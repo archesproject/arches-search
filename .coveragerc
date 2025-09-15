@@ -1,6 +1,6 @@
 [run]
 source =
-    arches_advanced_search/
+    arches_search/
 
 omit =
     */python?.?/*

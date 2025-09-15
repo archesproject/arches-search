@@ -14,7 +14,7 @@ jobs:
         image: postgis/postgis:14-3.4
         env:
           POSTGRES_PASSWORD: postgis
-          POSTGRES_DB: arches_advanced_search
+          POSTGRES_DB: arches_search
         ports:
           - 5432:5432
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
@@ -44,7 +44,7 @@ jobs:
         uses: ./.github/actions/build-and-test-branch
         with:
           secrets: ${{ toJSON(secrets) }}
-          project-name: 'arches_advanced_search'
+          project-name: 'arches_search'
           branch-type: 'target'
 
   build_feature_branch:
@@ -55,7 +55,7 @@ jobs:
         image: postgis/postgis:14-3.4
         env:
           POSTGRES_PASSWORD: postgis
-          POSTGRES_DB: arches_advanced_search
+          POSTGRES_DB: arches_search
         ports:
           - 5432:5432
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
@@ -85,7 +85,7 @@ jobs:
         uses: ./.github/actions/build-and-test-branch
         with:
           secrets: ${{ toJSON(secrets) }}
-          project-name: 'arches_advanced_search'
+          project-name: 'arches_search'
           branch-type: 'feature'
 
   check_frontend_coverage:

@@ -7,7 +7,7 @@ import platform
 if platform.system().lower() == "windows":
     os.environ.setdefault("FORKED_BY_MULTIPROCESSING", "1")
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'arches_advanced_search.settings')
-app = Celery('arches_advanced_search')
-app.config_from_object('django.conf:settings', namespace='CELERY')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "arches_search.settings")
+app = Celery("arches_search")
+app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()

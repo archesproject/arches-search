@@ -13,10 +13,10 @@ class Migration(migrations.Migration):
             VALUES ('e42889e8-f8a8-4347-add3-f50aae161775', 
             '{"en": "Advanced Search"}', 
             'fa fa-search', 
-            'views/components/plugins/arches-advanced-search', 
-            'arches-advanced-search', 
+            'views/components/plugins/arches-search', 
+            'arches-search', 
             '{"show": true, "description": {"en": null}, "i18n_properties": ["description"]}', 
-            'arches-advanced-search', 
+            'arches-search', 
             1, 
             ''
         );
