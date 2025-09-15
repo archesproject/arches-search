@@ -1,0 +1,22 @@
+*.pyc
+*.log
+node_modules
+coverage/
+arches_advanced_search/logs
+arches_advanced_search/export_deliverables
+arches_advanced_search/cantaloupe/*
+arches_advanced_search/staticfiles
+arches_advanced_search/media/packages
+arches_advanced_search/media/build/
+arches_advanced_search/uploadedfiles/*
+arches_advanced_search/settings_local.py
+webpack-stats.json
+.vscode/
+*.egg-info
+.DS_STORE
+CACHE
+frontend_configuration
+
+# Packaging
+build/
+dist/
