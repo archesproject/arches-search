@@ -146,6 +146,7 @@ INSTALLED_APPS = (
     "pgtrigger",
     # "silk",
     "arches_search",  # Ensure the project is listed before any other arches applications
+    "arches_component_lab",
 )
 
 # Placing this last ensures any templates provided by Arches Applications

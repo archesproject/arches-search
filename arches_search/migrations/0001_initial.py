@@ -3,8 +3,9 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
 
+    initial = True
     dependencies = [
-        ("afrc", "0001_initial"),
+        ("models", "11499_add_editlog_resourceinstance_idx"),
     ]
 
     forward_sql = """
