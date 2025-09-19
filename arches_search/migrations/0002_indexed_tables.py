@@ -10,118 +10,289 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('arches_search', '0001_initial'),
+        ("arches_search", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='BooleanSearch',
+            name="BooleanSearch",
             fields=[
-                ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('tileid', models.UUIDField()),
-                ('resourceinstanceid', models.UUIDField()),
-                ('graph_alias', models.TextField()),
-                ('node_alias', models.TextField()),
-                ('datatype', models.TextField()),
-                ('value', models.BooleanField()),
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                ("tileid", models.UUIDField()),
+                ("resourceinstanceid", models.UUIDField()),
+                ("graph_alias", models.TextField()),
+                ("node_alias", models.TextField()),
+                ("datatype", models.TextField()),
+                ("value", models.BooleanField()),
             ],
             options={
-                'db_table': 'arches_search_boolean',
-                'managed': True,
-                'indexes': [models.Index(fields=['tileid', 'node_alias', 'value'], name='arches_sear_tileid_0b23d0_idx'), models.Index(fields=['tileid'], name='arches_sear_tileid_7e51ef_idx'), models.Index(fields=['resourceinstanceid'], name='arches_sear_resourc_9c56dd_idx'), models.Index(fields=['graph_alias'], name='arches_sear_graph_a_bd97e5_idx'), models.Index(fields=['node_alias'], name='arches_sear_node_al_d50151_idx'), models.Index(fields=['datatype'], name='arches_sear_datatyp_5d075a_idx'), models.Index(fields=['value'], name='arches_sear_value_89ce5c_idx')],
-                'constraints': [models.UniqueConstraint(fields=('tileid', 'resourceinstanceid', 'node_alias'), name='search_boolean_unique')],
+                "db_table": "arches_search_boolean",
+                "managed": True,
+                "indexes": [
+                    models.Index(
+                        fields=["tileid", "node_alias", "value"],
+                        name="arches_sear_tileid_0b23d0_idx",
+                    ),
+                    models.Index(
+                        fields=["tileid"], name="arches_sear_tileid_7e51ef_idx"
+                    ),
+                    models.Index(
+                        fields=["resourceinstanceid"],
+                        name="arches_sear_resourc_9c56dd_idx",
+                    ),
+                    models.Index(
+                        fields=["graph_alias"], name="arches_sear_graph_a_bd97e5_idx"
+                    ),
+                    models.Index(
+                        fields=["node_alias"], name="arches_sear_node_al_d50151_idx"
+                    ),
+                    models.Index(
+                        fields=["datatype"], name="arches_sear_datatyp_5d075a_idx"
+                    ),
+                    models.Index(fields=["value"], name="arches_sear_value_89ce5c_idx"),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("tileid", "resourceinstanceid", "node_alias"),
+                        name="search_boolean_unique",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='DateRangeSearch',
+            name="DateRangeSearch",
             fields=[
-                ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('tileid', models.UUIDField()),
-                ('resourceinstanceid', models.UUIDField()),
-                ('graph_alias', models.TextField()),
-                ('node_alias', models.TextField()),
-                ('datatype', models.TextField()),
-                ('start_date', models.DateField()),
-                ('end_date', models.DateField()),
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                ("tileid", models.UUIDField()),
+                ("resourceinstanceid", models.UUIDField()),
+                ("graph_alias", models.TextField()),
+                ("node_alias", models.TextField()),
+                ("datatype", models.TextField()),
+                ("start_date", models.DateField()),
+                ("end_date", models.DateField()),
             ],
             options={
-                'db_table': 'arches_search_date_range',
-                'managed': True,
-                'indexes': [models.Index(fields=['tileid', 'node_alias', 'start_date', 'end_date'], name='arches_sear_tileid_6c1f02_idx'), models.Index(fields=['tileid'], name='arches_sear_tileid_f37e5a_idx'), models.Index(fields=['resourceinstanceid'], name='arches_sear_resourc_a34b2e_idx'), models.Index(fields=['graph_alias'], name='arches_sear_graph_a_a0d51a_idx'), models.Index(fields=['node_alias'], name='arches_sear_node_al_f9d59f_idx'), models.Index(fields=['datatype'], name='arches_sear_datatyp_503c77_idx'), models.Index(fields=['start_date', 'end_date'], name='arches_sear_start_d_d7258f_idx')],
-                'constraints': [models.UniqueConstraint(fields=('tileid', 'resourceinstanceid', 'node_alias'), name='search_date_range_unique')],
+                "db_table": "arches_search_date_range",
+                "managed": True,
+                "indexes": [
+                    models.Index(
+                        fields=["tileid", "node_alias", "start_date", "end_date"],
+                        name="arches_sear_tileid_6c1f02_idx",
+                    ),
+                    models.Index(
+                        fields=["tileid"], name="arches_sear_tileid_f37e5a_idx"
+                    ),
+                    models.Index(
+                        fields=["resourceinstanceid"],
+                        name="arches_sear_resourc_a34b2e_idx",
+                    ),
+                    models.Index(
+                        fields=["graph_alias"], name="arches_sear_graph_a_a0d51a_idx"
+                    ),
+                    models.Index(
+                        fields=["node_alias"], name="arches_sear_node_al_f9d59f_idx"
+                    ),
+                    models.Index(
+                        fields=["datatype"], name="arches_sear_datatyp_503c77_idx"
+                    ),
+                    models.Index(
+                        fields=["start_date", "end_date"],
+                        name="arches_sear_start_d_d7258f_idx",
+                    ),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("tileid", "resourceinstanceid", "node_alias"),
+                        name="search_date_range_unique",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='DateSearch',
+            name="DateSearch",
             fields=[
-                ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('tileid', models.UUIDField()),
-                ('resourceinstanceid', models.UUIDField()),
-                ('graph_alias', models.TextField()),
-                ('node_alias', models.TextField()),
-                ('datatype', models.TextField()),
-                ('value', models.DateField()),
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                ("tileid", models.UUIDField()),
+                ("resourceinstanceid", models.UUIDField()),
+                ("graph_alias", models.TextField()),
+                ("node_alias", models.TextField()),
+                ("datatype", models.TextField()),
+                ("value", models.DateField()),
             ],
             options={
-                'db_table': 'arches_search_date',
-                'managed': True,
-                'indexes': [models.Index(fields=['tileid', 'node_alias', 'value'], name='arches_sear_tileid_8c1e1c_idx'), models.Index(fields=['tileid'], name='arches_sear_tileid_1f1aab_idx'), models.Index(fields=['resourceinstanceid'], name='arches_sear_resourc_950e29_idx'), models.Index(fields=['graph_alias'], name='arches_sear_graph_a_b60884_idx'), models.Index(fields=['node_alias'], name='arches_sear_node_al_957613_idx'), models.Index(fields=['datatype'], name='arches_sear_datatyp_370d78_idx'), models.Index(fields=['value'], name='arches_sear_value_230e64_idx')],
-                'constraints': [models.UniqueConstraint(fields=('tileid', 'resourceinstanceid', 'node_alias'), name='search_date_unique')],
+                "db_table": "arches_search_date",
+                "managed": True,
+                "indexes": [
+                    models.Index(
+                        fields=["tileid", "node_alias", "value"],
+                        name="arches_sear_tileid_8c1e1c_idx",
+                    ),
+                    models.Index(
+                        fields=["tileid"], name="arches_sear_tileid_1f1aab_idx"
+                    ),
+                    models.Index(
+                        fields=["resourceinstanceid"],
+                        name="arches_sear_resourc_950e29_idx",
+                    ),
+                    models.Index(
+                        fields=["graph_alias"], name="arches_sear_graph_a_b60884_idx"
+                    ),
+                    models.Index(
+                        fields=["node_alias"], name="arches_sear_node_al_957613_idx"
+                    ),
+                    models.Index(
+                        fields=["datatype"], name="arches_sear_datatyp_370d78_idx"
+                    ),
+                    models.Index(fields=["value"], name="arches_sear_value_230e64_idx"),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("tileid", "resourceinstanceid", "node_alias"),
+                        name="search_date_unique",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='NumericSearch',
+            name="NumericSearch",
             fields=[
-                ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('tileid', models.UUIDField()),
-                ('resourceinstanceid', models.UUIDField()),
-                ('graph_alias', models.TextField()),
-                ('node_alias', models.TextField()),
-                ('datatype', models.TextField()),
-                ('value', models.DecimalField(decimal_places=10, max_digits=64)),
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                ("tileid", models.UUIDField()),
+                ("resourceinstanceid", models.UUIDField()),
+                ("graph_alias", models.TextField()),
+                ("node_alias", models.TextField()),
+                ("datatype", models.TextField()),
+                ("value", models.DecimalField(decimal_places=10, max_digits=64)),
             ],
             options={
-                'db_table': 'arches_search_numeric',
-                'managed': True,
-                'indexes': [models.Index(fields=['tileid', 'node_alias', 'value'], name='arches_sear_tileid_c5a973_idx'), models.Index(fields=['tileid'], name='arches_sear_tileid_232ee9_idx'), models.Index(fields=['resourceinstanceid'], name='arches_sear_resourc_7f8614_idx'), models.Index(fields=['datatype'], name='arches_sear_datatyp_e2c95f_idx'), models.Index(fields=['graph_alias'], name='arches_sear_graph_a_a6ce74_idx'), models.Index(fields=['node_alias'], name='arches_sear_node_al_8ac284_idx'), models.Index(fields=['value'], name='arches_sear_value_f135ab_idx')],
-                'constraints': [models.UniqueConstraint(fields=('tileid', 'resourceinstanceid', 'node_alias'), name='search_numeric_unique')],
+                "db_table": "arches_search_numeric",
+                "managed": True,
+                "indexes": [
+                    models.Index(
+                        fields=["tileid", "node_alias", "value"],
+                        name="arches_sear_tileid_c5a973_idx",
+                    ),
+                    models.Index(
+                        fields=["tileid"], name="arches_sear_tileid_232ee9_idx"
+                    ),
+                    models.Index(
+                        fields=["resourceinstanceid"],
+                        name="arches_sear_resourc_7f8614_idx",
+                    ),
+                    models.Index(
+                        fields=["datatype"], name="arches_sear_datatyp_e2c95f_idx"
+                    ),
+                    models.Index(
+                        fields=["graph_alias"], name="arches_sear_graph_a_a6ce74_idx"
+                    ),
+                    models.Index(
+                        fields=["node_alias"], name="arches_sear_node_al_8ac284_idx"
+                    ),
+                    models.Index(fields=["value"], name="arches_sear_value_f135ab_idx"),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("tileid", "resourceinstanceid", "node_alias"),
+                        name="search_numeric_unique",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='TermSearch',
+            name="TermSearch",
             fields=[
-                ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('tileid', models.UUIDField()),
-                ('resourceinstanceid', models.UUIDField()),
-                ('graph_alias', models.TextField()),
-                ('node_alias', models.TextField()),
-                ('datatype', models.TextField()),
-                ('value', models.TextField()),
-                ('search_vector', django.contrib.postgres.search.SearchVectorField(null=True)),
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                ("tileid", models.UUIDField()),
+                ("resourceinstanceid", models.UUIDField()),
+                ("graph_alias", models.TextField()),
+                ("node_alias", models.TextField()),
+                ("datatype", models.TextField()),
+                ("value", models.TextField()),
+                (
+                    "search_vector",
+                    django.contrib.postgres.search.SearchVectorField(null=True),
+                ),
             ],
             options={
-                'db_table': 'arches_search_terms',
-                'managed': True,
-                'indexes': [models.Index(fields=['tileid', 'node_alias', 'value'], name='arches_sear_tileid_95c051_idx'), models.Index(fields=['tileid'], name='arches_sear_tileid_59a5d6_idx'), models.Index(fields=['resourceinstanceid'], name='arches_sear_resourc_01b929_idx'), models.Index(fields=['datatype'], name='arches_sear_datatyp_9d826b_idx'), models.Index(fields=['graph_alias'], name='arches_sear_graph_a_0c8ffe_idx'), models.Index(fields=['node_alias'], name='arches_sear_node_al_e52887_idx'), models.Index(fields=['value'], name='arches_sear_value_8a4617_idx'), django.contrib.postgres.indexes.GinIndex(fields=['search_vector'], name='arches_sear_search__40996d_gin')],
-                'constraints': [models.UniqueConstraint(fields=('tileid', 'resourceinstanceid', 'node_alias'), name='search_term_unique')],
+                "db_table": "arches_search_terms",
+                "managed": True,
+                "indexes": [
+                    models.Index(
+                        fields=["tileid", "node_alias", "value"],
+                        name="arches_sear_tileid_95c051_idx",
+                    ),
+                    models.Index(
+                        fields=["tileid"], name="arches_sear_tileid_59a5d6_idx"
+                    ),
+                    models.Index(
+                        fields=["resourceinstanceid"],
+                        name="arches_sear_resourc_01b929_idx",
+                    ),
+                    models.Index(
+                        fields=["datatype"], name="arches_sear_datatyp_9d826b_idx"
+                    ),
+                    models.Index(
+                        fields=["graph_alias"], name="arches_sear_graph_a_0c8ffe_idx"
+                    ),
+                    models.Index(
+                        fields=["node_alias"], name="arches_sear_node_al_e52887_idx"
+                    ),
+                    models.Index(fields=["value"], name="arches_sear_value_8a4617_idx"),
+                    django.contrib.postgres.indexes.GinIndex(
+                        fields=["search_vector"], name="arches_sear_search__40996d_gin"
+                    ),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("tileid", "resourceinstanceid", "node_alias"),
+                        name="search_term_unique",
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='UUIDSearch',
+            name="UUIDSearch",
             fields=[
-                ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('tileid', models.UUIDField()),
-                ('resourceinstanceid', models.UUIDField()),
-                ('graph_alias', models.TextField()),
-                ('node_alias', models.TextField()),
-                ('datatype', models.TextField()),
-                ('value', models.UUIDField()),
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                ("tileid", models.UUIDField()),
+                ("resourceinstanceid", models.UUIDField()),
+                ("graph_alias", models.TextField()),
+                ("node_alias", models.TextField()),
+                ("datatype", models.TextField()),
+                ("value", models.UUIDField()),
             ],
             options={
-                'db_table': 'arches_search_uuid',
-                'managed': True,
-                'indexes': [models.Index(fields=['tileid', 'node_alias', 'value'], name='arches_sear_tileid_8ca2c3_idx'), models.Index(fields=['tileid'], name='arches_sear_tileid_656855_idx'), models.Index(fields=['resourceinstanceid'], name='arches_sear_resourc_504e56_idx'), models.Index(fields=['datatype'], name='arches_sear_datatyp_6f5917_idx'), models.Index(fields=['graph_alias'], name='arches_sear_graph_a_c2a8c5_idx'), models.Index(fields=['node_alias'], name='arches_sear_node_al_cdede4_idx'), models.Index(fields=['value'], name='arches_sear_value_036bfb_idx')],
-                'constraints': [models.UniqueConstraint(fields=('tileid', 'resourceinstanceid', 'node_alias'), name='search_uuid_unique')],
+                "db_table": "arches_search_uuid",
+                "managed": True,
+                "indexes": [
+                    models.Index(
+                        fields=["tileid", "node_alias", "value"],
+                        name="arches_sear_tileid_8ca2c3_idx",
+                    ),
+                    models.Index(
+                        fields=["tileid"], name="arches_sear_tileid_656855_idx"
+                    ),
+                    models.Index(
+                        fields=["resourceinstanceid"],
+                        name="arches_sear_resourc_504e56_idx",
+                    ),
+                    models.Index(
+                        fields=["datatype"], name="arches_sear_datatyp_6f5917_idx"
+                    ),
+                    models.Index(
+                        fields=["graph_alias"], name="arches_sear_graph_a_c2a8c5_idx"
+                    ),
+                    models.Index(
+                        fields=["node_alias"], name="arches_sear_node_al_cdede4_idx"
+                    ),
+                    models.Index(fields=["value"], name="arches_sear_value_036bfb_idx"),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("tileid", "resourceinstanceid", "node_alias"),
+                        name="search_uuid_unique",
+                    )
+                ],
             },
         ),
     ]
