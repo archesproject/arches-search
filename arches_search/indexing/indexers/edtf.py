@@ -32,7 +32,7 @@ class EDTFIndexing(BaseIndexing):
                 resourceinstanceid=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 graph_alias=node.graph.slug,
-                start_date=date_range["date_range"]["lte"],
-                end_date=date_range["date_range"]["gte"],
+                start_value=date_range["date_range"]["lte"],
+                end_value=date_range["date_range"]["gte"],
             )
             date_range_search.save()
