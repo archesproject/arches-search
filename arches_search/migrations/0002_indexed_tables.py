@@ -51,12 +51,7 @@ class Migration(migrations.Migration):
                     ),
                     models.Index(fields=["value"], name="arches_sear_value_89ce5c_idx"),
                 ],
-                "constraints": [
-                    models.UniqueConstraint(
-                        fields=("tileid", "resourceinstanceid", "node_alias"),
-                        name="search_boolean_unique",
-                    )
-                ],
+                "constraints": [],
             },
         ),
         migrations.CreateModel(
@@ -68,16 +63,16 @@ class Migration(migrations.Migration):
                 ("graph_alias", models.TextField()),
                 ("node_alias", models.TextField()),
                 ("datatype", models.TextField()),
-                ("start_date", models.BigIntegerField()),
-                ("end_date", models.BigIntegerField()),
+                ("start_value", models.BigIntegerField()),
+                ("end_value", models.BigIntegerField()),
             ],
             options={
                 "db_table": "arches_search_date_range",
                 "managed": True,
                 "indexes": [
                     models.Index(
-                        fields=["tileid", "node_alias", "start_date", "end_date"],
-                        name="arches_sear_tileid_6c1f02_idx",
+                        fields=["tileid", "node_alias", "start_value", "end_value"],
+                        name="arches_sear_tileid_ad3a82_idx",
                     ),
                     models.Index(
                         fields=["tileid"], name="arches_sear_tileid_f37e5a_idx"
@@ -96,16 +91,11 @@ class Migration(migrations.Migration):
                         fields=["datatype"], name="arches_sear_datatyp_503c77_idx"
                     ),
                     models.Index(
-                        fields=["start_date", "end_date"],
-                        name="arches_sear_start_d_d7258f_idx",
+                        fields=["start_value", "end_value"],
+                        name="arches_sear_start_v_686a18_idx",
                     ),
                 ],
-                "constraints": [
-                    models.UniqueConstraint(
-                        fields=("tileid", "resourceinstanceid", "node_alias"),
-                        name="search_date_range_unique",
-                    )
-                ],
+                "constraints": [],
             },
         ),
         migrations.CreateModel(
@@ -145,12 +135,7 @@ class Migration(migrations.Migration):
                     ),
                     models.Index(fields=["value"], name="arches_sear_value_230e64_idx"),
                 ],
-                "constraints": [
-                    models.UniqueConstraint(
-                        fields=("tileid", "resourceinstanceid", "node_alias", "value"),
-                        name="search_date_unique",
-                    )
-                ],
+                "constraints": [],
             },
         ),
         migrations.CreateModel(
@@ -190,12 +175,7 @@ class Migration(migrations.Migration):
                     ),
                     models.Index(fields=["value"], name="arches_sear_value_f135ab_idx"),
                 ],
-                "constraints": [
-                    models.UniqueConstraint(
-                        fields=("tileid", "resourceinstanceid", "node_alias"),
-                        name="search_numeric_unique",
-                    )
-                ],
+                "constraints": [],
             },
         ),
         migrations.CreateModel(
@@ -243,18 +223,7 @@ class Migration(migrations.Migration):
                         fields=["search_vector"], name="arches_sear_search__40996d_gin"
                     ),
                 ],
-                "constraints": [
-                    models.UniqueConstraint(
-                        fields=(
-                            "tileid",
-                            "resourceinstanceid",
-                            "node_alias",
-                            "language",
-                            "value",
-                        ),
-                        name="search_term_unique",
-                    )
-                ],
+                "constraints": [],
             },
         ),
         migrations.CreateModel(
@@ -294,12 +263,7 @@ class Migration(migrations.Migration):
                     ),
                     models.Index(fields=["value"], name="arches_sear_value_036bfb_idx"),
                 ],
-                "constraints": [
-                    models.UniqueConstraint(
-                        fields=("tileid", "resourceinstanceid", "node_alias"),
-                        name="search_uuid_unique",
-                    )
-                ],
+                "constraints": [],
             },
         ),
     ]

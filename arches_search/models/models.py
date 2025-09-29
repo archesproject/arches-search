@@ -17,18 +17,7 @@ class TermSearch(models.Model):
     class Meta:
         managed = True
         db_table = "arches_search_terms"
-        constraints = [
-            models.UniqueConstraint(
-                fields=[
-                    "tileid",
-                    "resourceinstanceid",
-                    "node_alias",
-                    "language",
-                    "value",
-                ],
-                name="search_term_unique",
-            )
-        ]
+        constraints = []
         indexes = [
             models.Index(fields=["tileid", "node_alias", "value"]),
             models.Index(fields=["tileid"]),
@@ -53,12 +42,7 @@ class NumericSearch(models.Model):
     class Meta:
         managed = True
         db_table = "arches_search_numeric"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["tileid", "resourceinstanceid", "node_alias"],
-                name="search_numeric_unique",
-            )
-        ]
+        constraints = []
         indexes = [
             models.Index(fields=["tileid", "node_alias", "value"]),
             models.Index(fields=["tileid"]),
@@ -82,12 +66,7 @@ class UUIDSearch(models.Model):
     class Meta:
         managed = True
         db_table = "arches_search_uuid"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["tileid", "resourceinstanceid", "node_alias"],
-                name="search_uuid_unique",
-            )
-        ]
+        constraints = []
         indexes = [
             models.Index(fields=["tileid", "node_alias", "value"]),
             models.Index(fields=["tileid"]),
@@ -111,12 +90,7 @@ class DateSearch(models.Model):
     class Meta:
         managed = True
         db_table = "arches_search_date"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["tileid", "resourceinstanceid", "node_alias", "value"],
-                name="search_date_unique",
-            )
-        ]
+        constraints = []
         indexes = [
             models.Index(fields=["tileid", "node_alias", "value"]),
             models.Index(fields=["tileid"]),
@@ -135,18 +109,13 @@ class DateRangeSearch(models.Model):
     graph_alias = models.TextField()
     node_alias = models.TextField()
     datatype = models.TextField()
-    start_date = models.BigIntegerField()
-    end_date = models.BigIntegerField()
+    start_value = models.BigIntegerField()
+    end_value = models.BigIntegerField()
 
     class Meta:
         managed = True
         db_table = "arches_search_date_range"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["tileid", "resourceinstanceid", "node_alias"],
-                name="search_date_range_unique",
-            )
-        ]
+        constraints = []
         indexes = [
             models.Index(fields=["tileid", "node_alias", "start_date", "end_date"]),
             models.Index(fields=["tileid"]),
@@ -170,12 +139,7 @@ class BooleanSearch(models.Model):
     class Meta:
         managed = True
         db_table = "arches_search_boolean"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["tileid", "resourceinstanceid", "node_alias"],
-                name="search_boolean_unique",
-            )
-        ]
+        constraints = []
         indexes = [
             models.Index(fields=["tileid", "node_alias", "value"]),
             models.Index(fields=["tileid"]),
