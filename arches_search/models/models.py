@@ -9,6 +9,7 @@ class TermSearch(models.Model):
     resourceinstanceid = models.UUIDField()
     graph_alias = models.TextField()
     node_alias = models.TextField()
+    language = models.TextField()
     datatype = models.TextField()
     value = models.TextField()
     search_vector = SearchVectorField(null=True)
@@ -18,7 +19,13 @@ class TermSearch(models.Model):
         db_table = "arches_search_terms"
         constraints = [
             models.UniqueConstraint(
-                fields=["tileid", "resourceinstanceid", "node_alias"],
+                fields=[
+                    "tileid",
+                    "resourceinstanceid",
+                    "node_alias",
+                    "language",
+                    "value",
+                ],
                 name="search_term_unique",
             )
         ]
@@ -99,14 +106,14 @@ class DateSearch(models.Model):
     graph_alias = models.TextField()
     node_alias = models.TextField()
     datatype = models.TextField()
-    value = models.DateField()
+    value = models.BigIntegerField()
 
     class Meta:
         managed = True
         db_table = "arches_search_date"
         constraints = [
             models.UniqueConstraint(
-                fields=["tileid", "resourceinstanceid", "node_alias"],
+                fields=["tileid", "resourceinstanceid", "node_alias", "value"],
                 name="search_date_unique",
             )
         ]
@@ -128,8 +135,8 @@ class DateRangeSearch(models.Model):
     graph_alias = models.TextField()
     node_alias = models.TextField()
     datatype = models.TextField()
-    start_date = models.DateField()
-    end_date = models.DateField()
+    start_date = models.BigIntegerField()
+    end_date = models.BigIntegerField()
 
     class Meta:
         managed = True
