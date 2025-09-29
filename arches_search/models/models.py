@@ -117,13 +117,13 @@ class DateRangeSearch(models.Model):
         db_table = "arches_search_date_range"
         constraints = []
         indexes = [
-            models.Index(fields=["tileid", "node_alias", "start_date", "end_date"]),
+            models.Index(fields=["tileid", "node_alias", "start_value", "end_value"]),
             models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
             models.Index(fields=["graph_alias"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["datatype"]),
-            models.Index(fields=["start_date", "end_date"]),
+            models.Index(fields=["start_value", "end_value"]),
         ]
 
 
