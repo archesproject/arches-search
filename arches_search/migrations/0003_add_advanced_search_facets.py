@@ -217,6 +217,44 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
+            name="AdvancedSearchFacetOperator",
+            fields=[
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                ("key", models.SlugField(unique=True)),
+                ("arity", models.PositiveSmallIntegerField(default=0)),
+                ("param_formats", models.JSONField(blank=True, default=list)),
+                ("sql_template", models.TextField()),
+                ("orm_path_template", models.CharField(blank=True, max_length=255)),
+                ("orm_negated", models.BooleanField(default=False)),
+            ],
+        ),
+        migrations.CreateModel(
+            name="AdvancedSearchFacet",
+            fields=[
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                (
+                    "controlled_list_item",
+                    models.ForeignKey(
+                        db_column="controlledlistitemid",
+                        help_text="The controlled list item associated with the advanced search facet.",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="arches_controlled_lists.listitem",
+                        verbose_name="Controlled List Item",
+                    ),
+                ),
+                (
+                    "operator",
+                    models.ForeignKey(
+                        db_column="operatorid",
+                        help_text="The operator associated with the advanced search facet.",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="arches_search.advancedsearchfacetoperator",
+                        verbose_name="Operator",
+                    ),
+                ),
+            ],
+        ),
+        migrations.CreateModel(
             name="DatatypeXAdvancedSearchFacets",
             fields=[
                 (
