@@ -211,8 +211,8 @@ def remove_datatype_advanced_search_facets(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("arches_search", "0001_initial"),
-        ("arches_controlled_lists", "0001_initial"),
+        ("arches_search", "0002_indexed_tables"),
+        ("arches_controlled_lists", "0008_ensure_languages_in_sync"),
     ]
 
     operations = [
