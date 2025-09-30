@@ -6,6 +6,7 @@ from django.utils.translation import gettext_lazy as _
 
 
 class DatatypeXAdvancedSearchFacets(models.Model):
+    id = models.AutoField(primary_key=True)
     datatype = models.ForeignKey(
         "models.DDataType",
         on_delete=models.CASCADE,
