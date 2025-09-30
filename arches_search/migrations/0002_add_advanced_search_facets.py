@@ -213,6 +213,7 @@ class Migration(migrations.Migration):
     initial = True
     dependencies = [
         ("arches_search", "0001_initial"),
+        ("arches_controlled_lists", "0001_initial"),
     ]
 
     operations = [
