@@ -148,6 +148,7 @@ INSTALLED_APPS = (
     "arches_search",  # Ensure the project is listed before any other arches applications
     "arches_component_lab",
     "arches_controlled_lists",
+    "arches_querysets",
 )
 
 # Placing this last ensures any templates provided by Arches Applications
