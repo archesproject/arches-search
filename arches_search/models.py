@@ -2,13 +2,13 @@ from django.db import models
 
 from django.utils.translation import gettext_lazy as _
 
-from arches.app.models.models import DValueType
+from arches.app.models.models import DDataType
 from arches_controlled_lists.models import List
 
 
 class DatatypeXAdvancedSearchFacets(models.Model):
     datatype = models.ForeignKey(
-        DValueType,
+        DDataType,
         on_delete=models.CASCADE,
         db_column="datatypeid",
         verbose_name=_("Data Type"),

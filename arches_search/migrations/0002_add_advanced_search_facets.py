@@ -220,6 +220,15 @@ class Migration(migrations.Migration):
             name="DatatypeXAdvancedSearchFacets",
             fields=[
                 (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
                     "controlled_list",
                     models.ForeignKey(
                         db_column="controlledlistid",
