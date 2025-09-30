@@ -5,6 +5,36 @@ from django.contrib.postgres.search import SearchVectorField
 from django.utils.translation import gettext_lazy as _
 
 
+class AdvancedSearchFacetOperator(models.Model):
+    id = models.AutoField(primary_key=True)
+    key = models.SlugField(unique=True)
+    arity = models.PositiveSmallIntegerField(default=0)
+    param_formats = models.JSONField(default=list, blank=True)
+    sql_template = models.TextField()
+    orm_path_template = models.CharField(max_length=255, blank=True)
+    orm_negated = models.BooleanField(default=False)
+
+
+class AdvancedSearchFacet(models.Model):
+    id = models.AutoField(primary_key=True)
+    controlled_list_item = models.ForeignKey(
+        "arches_controlled_lists.ListItem",
+        on_delete=models.CASCADE,
+        db_column="controlledlistitemid",
+        verbose_name=_("Controlled List Item"),
+        help_text=_(
+            "The controlled list item associated with the advanced search facet."
+        ),
+    )
+    operator = models.ForeignKey(
+        AdvancedSearchFacetOperator,
+        on_delete=models.CASCADE,
+        db_column="operatorid",
+        verbose_name=_("Operator"),
+        help_text=_("The operator associated with the advanced search facet."),
+    )
+
+
 class DatatypeXAdvancedSearchFacets(models.Model):
     id = models.AutoField(primary_key=True)
     datatype = models.ForeignKey(
