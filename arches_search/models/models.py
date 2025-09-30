@@ -2,6 +2,29 @@ from django.db import models
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
 
+from django.utils.translation import gettext_lazy as _
+
+
+class DatatypeXAdvancedSearchFacets(models.Model):
+    datatype = models.ForeignKey(
+        "models.DDataType",
+        on_delete=models.CASCADE,
+        db_column="datatypeid",
+        verbose_name=_("Data Type"),
+        help_text=_("The data type to which the advanced search facets apply."),
+    )
+    controlled_list = models.ForeignKey(
+        "arches_controlled_lists.List",
+        on_delete=models.CASCADE,
+        db_column="controlledlistid",
+        verbose_name=_("Controlled List"),
+        help_text=_(
+            "The controlled list associated with the data type, if applicable."
+        ),
+        null=True,
+        blank=True,
+    )
+
 
 class TermSearch(models.Model):
     id = models.AutoField(primary_key=True)
