@@ -17,11 +17,14 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
 """This module contains commands for building Arches."""
-
 import logging
+from django.db import transaction
 from django.core.management.base import BaseCommand
-from arches.app.models.tile import Tile
+from django.core.paginator import Paginator
+from arches.app.models.models import TileModel
+
 from arches_search.indexing.index_from_tile import index_from_tile
+from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
     BooleanSearch,
     NumericSearch,
@@ -57,8 +60,26 @@ class Command(BaseCommand):
 
     def reindex_database(self):
         self.delete_indexes()
-        for tile in Tile.objects.all():
-            index_from_tile(tile)
+        nodegroup_cache = {}
+        indexing_factory = IndexingFactory()
+        paginator = Paginator(TileModel.objects.order_by("tileid").all(), 1000)
+        for page in range(1, paginator.num_pages + 1):
+            with transaction.atomic():
+                for tile in paginator.page(page).object_list:
+                    index_from_tile(
+                        tile,
+                        delete_existing=False,
+                        indexing_factory=indexing_factory,
+                        nodegroup_cache=nodegroup_cache,
+                    )
+
+    def delete_indexes(self, name=None):
+        TermSearch.objects.all().delete()
+        NumericSearch.objects.all().delete()
+        DateSearch.objects.all().delete()
+        DateRangeSearch.objects.all().delete()
+        BooleanSearch.objects.all().delete()
+        UUIDSearch.objects.all().delete()
 
     def delete_indexes(self, name=None):
         TermSearch.objects.all().delete()

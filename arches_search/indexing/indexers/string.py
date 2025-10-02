@@ -1,6 +1,7 @@
+from django.db.models import Value
 from django.contrib.postgres.search import SearchVector
 from arches.app.datatypes.datatypes import DataTypeFactory
-from arches.app.models.models import Node, Language
+from arches.app.models.models import Language
 from arches_search.models.models import TermSearch
 
 from arches_search.indexing.base import BaseIndexing
@@ -32,11 +33,8 @@ class StringIndexing(BaseIndexing):
                 graph_alias=node.graph.slug,
                 value=string_object["string"],
             )
-            term_search.save()
             term_search.search_vector = SearchVector(
-                "value",
+                Value(string_object["string"]),
                 config=self.languages[string_object["language"]].name.lower(),
             )
-            TermSearch.objects.filter(pk=term_search.pk).update(
-                search_vector=term_search.search_vector
-            )
+            term_search.save()
