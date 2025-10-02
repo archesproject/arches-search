@@ -12,22 +12,149 @@ const { $gettext } = useGettext();
 const selectedGraph = ref<string | null>(null);
 
 watchEffect(() => {
+    // const query = {
+    //         logic: "AND",
+    //         clauses: [
+    //             {
+    //                 node_alias: "number",
+    //                 search_table: "numeric",
+    //                 datatype: "number",
+    //                 operator: "LESS_THAN",
+    //                 params: [5],
+    //             },
+    //         ],
+    //         groups: [],
+    // };
+
+    // const query = {
+    //         logic: "AND",
+    //         clauses: [
+    //             {
+    //                 node_alias: "string",
+    //                 search_table: "term",
+    //                 datatype: "string",
+    //                 operator: "EQUALS",
+    //                 params: ["STRING"],
+    //             },
+    //         ],
+    //         groups: [],
+    // };
+
+    // const query = {
+    //     logic: "AND",
+    //     clauses: [
+    //         {
+    //             node_alias: "number",
+    //             search_table: "numeric",
+    //             datatype: "number",
+    //             operator: "LESS_THAN",
+    //             params: [5],
+    //         },
+    //         {
+    //             node_alias: "string",
+    //             search_table: "term",
+    //             datatype: "string",
+    //             operator: "EQUALS",
+    //             params: ["STRING"],
+    //         },
+    //     ],
+    //     groups: [],
+    // };
+
+    // const query = {
+    //     logic: "OR",
+    //     clauses: [
+    //         {
+    //             node_alias: "number",
+    //             search_table: "numeric",
+    //             datatype: "number",
+    //             operator: "LESS_THAN",
+    //             params: [5],
+    //         },
+    //         {
+    //             node_alias: "string",
+    //             search_table: "term",
+    //             datatype: "string",
+    //             operator: "EQUALS",
+    //             params: ["STRING"],
+    //         },
+    //     ],
+    //     groups: [],
+    // }
+
+    // const query =  {
+    //     logic: "OR",
+    //     clauses: [
+    //         {
+    //             node_alias: "string_2",
+    //             search_table: "term",
+    //             datatype: "string",
+    //             operator: "EQUALS",
+    //             params: ["STRING TWO"],
+    //         }
+    //     ],
+    //     groups: [
+    //         {
+    //             logic: "AND",
+    //             clauses: [
+    //                 {
+    //                     node_alias: "number",
+    //                     search_table: "numeric",
+    //                     datatype: "number",
+    //                     operator: "LESS_THAN",
+    //                     params: [5],
+    //                 },
+    //                 {
+    //                     node_alias: "string",
+    //                     search_table: "term",
+    //                     datatype: "string",
+    //                     operator: "EQUALS",
+    //                     params: ["STRING"],
+    //                 },
+    //             ],
+    //             groups: [],
+    //         }
+    //     ],
+    // }
+
+    const query = {
+        logic: "AND",
+        clauses: [
+            {
+                node_alias: "string_2",
+                search_table: "term",
+                datatype: "string",
+                operator: "EQUALS",
+                params: ["STRING TWO"],
+            },
+        ],
+        groups: [
+            {
+                logic: "OR",
+                clauses: [
+                    {
+                        node_alias: "number",
+                        search_table: "numeric",
+                        datatype: "number",
+                        operator: "GREATER_THAN",
+                        params: [5],
+                    },
+                    {
+                        node_alias: "string",
+                        search_table: "term",
+                        datatype: "string",
+                        operator: "EQUALS",
+                        params: ["STRING"],
+                    },
+                ],
+                groups: [],
+            },
+        ],
+    };
+
     getSearchResults({
         graph_alias: "new_resource_model",
-        query: {
-            logic: "AND",
-            clauses: [
-                {
-                    type: "clause",
-                    node_alias: "number",
-                    search_table: "numeric",
-                    datatype: "number",
-                    operator: ">",
-                    params: [5],
-                },
-            ],
-            groups: [],
-        },
+        query: query,
     });
 });
 </script>
