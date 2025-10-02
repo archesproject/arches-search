@@ -1,60 +1,40 @@
 from django.db import models
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
-
 from django.utils.translation import gettext_lazy as _
 
-
-class AdvancedSearchFacetOperator(models.Model):
-    id = models.AutoField(primary_key=True)
-    key = models.SlugField(unique=True)
-    arity = models.PositiveSmallIntegerField(default=0)
-    param_formats = models.JSONField(default=list, blank=True)
-    sql_template = models.TextField()
-    orm_path_template = models.CharField(max_length=255, blank=True)
-    orm_negated = models.BooleanField(default=False)
+from arches.app.models.fields.i18n import I18n_TextField
 
 
 class AdvancedSearchFacet(models.Model):
     id = models.AutoField(primary_key=True)
-    controlled_list_item = models.ForeignKey(
-        "arches_controlled_lists.ListItem",
-        on_delete=models.CASCADE,
-        db_column="controlledlistitemid",
-        verbose_name=_("Controlled List Item"),
-        help_text=_(
-            "The controlled list item associated with the advanced search facet."
-        ),
-    )
-    operator = models.ForeignKey(
-        AdvancedSearchFacetOperator,
-        on_delete=models.CASCADE,
-        db_column="operatorid",
-        verbose_name=_("Operator"),
-        help_text=_("The operator associated with the advanced search facet."),
-    )
-
-
-class DatatypeXAdvancedSearchFacets(models.Model):
-    id = models.AutoField(primary_key=True)
+    arity = models.PositiveSmallIntegerField(default=0)
     datatype = models.ForeignKey(
         "models.DDataType",
         on_delete=models.CASCADE,
         db_column="datatypeid",
         verbose_name=_("Data Type"),
-        help_text=_("The data type to which the advanced search facets apply."),
+        help_text=_("The data type to which the advanced search facet applies."),
     )
-    controlled_list = models.ForeignKey(
-        "arches_controlled_lists.List",
-        on_delete=models.CASCADE,
-        db_column="controlledlistid",
-        verbose_name=_("Controlled List"),
-        help_text=_(
-            "The controlled list associated with the data type, if applicable."
-        ),
-        null=True,
-        blank=True,
-    )
+    label = I18n_TextField()
+    operator = models.CharField(max_length=50)
+    param_formats = models.JSONField(default=list, blank=True)
+    sortorder = models.PositiveSmallIntegerField()
+    orm_template = models.CharField(max_length=255, blank=True)
+    is_orm_template_negated = models.BooleanField(default=False)
+    sql_template = models.TextField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["datatype", "operator"],
+                name="unique_operator_per_datatype",
+            ),
+            models.UniqueConstraint(
+                fields=["datatype", "sortorder"],
+                name="unique_sortorder_per_datatype",
+            ),
+        ]
 
 
 class TermSearch(models.Model):
