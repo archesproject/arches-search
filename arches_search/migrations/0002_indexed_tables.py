@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
                 ("id", models.AutoField(primary_key=True, serialize=False)),
                 ("tileid", models.UUIDField()),
                 ("resourceinstanceid", models.UUIDField()),
-                ("graph_alias", models.TextField()),
+                ("graph_slug", models.TextField()),
                 ("node_alias", models.TextField()),
                 ("datatype", models.TextField()),
                 ("value", models.BooleanField()),
@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
                         name="arches_sear_resourc_9c56dd_idx",
                     ),
                     models.Index(
-                        fields=["graph_alias"], name="arches_sear_graph_a_bd97e5_idx"
+                        fields=["graph_slug"], name="arches_sear_graph_a_bd97e5_idx"
                     ),
                     models.Index(
                         fields=["node_alias"], name="arches_sear_node_al_d50151_idx"
@@ -60,7 +60,7 @@ class Migration(migrations.Migration):
                 ("id", models.AutoField(primary_key=True, serialize=False)),
                 ("tileid", models.UUIDField()),
                 ("resourceinstanceid", models.UUIDField()),
-                ("graph_alias", models.TextField()),
+                ("graph_slug", models.TextField()),
                 ("node_alias", models.TextField()),
                 ("datatype", models.TextField()),
                 ("start_value", models.BigIntegerField()),
@@ -82,7 +82,7 @@ class Migration(migrations.Migration):
                         name="arches_sear_resourc_a34b2e_idx",
                     ),
                     models.Index(
-                        fields=["graph_alias"], name="arches_sear_graph_a_a0d51a_idx"
+                        fields=["graph_slug"], name="arches_sear_graph_a_a0d51a_idx"
                     ),
                     models.Index(
                         fields=["node_alias"], name="arches_sear_node_al_f9d59f_idx"
@@ -104,7 +104,7 @@ class Migration(migrations.Migration):
                 ("id", models.AutoField(primary_key=True, serialize=False)),
                 ("tileid", models.UUIDField()),
                 ("resourceinstanceid", models.UUIDField()),
-                ("graph_alias", models.TextField()),
+                ("graph_slug", models.TextField()),
                 ("node_alias", models.TextField()),
                 ("datatype", models.TextField()),
                 ("value", models.BigIntegerField()),
@@ -125,7 +125,7 @@ class Migration(migrations.Migration):
                         name="arches_sear_resourc_950e29_idx",
                     ),
                     models.Index(
-                        fields=["graph_alias"], name="arches_sear_graph_a_b60884_idx"
+                        fields=["graph_slug"], name="arches_sear_graph_a_b60884_idx"
                     ),
                     models.Index(
                         fields=["node_alias"], name="arches_sear_node_al_957613_idx"
@@ -144,7 +144,7 @@ class Migration(migrations.Migration):
                 ("id", models.AutoField(primary_key=True, serialize=False)),
                 ("tileid", models.UUIDField()),
                 ("resourceinstanceid", models.UUIDField()),
-                ("graph_alias", models.TextField()),
+                ("graph_slug", models.TextField()),
                 ("node_alias", models.TextField()),
                 ("datatype", models.TextField()),
                 ("value", models.DecimalField(decimal_places=10, max_digits=64)),
@@ -168,7 +168,7 @@ class Migration(migrations.Migration):
                         fields=["datatype"], name="arches_sear_datatyp_e2c95f_idx"
                     ),
                     models.Index(
-                        fields=["graph_alias"], name="arches_sear_graph_a_a6ce74_idx"
+                        fields=["graph_slug"], name="arches_sear_graph_a_a6ce74_idx"
                     ),
                     models.Index(
                         fields=["node_alias"], name="arches_sear_node_al_8ac284_idx"
@@ -184,7 +184,7 @@ class Migration(migrations.Migration):
                 ("id", models.AutoField(primary_key=True, serialize=False)),
                 ("tileid", models.UUIDField()),
                 ("resourceinstanceid", models.UUIDField()),
-                ("graph_alias", models.TextField()),
+                ("graph_slug", models.TextField()),
                 ("node_alias", models.TextField()),
                 ("language", models.TextField()),
                 ("datatype", models.TextField()),
@@ -213,7 +213,7 @@ class Migration(migrations.Migration):
                         fields=["datatype"], name="arches_sear_datatyp_9d826b_idx"
                     ),
                     models.Index(
-                        fields=["graph_alias"], name="arches_sear_graph_a_0c8ffe_idx"
+                        fields=["graph_slug"], name="arches_sear_graph_a_0c8ffe_idx"
                     ),
                     models.Index(
                         fields=["node_alias"], name="arches_sear_node_al_e52887_idx"
@@ -232,7 +232,7 @@ class Migration(migrations.Migration):
                 ("id", models.AutoField(primary_key=True, serialize=False)),
                 ("tileid", models.UUIDField()),
                 ("resourceinstanceid", models.UUIDField()),
-                ("graph_alias", models.TextField()),
+                ("graph_slug", models.TextField()),
                 ("node_alias", models.TextField()),
                 ("datatype", models.TextField()),
                 ("value", models.UUIDField()),
@@ -256,7 +256,7 @@ class Migration(migrations.Migration):
                         fields=["datatype"], name="arches_sear_datatyp_6f5917_idx"
                     ),
                     models.Index(
-                        fields=["graph_alias"], name="arches_sear_graph_a_c2a8c5_idx"
+                        fields=["graph_slug"], name="arches_sear_graph_a_c2a8c5_idx"
                     ),
                     models.Index(
                         fields=["node_alias"], name="arches_sear_node_al_cdede4_idx"

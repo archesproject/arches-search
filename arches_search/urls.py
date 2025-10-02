@@ -3,8 +3,10 @@ from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.urls import include, path
 
+from arches_search.views.api.advanced_search import AdvancedSearchAPI
+
 urlpatterns = [
-    # project-level urls
+    path("api/advanced_search", AdvancedSearchAPI.as_view(), name="advanced_search"),
 ]
 
 handler400 = "arches.app.views.main.custom_400"
@@ -13,6 +15,10 @@ handler404 = "arches.app.views.main.custom_404"
 handler500 = "arches.app.views.main.custom_500"
 
 # Ensure Arches core urls are superseded by project-level urls
+urlpatterns.append(path("", include("arches_controlled_lists.urls")))
+urlpatterns.append(path("", include("arches_component_lab.urls")))
+urlpatterns.append(path("", include("arches_querysets.urls")))
+
 urlpatterns.append(path("", include("arches.urls")))
 
 # Adds URL pattern to serve media files during development
