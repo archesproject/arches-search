@@ -5,7 +5,7 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
-BOOLEAN_DATATYPES = [
+BOOLEAN_FACETS = [
     {
         "datatype": "boolean",
         "label": "is true",
@@ -48,7 +48,7 @@ BOOLEAN_DATATYPES = [
     },
 ]
 
-DATE_DATATYPES = [
+DATE_FACETS = [
     {
         "datatype": "date",
         "label": "=",
@@ -151,7 +151,7 @@ DATE_DATATYPES = [
     },
 ]
 
-EDTF_DATATYPES = [
+EDTF_FACETS = [
     {
         "datatype": "edtf",
         "label": "=",
@@ -284,7 +284,7 @@ EDTF_DATATYPES = [
     },
 ]
 
-FILE_LIST_DATATYPES = [
+FILE_LIST_FACETS = [
     {
         "datatype": "file-list",
         "label": "size is greater than",
@@ -377,7 +377,7 @@ FILE_LIST_DATATYPES = [
     },
 ]
 
-GEOJSON_FEATURE_COLLECTION_DATATYPES = [
+GEOJSON_FEATURE_COLLECTION_FACETS = [
     {
         "datatype": "geojson-feature-collection",
         "label": "contains a point",
@@ -430,7 +430,7 @@ GEOJSON_FEATURE_COLLECTION_DATATYPES = [
     },
 ]
 
-NON_LOCALIZED_STRING_DATATYPES = [
+NON_LOCALIZED_STRING_FACETS = [
     {
         "datatype": "non-localized-string",
         "label": "is like",
@@ -513,7 +513,7 @@ NON_LOCALIZED_STRING_DATATYPES = [
     },
 ]
 
-NUMBER_DATATYPES = [
+NUMBER_FACETS = [
     {
         "datatype": "number",
         "label": "=",
@@ -616,7 +616,7 @@ NUMBER_DATATYPES = [
     },
 ]
 
-REFERENCE_DATATYPES = [
+REFERENCE_FACETS = [
     {
         "datatype": "reference",
         "label": "references any",
@@ -699,7 +699,7 @@ REFERENCE_DATATYPES = [
     },
 ]
 
-RESOURCE_INSTANCE_DATATYPES = [
+RESOURCE_INSTANCE_FACETS = [
     {
         "datatype": "resource-instance",
         "label": "references any",
@@ -762,7 +762,7 @@ RESOURCE_INSTANCE_DATATYPES = [
     },
 ]
 
-RESOURCE_INSTANCE_LIST_DATATYPES = [
+RESOURCE_INSTANCE_LIST_FACETS = [
     {
         "datatype": "resource-instance-list",
         "label": "references any",
@@ -845,7 +845,7 @@ RESOURCE_INSTANCE_LIST_DATATYPES = [
     },
 ]
 
-STRING_DATATYPES = [
+STRING_FACETS = [
     {
         "datatype": "string",
         "label": "is like",
@@ -928,7 +928,7 @@ STRING_DATATYPES = [
     },
 ]
 
-URL_DATATYPES = [
+URL_FACETS = [
     {
         "datatype": "url",
         "label": "is like",
@@ -1011,19 +1011,19 @@ URL_DATATYPES = [
     },
 ]
 
-ALL_DATATYPES = [
-    *BOOLEAN_DATATYPES,
-    *DATE_DATATYPES,
-    *EDTF_DATATYPES,
-    *FILE_LIST_DATATYPES,
-    *GEOJSON_FEATURE_COLLECTION_DATATYPES,
-    *NON_LOCALIZED_STRING_DATATYPES,
-    *NUMBER_DATATYPES,
-    *REFERENCE_DATATYPES,
-    *RESOURCE_INSTANCE_DATATYPES,
-    *RESOURCE_INSTANCE_LIST_DATATYPES,
-    *STRING_DATATYPES,
-    *URL_DATATYPES,
+ALL_FACETS = [
+    *BOOLEAN_FACETS,
+    *DATE_FACETS,
+    *EDTF_FACETS,
+    *FILE_LIST_FACETS,
+    *GEOJSON_FEATURE_COLLECTION_FACETS,
+    *NON_LOCALIZED_STRING_FACETS,
+    *NUMBER_FACETS,
+    *REFERENCE_FACETS,
+    *RESOURCE_INSTANCE_FACETS,
+    *RESOURCE_INSTANCE_LIST_FACETS,
+    *STRING_FACETS,
+    *URL_FACETS,
 ]
 
 
@@ -1031,7 +1031,7 @@ def seed_facets(apps, schema_editor):
     AdvancedSearchFacet = apps.get_model("arches_search", "AdvancedSearchFacet")
     DDataType = apps.get_model("models", "DDataType")
 
-    for spec in ALL_DATATYPES:
+    for spec in ALL_FACETS:
         datatype = DDataType.objects.get(datatype=spec["datatype"])
         current_count = AdvancedSearchFacet.objects.filter(datatype=datatype).count()
 
@@ -1052,7 +1052,7 @@ def unseed_facets(apps, schema_editor):
     AdvancedSearchFacet = apps.get_model("arches_search", "AdvancedSearchFacet")
     DDataType = apps.get_model("models", "DDataType")
 
-    for spec in ALL_DATATYPES:
+    for spec in ALL_FACETS:
         datatype = DDataType.objects.get(datatype=spec["datatype"])
 
         AdvancedSearchFacet.objects.filter(
