@@ -80,11 +80,3 @@ class Command(BaseCommand):
         DateRangeSearch.objects.all().delete()
         BooleanSearch.objects.all().delete()
         UUIDSearch.objects.all().delete()
-
-    def delete_indexes(self, name=None):
-        TermSearch.objects.all().delete()
-        NumericSearch.objects.all().delete()
-        DateSearch.objects.all().delete()
-        DateRangeSearch.objects.all().delete()
-        BooleanSearch.objects.all().delete()
-        UUIDSearch.objects.all().delete()
