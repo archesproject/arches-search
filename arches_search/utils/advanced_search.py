@@ -1,6 +1,5 @@
-from typing import Any, Dict, List, Sequence, Set
-from django.db.models import Q, QuerySet
-
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from arches_search.models.models import (
     AdvancedSearchFacet,
     TermSearch,
@@ -10,6 +9,9 @@ from arches_search.models.models import (
     DateRangeSearch,
     BooleanSearch,
 )
+
+from arches.app.models import models as arches_models
+
 
 SEARCH_TABLE_TO_MODEL = {
     "term": TermSearch,
@@ -21,89 +23,88 @@ SEARCH_TABLE_TO_MODEL = {
 }
 
 
-def get_facet(datatype_code: str, operator_code: str) -> AdvancedSearchFacet:
-    return AdvancedSearchFacet.objects.get(
-        datatype=datatype_code, operator=operator_code
-    )
+def build_condition_q(
+    facet: AdvancedSearchFacet, value_field_name: str, params: Sequence[Any]
+) -> Q:
+    lookup = facet.orm_template.replace("{col}", value_field_name)
+
+    if facet.arity == 0:
+        return Q(**{lookup: True})
+
+    if facet.arity == 1:
+        return Q(**{lookup: params[0]})
+
+    return Q(**{lookup: params[0]})
 
 
-def coerce_params(raw_params: Sequence[Any]) -> List[Any]:
-    coerced_values: List[Any] = []
-    for raw in raw_params:
-        try:
-            coerced_values.append(float(raw))
-        except (TypeError, ValueError):
-            coerced_values.append(raw)
-    return coerced_values
-
-
-def build_clause_queryset(
-    graph_alias: str,
+def build_exists_for_clause(
+    graph_slug: str,
     node_alias: str,
     search_table: str,
     datatype: str,
     operator: str,
     params: Sequence[Any],
-) -> QuerySet:
-    facet = get_facet(datatype, operator)
+):
+    facet = AdvancedSearchFacet.objects.get(datatype=datatype, operator=operator)
     model_class = SEARCH_TABLE_TO_MODEL[search_table]
-    base_queryset = model_class.objects.filter(
-        graph_alias=graph_alias, node_alias=node_alias
-    )
 
     value_field_name = "value"
-    lookup = facet.orm_template.replace("{col}", value_field_name)
-
-    if facet.arity == 0:
-        q_object = Q(**{lookup: True})
-    elif facet.arity == 1:
-        coerced = coerce_params(params)
-        q_object = Q(**{lookup: coerced[0]})
+    condition_q = build_condition_q(facet, value_field_name, params)
 
     if facet.is_orm_template_negated:
-        q_object = ~q_object
+        condition_q = ~condition_q
 
-    return base_queryset.filter(q_object)
+    subquery = model_class.objects.filter(
+        graph_slug=graph_slug,
+        node_alias=node_alias,
+        resourceinstanceid=OuterRef("resourceinstanceid"),
+    ).filter(condition_q)
+    return Exists(subquery)
 
 
-def collect_resource_ids_for_group(graph_alias: str, group: Dict[str, Any]) -> Set[str]:
+def build_exists_expression_for_group(graph_slug: str, group: Dict[str, Any]):
     logic = (group.get("logic") or "AND").upper()
-    buckets: List[Set[str]] = []
+    expressions: List[Any] = []
 
     for clause in group.get("clauses", []):
-        qs = build_clause_queryset(
-            graph_alias=graph_alias,
+        exists_expr = build_exists_for_clause(
+            graph_slug=graph_slug,
             node_alias=clause["node_alias"],
             search_table=clause["search_table"],
             datatype=clause["datatype"],
             operator=clause["operator"],
             params=clause.get("params", []),
         )
-        buckets.append(set(qs.values_list("resourceinstanceid", flat=True)))
+        expressions.append(exists_expr)
 
     for subgroup in group.get("groups", []):
-        buckets.append(collect_resource_ids_for_group(graph_alias, subgroup))
+        subgroup_expr = build_exists_expression_for_group(graph_slug, subgroup)
+        if subgroup_expr is not None:
+            expressions.append(subgroup_expr)
 
-    if not buckets:
-        return set()
+    if not expressions:
+        return None
 
-    if logic == "AND":
-        result_ids = buckets[0]
-        for next_ids in buckets[1:]:
-            result_ids = result_ids.intersection(next_ids)
-        return result_ids
-
-    result_ids: Set[str] = set()
-    for next_ids in buckets:
-        result_ids |= next_ids
-    return result_ids
+    combined = expressions[0]
+    for next_expr in expressions[1:]:
+        combined = (combined & next_expr) if logic == "AND" else (combined | next_expr)
+    return combined
 
 
-def search_resource_ids_from_payload(payload: Dict[str, Any]) -> Set[str]:
-    graph_alias = payload["graph_alias"]
-    root_group = (
+def resources_queryset_from_payload(payload: Dict[str, Any]) -> QuerySet:
+    graph_slug = payload["graph_slug"]
+    query = (
         payload.get("query")
         or payload.get("where")
         or {"logic": "AND", "clauses": [], "groups": []}
     )
-    return collect_resource_ids_for_group(graph_alias, root_group)
+
+    aliased_graph_queryset = arches_models.ResourceInstance.objects.filter(
+        graph__slug=graph_slug
+    )
+    predicate = build_exists_expression_for_group(graph_slug, query)
+
+    if predicate is None:
+        return aliased_graph_queryset.none()
+
+    return aliased_graph_queryset.filter(predicate)

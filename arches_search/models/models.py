@@ -41,7 +41,7 @@ class TermSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.UUIDField()
     resourceinstanceid = models.UUIDField()
-    graph_alias = models.TextField()
+    graph_slug = models.TextField()
     node_alias = models.TextField()
     language = models.TextField()
     datatype = models.TextField()
@@ -57,7 +57,7 @@ class TermSearch(models.Model):
             models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
             models.Index(fields=["datatype"]),
-            models.Index(fields=["graph_alias"]),
+            models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
             GinIndex(fields=["search_vector"]),
@@ -68,7 +68,7 @@ class NumericSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.UUIDField()
     resourceinstanceid = models.UUIDField()
-    graph_alias = models.TextField()
+    graph_slug = models.TextField()
     node_alias = models.TextField()
     datatype = models.TextField()
     value = models.DecimalField(decimal_places=10, max_digits=64)
@@ -82,7 +82,7 @@ class NumericSearch(models.Model):
             models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
             models.Index(fields=["datatype"]),
-            models.Index(fields=["graph_alias"]),
+            models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
         ]
@@ -92,7 +92,7 @@ class UUIDSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.UUIDField()
     resourceinstanceid = models.UUIDField()
-    graph_alias = models.TextField()
+    graph_slug = models.TextField()
     node_alias = models.TextField()
     datatype = models.TextField()
     value = models.UUIDField()
@@ -106,7 +106,7 @@ class UUIDSearch(models.Model):
             models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
             models.Index(fields=["datatype"]),
-            models.Index(fields=["graph_alias"]),
+            models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
         ]
@@ -116,7 +116,7 @@ class DateSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.UUIDField()
     resourceinstanceid = models.UUIDField()
-    graph_alias = models.TextField()
+    graph_slug = models.TextField()
     node_alias = models.TextField()
     datatype = models.TextField()
     value = models.BigIntegerField()
@@ -129,7 +129,7 @@ class DateSearch(models.Model):
             models.Index(fields=["tileid", "node_alias", "value"]),
             models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
-            models.Index(fields=["graph_alias"]),
+            models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["datatype"]),
             models.Index(fields=["value"]),
@@ -140,7 +140,7 @@ class DateRangeSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.UUIDField()
     resourceinstanceid = models.UUIDField()
-    graph_alias = models.TextField()
+    graph_slug = models.TextField()
     node_alias = models.TextField()
     datatype = models.TextField()
     start_value = models.BigIntegerField()
@@ -154,7 +154,7 @@ class DateRangeSearch(models.Model):
             models.Index(fields=["tileid", "node_alias", "start_value", "end_value"]),
             models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
-            models.Index(fields=["graph_alias"]),
+            models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["datatype"]),
             models.Index(fields=["start_value", "end_value"]),
@@ -165,7 +165,7 @@ class BooleanSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.UUIDField()
     resourceinstanceid = models.UUIDField()
-    graph_alias = models.TextField()
+    graph_slug = models.TextField()
     node_alias = models.TextField()
     datatype = models.TextField()
     value = models.BooleanField()
@@ -178,7 +178,7 @@ class BooleanSearch(models.Model):
             models.Index(fields=["tileid", "node_alias", "value"]),
             models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
-            models.Index(fields=["graph_alias"]),
+            models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["datatype"]),
             models.Index(fields=["value"]),
