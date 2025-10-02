@@ -13,7 +13,12 @@ class DateIndexing(BaseIndexing):
     def index(self, tile, node):
         nodeid = str(node.nodeid)
         document = {"dates": [], "date_ranges": []}
-        self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
+        date_value = tile.data[nodeid]
+        date_components = date_value.split("-")
+        if len(date_components[0]) == 4 and len(date_components) == 3:
+            self._short_circuit_date(document, date_components, nodeid, node, tile)
+        else:
+            self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
         for date in document["dates"]:
             date_search = DateSearch.objects.create(
                 node_alias=node.alias,
@@ -24,3 +29,18 @@ class DateIndexing(BaseIndexing):
                 value=date["date"],
             )
             date_search.save()
+
+    def _short_circuit_date(self, document, date_components, nodeid, node, tile):
+        year = int(date_components[0])
+        month = int(date_components[1])
+        day = int(date_components[2])
+        date_int = year * 10000 + month * 100 + day
+
+        document["dates"].append(
+            {
+                "date": date_int,
+                "nodegroup_id": tile.nodegroup_id,
+                "nodeid": nodeid,
+                "provisional": tile.provisionaledits,
+            }
+        )
