@@ -62,16 +62,16 @@ class Command(BaseCommand):
         self.delete_indexes()
         nodegroup_cache = {}
         indexing_factory = IndexingFactory()
-        paginator = Paginator(TileModel.objects.order_by("tileid").all(), 1000)
-        for page in range(1, paginator.num_pages + 1):
-            with transaction.atomic():
-                for tile in paginator.page(page).object_list:
-                    index_from_tile(
-                        tile,
-                        delete_existing=False,
-                        indexing_factory=indexing_factory,
-                        nodegroup_cache=nodegroup_cache,
-                    )
+
+        for tile in (
+            TileModel.objects.order_by("tileid").all().iterator(chunk_size=1000)
+        ):
+            index_from_tile(
+                tile,
+                delete_existing=False,
+                indexing_factory=indexing_factory,
+                nodegroup_cache=nodegroup_cache,
+            )
 
     def delete_indexes(self, name=None):
         TermSearch.objects.all().delete()
