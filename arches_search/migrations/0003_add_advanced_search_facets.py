@@ -1,283 +1,1095 @@
-import uuid
+import arches.app.models.fields.i18n
+import arches.app.utils.betterJSONSerializer
 import django.db.models.deletion
 
 from django.db import migrations, models
 
-from arches.app.models.system_settings import settings
+
+BOOLEAN_DATATYPES = [
+    {
+        "datatype": "boolean",
+        "label": "is true",
+        "operator": "IS_TRUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS TRUE",
+    },
+    {
+        "datatype": "boolean",
+        "label": "is false",
+        "operator": "IS_FALSE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS FALSE",
+    },
+    {
+        "datatype": "boolean",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "boolean",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+DATE_DATATYPES = [
+    {
+        "datatype": "date",
+        "label": "=",
+        "operator": "EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = {p0}",
+    },
+    {
+        "datatype": "date",
+        "label": "!=",
+        "operator": "NOT_EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS DISTINCT FROM {p0}",
+    },
+    {
+        "datatype": "date",
+        "label": "<",
+        "operator": "LESS_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__lt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} < {p0}",
+    },
+    {
+        "datatype": "date",
+        "label": ">",
+        "operator": "GREATER_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__gt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} > {p0}",
+    },
+    {
+        "datatype": "date",
+        "label": "<=",
+        "operator": "LESS_THAN_OR_EQUAL",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__lte",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} <= {p0}",
+    },
+    {
+        "datatype": "date",
+        "label": ">=",
+        "operator": "GREATER_THAN_OR_EQUAL",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__gte",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} >= {p0}",
+    },
+    {
+        "datatype": "date",
+        "label": "is between",
+        "operator": "BETWEEN",
+        "arity": 2,
+        "param_formats": ["{value0}", "{value1}"],
+        "orm_template": "{col}__range",
+        "is_orm_template_negated": False,
+        "sql_template": "({col} BETWEEN {p0} AND {p1})",
+    },
+    {
+        "datatype": "date",
+        "label": "is not between",
+        "operator": "NOT_BETWEEN",
+        "arity": 2,
+        "param_formats": ["{value0}", "{value1}"],
+        "orm_template": "{col}__range",
+        "is_orm_template_negated": True,
+        "sql_template": "NOT ({col} BETWEEN {p0} AND {p1})",
+    },
+    {
+        "datatype": "date",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "date",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+EDTF_DATATYPES = [
+    {
+        "datatype": "edtf",
+        "label": "=",
+        "operator": "EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = {p0}",
+    },
+    {
+        "datatype": "edtf",
+        "label": "!=",
+        "operator": "NOT_EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS DISTINCT FROM {p0}",
+    },
+    {
+        "datatype": "edtf",
+        "label": "<",
+        "operator": "LESS_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__lt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} < {p0}",
+    },
+    {
+        "datatype": "edtf",
+        "label": ">",
+        "operator": "GREATER_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__gt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} > {p0}",
+    },
+    {
+        "datatype": "edtf",
+        "label": "<=",
+        "operator": "LESS_THAN_OR_EQUAL",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__lte",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} <= {p0}",
+    },
+    {
+        "datatype": "edtf",
+        "label": ">=",
+        "operator": "GREATER_THAN_OR_EQUAL",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__gte",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} >= {p0}",
+    },
+    {
+        "datatype": "edtf",
+        "label": "overlaps",
+        "operator": "OVERLAPS",
+        "arity": 2,
+        "param_formats": ["{value0}", "{value1}"],
+        "orm_template": "AND:{col_start}__lte:{p1};{col_end}__gte:{p0}",
+        "is_orm_template_negated": False,
+        "sql_template": "({col_start} <= {p1} AND {col_end} >= {p0})",
+    },
+    {
+        "datatype": "edtf",
+        "label": "is during",
+        "operator": "DURING",
+        "arity": 2,
+        "param_formats": ["{value0}", "{value1}"],
+        "orm_template": "AND:{col_start}__gte:{p0};{col_end}__lte:{p1}",
+        "is_orm_template_negated": False,
+        "sql_template": "({col_start} >= {p0} AND {col_end} <= {p1})",
+    },
+    {
+        "datatype": "edtf",
+        "label": "contains",
+        "operator": "CONTAINS",
+        "arity": 2,
+        "param_formats": ["{value0}", "{value1}"],
+        "orm_template": "AND:{col_start}__lte:{p0};{col_end}__gte:{p1}",
+        "is_orm_template_negated": False,
+        "sql_template": "({col_start} <= {p0} AND {col_end} >= {p1})",
+    },
+    {
+        "datatype": "edtf",
+        "label": "starts at",
+        "operator": "STARTS_AT",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col_start}",
+        "is_orm_template_negated": False,
+        "sql_template": "{col_start} = {p0}",
+    },
+    {
+        "datatype": "edtf",
+        "label": "finishes at",
+        "operator": "FINISHES_AT",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col_end}",
+        "is_orm_template_negated": False,
+        "sql_template": "{col_end} = {p0}",
+    },
+    {
+        "datatype": "edtf",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "edtf",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+FILE_LIST_DATATYPES = [
+    {
+        "datatype": "file-list",
+        "label": "size is greater than",
+        "operator": "FILE_SIZE_GREATER_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__gt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} > {p0}",
+    },
+    {
+        "datatype": "file-list",
+        "label": "size is less than",
+        "operator": "FILE_SIZE_LESS_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__lt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} < {p0}",
+    },
+    {
+        "datatype": "file-list",
+        "label": "size is between",
+        "operator": "FILE_SIZE_BETWEEN",
+        "arity": 2,
+        "param_formats": ["{value0}", "{value1}"],
+        "orm_template": "{col}__range",
+        "is_orm_template_negated": False,
+        "sql_template": "({col} BETWEEN {p0} AND {p1})",
+    },
+    {
+        "datatype": "file-list",
+        "label": "count is greater than",
+        "operator": "FILE_COUNT_GREATER_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__gt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} > {p0}",
+    },
+    {
+        "datatype": "file-list",
+        "label": "count is less than",
+        "operator": "FILE_COUNT_LESS_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__lt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} < {p0}",
+    },
+    {
+        "datatype": "file-list",
+        "label": "name is like",
+        "operator": "FILE_NAME_LIKE",
+        "arity": 1,
+        "param_formats": ["%{value}%"],
+        "orm_template": "{col}__icontains",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "file-list",
+        "label": "extension equals",
+        "operator": "FILE_EXTENSION_EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__iexact",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = {p0}",
+    },
+    {
+        "datatype": "file-list",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "file-list",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+GEOJSON_FEATURE_COLLECTION_DATATYPES = [
+    {
+        "datatype": "geojson-feature-collection",
+        "label": "contains a point",
+        "operator": "GEO_CONTAINS_POINT",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__contains",
+        "is_orm_template_negated": False,
+        "sql_template": "ST_Contains({col}, ST_SetSRID(ST_GeomFromGeoJSON({p0}), 4326))",
+    },
+    {
+        "datatype": "geojson-feature-collection",
+        "label": "contains a line",
+        "operator": "GEO_CONTAINS_LINE",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__contains",
+        "is_orm_template_negated": False,
+        "sql_template": "ST_Contains({col}, ST_SetSRID(ST_GeomFromGeoJSON({p0}), 4326))",
+    },
+    {
+        "datatype": "geojson-feature-collection",
+        "label": "contains a polygon",
+        "operator": "GEO_CONTAINS_POLYGON",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__contains",
+        "is_orm_template_negated": False,
+        "sql_template": "ST_Contains({col}, ST_SetSRID(ST_GeomFromGeoJSON({p0}), 4326))",
+    },
+    {
+        "datatype": "geojson-feature-collection",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "geojson-feature-collection",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+NON_LOCALIZED_STRING_DATATYPES = [
+    {
+        "datatype": "non-localized-string",
+        "label": "is like",
+        "operator": "LIKE",
+        "arity": 1,
+        "param_formats": ["%{value}%"],
+        "orm_template": "{col}__icontains",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "non-localized-string",
+        "label": "is not like",
+        "operator": "NOT_LIKE",
+        "arity": 1,
+        "param_formats": ["%{value}%"],
+        "orm_template": "{col}__icontains",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} NOT ILIKE {p0}",
+    },
+    {
+        "datatype": "non-localized-string",
+        "label": "starts with",
+        "operator": "STARTS_WITH",
+        "arity": 1,
+        "param_formats": ["{value}%"],
+        "orm_template": "{col}__istartswith",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "non-localized-string",
+        "label": "ends with",
+        "operator": "ENDS_WITH",
+        "arity": 1,
+        "param_formats": ["%{value}"],
+        "orm_template": "{col}__iendswith",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "non-localized-string",
+        "label": "equals",
+        "operator": "EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__iexact",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = {p0}",
+    },
+    {
+        "datatype": "non-localized-string",
+        "label": "does not equal",
+        "operator": "NOT_EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__iexact",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS DISTINCT FROM {p0}",
+    },
+    {
+        "datatype": "non-localized-string",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "non-localized-string",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+NUMBER_DATATYPES = [
+    {
+        "datatype": "number",
+        "label": "=",
+        "operator": "EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = {p0}",
+    },
+    {
+        "datatype": "number",
+        "label": "!=",
+        "operator": "NOT_EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS DISTINCT FROM {p0}",
+    },
+    {
+        "datatype": "number",
+        "label": "<",
+        "operator": "LESS_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__lt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} < {p0}",
+    },
+    {
+        "datatype": "number",
+        "label": ">",
+        "operator": "GREATER_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__gt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} > {p0}",
+    },
+    {
+        "datatype": "number",
+        "label": "<=",
+        "operator": "LESS_THAN_OR_EQUAL",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__lte",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} <= {p0}",
+    },
+    {
+        "datatype": "number",
+        "label": ">=",
+        "operator": "GREATER_THAN_OR_EQUAL",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__gte",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} >= {p0}",
+    },
+    {
+        "datatype": "number",
+        "label": "is between",
+        "operator": "BETWEEN",
+        "arity": 2,
+        "param_formats": ["{value0}", "{value1}"],
+        "orm_template": "{col}__range",
+        "is_orm_template_negated": False,
+        "sql_template": "({col} BETWEEN {p0} AND {p1})",
+    },
+    {
+        "datatype": "number",
+        "label": "is not between",
+        "operator": "NOT_BETWEEN",
+        "arity": 2,
+        "param_formats": ["{value0}", "{value1}"],
+        "orm_template": "{col}__range",
+        "is_orm_template_negated": True,
+        "sql_template": "NOT ({col} BETWEEN {p0} AND {p1})",
+    },
+    {
+        "datatype": "number",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "number",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+REFERENCE_DATATYPES = [
+    {
+        "datatype": "reference",
+        "label": "references any",
+        "operator": "REFERENCES_ANY",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "{col}__in",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = ANY ({p0})",
+    },
+    {
+        "datatype": "reference",
+        "label": "references all",
+        "operator": "REFERENCES_ALL",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "HAVING_ALL:{col}:{values}",
+        "is_orm_template_negated": False,
+        "sql_template": "({p0} <@ array_agg({col}))",
+    },
+    {
+        "datatype": "reference",
+        "label": "references only",
+        "operator": "REFERENCES_ONLY",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "HAVING_ONLY:{col}:{values}",
+        "is_orm_template_negated": False,
+        "sql_template": "(array_agg({col}) <@ {p0})",
+    },
+    {
+        "datatype": "reference",
+        "label": "references none of",
+        "operator": "REFERENCES_NONE_OF",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "{col}__in",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} <> ALL ({p0})",
+    },
+    {
+        "datatype": "reference",
+        "label": "descendant of",
+        "operator": "DESCENDANT_OF",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "{col}__in",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = ANY ({p0})",
+    },
+    {
+        "datatype": "reference",
+        "label": "ancestor of",
+        "operator": "ANCESTOR_OF",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "{col}__in",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = ANY ({p0})",
+    },
+    {
+        "datatype": "reference",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "reference",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+RESOURCE_INSTANCE_DATATYPES = [
+    {
+        "datatype": "resource-instance",
+        "label": "references any",
+        "operator": "REFERENCES_ANY",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "{col}__in",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = ANY ({p0})",
+    },
+    {
+        "datatype": "resource-instance",
+        "label": "references all",
+        "operator": "REFERENCES_ALL",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "AGG_SUPERSET:{col}:{p0}",
+        "is_orm_template_negated": False,
+        "sql_template": "({p0} <@ array_agg({col}))",
+    },
+    {
+        "datatype": "resource-instance",
+        "label": "references only",
+        "operator": "REFERENCES_ONLY",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "AGG_SET_EQUAL:{col}:{p0}",
+        "is_orm_template_negated": False,
+        "sql_template": "((array_agg({col}) <@ {p0}) AND ({p0} <@ array_agg({col})))",
+    },
+    {
+        "datatype": "resource-instance",
+        "label": "references none of",
+        "operator": "REFERENCES_NONE_OF",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "{col}__in",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} <> ALL ({p0})",
+    },
+    {
+        "datatype": "resource-instance",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "resource-instance",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+RESOURCE_INSTANCE_LIST_DATATYPES = [
+    {
+        "datatype": "resource-instance-list",
+        "label": "references any",
+        "operator": "REFERENCES_ANY",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "{col}__in",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = ANY ({p0})",
+    },
+    {
+        "datatype": "resource-instance-list",
+        "label": "references all",
+        "operator": "REFERENCES_ALL",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "AGG_SUPERSET:{col}:{p0}",
+        "is_orm_template_negated": False,
+        "sql_template": "({p0} <@ array_agg({col}))",
+    },
+    {
+        "datatype": "resource-instance-list",
+        "label": "references only",
+        "operator": "REFERENCES_ONLY",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "AGG_SET_EQUAL:{col}:{p0}",
+        "is_orm_template_negated": False,
+        "sql_template": "((array_agg({col}) <@ {p0}) AND ({p0} <@ array_agg({col})))",
+    },
+    {
+        "datatype": "resource-instance-list",
+        "label": "references none of",
+        "operator": "REFERENCES_NONE_OF",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "{col}__in",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} <> ALL ({p0})",
+    },
+    {
+        "datatype": "resource-instance-list",
+        "label": "count is greater than",
+        "operator": "COUNT_GREATER_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col_count}__gt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col_count} > {p0}",
+    },
+    {
+        "datatype": "resource-instance-list",
+        "label": "count is less than",
+        "operator": "COUNT_LESS_THAN",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col_count}__lt",
+        "is_orm_template_negated": False,
+        "sql_template": "{col_count} < {p0}",
+    },
+    {
+        "datatype": "resource-instance-list",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "resource-instance-list",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+STRING_DATATYPES = [
+    {
+        "datatype": "string",
+        "label": "is like",
+        "operator": "LIKE",
+        "arity": 1,
+        "param_formats": ["%{value}%"],
+        "orm_template": "{col}__icontains",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "string",
+        "label": "is not like",
+        "operator": "NOT_LIKE",
+        "arity": 1,
+        "param_formats": ["%{value}%"],
+        "orm_template": "{col}__icontains",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} NOT ILIKE {p0}",
+    },
+    {
+        "datatype": "string",
+        "label": "starts with",
+        "operator": "STARTS_WITH",
+        "arity": 1,
+        "param_formats": ["{value}%"],
+        "orm_template": "{col}__istartswith",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "string",
+        "label": "ends with",
+        "operator": "ENDS_WITH",
+        "arity": 1,
+        "param_formats": ["%{value}"],
+        "orm_template": "{col}__iendswith",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "string",
+        "label": "equals",
+        "operator": "EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__iexact",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = {p0}",
+    },
+    {
+        "datatype": "string",
+        "label": "does not equal",
+        "operator": "NOT_EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__iexact",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS DISTINCT FROM {p0}",
+    },
+    {
+        "datatype": "string",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "string",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+URL_DATATYPES = [
+    {
+        "datatype": "url",
+        "label": "is like",
+        "operator": "LIKE",
+        "arity": 1,
+        "param_formats": ["%{value}%"],
+        "orm_template": "{col}__icontains",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "url",
+        "label": "is not like",
+        "operator": "NOT_LIKE",
+        "arity": 1,
+        "param_formats": ["%{value}%"],
+        "orm_template": "{col}__icontains",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} NOT ILIKE {p0}",
+    },
+    {
+        "datatype": "url",
+        "label": "starts with",
+        "operator": "STARTS_WITH",
+        "arity": 1,
+        "param_formats": ["{value}%"],
+        "orm_template": "{col}__istartswith",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "url",
+        "label": "ends with",
+        "operator": "ENDS_WITH",
+        "arity": 1,
+        "param_formats": ["%{value}"],
+        "orm_template": "{col}__iendswith",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} ILIKE {p0}",
+    },
+    {
+        "datatype": "url",
+        "label": "equals",
+        "operator": "EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__iexact",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} = {p0}",
+    },
+    {
+        "datatype": "url",
+        "label": "does not equal",
+        "operator": "NOT_EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__iexact",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS DISTINCT FROM {p0}",
+    },
+    {
+        "datatype": "url",
+        "label": "has no value",
+        "operator": "HAS_NO_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": False,
+        "sql_template": "{col} IS NULL",
+    },
+    {
+        "datatype": "url",
+        "label": "has any value",
+        "operator": "HAS_ANY_VALUE",
+        "arity": 0,
+        "param_formats": [],
+        "orm_template": "{col}__isnull",
+        "is_orm_template_negated": True,
+        "sql_template": "{col} IS NOT NULL",
+    },
+]
+
+ALL_DATATYPES = [
+    *BOOLEAN_DATATYPES,
+    *DATE_DATATYPES,
+    *EDTF_DATATYPES,
+    *FILE_LIST_DATATYPES,
+    *GEOJSON_FEATURE_COLLECTION_DATATYPES,
+    *NON_LOCALIZED_STRING_DATATYPES,
+    *NUMBER_DATATYPES,
+    *REFERENCE_DATATYPES,
+    *RESOURCE_INSTANCE_DATATYPES,
+    *RESOURCE_INSTANCE_LIST_DATATYPES,
+    *STRING_DATATYPES,
+    *URL_DATATYPES,
+]
 
 
-# I'm unable to access `generate_uri` from ListItem here, so I'm duplicating its logic.
-def generate_uri(id):
-    if not id:
-        raise RuntimeError("URI generation attempted without a primary key.")
-
-    parts = [settings.PUBLIC_SERVER_ADDRESS.rstrip("/")]
-    if settings.FORCE_SCRIPT_NAME:
-        parts.append(settings.FORCE_SCRIPT_NAME)
-    parts += ["plugins", "controlled-list-manager", "item", str(id)]
-
-    return "/".join(parts)
-
-
-def populate_datatype_advanced_search_facets(apps, schema_editor):
-    List = apps.get_model("arches_controlled_lists", "List")
-    ListItem = apps.get_model("arches_controlled_lists", "ListItem")
-    ListItemValue = apps.get_model("arches_controlled_lists", "ListItemValue")
-    DatatypeXAdvancedSearchFacets = apps.get_model(
-        "arches_search", "DatatypeXAdvancedSearchFacets"
-    )
+def seed_facets(apps, schema_editor):
+    AdvancedSearchFacet = apps.get_model("arches_search", "AdvancedSearchFacet")
     DDataType = apps.get_model("models", "DDataType")
 
-    datatype_to_facet_map = {
-        "annotation": [],
-        "boolean": ["is true", "is false", "has no value", "has any value"],
-        "date": [
-            "=",
-            "!=",
-            "<",
-            ">",
-            "<=",
-            ">=",
-            "is between",
-            "is not between",
-            "has no value",
-            "has any value",
-        ],
-        "edtf": [
-            "=",
-            "!=",
-            "<",
-            ">",
-            "<=",
-            ">=",
-            "overlaps",
-            "is during",
-            "contains",
-            "starts at",
-            "finishes at",
-            "has no value",
-            "has any value",
-        ],
-        "file-list": [
-            "size is greater than",
-            "size is less than",
-            "size is between",
-            "count is greater than",
-            "count is less than",
-            "name is like",
-            "extension is equals",
-            "has no value",
-            "has any value",
-        ],
-        "geojson-feature-collection": [
-            "contains a point",
-            "contains a line",
-            "contains a polygon",
-            "has no value",
-            "has any value",
-        ],
-        "node-value": [],
-        "non-localized-string": [
-            "is like",
-            "is not like",
-            "starts with",
-            "ends with",
-            "equals",
-            "does not equal",
-            "has no value",
-            "has any value",
-        ],
-        "number": [
-            "=",
-            "!=",
-            "<",
-            ">",
-            "<=",
-            ">=",
-            "is between",
-            "is not between",
-            "has no value",
-            "has any value",
-        ],
-        "reference": [
-            "references any",
-            "references all",
-            "references only",
-            "references none of",
-            "descendant of",
-            "ancestor of",
-            "has no value",
-            "has any value",
-        ],
-        "resource-instance": [
-            "references any",
-            "references all",
-            "references only",
-            "references none of",
-            "has no value",
-            "has any value",
-        ],
-        "resource-instance-list": [
-            "references any",
-            "references all",
-            "references only",
-            "references none of",
-            "count is greater than",
-            "count is less than",
-            "has no value",
-            "has any value",
-        ],
-        "semantic": [],
-        "string": [
-            "is like",
-            "is not like",
-            "starts with",
-            "ends with",
-            "equals",
-            "does not equal",
-            "has no value",
-            "has any value",
-        ],
-        "url": [
-            "is like",
-            "is not like",
-            "starts with",
-            "ends with",
-            "equals",
-            "does not equal",
-            "has no value",
-            "has any value",
-        ],
-    }
+    for spec in ALL_DATATYPES:
+        datatype = DDataType.objects.get(datatype=spec["datatype"])
+        current_count = AdvancedSearchFacet.objects.filter(datatype=datatype).count()
 
-    for datatype, facets in datatype_to_facet_map.items():
-        ddatatype_instance = DDataType.objects.get(datatype=datatype)
-
-        if List.objects.filter(name=f"Advanced Search Facets - {datatype}").exists():
-            List.objects.filter(name=f"Advanced Search Facets - {datatype}").delete()
-
-        if DatatypeXAdvancedSearchFacets.objects.filter(
-            datatype=ddatatype_instance
-        ).exists():
-            DatatypeXAdvancedSearchFacets.objects.filter(
-                datatype=ddatatype_instance
-            ).delete()
-
-        controlled_list = None
-        if facets:
-            controlled_list = List.objects.create(
-                name=f"Advanced Search Facets - {datatype}",
-                searchable=True,
-            )
-
-        DatatypeXAdvancedSearchFacets.objects.create(
-            datatype=ddatatype_instance,
-            controlled_list=controlled_list,
+        AdvancedSearchFacet.objects.create(
+            arity=spec["arity"],
+            datatype=datatype,
+            label={"en": spec["label"]},
+            operator=spec["operator"],
+            param_formats=spec["param_formats"],
+            sortorder=current_count,
+            orm_template=spec["orm_template"],
+            is_orm_template_negated=spec["is_orm_template_negated"],
+            sql_template=spec["sql_template"],
         )
 
-        if controlled_list:
-            sort_order = 0
-            for facet in facets:
-                list_item_id = uuid.uuid4()
 
-                list_item = ListItem.objects.create(
-                    id=list_item_id,
-                    list=controlled_list,
-                    sortorder=sort_order,
-                    uri=generate_uri(list_item_id),
-                )
-                ListItemValue.objects.create(
-                    list_item=list_item,
-                    valuetype_id="prefLabel",
-                    language_id="en",
-                    value=facet,
-                )
-                sort_order += 1
+def unseed_facets(apps, schema_editor):
+    AdvancedSearchFacet = apps.get_model("arches_search", "AdvancedSearchFacet")
+    DDataType = apps.get_model("models", "DDataType")
 
+    for spec in ALL_DATATYPES:
+        datatype = DDataType.objects.get(datatype=spec["datatype"])
 
-def remove_datatype_advanced_search_facets(apps, schema_editor):
-    DatatypeXAdvancedSearchFacets = apps.get_model(
-        "arches_search", "DatatypeXAdvancedSearchFacets"
-    )
-
-    for (
-        datatype_x_advanced_search_facets
-    ) in DatatypeXAdvancedSearchFacets.objects.all():
-        if datatype_x_advanced_search_facets.controlled_list:
-            datatype_x_advanced_search_facets.controlled_list.delete()
-        datatype_x_advanced_search_facets.delete()
+        AdvancedSearchFacet.objects.filter(
+            datatype=datatype, operator=spec["operator"]
+        ).delete()
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
         ("arches_search", "0002_indexed_tables"),
-        ("arches_controlled_lists", "0008_ensure_languages_in_sync"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name="AdvancedSearchFacetOperator",
-            fields=[
-                ("id", models.AutoField(primary_key=True, serialize=False)),
-                ("key", models.SlugField(unique=True)),
-                ("arity", models.PositiveSmallIntegerField(default=0)),
-                ("param_formats", models.JSONField(blank=True, default=list)),
-                ("sql_template", models.TextField()),
-                ("orm_path_template", models.CharField(blank=True, max_length=255)),
-                ("orm_negated", models.BooleanField(default=False)),
-            ],
-        ),
-        migrations.CreateModel(
             name="AdvancedSearchFacet",
             fields=[
                 ("id", models.AutoField(primary_key=True, serialize=False)),
+                ("arity", models.PositiveSmallIntegerField(default=0)),
                 (
-                    "controlled_list_item",
-                    models.ForeignKey(
-                        db_column="controlledlistitemid",
-                        help_text="The controlled list item associated with the advanced search facet.",
-                        on_delete=django.db.models.deletion.CASCADE,
-                        to="arches_controlled_lists.listitem",
-                        verbose_name="Controlled List Item",
+                    "label",
+                    arches.app.models.fields.i18n.I18n_TextField(
+                        default="",
+                        encoder=arches.app.utils.betterJSONSerializer.JSONSerializer,
                     ),
                 ),
-                (
-                    "operator",
-                    models.ForeignKey(
-                        db_column="operatorid",
-                        help_text="The operator associated with the advanced search facet.",
-                        on_delete=django.db.models.deletion.CASCADE,
-                        to="arches_search.advancedsearchfacetoperator",
-                        verbose_name="Operator",
-                    ),
-                ),
-            ],
-        ),
-        migrations.CreateModel(
-            name="DatatypeXAdvancedSearchFacets",
-            fields=[
-                (
-                    "id",
-                    models.AutoField(primary_key=True, serialize=False),
-                ),
-                (
-                    "controlled_list",
-                    models.ForeignKey(
-                        db_column="controlledlistid",
-                        help_text="The controlled list associated with the data type, if applicable.",
-                        on_delete=django.db.models.deletion.CASCADE,
-                        to="arches_controlled_lists.list",
-                        verbose_name="Controlled List",
-                        null=True,
-                        blank=True,
-                    ),
-                ),
+                ("operator", models.CharField(max_length=50)),
+                ("param_formats", models.JSONField(blank=True, default=list)),
+                ("sortorder", models.PositiveSmallIntegerField()),
+                ("orm_template", models.CharField(blank=True, max_length=255)),
+                ("is_orm_template_negated", models.BooleanField(default=False)),
+                ("sql_template", models.TextField()),
                 (
                     "datatype",
                     models.ForeignKey(
                         db_column="datatypeid",
-                        help_text="The data type to which the advanced search facets apply.",
+                        help_text="The data type to which the advanced search facet applies.",
                         on_delete=django.db.models.deletion.CASCADE,
                         to="models.ddatatype",
                         verbose_name="Data Type",
@@ -285,8 +1097,17 @@ class Migration(migrations.Migration):
                 ),
             ],
         ),
-        migrations.RunPython(
-            code=populate_datatype_advanced_search_facets,
-            reverse_code=remove_datatype_advanced_search_facets,
+        migrations.AddConstraint(
+            model_name="advancedsearchfacet",
+            constraint=models.UniqueConstraint(
+                fields=("datatype", "operator"), name="unique_operator_per_datatype"
+            ),
         ),
+        migrations.AddConstraint(
+            model_name="advancedsearchfacet",
+            constraint=models.UniqueConstraint(
+                fields=("datatype", "sortorder"), name="unique_sortorder_per_datatype"
+            ),
+        ),
+        migrations.RunPython(code=seed_facets, reverse_code=unseed_facets),
     ]

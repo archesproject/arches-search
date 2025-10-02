@@ -3,8 +3,10 @@ from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.urls import include, path
 
+from arches_search.views.api.advanced_search import AdvancedSearchAPI
+
 urlpatterns = [
-    # project-level urls
+    path("api/advanced_search", AdvancedSearchAPI.as_view(), name="advanced_search"),
 ]
 
 handler400 = "arches.app.views.main.custom_400"
