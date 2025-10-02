@@ -136,7 +136,7 @@ watchEffect(() => {
                         node_alias: "number",
                         search_table: "numeric",
                         datatype: "number",
-                        operator: "GREATER_THAN",
+                        operator: "LESS_THAN",
                         params: [5],
                     },
                     {
@@ -144,7 +144,7 @@ watchEffect(() => {
                         search_table: "term",
                         datatype: "string",
                         operator: "EQUALS",
-                        params: ["STRING"],
+                        params: ["STRING!"],
                     },
                 ],
                 groups: [],
@@ -153,7 +153,7 @@ watchEffect(() => {
     };
 
     getSearchResults({
-        graph_alias: "new_resource_model",
+        graph_slug: "new_resource_model",
         query: query,
     });
 });
