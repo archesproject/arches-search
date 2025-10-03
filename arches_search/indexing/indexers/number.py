@@ -1,7 +1,6 @@
-from django.contrib.postgres.search import SearchVector
 from arches.app.datatypes.datatypes import DataTypeFactory
-from arches.app.models.models import Node, Language
-from arches_search.models.models import NumericSearch, TermSearch
+from arches.app.models.models import Language
+from arches_search.models.models import NumericSearch
 
 from arches_search.indexing.base import BaseIndexing
 

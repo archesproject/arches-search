@@ -1,4 +1,3 @@
-from django.contrib.postgres.search import SearchVector
 from arches.app.datatypes.datatypes import DataTypeFactory
 from arches_search.models.models import BooleanSearch
 
