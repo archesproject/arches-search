@@ -93,11 +93,7 @@ def build_exists_expression_for_group(graph_slug: str, group: Dict[str, Any]):
 
 def resources_queryset_from_payload(payload: Dict[str, Any]) -> QuerySet:
     graph_slug = payload["graph_slug"]
-    query = (
-        payload.get("query")
-        or payload.get("where")
-        or {"logic": "AND", "clauses": [], "groups": []}
-    )
+    query = payload.get("query")
 
     aliased_graph_queryset = arches_models.ResourceInstance.objects.filter(
         graph__slug=graph_slug
