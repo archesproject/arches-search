@@ -125,21 +125,7 @@ watchEffect(() => {
                 params: ["STRING"],
             },
         ],
-        groups: [
-            {
-                logic: "AND",
-                clauses: [
-                    {
-                        type: "reflective",
-                        search_table: "numeric",
-                        left_node_alias: "fingernail_length",
-                        operator: "<",
-                        right_node_alias: "toenail_length",
-                    },
-                ],
-                groups: [],
-            },
-        ],
+        groups: [],
         aggregations: [
             {
                 name: "count_by_graph_slug",
