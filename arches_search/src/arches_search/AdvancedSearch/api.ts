@@ -22,3 +22,20 @@ export async function getSearchResults(searchQuery: {
 
     return parsed;
 }
+
+export async function getNodes(graphId: string) {
+    const response = await fetch(
+        generateArchesURL("arches:graph_nodes", { graphid: graphId }),
+        {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}

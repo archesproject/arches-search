@@ -1,172 +1,62 @@
 <script setup lang="ts">
-import { ref, watchEffect } from "vue";
+import { ref, watch } from "vue";
+
+import Button from "primevue/button";
 
 import GraphSelection from "@/arches_search/AdvancedSearch/components/GraphSelection/GraphSelection.vue";
 
-import { getSearchResults } from "@/arches_search/AdvancedSearch/api.ts";
+import {
+    getSearchResults,
+    getNodes,
+} from "@/arches_search/AdvancedSearch/api.ts";
 
-const selectedGraph = ref<string | null>(null);
-console.log(selectedGraph);
+import {
+    initializeQueryTree,
+    updateGraphSlug,
+} from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
-watchEffect(() => {
-    // const query = {
-    //         logic: "AND",
-    //         clauses: [
-    //             {
-    //                 node_alias: "number",
-    //                 search_table: "numeric",
-    //                 datatype: "number",
-    //                 operator: "LESS_THAN",
-    //                 params: [5],
-    //             },
-    //         ],
-    //         groups: [],
-    // };
+const selectedGraph = ref<{ [key: string]: unknown } | null>(null);
+const selectedGraphNodes = ref<{ [key: string]: unknown }[]>([]);
 
-    // const query = {
-    //         logic: "AND",
-    //         clauses: [
-    //             {
-    //                 node_alias: "string",
-    //                 search_table: "term",
-    //                 datatype: "string",
-    //                 operator: "EQUALS",
-    //                 params: ["STRING"],
-    //             },
-    //         ],
-    //         groups: [],
-    // };
+const queryTree = ref(initializeQueryTree());
 
-    // const query = {
-    //     logic: "AND",
-    //     clauses: [
-    //         {
-    //             node_alias: "number",
-    //             search_table: "numeric",
-    //             datatype: "number",
-    //             operator: "LESS_THAN",
-    //             params: [5],
-    //         },
-    //         {
-    //             node_alias: "string",
-    //             search_table: "term",
-    //             datatype: "string",
-    //             operator: "EQUALS",
-    //             params: ["STRING"],
-    //         },
-    //     ],
-    //     groups: [],
-    // };
-
-    // const query = {
-    //     logic: "OR",
-    //     clauses: [
-    //         {
-    //             node_alias: "number",
-    //             search_table: "numeric",
-    //             datatype: "number",
-    //             operator: "LESS_THAN",
-    //             params: [5],
-    //         },
-    //         {
-    //             node_alias: "string",
-    //             search_table: "term",
-    //             datatype: "string",
-    //             operator: "EQUALS",
-    //             params: ["STRING"],
-    //         },
-    //     ],
-    //     groups: [],
-    // }
-
-    // const query =  {
-    //     logic: "OR",
-    //     clauses: [
-    //         {
-    //             node_alias: "string_2",
-    //             search_table: "term",
-    //             datatype: "string",
-    //             operator: "EQUALS",
-    //             params: ["STRING TWO"],
-    //         }
-    //     ],
-    //     groups: [
-    //         {
-    //             logic: "AND",
-    //             clauses: [
-    //                 {
-    //                     node_alias: "number",
-    //                     search_table: "numeric",
-    //                     datatype: "number",
-    //                     operator: "LESS_THAN",
-    //                     params: [5],
-    //                 },
-    //                 {
-    //                     node_alias: "string",
-    //                     search_table: "term",
-    //                     datatype: "string",
-    //                     operator: "EQUALS",
-    //                     params: ["STRING"],
-    //                 },
-    //             ],
-    //             groups: [],
-    //         }
-    //     ],
-    // }
-
-    const query = {
-        logic: "AND",
-        clauses: [
-            {
-                node_alias: "string",
-                search_table: "term",
-                datatype: "string",
-                operator: "EQUALS",
-                params: ["STRING"],
-            },
-        ],
-        groups: [],
-        aggregations: [
-            {
-                name: "count_by_graph_slug",
-                where: { name__isnull: false },
-                group_by: ["graph__slug"],
-                metrics: [
-                    {
-                        alias: "row_count",
-                        fn: "Count",
-                        field: "resourceinstanceid",
-                        distinct: true,
-                    },
-                ],
-                order_by: ["-row_count", "graph__slug"],
-                limit: 6,
-            },
-            {
-                name: "totals_with_graph_names",
-                where: { name__isnull: false },
-                aggregate: [
-                    {
-                        alias: "total_rows",
-                        fn: "Count",
-                        field: "resourceinstanceid",
-                        distinct: true,
-                    },
-                ],
-            },
-        ],
-    };
-
-    getSearchResults({
-        graph_slug: "new_resource_model",
-        query: query,
-    });
+watch(selectedGraph, async (newGraph) => {
+    if (newGraph) {
+        selectedGraphNodes.value = await getNodesForGraph(
+            newGraph.graphid as string,
+        );
+        queryTree.value = updateGraphSlug(
+            initializeQueryTree(),
+            newGraph.slug as string,
+        );
+    }
 });
+
+async function getNodesForGraph(graphId: string) {
+    return await getNodes(graphId);
+}
+
+function search() {
+    if (selectedGraph.value) {
+        getSearchResults(queryTree.value).then((results) => {
+            console.log("Search results:", results);
+        });
+    }
+}
 </script>
 
 <template>
     <div class="advanced-search">
-        <GraphSelection @graph-selected="console.log($event)" />
+        <GraphSelection @graph-selected="selectedGraph = $event" />
+
+        <Button
+            style="margin-top: 1rem"
+            size="large"
+            label="Search"
+            icon="pi pi-search"
+            :disabled="!selectedGraph"
+            @click="search"
+        />
     </div>
 </template>
 

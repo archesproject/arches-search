@@ -98,9 +98,14 @@ def resources_queryset_from_payload(payload: Dict[str, Any]) -> QuerySet:
     aliased_graph_queryset = arches_models.ResourceInstance.objects.filter(
         graph__slug=graph_slug
     )
+
+    # If there are no clauses or groups, return all resources for the graph
+    if not query.get("clauses") and not query.get("groups"):
+        return aliased_graph_queryset
+
     predicate = build_exists_expression_for_group(graph_slug, query)
 
     if predicate is None:
-        return aliased_graph_queryset.none()
+        return aliased_graph_queryset
 
     return aliased_graph_queryset.filter(predicate)

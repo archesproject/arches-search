@@ -11,17 +11,15 @@ import { getGraphs } from "@/arches_search/AdvancedSearch/components/GraphSelect
 const { $gettext } = useGettext();
 
 const emit = defineEmits<{
-    (e: "graph-selected", graphSlug: string): void;
+    (e: "graph-selected", graphSlug: { [key: string]: unknown } | null): void;
 }>();
 
-const graphs = ref([]);
+const graphs = ref<{ [key: string]: unknown }[]>([]);
 const isLoading = ref(true);
 const configurationError = ref();
 
-const selectedGraph = ref(null);
-
-const placeholderToken = "%{graph}";
-const translatedSentence = $gettext("I want to find %{graph} that have...");
+const selectedGraphSlug = ref(null);
+const selectedGraph = ref<{ [key: string]: unknown } | null>(null);
 
 watchEffect(async () => {
     isLoading.value = true;
@@ -35,10 +33,10 @@ watchEffect(async () => {
     }
 });
 
-watch(selectedGraph, (newGraph) => {
-    if (newGraph) {
-        emit("graph-selected", newGraph);
-    }
+watch(selectedGraphSlug, (graphSlug) => {
+    selectedGraph.value =
+        graphs.value.find((graph) => graph.slug === graphSlug) || null;
+    emit("graph-selected", selectedGraph.value);
 });
 </script>
 <template>
@@ -54,15 +52,14 @@ watch(selectedGraph, (newGraph) => {
             {{ configurationError.message }}
         </Message>
         <div v-else>
-            <span>{{ translatedSentence.split(placeholderToken)[0] }}</span>
+            <span>{{ $gettext("I want to find") }}</span>
             <Select
-                v-model="selectedGraph"
+                v-model="selectedGraphSlug"
                 :options="graphs"
                 :placeholder="$gettext('Select a graph...')"
                 option-label="name"
                 option-value="slug"
             />
-            <span>{{ translatedSentence.split(placeholderToken)[1] }}</span>
         </div>
     </div>
 </template>
