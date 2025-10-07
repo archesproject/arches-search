@@ -27,7 +27,7 @@ class DateIndexing(BaseIndexing):
                 tileid=tile.tileid,
                 resourceinstanceid=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
-                graph_alias=node.graph.slug,
+                graph_slug=node.graph.slug,
                 value=date["date"],
             )
             date_search.save()
