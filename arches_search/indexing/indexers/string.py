@@ -30,7 +30,7 @@ class StringIndexing(BaseIndexing):
                 resourceinstanceid=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 language=string_object["language"],
-                graph_alias=node.graph.slug,
+                graph_slug=node.graph.slug,
                 value=string_object["string"],
             )
             term_search.search_vector = SearchVector(

@@ -21,7 +21,7 @@ class NumberIndexing(BaseIndexing):
                 tileid=tile.tileid,
                 resourceinstanceid=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
-                graph_alias=node.graph.slug,
+                graph_slug=node.graph.slug,
                 value=number_object["number"],
             )
             numeric_search.save()
