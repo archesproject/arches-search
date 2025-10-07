@@ -121,33 +121,55 @@ watchEffect(() => {
         logic: "AND",
         clauses: [
             {
-                node_alias: "string_2",
+                node_alias: "string",
                 search_table: "term",
                 datatype: "string",
                 operator: "EQUALS",
-                params: ["STRING TWO"],
+                params: ["STRING"],
             },
         ],
         groups: [
             {
-                logic: "OR",
+                logic: "AND",
                 clauses: [
                     {
-                        node_alias: "number",
+                        type: "reflective",
                         search_table: "numeric",
-                        datatype: "number",
-                        operator: "LESS_THAN",
-                        params: [5],
-                    },
-                    {
-                        node_alias: "string",
-                        search_table: "term",
-                        datatype: "string",
-                        operator: "EQUALS",
-                        params: ["STRING!"],
+                        left_node_alias: "fingernail_length",
+                        operator: "<",
+                        right_node_alias: "toenail_length",
                     },
                 ],
                 groups: [],
+            },
+        ],
+        aggregations: [
+            {
+                name: "count_by_graph_slug",
+                where: { name__isnull: false },
+                group_by: ["graph__slug"],
+                metrics: [
+                    {
+                        alias: "row_count",
+                        fn: "Count",
+                        field: "resourceinstanceid",
+                        distinct: true,
+                    },
+                ],
+                order_by: ["-row_count", "graph__slug"],
+                limit: 6,
+            },
+            {
+                name: "totals_with_graph_names",
+                where: { name__isnull: false },
+                aggregate: [
+                    {
+                        alias: "total_rows",
+                        fn: "Count",
+                        field: "resourceinstanceid",
+                        distinct: true,
+                    },
+                ],
             },
         ],
     };
