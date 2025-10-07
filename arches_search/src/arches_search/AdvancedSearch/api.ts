@@ -2,7 +2,9 @@ import Cookies from "js-cookie";
 
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
-export async function getSearchResults(searchQuery: any) {
+export async function getSearchResults(searchQuery: {
+    [key: string]: unknown;
+}) {
     const response = await fetch(
         generateArchesURL("arches_search:advanced_search"),
         {

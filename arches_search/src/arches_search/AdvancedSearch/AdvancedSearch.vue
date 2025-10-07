@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import { ref, watchEffect } from "vue";
 
-import { useGettext } from "vue3-gettext";
-
 import GraphSelection from "@/arches_search/AdvancedSearch/components/GraphSelection/GraphSelection.vue";
 
 import { getSearchResults } from "@/arches_search/AdvancedSearch/api.ts";
 
-const { $gettext } = useGettext();
-
 const selectedGraph = ref<string | null>(null);
+console.log(selectedGraph);
 
 watchEffect(() => {
     // const query = {
@@ -183,7 +180,7 @@ watchEffect(() => {
 
 <template>
     <div class="advanced-search">
-        <GraphSelection @graph-selected="" />
+        <GraphSelection @graph-selected="console.log($event)" />
     </div>
 </template>
 
