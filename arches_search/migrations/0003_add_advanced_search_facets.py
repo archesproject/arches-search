@@ -92,7 +92,7 @@ DATE_FACETS = [
     {
         "datatype": "date",
         "label": "<=",
-        "operator": "LESS_THAN_OR_EQUAL",
+        "operator": "LESS_THAN_OR_EQUALS",
         "arity": 1,
         "param_formats": ["{value}"],
         "orm_template": "{col}__lte",
@@ -102,7 +102,7 @@ DATE_FACETS = [
     {
         "datatype": "date",
         "label": ">=",
-        "operator": "GREATER_THAN_OR_EQUAL",
+        "operator": "GREATER_THAN_OR_EQUALS",
         "arity": 1,
         "param_formats": ["{value}"],
         "orm_template": "{col}__gte",
@@ -195,7 +195,7 @@ EDTF_FACETS = [
     {
         "datatype": "edtf",
         "label": "<=",
-        "operator": "LESS_THAN_OR_EQUAL",
+        "operator": "LESS_THAN_OR_EQUALS",
         "arity": 1,
         "param_formats": ["{value}"],
         "orm_template": "{col}__lte",
@@ -205,7 +205,7 @@ EDTF_FACETS = [
     {
         "datatype": "edtf",
         "label": ">=",
-        "operator": "GREATER_THAN_OR_EQUAL",
+        "operator": "GREATER_THAN_OR_EQUALS",
         "arity": 1,
         "param_formats": ["{value}"],
         "orm_template": "{col}__gte",
@@ -557,7 +557,7 @@ NUMBER_FACETS = [
     {
         "datatype": "number",
         "label": "<=",
-        "operator": "LESS_THAN_OR_EQUAL",
+        "operator": "LESS_THAN_OR_EQUALS",
         "arity": 1,
         "param_formats": ["{value}"],
         "orm_template": "{col}__lte",
@@ -567,7 +567,7 @@ NUMBER_FACETS = [
     {
         "datatype": "number",
         "label": ">=",
-        "operator": "GREATER_THAN_OR_EQUAL",
+        "operator": "GREATER_THAN_OR_EQUALS",
         "arity": 1,
         "param_formats": ["{value}"],
         "orm_template": "{col}__gte",
