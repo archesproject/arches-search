@@ -6,4 +6,6 @@ from arches_search.indexing.indexers.resource_instance import ResourceInstanceIn
 class ResourceInstanceListIndexing(ResourceInstanceIndexing):
     def __init__(self):
         super().__init__()
-        self.datatype: BaseDataType = DataTypeFactory().get_instance("resource-instance-list")
+        self.datatype: BaseDataType = DataTypeFactory().get_instance(
+            "resource-instance-list"
+        )

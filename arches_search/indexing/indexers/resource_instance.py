@@ -8,7 +8,9 @@ from arches_search.indexing.base import BaseIndexing
 class ResourceInstanceIndexing(BaseIndexing):
     def __init__(self):
         super().__init__()
-        self.datatype: BaseDataType = DataTypeFactory().get_instance("resource-instance")
+        self.datatype: BaseDataType = DataTypeFactory().get_instance(
+            "resource-instance"
+        )
 
     def index(self, tile, node):
         nodeid = str(node.nodeid)
@@ -42,4 +44,3 @@ class ResourceInstanceIndexing(BaseIndexing):
                 value=related_resource_id["id"],
             )
             uuid_search.save()
-
