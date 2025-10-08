@@ -38,7 +38,7 @@ class ConceptIndexing(BaseIndexing):
             TermSearch.objects.filter(pk=string_search.pk).update(
                 search_vector=string_search.search_vector
             )
-        
+
         for concept in document["domains"]:
             for id in [concept["conceptid"], concept["valueid"]]:
                 uuid_search = UUIDSearch.objects.create(
@@ -50,4 +50,3 @@ class ConceptIndexing(BaseIndexing):
                     value=id,
                 )
                 uuid_search.save()
-
