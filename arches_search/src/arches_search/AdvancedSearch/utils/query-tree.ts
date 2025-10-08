@@ -1,3 +1,5 @@
+// utils/query-tree.ts
+
 export type LogicOperator = "AND" | "OR";
 
 export type Clause = {
@@ -38,7 +40,7 @@ export type QueryPayload = {
 
 export function initializeQueryTree(graphSlug?: string | null): QueryPayload {
     return {
-        graph_slug: graphSlug,
+        graph_slug: graphSlug ?? null,
         query: {
             logic: "AND",
             clauses: [],
@@ -56,4 +58,65 @@ export function updateGraphSlug(
         ...existingQueryPayload,
         graph_slug: nextGraphSlug,
     };
+}
+
+/* ---------- central update helpers (single source of truth) ---------- */
+
+export function toggleGroupLogic(targetGroup: GroupPayload): void {
+    targetGroup.logic = targetGroup.logic === "AND" ? "OR" : "AND";
+}
+
+function createEmptyGroup(): GroupPayload {
+    return {
+        logic: "AND",
+        clauses: [],
+        groups: [],
+    };
+}
+
+export function addEmptyGroup(targetGroup: GroupPayload): void {
+    const newGroup = createEmptyGroup();
+    targetGroup.groups.push(newGroup);
+}
+
+function createEmptyClause(): Clause {
+    return {
+        node_alias: null,
+        search_table: null,
+        datatype: null,
+        operator: null,
+        params: [],
+    };
+}
+
+export function addEmptyClause(targetGroup: GroupPayload): void {
+    targetGroup.clauses.push(createEmptyClause());
+}
+
+export function setClauseNodeAlias(
+    targetClause: Clause,
+    nextAlias: string | null,
+): void {
+    targetClause.node_alias = nextAlias;
+}
+
+export function removeGroup(
+    parentGroup: GroupPayload,
+    groupToRemove: GroupPayload,
+): void {
+    const indexOfTarget = parentGroup.groups.indexOf(groupToRemove);
+
+    if (indexOfTarget >= 0) {
+        parentGroup.groups.splice(indexOfTarget, 1);
+    }
+}
+
+export function removeClause(
+    parentGroup: GroupPayload,
+    clauseToRemove: Clause,
+): void {
+    const indexOfTarget = parentGroup.clauses.indexOf(clauseToRemove);
+    if (indexOfTarget >= 0) {
+        parentGroup.clauses.splice(indexOfTarget, 1);
+    }
 }

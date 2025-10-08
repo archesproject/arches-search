@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineEmits, ref, watch, watchEffect } from "vue";
+import { defineEmits, defineProps, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Select from "primevue/select";
@@ -10,35 +10,71 @@ import { getGraphs } from "@/arches_search/AdvancedSearch/components/GraphSelect
 
 const { $gettext } = useGettext();
 
+const props = defineProps<{
+    initialGraphSlug?: string | null;
+}>();
+
 const emit = defineEmits<{
-    (e: "graph-selected", graphSlug: { [key: string]: unknown } | null): void;
+    (e: "graph-selected", graphObject: { [key: string]: unknown } | null): void;
 }>();
 
 const graphs = ref<{ [key: string]: unknown }[]>([]);
 const isLoading = ref(true);
-const configurationError = ref();
+const configurationError = ref<unknown>(null);
 
-const selectedGraphSlug = ref(null);
+const selectedGraphSlug = ref<string | null>(null);
 const selectedGraph = ref<{ [key: string]: unknown } | null>(null);
 
 watchEffect(async () => {
     isLoading.value = true;
+    configurationError.value = null;
 
     try {
-        graphs.value = await getGraphs();
-    } catch (error) {
-        configurationError.value = error;
+        const fetchedGraphs = await getGraphs();
+        graphs.value = Array.isArray(fetchedGraphs) ? fetchedGraphs : [];
+    } catch (caughtError) {
+        configurationError.value = caughtError;
     } finally {
         isLoading.value = false;
     }
 });
 
-watch(selectedGraphSlug, (graphSlug) => {
-    selectedGraph.value =
-        graphs.value.find((graph) => graph.slug === graphSlug) || null;
-    emit("graph-selected", selectedGraph.value);
+/**
+ * Hydrate selection from prop once graphs are available,
+ * and also if the prop changes later.
+ */
+watch(
+    () => [graphs.value, props.initialGraphSlug] as const,
+    () => {
+        if (!graphs.value.length) {
+            return;
+        }
+        if (props.initialGraphSlug && selectedGraphSlug.value == null) {
+            const exists = graphs.value.some(
+                (graphItem) => graphItem.slug === props.initialGraphSlug,
+            );
+            if (exists) {
+                selectedGraphSlug.value = props.initialGraphSlug;
+            }
+        }
+    },
+    { immediate: true, deep: false },
+);
+
+watch(selectedGraphSlug, (newGraphSlug) => {
+    if (!newGraphSlug) {
+        selectedGraph.value = null;
+        emit("graph-selected", null);
+        return;
+    }
+    const matchedGraph =
+        graphs.value.find((graphItem) => graphItem.slug === newGraphSlug) ||
+        null;
+    selectedGraph.value = matchedGraph;
+    emit("graph-selected", matchedGraph);
 });
 </script>
+
 <template>
     <div>
         <Skeleton
@@ -49,7 +85,11 @@ watch(selectedGraphSlug, (graphSlug) => {
             v-else-if="configurationError"
             severity="error"
         >
-            {{ configurationError.message }}
+            {{
+                configurationError instanceof Error
+                    ? configurationError.message
+                    : $gettext("There was a problem loading graphs.")
+            }}
         </Message>
         <div v-else>
             <span>{{ $gettext("I want to find") }}</span>
