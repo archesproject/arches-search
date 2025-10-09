@@ -1,115 +1,147 @@
 <script setup lang="ts">
-import { ref, watch, defineProps } from "vue";
+import { defineProps, provide, ref, watch, watchEffect } from "vue";
+
+import { useGettext } from "vue3-gettext";
+
 import Button from "primevue/button";
+import Message from "primevue/message";
+import Skeleton from "primevue/skeleton";
 
 import GraphSelection from "@/arches_search/AdvancedSearch/components/GraphSelection/GraphSelection.vue";
 import QueryGroup from "@/arches_search/AdvancedSearch/components/QueryGroup.vue";
 
 import {
+    getAdvancedSearchFacets,
     getSearchResults,
     getNodes,
 } from "@/arches_search/AdvancedSearch/api.ts";
-import {
-    initializeQueryTree,
-    updateGraphSlug,
-    type QueryPayload,
-} from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
+import { initializeQueryTree } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
-const props = defineProps<{
-    initialQuery?: QueryPayload;
+import type { QueryPayload } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
+import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types.ts";
+
+const { $gettext } = useGettext();
+
+const { query } = defineProps<{
+    query?: QueryPayload;
 }>();
 
+const isLoading = ref(false);
+const configurationError = ref<Error>();
+
+const advancedSearchFacets = ref();
+const queryTree = ref<QueryPayload>(initializeQueryTree());
 const selectedGraph = ref<{ [key: string]: unknown } | null>(null);
 const selectedGraphNodes = ref<{ [key: string]: unknown }[]>([]);
-const queryTree = ref<QueryPayload>(initializeQueryTree(null));
+
+provide("advancedSearchFacets", advancedSearchFacets);
+provide("selectedGraph", selectedGraph);
+
+watchEffect(() => {
+    fetchAdvancedSearchFacets();
+});
 
 watch(
-    () => props.initialQuery,
-    (_newInitialQuery) => {
-        queryTree.value = {
-            graph_slug: "new_resource_model",
-            query: {
-                logic: "AND",
-                clauses: [
-                    {
-                        node_alias: "toenail_length",
-                        search_table: null,
-                        datatype: null,
-                        operator: null,
-                        params: [],
-                    },
-                ],
-                groups: [
-                    {
-                        logic: "OR",
-                        clauses: [
-                            {
-                                node_alias: "fingernail_length",
-                                search_table: null,
-                                datatype: null,
-                                operator: null,
-                                params: [],
-                            },
-                        ],
-                        groups: [],
-                    },
-                ],
-            },
-            aggregations: [],
-        };
+    () => query,
+    (newInitialQuery) => {
+        if (newInitialQuery) {
+            queryTree.value = newInitialQuery;
+        }
     },
     { immediate: true },
 );
 
-watch(selectedGraph, async (newSelectedGraph) => {
+watch(selectedGraph, async (newSelectedGraph, previousSelectedGraph) => {
     if (!newSelectedGraph) {
+        selectedGraphNodes.value = [];
+        queryTree.value = initializeQueryTree(null);
+
         return;
     }
 
-    const fetchedGraphNodes = await getNodes(
-        newSelectedGraph.graphid as string,
-    );
-    selectedGraphNodes.value = Object.values(fetchedGraphNodes);
+    await fetchNodes(newSelectedGraph.graphid as string);
 
-    queryTree.value = updateGraphSlug(
-        queryTree.value ?? initializeQueryTree(null),
-        newSelectedGraph.slug as string,
-    );
+    if (
+        previousSelectedGraph ||
+        queryTree.value.graph_slug !== newSelectedGraph.slug
+    ) {
+        queryTree.value = initializeQueryTree(newSelectedGraph.slug as string);
+    }
 });
 
-function search() {
-    if (!queryTree.value.graph_slug) {
-        return;
+function onGraphSelected(graph: { [key: string]: unknown } | null) {
+    selectedGraph.value = graph;
+}
+
+async function fetchNodes(graphId: string) {
+    try {
+        const fetchedGraphNodes = await getNodes(graphId);
+        selectedGraphNodes.value = Object.values(fetchedGraphNodes);
+    } catch (error) {
+        configurationError.value = error as Error;
     }
-    getSearchResults(queryTree.value).then((results) => {
-        console.log("Search results:", results);
-    });
+}
+
+async function fetchAdvancedSearchFacets() {
+    isLoading.value = true;
+    try {
+        const fetchedFacets = await getAdvancedSearchFacets();
+
+        advancedSearchFacets.value = fetchedFacets.reduce(
+            (
+                acc: { [key: string]: AdvancedSearchFacet[] },
+                facet: AdvancedSearchFacet,
+            ) => {
+                if (facet.datatype_id) {
+                    acc[facet.datatype_id] = acc[facet.datatype_id] || [];
+                    acc[facet.datatype_id].push(facet);
+                }
+                return acc;
+            },
+            {},
+        );
+    } catch (error) {
+        configurationError.value = error as Error;
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+async function search() {
+    const results = await getSearchResults(queryTree.value!);
+    console.log("Search results:", results);
 }
 </script>
 
 <template>
     <div class="advanced-search">
-        <GraphSelection
-            :initial-graph-slug="queryTree.graph_slug"
-            @graph-selected="selectedGraph = $event"
+        <Skeleton
+            v-if="isLoading"
+            style="height: 10rem"
         />
+        <Message
+            v-else-if="configurationError"
+            severity="error"
+        >
+            {{ configurationError.message }}
+        </Message>
+        <div v-else>
+            <GraphSelection
+                :initial-graph-slug="queryTree.graph_slug"
+                @update:selected-graph="onGraphSelected"
+            />
 
-        <QueryGroup
-            :group="queryTree.query"
-            :nodes="selectedGraphNodes"
-            :config="{ nodeLabelKey: 'name', nodeValueKey: 'alias' }"
-            :is-root="true"
-            @reset-all="
-                queryTree = initializeQueryTree(queryTree.graph_slug ?? null)
-            "
-        />
+            <QueryGroup
+                v-if="selectedGraph"
+                :group="queryTree.query"
+                :nodes="selectedGraphNodes"
+            />
 
-        <div>
             <Button
-                size="large"
-                label="Search"
                 icon="pi pi-search"
+                size="large"
                 :disabled="!queryTree.graph_slug"
+                :label="$gettext('Search')"
                 @click="search"
             />
         </div>
