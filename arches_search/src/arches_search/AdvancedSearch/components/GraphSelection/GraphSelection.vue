@@ -24,8 +24,8 @@ const emit = defineEmits<{
 const configurationError = ref<Error>();
 const graphs = ref<{ [key: string]: unknown }[]>([]);
 const isLoading = ref(true);
-const selectedGraph = ref<{ [key: string]: unknown } | null>(null);
-const selectedGraphSlug = ref<string | null>(null);
+const selectedGraph = ref<{ [key: string]: unknown } | null>();
+const selectedGraphSlug = ref<string | null>();
 
 watchEffect(async () => {
     isLoading.value = true;

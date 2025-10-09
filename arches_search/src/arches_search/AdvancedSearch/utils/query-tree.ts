@@ -1,5 +1,3 @@
-// utils/query-tree.ts
-
 export type LogicOperator = "AND" | "OR";
 
 export type Clause = {
@@ -60,12 +58,6 @@ export function updateGraphSlug(
     };
 }
 
-/* ---------- central update helpers (single source of truth) ---------- */
-
-export function toggleGroupLogic(targetGroup: GroupPayload): void {
-    targetGroup.logic = targetGroup.logic === "AND" ? "OR" : "AND";
-}
-
 function createEmptyGroup(): GroupPayload {
     return {
         logic: "AND",
@@ -77,6 +69,21 @@ function createEmptyGroup(): GroupPayload {
 export function addEmptyGroup(targetGroup: GroupPayload): void {
     const newGroup = createEmptyGroup();
     targetGroup.groups.push(newGroup);
+}
+
+export function toggleGroupLogic(targetGroup: GroupPayload): void {
+    targetGroup.logic = targetGroup.logic === "AND" ? "OR" : "AND";
+}
+
+export function removeGroup(
+    parentGroup: GroupPayload,
+    groupToRemove: GroupPayload,
+): void {
+    const indexOfTarget = parentGroup.groups.indexOf(groupToRemove);
+
+    if (indexOfTarget >= 0) {
+        parentGroup.groups.splice(indexOfTarget, 1);
+    }
 }
 
 function createEmptyClause(): Clause {
@@ -100,15 +107,18 @@ export function setClauseNodeAlias(
     targetClause.node_alias = nextAlias;
 }
 
-export function removeGroup(
-    parentGroup: GroupPayload,
-    groupToRemove: GroupPayload,
+export function setClauseDatatype(
+    targetClause: Clause,
+    nextDatatype: string | null,
 ): void {
-    const indexOfTarget = parentGroup.groups.indexOf(groupToRemove);
+    targetClause.datatype = nextDatatype;
+}
 
-    if (indexOfTarget >= 0) {
-        parentGroup.groups.splice(indexOfTarget, 1);
-    }
+export function setClauseOperator(
+    targetClause: Clause,
+    nextOperator: string | null,
+): void {
+    targetClause.operator = nextOperator;
 }
 
 export function removeClause(
@@ -116,6 +126,7 @@ export function removeClause(
     clauseToRemove: Clause,
 ): void {
     const indexOfTarget = parentGroup.clauses.indexOf(clauseToRemove);
+
     if (indexOfTarget >= 0) {
         parentGroup.clauses.splice(indexOfTarget, 1);
     }

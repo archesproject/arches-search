@@ -1,117 +1,132 @@
 <script setup lang="ts">
-import { defineOptions, defineProps, defineEmits } from "vue";
+import { computed, defineProps, defineEmits, useId } from "vue";
+
+import { useGettext } from "vue3-gettext";
+
 import Button from "primevue/button";
-import QueryClause from "@/arches_search/AdvancedSearch/components/QueryClause.vue";
-import type {
-    GroupPayload,
-    Clause,
-} from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
+
+import QueryClause from "@/arches_search/AdvancedSearch/components/QueryClause/QueryClause.vue";
+
 import {
     toggleGroupLogic,
     addEmptyGroup,
     addEmptyClause,
-    removeGroup as removeChildGroup,
-    removeClause as removeChildClause,
+    removeGroup,
+    removeClause,
 } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
-defineOptions({ name: "QueryGroup" });
+import type {
+    GroupPayload,
+    Clause,
+} from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
-type GraphNodeOption = { [key: string]: unknown };
-type QueryRenderConfig = { nodeLabelKey?: string; nodeValueKey?: string };
+const { $gettext } = useGettext();
 
-const props = defineProps<{
+const { group, nodes, recursionDepth } = defineProps<{
     group: GroupPayload;
-    nodes: GraphNodeOption[];
-    config?: QueryRenderConfig;
-    isRoot?: boolean;
+    nodes: { [key: string]: unknown }[];
+    recursionDepth?: number;
 }>();
 
 const emit = defineEmits<{
-    (e: "request-remove", targetGroup: GroupPayload): void;
-    (e: "reset-all"): void;
+    (e: "request:removeGroup", targetGroup: GroupPayload): void;
 }>();
 
+const keyedClauses = computed(() =>
+    group.clauses.map((currentClause) => ({
+        clause: currentClause,
+        key: useId(),
+    })),
+);
+
+const keyedGroups = computed(() =>
+    group.groups.map((currentGroup) => ({
+        group: currentGroup,
+        key: useId(),
+    })),
+);
+
 function onToggleLogic() {
-    toggleGroupLogic(props.group);
+    toggleGroupLogic(group);
 }
+
 function onAddSubgroup() {
-    addEmptyGroup(props.group);
+    addEmptyGroup(group);
 }
+
 function onAddClause() {
-    addEmptyClause(props.group);
+    addEmptyClause(group);
 }
-function onRemoveSelf() {
-    if (props.isRoot) {
-        emit("reset-all");
-    } else {
-        emit("request-remove", props.group);
-    }
-}
+
 function onRequestRemoveChild(targetGroup: GroupPayload) {
-    removeChildGroup(props.group, targetGroup);
+    removeGroup(group, targetGroup);
 }
+
 function onRequestRemoveClause(targetClause: Clause) {
-    removeChildClause(props.group, targetClause);
+    removeClause(group, targetClause);
+}
+
+function onRequestRemoveSelf() {
+    emit("request:removeGroup", group);
 }
 </script>
 
 <template>
     <div class="query-group">
-        <div class="query-group__header">
-            <Button
-                class="query-group__toggle"
-                :label="group.logic"
-                :aria-pressed="group.logic === 'OR'"
-                @click="onToggleLogic"
-            />
-            <div class="query-group__actions">
+        <div
+            style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding-bottom: 1rem;
+            "
+        >
+            <div>
                 <Button
-                    class="query-group__add-group"
-                    label="Add Group"
+                    v-if="group.groups.length + group.clauses.length > 1"
+                    :label="group.logic"
+                    :aria-pressed="group.logic === 'OR'"
+                    @click="onToggleLogic"
+                />
+            </div>
+            <div>
+                <Button
                     icon="pi pi-plus"
+                    :label="$gettext('Add Group')"
                     @click="onAddSubgroup"
                 />
                 <Button
-                    class="query-group__add-clause"
-                    label="Add Clause"
                     icon="pi pi-plus"
+                    :label="$gettext('Add Clause')"
                     @click="onAddClause"
                 />
                 <Button
-                    class="query-group__remove-group"
-                    :label="isRoot ? 'Reset' : 'Remove Group'"
-                    icon="pi pi-trash"
+                    v-if="recursionDepth"
+                    icon="pi pi-times"
                     severity="danger"
-                    @click="onRemoveSelf"
+                    @click="onRequestRemoveSelf"
                 />
             </div>
         </div>
 
-        <div
-            v-if="group.clauses.length"
-            class="query-group__clauses"
-        >
+        <div v-if="group.clauses.length">
             <QueryClause
-                v-for="(existingClause, existingClauseIndex) in group.clauses"
-                :key="existingClauseIndex"
-                :clause="existingClause"
+                v-for="item in keyedClauses"
+                :key="item.key"
+                :clause="item.clause"
                 :nodes="nodes"
-                :config="config"
-                @request-remove-clause="onRequestRemoveClause"
+                @request:remove-clause="onRequestRemoveClause"
             />
         </div>
 
-        <div
-            v-if="group.groups.length"
-            class="query-group__children"
-        >
+        <div v-if="group.groups.length">
             <QueryGroup
-                v-for="(childGroup, childGroupIndex) in group.groups"
-                :key="childGroupIndex"
-                :group="childGroup"
+                v-for="item in keyedGroups"
+                :key="item.key"
+                :group="item.group"
                 :nodes="nodes"
-                :config="config"
-                @request-remove="onRequestRemoveChild"
+                :recursion-depth="(recursionDepth || 0) + 1"
+                @request:remove-group="onRequestRemoveChild"
             />
         </div>
     </div>
@@ -119,34 +134,10 @@ function onRequestRemoveClause(targetClause: Clause) {
 
 <style scoped>
 .query-group {
-    border: 1px solid var(--p-content-border-color);
+    border: 0.125rem solid var(--p-content-border-color);
     border-radius: var(--p-content-border-radius);
-    padding: 12px;
     background: var(--p-content-background);
     color: var(--p-text-color);
-}
-.query-group__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 8px;
-}
-.query-group__actions {
-    display: flex;
-    gap: 8px;
-}
-.query-group__toggle {
-    min-width: 80px;
-}
-.query-group__clauses {
-    display: grid;
-    gap: 10px;
-    margin-top: 8px;
-}
-.query-group__children {
-    display: grid;
-    gap: 12px;
-    margin-top: 8px;
+    padding: 1rem;
 }
 </style>
