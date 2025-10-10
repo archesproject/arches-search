@@ -1,7 +1,7 @@
 from django.contrib.postgres.search import SearchVector
 from arches.app.datatypes.datatypes import DataTypeFactory, BaseDataType
 from arches.app.models.models import Language
-from arches_search.models.models import TermSearch, UUIDSearch
+from arches_search.models.models import DateRangeSearch, TermSearch, UUIDSearch
 
 from arches_search.indexing.base import BaseIndexing
 
@@ -27,7 +27,7 @@ class ConceptIndexing(BaseIndexing):
                 tileid=tile.tileid,
                 resourceinstanceid=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
-                graph_alias=node.graph.slug,
+                graph_slug=node.graph.slug,
                 value=string["string"],
             )
             string_search.save()
@@ -46,7 +46,19 @@ class ConceptIndexing(BaseIndexing):
                     tileid=tile.tileid,
                     resourceinstanceid=tile.resourceinstance_id,
                     datatype=self.datatype.datatype_name,
-                    graph_alias=node.graph.slug,
+                    graph_slug=node.graph.slug,
                     value=id,
                 )
                 uuid_search.save()
+
+        for concept in document["date_ranges"]:
+            date_range_search = DateRangeSearch.objects.create(
+                node_alias=node.alias,
+                tileid=tile.tileid,
+                resourceinstanceid=tile.resourceinstance_id,
+                datatype=self.datatype.datatype_name,
+                graph_slug=node.graph.slug,
+                start_value=concept["date_range"]["gte"],
+                end_value=concept["date_range"]["lte"],
+            )
+            date_range_search.save()
