@@ -22,7 +22,7 @@ class ResourceInstanceIndexing(BaseIndexing):
                 tileid=tile.tileid,
                 resourceinstanceid=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
-                graph_alias=node.graph.slug,
+                graph_slug=node.graph.slug,
                 value=string["string"],
             )
             string_search.save()
@@ -40,7 +40,7 @@ class ResourceInstanceIndexing(BaseIndexing):
                 tileid=tile.tileid,
                 resourceinstanceid=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
-                graph_alias=node.graph.slug,
+                graph_slug=node.graph.slug,
                 value=related_resource_id["id"],
             )
             uuid_search.save()
