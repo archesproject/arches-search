@@ -28,7 +28,7 @@ class URLIndexing(BaseIndexing):
                 tileid=tile.tileid,
                 resourceinstanceid=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
-                graph_alias=node.graph.slug,
+                graph_slug=node.graph.slug,
                 value=string["string"],
             )
             string_search.save()

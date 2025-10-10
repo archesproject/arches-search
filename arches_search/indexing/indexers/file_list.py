@@ -29,7 +29,7 @@ class FileListIndexing(BaseIndexing):
                 resourceinstanceid=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 language=string["language"] if "language" in string else "",
-                graph_alias=node.graph.slug,
+                graph_slug=node.graph.slug,
                 value=string["string"],
             )
             string_search.save()
