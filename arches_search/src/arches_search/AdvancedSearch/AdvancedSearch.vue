@@ -118,33 +118,47 @@ watchEffect(() => {
         logic: "AND",
         clauses: [
             {
-                node_alias: "string",
+                node_alias: "",
                 search_table: "term",
                 datatype: "string",
                 operator: "EQUALS",
-                params: ["STRING"],
+                params: ["Active"],
             },
         ],
         groups: [],
         aggregations: [
             {
-                name: "count_by_graph_slug",
-                where: { name__isnull: false },
-                group_by: ["graph__slug"],
-                metrics: [
-                    {
-                        alias: "row_count",
-                        fn: "Count",
-                        field: "resourceinstanceid",
-                        distinct: true,
-                    },
-                ],
-                order_by: ["-row_count", "graph__slug"],
-                limit: 6,
+                "name": "funding_by_project_type",
+                // "where": { "numeric_funding_awarded__value__lt": 100000 },
+                "group_by": [{
+                    "alias": "Projects_by_Type",
+                    "search_table": "term",
+                    "field": "term_project_type__value",
+                    "node_alias": "project_type"
+                }],
+                "metrics": [ {
+                    "alias": "Total_Funding",
+                    "fn": "Sum",
+                    "search_table": "numeric",
+                    "field": "numeric_funding_awarded__value",
+                    "node_alias": "funding_awarded"
+                }]
             },
+            // {
+            //     "name": "average_funding_per_project",
+            //     // "where": { "numeric_funding_awarded__value__lt": 100000 },
+            //     "group_by": [],
+            //     "metrics": [ {
+            //         "alias": "Average_Funding",
+            //         "fn": "Avg",
+            //         "search_table": "numeric",
+            //         "field": "numeric_funding_awarded__value",
+            //         "node_alias": "funding_awarded"
+            //     }]
+            // },
             {
-                name: "totals_with_graph_names",
-                where: { name__isnull: false },
+                name: "project_totals",
+                where: { },
                 aggregate: [
                     {
                         alias: "total_rows",
@@ -154,11 +168,39 @@ watchEffect(() => {
                     },
                 ],
             },
+
+            // {
+            //     name: "count_by_graph_slug",
+            //     where: { name__isnull: false },
+            //     group_by: ["graph__slug"],
+            //     metrics: [
+            //         {
+            //             alias: "row_count",
+            //             fn: "Count",
+            //             field: "resourceinstanceid",
+            //             distinct: true,
+            //         },
+            //     ],
+            //     order_by: ["-row_count", "graph__slug"],
+            //     limit: 6,
+            // },
+            // {
+            //     name: "totals_with_graph_names",
+            //     where: { name__isnull: false },
+            //     aggregate: [
+            //         {
+            //             alias: "total_rows",
+            //             fn: "Count",
+            //             field: "resourceinstanceid",
+            //             distinct: true,
+            //         },
+            //     ],
+            // },
         ],
     };
 
     getSearchResults({
-        graph_slug: "new_resource_model",
+        graph_slug: "casf-project",
         query: query,
     });
 });
