@@ -17,11 +17,6 @@ import type {
     Node,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-const DATATYPE_TO_SEARCH_TABLE: { [key: string]: string } = {
-    string: "term",
-    number: "numeric",
-};
-
 const { $gettext } = useGettext();
 
 const { clause } = defineProps<{ clause: Clause }>();
@@ -81,15 +76,12 @@ watch(
         if (!newSelectedNode) {
             updateClause(clause, {
                 datatype: null,
-                search_table: null,
             });
             return;
         }
 
         updateClause(clause, {
             datatype: newSelectedNode.datatype,
-            search_table:
-                DATATYPE_TO_SEARCH_TABLE[newSelectedNode.datatype] ?? null,
         });
     },
     { immediate: true },

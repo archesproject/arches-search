@@ -2,7 +2,6 @@ export type LogicOperator = "AND" | "OR";
 
 export type Clause = {
     node_alias: string | null;
-    search_table: string | null;
     datatype: string | null;
     operator: string | null;
     params: unknown[];
@@ -77,7 +76,6 @@ export function removeGroup(
 export function addEmptyClause(targetGroup: GroupPayload): void {
     targetGroup.clauses.push({
         node_alias: null,
-        search_table: null,
         datatype: null,
         operator: null,
         params: [],
