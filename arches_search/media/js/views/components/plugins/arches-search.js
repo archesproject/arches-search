@@ -6,7 +6,39 @@ import ArchesSearchTemplate from 'templates/views/components/plugins/arches-sear
 
 export default ko.components.register('arches-search', {
     viewModel: function() {
-        createVueApplication(AdvancedSearch).then(vueApp => {
+        createVueApplication(AdvancedSearch, null, {
+                query: {
+                graph_slug: "new_resource_model",
+                query: {
+                    logic: "AND",
+                    clauses: [
+                        {
+                            node_alias: "toenail_length",
+                            search_table: "numeric",
+                            datatype: "number",
+                            operator: "GREATER_THAN",
+                            params: [5],
+                        },
+                    ],
+                    groups: [
+                        {
+                            logic: "OR",
+                            clauses: [
+                                {
+                                    node_alias: "fingernail_length",
+                                    search_table: null,
+                                    datatype: null,
+                                    operator: null,
+                                    params: [],
+                                },
+                            ],
+                            groups: [],
+                        },
+                    ],
+                },
+                aggregations: [],
+            }
+            }).then(vueApp => {
             vueApp.mount('#arches-search-mounting-point');
         });
     },
