@@ -46,19 +46,19 @@ def apply_json_aggregations(raw_aggregations, queryset):
         aggregation_name = raw_aggregation["name"]
 
         if raw_aggregation.get("where"):
-            inner_queryset = queryset.filter(**raw_aggregation.get("where"))
+            local_queryset = queryset.filter(**raw_aggregation.get("where"))
         else:
-            inner_queryset = queryset
+            local_queryset = queryset.all()
 
         if "aggregate" in raw_aggregation:
             annotations = _build_annotations(raw_aggregation["aggregate"])
-            results[aggregation_name] = inner_queryset.aggregate(**annotations)
+            results[aggregation_name] = local_queryset.aggregate(**annotations)
             continue
 
         if "group_by" in raw_aggregation and "metrics" in raw_aggregation:
             annotations = _build_annotations(raw_aggregation["metrics"])
-            group_by_fields = raw_aggregation["group_by"][0]["field"]
-            grouped = inner_queryset.values(group_by_fields).annotate(**annotations)
+            group_by_fields = [item["field"] for item in raw_aggregation["group_by"]]
+            grouped = local_queryset.values(*group_by_fields).annotate(**annotations)
 
             order_by_fields = raw_aggregation.get("order_by")
             if order_by_fields:
@@ -69,7 +69,7 @@ def apply_json_aggregations(raw_aggregations, queryset):
                     [f"-{metric_aliases_in_order[0]}"]
                     if metric_aliases_in_order
                     else []
-                ) + [group_by_fields]
+                ) + group_by_fields
                 grouped = grouped.order_by(*default_order)
 
             limit_value = raw_aggregation.get("limit")
@@ -97,6 +97,13 @@ def build_joined_queryset_for_aggregations(base_queryset, raw_aggregations):
         joins = []
 
         # extract group_by and metrics
+        for aggregate in agg.get("aggregate", []):
+            try:
+                assert "search_table" in aggregate and "node_alias" in aggregate
+                joins.append((aggregate["search_table"], aggregate["node_alias"]))
+            except AssertionError:
+                continue
+
         for group in agg.get("group_by", []):
             joins.append((group["search_table"], group["node_alias"]))
 
