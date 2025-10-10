@@ -30,14 +30,16 @@ const isLoading = ref(false);
 const configurationError = ref<Error>();
 
 const advancedSearchFacets = ref();
-const queryTree = ref<QueryPayload>(initializeQueryTree());
-const selectedGraph = ref<{ [key: string]: unknown } | null>(null);
+const queryTree = ref<QueryPayload>();
+const selectedGraph = ref<{ [key: string]: unknown } | null>();
 const selectedGraphNodes = ref<{ [key: string]: unknown }[]>([]);
 
 provide("advancedSearchFacets", advancedSearchFacets);
 provide("selectedGraph", selectedGraph);
+provide("selectedGraphNodes", selectedGraphNodes);
 
 watchEffect(() => {
+    queryTree.value = initializeQueryTree();
     fetchAdvancedSearchFacets();
 });
 
@@ -63,7 +65,7 @@ watch(selectedGraph, async (newSelectedGraph, previousSelectedGraph) => {
 
     if (
         previousSelectedGraph ||
-        queryTree.value.graph_slug !== newSelectedGraph.slug
+        queryTree.value?.graph_slug !== newSelectedGraph.slug
     ) {
         queryTree.value = initializeQueryTree(newSelectedGraph.slug as string);
     }
@@ -127,20 +129,19 @@ async function search() {
         </Message>
         <div v-else>
             <GraphSelection
-                :initial-graph-slug="queryTree.graph_slug"
+                :initial-graph-slug="queryTree?.graph_slug"
                 @update:selected-graph="onGraphSelected"
             />
 
             <QueryGroup
-                v-if="selectedGraph"
+                v-if="queryTree && selectedGraph"
                 :group="queryTree.query"
-                :nodes="selectedGraphNodes"
             />
 
             <Button
                 icon="pi pi-search"
                 size="large"
-                :disabled="!queryTree.graph_slug"
+                :disabled="!queryTree?.graph_slug"
                 :label="$gettext('Search')"
                 @click="search"
             />

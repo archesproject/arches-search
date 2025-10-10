@@ -48,31 +48,19 @@ export function initializeQueryTree(graphSlug?: string | null): QueryPayload {
     };
 }
 
-export function updateGraphSlug(
-    existingQueryPayload: QueryPayload,
-    nextGraphSlug: string | null,
-): QueryPayload {
-    return {
-        ...existingQueryPayload,
-        graph_slug: nextGraphSlug,
-    };
-}
-
-function createEmptyGroup(): GroupPayload {
-    return {
+export function addEmptyGroup(targetGroup: GroupPayload): void {
+    targetGroup.groups.push({
         logic: "AND",
         clauses: [],
         groups: [],
-    };
+    });
 }
 
-export function addEmptyGroup(targetGroup: GroupPayload): void {
-    const newGroup = createEmptyGroup();
-    targetGroup.groups.push(newGroup);
-}
-
-export function toggleGroupLogic(targetGroup: GroupPayload): void {
-    targetGroup.logic = targetGroup.logic === "AND" ? "OR" : "AND";
+export function updateGroupLogic(
+    targetGroup: GroupPayload,
+    newLogic: LogicOperator,
+) {
+    targetGroup.logic = newLogic;
 }
 
 export function removeGroup(
@@ -86,39 +74,21 @@ export function removeGroup(
     }
 }
 
-function createEmptyClause(): Clause {
-    return {
+export function addEmptyClause(targetGroup: GroupPayload): void {
+    targetGroup.clauses.push({
         node_alias: null,
         search_table: null,
         datatype: null,
         operator: null,
         params: [],
-    };
+    });
 }
 
-export function addEmptyClause(targetGroup: GroupPayload): void {
-    targetGroup.clauses.push(createEmptyClause());
-}
-
-export function setClauseNodeAlias(
-    targetClause: Clause,
-    nextAlias: string | null,
+export function updateClause(
+    clauseToUpdate: Clause,
+    updatedProperties: Partial<Clause>,
 ): void {
-    targetClause.node_alias = nextAlias;
-}
-
-export function setClauseDatatype(
-    targetClause: Clause,
-    nextDatatype: string | null,
-): void {
-    targetClause.datatype = nextDatatype;
-}
-
-export function setClauseOperator(
-    targetClause: Clause,
-    nextOperator: string | null,
-): void {
-    targetClause.operator = nextOperator;
+    Object.assign(clauseToUpdate, updatedProperties);
 }
 
 export function removeClause(

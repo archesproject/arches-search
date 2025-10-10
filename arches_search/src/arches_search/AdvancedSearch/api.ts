@@ -39,3 +39,20 @@ export async function getNodes(graphId: string) {
 
     return parsed;
 }
+
+export async function getAdvancedSearchFacets() {
+    const response = await fetch(
+        generateArchesURL("arches_search:all_datatype_facets"),
+        {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}

@@ -8,11 +8,11 @@ import Button from "primevue/button";
 import QueryClause from "@/arches_search/AdvancedSearch/components/QueryClause/QueryClause.vue";
 
 import {
-    toggleGroupLogic,
     addEmptyGroup,
     addEmptyClause,
     removeGroup,
     removeClause,
+    updateGroupLogic,
 } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
 import type {
@@ -22,9 +22,8 @@ import type {
 
 const { $gettext } = useGettext();
 
-const { group, nodes, recursionDepth } = defineProps<{
+const { group, recursionDepth } = defineProps<{
     group: GroupPayload;
-    nodes: { [key: string]: unknown }[];
     recursionDepth?: number;
 }>();
 
@@ -47,7 +46,7 @@ const keyedGroups = computed(() =>
 );
 
 function onToggleLogic() {
-    toggleGroupLogic(group);
+    updateGroupLogic(group, group.logic === "AND" ? "OR" : "AND");
 }
 
 function onAddSubgroup() {
@@ -85,7 +84,6 @@ function onRequestRemoveSelf() {
                 <Button
                     v-if="group.groups.length + group.clauses.length > 1"
                     :label="group.logic"
-                    :aria-pressed="group.logic === 'OR'"
                     @click="onToggleLogic"
                 />
             </div>
@@ -114,7 +112,6 @@ function onRequestRemoveSelf() {
                 v-for="item in keyedClauses"
                 :key="item.key"
                 :clause="item.clause"
-                :nodes="nodes"
                 @request:remove-clause="onRequestRemoveClause"
             />
         </div>
@@ -124,7 +121,6 @@ function onRequestRemoveSelf() {
                 v-for="item in keyedGroups"
                 :key="item.key"
                 :group="item.group"
-                :nodes="nodes"
                 :recursion-depth="(recursionDepth || 0) + 1"
                 @request:remove-group="onRequestRemoveChild"
             />
