@@ -2,8 +2,51 @@ from django.db import models
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.utils.translation import gettext_lazy as _
+from django.db import models
+from django.db.models import Q
+from django.contrib.contenttypes.models import ContentType
+from django.utils.translation import gettext_lazy as _
 
 from arches.app.models.fields.i18n import I18n_TextField
+
+
+class DDatatypeXAdvancedSearchModel(models.Model):
+    id = models.AutoField(primary_key=True)
+    datatype = models.OneToOneField(
+        "models.DDataType",
+        on_delete=models.CASCADE,
+        db_column="datatypeid",
+        verbose_name=_("Data Type"),
+        help_text=_("The data type this mapping applies to."),
+    )
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.PROTECT,
+        verbose_name=_("Search Model"),
+        help_text=_("The concrete search-table model for this data type."),
+    )
+
+    class Meta:
+        managed = True
+        constraints = [
+            models.UniqueConstraint(
+                fields=["datatype"],
+                name="unique_search_model_per_datatype",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["datatype"]),
+            models.Index(fields=["content_type"]),
+        ]
+
+    @property
+    def model_class(self):
+        return self.content_type.model_class()
+
+    @property
+    def db_table_name(self):
+        model_class = self.model_class
+        return model_class._meta.db_table if model_class else None
 
 
 class AdvancedSearchFacet(models.Model):
