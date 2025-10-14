@@ -3,8 +3,8 @@ from django.contrib.postgres.search import SearchVector
 from arches.app.datatypes.datatypes import DataTypeFactory
 from arches.app.models.models import Language
 from arches_search.models.models import TermSearch
-
 from arches_search.indexing.base import BaseIndexing
+import sys
 
 
 class StringIndexing(BaseIndexing):
@@ -37,4 +37,10 @@ class StringIndexing(BaseIndexing):
                 Value(string_object["string"]),
                 config=self.languages[string_object["language"]].name.lower(),
             )
-            term_search.save()
+            try:
+                term_search.save()
+            except Exception as e:
+                sys.stdout.write(
+                    f"Unable to index: value '{term_search.value}' in language '{term_search.language}' on node '{term_search.node_alias}' in tile '{term_search.tileid}' due to the following error:"
+                )
+                sys.stdout.write(str(e))
