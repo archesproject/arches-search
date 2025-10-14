@@ -96,7 +96,6 @@ def build_joined_queryset_for_aggregations(base_queryset, raw_aggregations):
     for agg in raw_aggregations:
         joins = []
 
-        # extract group_by and metrics
         for aggregate in agg.get("aggregate", []):
             try:
                 assert "search_table" in aggregate and "node_alias" in aggregate
@@ -110,7 +109,7 @@ def build_joined_queryset_for_aggregations(base_queryset, raw_aggregations):
         for metric in agg.get("metrics", []):
             joins.append((metric["search_table"], metric["node_alias"]))
 
-        # deduplicate (by tuple)
+        # deduplicate joins
         joins = list(set(joins))
 
         for search_table, node_alias in joins:
