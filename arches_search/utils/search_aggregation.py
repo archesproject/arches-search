@@ -2,38 +2,135 @@ from django.db.models import aggregates, Q, OuterRef, Subquery
 from django.utils.translation import gettext as _
 
 from arches_search.utils.advanced_search import SEARCH_TABLE_TO_MODEL
+from django.db.models import OuterRef, Subquery, F, Q, Value
+from django.db.models import Sum, Avg, Count, Min, Max
+from django.db import models
+
+
+# --- Utilities ---
 
 
 def get_search_model(search_table: str):
-    model = SEARCH_TABLE_TO_MODEL.get(search_table)
-    if not model:
+    try:
+        return SEARCH_TABLE_TO_MODEL[search_table]
+    except KeyError:
         raise ValueError(f"Unknown search table '{search_table}'")
-    return model
+
+
+def build_subquery_for_groupby(group_spec, parent_ref_field="resourceinstanceid"):
+    """
+    Build a correlated Subquery that pulls a field from a search table.
+    Example:
+        Subquery(
+            TermSearch.objects.filter(
+                node_alias='account_type',
+                resourceinstanceid=OuterRef(parent_ref_field),
+            ).values('value')[:1]
+        )
+    """
+    model = get_search_model(group_spec["search_table"])
+    node_alias = group_spec["node_alias"]
+    field = group_spec.get("field", "value")
+
+    subquery = model.objects.filter(
+        node_alias=node_alias,
+        resourceinstanceid=OuterRef(parent_ref_field),
+    ).values("value")[:1]
+
+    return subquery
+
+
+# --- Recursive Subquery Builder ---
+
+
+def build_nested_subquery(group_spec, parent_ref_field="resourceinstanceid"):
+    """
+    Recursively build nested subqueries for deeply linked nodes.
+    """
+
+    # Base subquery for this level
+    base_subquery = build_subquery_for_groupby(
+        group_spec, parent_ref_field=parent_ref_field
+    )
+
+    # Handle nested aggregations if present
+    if "aggregations" in group_spec and group_spec["aggregations"]:
+        # Each nested aggregation will become another subquery wrapped inside this one
+        for agg in group_spec["aggregations"]:
+            for nested_group in agg.get("group_by", []):
+                nested_subquery = build_nested_subquery(
+                    nested_group,
+                    parent_ref_field="value",  # Each nested subquery joins on the previous value
+                )
+
+                # Rebuild the current subquery, wrapping the nested one
+                model = get_search_model(group_spec["search_table"])
+                base_subquery = Subquery(
+                    model.objects.filter(
+                        node_alias=group_spec["node_alias"],
+                        resourceinstanceid=OuterRef(parent_ref_field),
+                    )
+                    .annotate(**{nested_group["field"]: nested_subquery})
+                    .values(nested_group["field"])[:1]
+                )
+
+    return base_subquery
+
+
+# --- Aggregation Builder ---
 
 
 def _build_annotations(metric_specs):
     annotations = {}
-
     for metric_spec in metric_specs:
-        metric_alias = metric_spec["alias"]
-        aggregate_name = metric_spec["fn"]
-        field_name = metric_spec.get("field")
+        alias = metric_spec["alias"]
+        fn_name = metric_spec["fn"]
+        model = get_search_model(metric_spec["search_table"])
+        node_alias = metric_spec["node_alias"]
+        field = metric_spec.get("field", "value")
 
         try:
-            aggregate_fn = getattr(aggregates, aggregate_name)
-        except AttributeError as error:
-            raise ValueError(f"Unknown aggregate '{aggregate_name}'") from error
+            aggregate_fn = getattr(models, fn_name)
+        except AttributeError as e:
+            raise ValueError(f"Unknown aggregate function: {fn_name}") from e
 
-        kwargs = dict(metric_spec.get("kwargs") or {})
+        subquery = Subquery(
+            model.objects.filter(
+                node_alias=node_alias,
+                resourceinstanceid=OuterRef("resourceinstanceid"),
+            ).values("value")[:1]
+        )
 
-        if metric_spec.get("where"):
-            kwargs["filter"] = Q(**metric_spec.get("where"))
-        if metric_spec.get("distinct"):
-            kwargs["distinct"] = True
-
-        annotations[metric_alias] = aggregate_fn(field_name, **kwargs)
-
+        annotations[field] = aggregate_fn(subquery)
     return annotations
+
+
+def build_joined_queryset_for_aggregations(queryset, aggregations):
+    """
+    Takes a base ResourceInstance queryset and a list of aggregation definitions
+    and returns a queryset annotated with nested subqueries for group_by and metrics.
+    """
+    # queryset = base_queryset
+    for agg in aggregations:
+        group_bys = agg.get("group_by", [])
+        metrics = agg.get("metrics", [])
+        # field = agg.get("field", "value")
+        # print(f"field: {field}")
+
+        # Handle group_by subqueries
+        for group_spec in group_bys:
+            subquery = build_nested_subquery(group_spec)
+            alias = group_spec.get("alias") or f"{group_spec['node_alias']}__value"
+            field = group_spec.get("field")
+            queryset = queryset.annotate(**{field: subquery})
+
+        # Handle metric annotations
+        metric_annotations = _build_annotations(metrics)
+        if metric_annotations:
+            queryset = queryset.annotate(**metric_annotations)
+
+    print(queryset.query)
+    return queryset
 
 
 def apply_json_aggregations(raw_aggregations, queryset):
@@ -84,49 +181,3 @@ def apply_json_aggregations(raw_aggregations, queryset):
         )
 
     return results
-
-
-def build_joined_queryset_for_aggregations(base_queryset, raw_aggregations):
-    """
-    Annotates the ResourceInstance queryset with values from arches_search_* tables
-    based on the aggregation payload structure.
-    """
-    queryset = base_queryset
-
-    for agg in raw_aggregations:
-        joins = []
-
-        for aggregate in agg.get("aggregate", []):
-            try:
-                assert "search_table" in aggregate and "node_alias" in aggregate
-                joins.append((aggregate["search_table"], aggregate["node_alias"]))
-            except AssertionError:
-                continue
-
-        for group in agg.get("group_by", []):
-            joins.append((group["search_table"], group["node_alias"]))
-
-        for metric in agg.get("metrics", []):
-            joins.append((metric["search_table"], metric["node_alias"]))
-
-        # deduplicate joins
-        joins = list(set(joins))
-
-        for search_table, node_alias in joins:
-            model_class = get_search_model(search_table)
-            alias_prefix = f"{search_table}_{node_alias}"
-
-            subquery = (
-                model_class.objects.filter(
-                    resourceinstanceid=OuterRef("resourceinstanceid"),
-                    node_alias=node_alias,
-                )
-                .order_by()
-                .values("value")[:1]
-            )
-
-            queryset = queryset.annotate(
-                **{f"{alias_prefix}__value": Subquery(subquery)}
-            )
-
-    return queryset
