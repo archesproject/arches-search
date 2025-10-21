@@ -8,9 +8,11 @@ export type Clause = {
 };
 
 export type GroupPayload = {
+    graph_slug: string | undefined;
     logic: LogicOperator;
     clauses: Clause[];
     groups: GroupPayload[];
+    aggregations: Aggregation[];
 };
 
 export type AggregationMetric = {
@@ -38,11 +40,9 @@ export type QueryPayload = {
 export function initializeQueryTree(graphSlug?: string | null): QueryPayload {
     return {
         graph_slug: graphSlug ?? null,
-        query: {
-            logic: "AND",
-            clauses: [],
-            groups: [],
-        },
+        logic: "AND",
+        clauses: [],
+        groups: [],
         aggregations: [],
     };
 }
