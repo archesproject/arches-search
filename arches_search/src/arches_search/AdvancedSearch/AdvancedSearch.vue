@@ -128,40 +128,48 @@ watchEffect(() => {
         groups: [],
         aggregations: [
             {
-                "name": "funding_by_project_type",
+                name: "funding_by_project_type",
                 // "where": { "numeric_funding_awarded__value__lt": 100000 },
-                "group_by": [{
-                    "alias": "Projects_by_Type",
-                    "search_table": "term",
-                    "field": "term_project_type__value",
-                    "node_alias": "project_type"
-                }],
-                "metrics": [{
-                    "alias": "Total_Funding",
-                    "fn": "Sum",
-                    "search_table": "numeric",
-                    "field": "numeric_funding_awarded__value",
-                    "node_alias": "funding_awarded"
-                }],
+                group_by: [
+                    {
+                        alias: "Projects_by_Type",
+                        search_table: "term",
+                        field: "term_project_type__value",
+                        node_alias: "project_type",
+                    },
+                ],
+                metrics: [
+                    {
+                        alias: "Total_Funding",
+                        fn: "Sum",
+                        search_table: "numeric",
+                        field: "numeric_funding_awarded__value",
+                        node_alias: "funding_awarded",
+                    },
+                ],
                 // order_by: ["-numeric_funding_awarded__value", "term_project_type__value"],
                 //limit: 3,
             },
             {
-                "name": "count_by_project_type",
-                "where": { "term_project_type__value": "Consortia" },
-                "group_by": [{
-                    "alias": "Projects_by_Type",
-                    "search_table": "term",
-                    "field": "term_project_type__value",
-                    "node_alias": "project_type"
-                }],
-                "metrics": [{
-                    "alias": "Project_Count",
-                    "fn": "Count",
-                    "search_table": "term",
-                    "field": "term_project_type__value",
-                    "node_alias": "project_type"
-                }]
+                name: "count_by_project_type",
+                where: { term_project_type__value: "Consortia" },
+                group_by: [
+                    {
+                        alias: "Projects_by_Type",
+                        search_table: "term",
+                        field: "term_project_type__value",
+                        node_alias: "project_type",
+                    },
+                ],
+                metrics: [
+                    {
+                        alias: "Project_Count",
+                        fn: "Count",
+                        search_table: "term",
+                        field: "term_project_type__value",
+                        node_alias: "project_type",
+                    },
+                ],
             },
             // {
             //     "name": "average_funding_per_project",
@@ -177,7 +185,7 @@ watchEffect(() => {
             // },
             {
                 name: "project_totals",
-                where: { },
+                where: {},
                 aggregate: [
                     {
                         alias: "total_rows",
@@ -189,7 +197,7 @@ watchEffect(() => {
             },
             {
                 name: "total_funding_awarded",
-                where: { },
+                where: {},
                 aggregate: [
                     {
                         alias: "total_funding_awarded",
@@ -200,8 +208,8 @@ watchEffect(() => {
                         distinct: true,
                     },
                 ],
-            }
-        ]
+            },
+        ],
     };
 
     getSearchResults({
