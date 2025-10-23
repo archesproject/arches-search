@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch, watchEffect } from "vue";
+import { computed, inject, ref, useId, watch, watchEffect } from "vue";
 
 import Message from "primevue/message";
 import Select from "primevue/select";
@@ -246,7 +246,7 @@ function removeSegment(sequenceIndex: number): void {
     >
         <div
             v-for="(pair, sequenceIndex) in localPathSequence"
-            :key="sequenceIndex"
+            :key="pair + useId()"
             class="path-segment"
         >
             <Select
