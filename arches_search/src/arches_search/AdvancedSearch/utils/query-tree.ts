@@ -40,19 +40,32 @@ export type QueryPayload = {
 export function initializeQueryTree(graphSlug?: string | null): QueryPayload {
     return {
         graph_slug: graphSlug ?? null,
-        logic: "AND",
-        clauses: [],
-        groups: [],
+        query: {
+            graph_slug: graphSlug ?? undefined,
+            logic: "AND",
+            clauses: [],
+            groups: [],
+            aggregations: [],
+        },
         aggregations: [],
     };
 }
 
 export function addEmptyGroup(targetGroup: GroupPayload): void {
     targetGroup.groups.push({
+        graph_slug: targetGroup.graph_slug,
         logic: "AND",
         clauses: [],
         groups: [],
+        aggregations: [],
     });
+}
+
+export function updateGroupGraphSlug(
+    targetGroup: GroupPayload,
+    newGraphSlug: string | undefined,
+) {
+    targetGroup.graph_slug = newGraphSlug;
 }
 
 export function updateGroupLogic(

@@ -12,7 +12,7 @@ import {
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
-import Dropdown from "primevue/dropdown";
+import Select from "primevue/select";
 import Message from "primevue/message";
 import Skeleton from "primevue/skeleton";
 
@@ -24,6 +24,7 @@ import {
     removeGroup,
     removeClause,
     updateGroupLogic,
+    updateGroupGraphSlug,
 } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
 import type { Ref } from "vue";
@@ -37,8 +38,8 @@ const OR = "OR";
 
 const { $gettext } = useGettext();
 
-const { group, recursionDepth } = defineProps<{
-    group: GroupPayload;
+const { groupPayload, recursionDepth } = defineProps<{
+    groupPayload: GroupPayload;
     recursionDepth?: number;
 }>();
 
@@ -53,7 +54,7 @@ const graphs = inject<Ref<Record<string, unknown>[]>>("graphs")!;
 const selectedGraph = ref<Record<string, unknown> | undefined>();
 
 watch(
-    () => group,
+    () => groupPayload,
     (updatedGroup) => {
         const graphSlug = updatedGroup?.graph_slug;
 
@@ -68,49 +69,63 @@ watch(
     { immediate: true },
 );
 
+watch(selectedGraph, (newSelectedGraph, oldSelectedGraph) => {
+    const newSlug = newSelectedGraph?.slug as string | undefined;
+    const oldSlug = oldSelectedGraph?.slug as string | undefined;
+
+    if (newSlug === oldSlug) {
+        return;
+    }
+
+    updateGroupGraphSlug(groupPayload, newSlug);
+
+    for (const clause of groupPayload.clauses) {
+        removeClause(groupPayload, clause);
+    }
+});
+
 const isRootGroup = computed(() => {
     if (!recursionDepth) {
         return true;
     }
-
     return recursionDepth === 0;
 });
 
 const keyedClauses = computed(() => {
-    return group.clauses.map((currentClause) => {
+    return groupPayload.clauses.map((currentClause) => {
         return { clause: currentClause, key: useId() };
     });
 });
 
 const keyedGroups = computed(() => {
-    return group.groups.map((currentGroup) => {
-        return { group: currentGroup, key: useId() };
+    return groupPayload.groups.map((currentGroup) => {
+        return { groupPayload: currentGroup, key: useId() };
     });
 });
 
 function onToggleLogic() {
-    const newLogic = group.logic === AND ? OR : AND;
-    updateGroupLogic(group, newLogic);
+    const newLogic = groupPayload.logic === AND ? OR : AND;
+    updateGroupLogic(groupPayload, newLogic);
 }
 
 function onAddSubgroup() {
-    addEmptyGroup(group);
+    addEmptyGroup(groupPayload);
 }
 
 function onAddClause() {
-    addEmptyClause(group);
+    addEmptyClause(groupPayload);
 }
 
 function onRemoveChildGroup(target: GroupPayload) {
-    removeGroup(group, target);
+    removeGroup(groupPayload, target);
 }
 
 function onRemoveClause(target: Clause) {
-    removeClause(group, target);
+    removeClause(groupPayload, target);
 }
 
 function onRemoveSelf() {
-    emit("request:removeGroup", group);
+    emit("request:removeGroup", groupPayload);
 }
 </script>
 
@@ -132,11 +147,15 @@ function onRemoveSelf() {
         <div class="query-group-controls">
             <div>
                 <Button
-                    v-if="group.groups.length + group.clauses.length > 1"
-                    :label="group.logic"
+                    v-if="
+                        groupPayload.groups.length +
+                            groupPayload.clauses.length >
+                        1
+                    "
+                    :label="groupPayload.logic"
                     @click="onToggleLogic"
                 />
-                <Dropdown
+                <Select
                     v-model="selectedGraph"
                     :options="graphs"
                     option-label="name"
@@ -164,22 +183,23 @@ function onRemoveSelf() {
             </div>
         </div>
 
-        <div v-if="group.clauses.length">
+        <div v-if="selectedGraph && groupPayload.clauses.length">
             <QueryClause
                 v-for="item in keyedClauses"
                 :key="item.key"
+                :anchor-graph="selectedGraph"
                 :clause="item.clause"
                 @request:remove-clause="onRemoveClause"
             />
         </div>
 
-        <div v-if="group.groups.length">
+        <div v-if="groupPayload.groups.length">
             <QueryGroup
                 v-for="item in keyedGroups"
                 :key="item.key"
-                :group="item.group"
+                :group-payload="item.groupPayload"
                 :recursion-depth="(recursionDepth || 0) + 1"
-                @request:remove-group="onRemoveChildGroup"
+                @request:remove-group-payload="onRemoveChildGroup"
             />
         </div>
     </div>

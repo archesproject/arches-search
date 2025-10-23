@@ -26,7 +26,7 @@ const { query } = defineProps<{ query?: GroupPayload }>();
 const isLoading = ref(true);
 const fetchError = ref<Error | null>(null);
 
-const rootGroup = ref<GroupPayload>();
+const rootGroupPayload = ref<GroupPayload>();
 
 const datatypesToAdvancedSearchFacets = ref<{ [datatype: string]: unknown[] }>(
     {},
@@ -34,7 +34,7 @@ const datatypesToAdvancedSearchFacets = ref<{ [datatype: string]: unknown[] }>(
 const graphs = ref([]);
 
 const graphIdsToNodes = ref<{ [graphId: string]: unknown[] }>({});
-const inflightLoads = new Map<string, Promise<unknown[]>>();
+const inflightLoads: Map<string, Promise<unknown[]>> = new Map();
 
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
@@ -67,7 +67,9 @@ async function getNodesForGraphId(graphId: string): Promise<unknown[]> {
     }
 
     const pendingNodesRequest = fetchNodesForGraphId(graphId)
-        .then((nodes) => {
+        .then((nodesMap) => {
+            const nodes = Object.values(nodesMap);
+
             graphIdsToNodes.value = {
                 ...graphIdsToNodes.value,
                 [graphId]: nodes,
@@ -79,6 +81,8 @@ async function getNodesForGraphId(graphId: string): Promise<unknown[]> {
         .catch((error) => {
             inflightLoads.delete(graphId);
             fetchError.value = error as Error;
+
+            throw error;
         });
 
     inflightLoads.set(graphId, pendingNodesRequest);
@@ -115,9 +119,9 @@ async function fetchGraphs() {
 
 function seedRootGroup() {
     if (query) {
-        rootGroup.value = structuredClone(query);
+        rootGroupPayload.value = structuredClone(query);
     } else {
-        rootGroup.value = {
+        rootGroupPayload.value = {
             graph_slug: undefined,
             logic: "AND",
             clauses: [],
@@ -128,7 +132,7 @@ function seedRootGroup() {
 }
 
 async function search() {
-    const results = await getSearchResults(rootGroup.value!);
+    const results = await getSearchResults(rootGroupPayload.value!);
     console.log("Search results:", results);
 }
 </script>
@@ -148,7 +152,7 @@ async function search() {
         </Message>
 
         <div v-else>
-            <QueryGroup :group="rootGroup!" />
+            <QueryGroup :group-payload="rootGroupPayload!" />
 
             <Button
                 icon="pi pi-search"
