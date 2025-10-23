@@ -31,22 +31,12 @@ export type Aggregation = {
     limit?: number;
 };
 
-export type QueryPayload = {
-    graph_slug: string | null | undefined;
-    query: GroupPayload;
-    aggregations: Aggregation[];
-};
-
-export function initializeQueryTree(graphSlug?: string | null): QueryPayload {
+export function initializeQueryTree(graphSlug?: string | null): GroupPayload {
     return {
-        graph_slug: graphSlug ?? null,
-        query: {
-            graph_slug: graphSlug ?? undefined,
-            logic: "AND",
-            clauses: [],
-            groups: [],
-            aggregations: [],
-        },
+        graph_slug: graphSlug ?? undefined,
+        logic: "AND",
+        clauses: [],
+        groups: [],
         aggregations: [],
     };
 }
