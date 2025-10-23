@@ -199,7 +199,7 @@ function onRemoveSelf() {
                 :key="item.key"
                 :group-payload="item.groupPayload"
                 :recursion-depth="(recursionDepth || 0) + 1"
-                @request:remove-group-payload="onRemoveChildGroup"
+                @request:remove-group="onRemoveChildGroup"
             />
         </div>
     </div>
