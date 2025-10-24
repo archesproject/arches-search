@@ -38,9 +38,10 @@ const OR = "OR";
 
 const { $gettext } = useGettext();
 
-const { groupPayload, recursionDepth } = defineProps<{
+const { groupPayload, recursionDepth, parentSelectedGraph } = defineProps<{
     groupPayload: GroupPayload;
     recursionDepth?: number;
+    parentSelectedGraph?: Record<string, unknown> | undefined;
 }>();
 
 const emit = defineEmits<{
@@ -187,7 +188,8 @@ function onRemoveSelf() {
             <QueryClause
                 v-for="item in keyedClauses"
                 :key="item.key"
-                :anchor-graph="selectedGraph"
+                :group-selected-graph="selectedGraph"
+                :parent-group-selected-graph="parentSelectedGraph"
                 :clause="item.clause"
                 @request:remove-clause="onRemoveClause"
             />
@@ -199,6 +201,7 @@ function onRemoveSelf() {
                 :key="item.key"
                 :group-payload="item.groupPayload"
                 :recursion-depth="(recursionDepth || 0) + 1"
+                :parent-selected-graph="selectedGraph"
                 @request:remove-group="onRemoveChildGroup"
             />
         </div>

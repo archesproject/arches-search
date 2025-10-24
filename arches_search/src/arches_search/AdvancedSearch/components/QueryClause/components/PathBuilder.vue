@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, useId, watch, watchEffect } from "vue";
+import { computed, inject, ref, watch, watchEffect } from "vue";
 
 import Message from "primevue/message";
 import Select from "primevue/select";
@@ -69,18 +69,23 @@ watchEffect(() => {
 watch(
     () => pathSequence,
     (updatedPathSequence) => {
-        localPathSequence.value = [...(updatedPathSequence ?? [])];
+        const next = [...(updatedPathSequence ?? [])];
+        const hasIncompleteLocal = localPathSequence.value.some(
+            (segment) => !segment[0] || !segment[1],
+        );
+        if (
+            !hasIncompleteLocal ||
+            next.length >= localPathSequence.value.length
+        ) {
+            localPathSequence.value = next;
+        }
     },
 );
 
 watch(
     () => localPathSequence.value,
     (updatedLocalPathSequence) => {
-        const completeSegments = updatedLocalPathSequence.filter((segment) => {
-            return Boolean(segment[0]) && Boolean(segment[1]);
-        });
-
-        emit("update:pathSequence", completeSegments);
+        emit("update:pathSequence", updatedLocalPathSequence);
     },
 );
 
@@ -123,7 +128,7 @@ function getNodesForGraphSlug(
     }
 
     const graphId = graphSlugsToGraphIds.value[graphSlug];
-    return graphIdsToNodes.value[graphId];
+    return graphId ? graphIdsToNodes.value[graphId] ?? [] : [];
 }
 
 function getNodeForGraphSlugNodeAlias(
@@ -162,16 +167,16 @@ function getPermittedRelationshipGraphs(
         (previousNodeConfig?.graphs as { [key: string]: string }[]) || [];
 
     return graphs.value.reduce<{ [key: string]: unknown }[]>(
-        (acc, graphData) => {
+        (accumulatedGraphs, graphData) => {
             if (
                 permittedGraphData.some(
                     (reference) => reference.graphid === graphData.graphid,
                 )
             ) {
-                acc.push(graphData);
+                accumulatedGraphs.push(graphData);
             }
 
-            return acc;
+            return accumulatedGraphs;
         },
         [],
     );
@@ -189,7 +194,6 @@ function updateSegment(
     graphSlug: string,
     nodeAlias: string,
 ): void {
-    // truncating the sequence is desired behavior when updating earlier segments
     const truncatedSequence = localPathSequence.value.slice(
         0,
         sequenceIndex + 1,
@@ -216,7 +220,6 @@ function addSegment(): void {
     if (permittedRelationshipGraphs.length === 1) {
         const graphSlug = permittedRelationshipGraphs[0].slug as string;
         localPathSequence.value = [...localPathSequence.value, [graphSlug, ""]];
-
         return;
     }
 
@@ -246,7 +249,7 @@ function removeSegment(sequenceIndex: number): void {
     >
         <div
             v-for="(pair, sequenceIndex) in localPathSequence"
-            :key="pair + useId()"
+            :key="pair[0] + '-' + pair[1] + '-' + sequenceIndex"
             class="path-segment"
         >
             <Select
