@@ -117,7 +117,6 @@ def build_aggregations(queryset, aggregations):
                     kwargs["distinct"] = True
                 annotations[aggregate["alias"]] = aggregate_fn(field, **kwargs)
             results[name] = queryset.aggregate(**annotations)
-            print(queryset.query)
             continue
 
         group_bys = agg.get("group_by", [])
