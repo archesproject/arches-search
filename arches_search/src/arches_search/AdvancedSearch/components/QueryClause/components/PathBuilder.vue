@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch, watchEffect } from "vue";
+import { computed, inject, ref, useId, watch, watchEffect } from "vue";
 
 import Message from "primevue/message";
 import Select from "primevue/select";
@@ -248,15 +248,15 @@ function removeSegment(sequenceIndex: number): void {
         class="path-builder"
     >
         <div
-            v-for="(pair, sequenceIndex) in localPathSequence"
-            :key="pair[0] + '-' + pair[1] + '-' + sequenceIndex"
+            v-for="(segment, sequenceIndex) in localPathSequence"
+            :key="useId() + segment[0] + segment[1]"
             class="path-segment"
         >
             <Select
                 v-if="shouldShowGraphSelect(sequenceIndex)"
                 option-label="name"
                 option-value="slug"
-                :model-value="pair[0]"
+                :model-value="segment[0]"
                 :options="getPermittedRelationshipGraphs(sequenceIndex)"
                 :placeholder="$gettext('Select graph...')"
                 @update:model-value="
@@ -266,8 +266,8 @@ function removeSegment(sequenceIndex: number): void {
             <Select
                 option-label="name"
                 option-value="alias"
-                :model-value="pair[1]"
-                :options="getNodesForGraphSlug(pair[0])"
+                :model-value="segment[1]"
+                :options="getNodesForGraphSlug(segment[0])"
                 :placeholder="$gettext('Select node...')"
                 @update:model-value="
                     (value) => onNodeChanged(sequenceIndex, value)

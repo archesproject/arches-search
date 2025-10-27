@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, defineEmits, defineProps, inject, ref, watch } from "vue";
+import {
+    computed,
+    defineEmits,
+    defineProps,
+    inject,
+    ref,
+    useId,
+    watch,
+} from "vue";
 
 import { useGettext } from "vue3-gettext";
 
@@ -211,7 +219,7 @@ function onRemoveSelf() {
                 <!-- prettier-ignore -->
                 <OperandBuilder
                     v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
-                    :key="`operand-${parameterIndex - 1}`"
+                    :key="useId() + parameterIndex"
                     :model-value="props.clause.operands?.[parameterIndex - 1]"
                     :group-selected-graph="groupSelectedGraph"
                     :parent-group-selected-graph="
