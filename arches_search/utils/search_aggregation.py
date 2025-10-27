@@ -78,25 +78,6 @@ def build_nested_subquery(group_spec, parent_ref_field="resourceinstanceid"):
     return subquery
 
 
-def _build_annotations(metric_specs):
-    annotations = {}
-
-    for spec in metric_specs:
-        alias = spec["alias"]
-        aggregate_fn = get_aggregate_function(spec["fn"])
-        field = spec.get("field", "value")
-
-        # Use our unified helper
-        subquery = build_value_subquery(
-            search_table=spec["search_table"],
-            node_alias=spec["node_alias"],
-            parent_ref_field="resourceinstanceid",
-        )
-        annotations[alias] = aggregate_fn(subquery)
-
-    return annotations
-
-
 def build_aggregations(queryset, aggregations):
     results = {}
 
@@ -129,7 +110,20 @@ def build_aggregations(queryset, aggregations):
                 **{field_alias: build_nested_subquery(group_spec)}
             )
 
-        metric_annotations = _build_annotations(metrics)
+        metric_annotations = {}
+        for metric_spec in metrics:
+            alias = metric_spec["alias"]
+            aggregate_fn = get_aggregate_function(metric_spec["fn"])
+            field = metric_spec.get("field", "value")
+
+            # Use our unified helper
+            subquery = build_value_subquery(
+                search_table=metric_spec["search_table"],
+                node_alias=metric_spec["node_alias"],
+                parent_ref_field="resourceinstanceid",
+            )
+            metric_annotations[alias] = aggregate_fn(subquery)
+
         if metric_annotations:
             group_fields = [g["field"] for g in group_bys]
             local_queryset = local_queryset.values(*group_fields).annotate(
