@@ -1,6 +1,6 @@
 from typing import Any, Dict, Tuple, Union
 
-from django.db.models import Exists, Q, QuerySet
+from django.db.models import Exists, Q, QuerySet, F
 
 from arches.app.models import models as arches_models
 
@@ -47,9 +47,15 @@ class AdvancedSearchQueryCompiler:
 
     def build_resources_queryset(self) -> QuerySet:
         compiled_advanced_search_query = self.compile()
-        base_queryset = arches_models.ResourceInstance.objects.filter(
-            graph__slug=self.graph_slug
-        ).only("resourceinstanceid")
+
+        base_queryset = (
+            arches_models.ResourceInstance.objects.filter(graph__slug=self.graph_slug)
+            .only("resourceinstanceid")
+            .annotate(
+                anchor_resourceinstanceid=F("resourceinstanceid"),
+                parent_resourceinstanceid=F("resourceinstanceid"),
+            )
+        )
 
         if (
             isinstance(compiled_advanced_search_query, Q)
@@ -62,7 +68,6 @@ class AdvancedSearchQueryCompiler:
             .only("resourceinstanceid")
             .query
         )
-
         return base_queryset.filter(compiled_advanced_search_query).only(
             "resourceinstanceid"
         )

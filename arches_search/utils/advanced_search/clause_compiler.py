@@ -163,6 +163,10 @@ class ClauseCompiler:
             starting_graph = parent_graph_slug or anchor_graph_slug
 
             if not path_segments:
+                if parent_graph_slug is None:
+                    raise ValueError(
+                        _("PARENT operand cannot be empty at the top level.")
+                    )
                 return OuterRef("parent_resourceinstanceid")
 
             return self.path_navigator.build_values_subquery(

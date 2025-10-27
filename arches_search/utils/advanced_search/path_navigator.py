@@ -27,7 +27,7 @@ class PathNavigator:
         self,
         outer_resource_instance_id_reference: str,
         starting_graph_slug: str,
-        path_segments: Sequence[str],
+        path_segments: Sequence[Tuple[str, str]],
     ) -> Subquery:
         if not path_segments:
             base_queryset = (
@@ -120,7 +120,7 @@ class PathNavigator:
         self,
         outer_resource_instance_id_reference: str,
         starting_graph_slug: str,
-        path_segments: Sequence[str],
+        path_segments: Sequence[Tuple[str, str]],
     ) -> Subquery:
         if not path_segments:
             base_queryset = (
@@ -180,7 +180,7 @@ class PathNavigator:
 
     def build_path_queryset(
         self,
-        path_segments: Sequence[str],
+        path_segments: Sequence[Tuple[str, str]],
         context_graph_slug: str,
     ) -> Tuple[str, Any, QuerySet]:
         if not path_segments:
@@ -195,22 +195,27 @@ class PathNavigator:
         )
 
         if len(path_segments) == 1:
+            base_qs = last_model.objects.only(
+                "graph_slug", "node_alias", "resourceinstanceid", "value"
+            ).filter(
+                graph_slug=last_graph_slug,
+                node_alias=last_node_alias,
+            )
+
+            base_qs = base_qs.annotate(
+                anchor_resourceinstanceid=OuterRef("resourceinstanceid"),
+                parent_resourceinstanceid=OuterRef("parent_resourceinstanceid"),
+            )
+
             if last_graph_slug == context_graph_slug:
-                queryset = last_model.objects.only(
-                    "graph_slug", "node_alias", "resourceinstanceid", "value"
-                ).filter(
-                    graph_slug=last_graph_slug,
-                    node_alias=last_node_alias,
+                queryset = base_qs.filter(
                     resourceinstanceid=OuterRef("resourceinstanceid"),
                 )
             else:
-                queryset = last_model.objects.only(
-                    "graph_slug", "node_alias", "resourceinstanceid", "value"
-                ).filter(
-                    graph_slug=last_graph_slug,
-                    node_alias=last_node_alias,
+                queryset = base_qs.filter(
                     value=OuterRef("resourceinstanceid"),
                 )
+
             return last_datatype_name, last_model, queryset
 
         accumulated_owner_ids = self._build_resource_instance_ids_subquery(
@@ -220,7 +225,10 @@ class PathNavigator:
         )
         queryset = (
             last_model.objects.only("value")
-            .annotate(**{"anchor_resourceinstanceid": OuterRef("resourceinstanceid")})
+            .annotate(
+                anchor_resourceinstanceid=OuterRef("resourceinstanceid"),
+                parent_resourceinstanceid=OuterRef("parent_resourceinstanceid"),
+            )
             .filter(
                 graph_slug=last_graph_slug,
                 node_alias=last_node_alias,

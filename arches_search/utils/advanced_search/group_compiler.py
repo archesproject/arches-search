@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet, F
 
 from arches.app.models import models as arches_models
 
@@ -35,7 +35,8 @@ class GroupCompiler:
             ).only("resourceinstanceid")
 
             filtered_subgroup_queryset = subgroup_base_queryset.annotate(
-                parent_resourceinstanceid=OuterRef("parent_resourceinstanceid")
+                anchor_resourceinstanceid=F("resourceinstanceid"),
+                parent_resourceinstanceid=OuterRef("resourceinstanceid"),
             ).filter(compiled_subgroup)
 
             subgroup_ids_queryset.append(
