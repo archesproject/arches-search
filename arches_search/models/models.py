@@ -1,12 +1,8 @@
 from django.db import models
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
-from django.utils.translation import gettext_lazy as _
-from django.db import models
-from django.db.models import Q
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
-
 from arches.app.models.fields.i18n import I18n_TextField
 
 
@@ -30,8 +26,7 @@ class DDatatypeXAdvancedSearchModel(models.Model):
         managed = True
         constraints = [
             models.UniqueConstraint(
-                fields=["datatype"],
-                name="unique_search_model_per_datatype",
+                fields=["datatype"], name="unique_search_model_per_datatype"
             )
         ]
         indexes = [
@@ -70,12 +65,10 @@ class AdvancedSearchFacet(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["datatype", "operator"],
-                name="unique_operator_per_datatype",
+                fields=["datatype", "operator"], name="unique_operator_per_datatype"
             ),
             models.UniqueConstraint(
-                fields=["datatype", "sortorder"],
-                name="unique_sortorder_per_datatype",
+                fields=["datatype", "sortorder"], name="unique_sortorder_per_datatype"
             ),
         ]
 
@@ -103,6 +96,8 @@ class TermSearch(models.Model):
             models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
+            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
+            models.Index(fields=["graph_slug", "node_alias", "value"]),
             GinIndex(fields=["search_vector"]),
         ]
 
@@ -128,6 +123,8 @@ class NumericSearch(models.Model):
             models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
+            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
+            models.Index(fields=["graph_slug", "node_alias", "value"]),
         ]
 
 
@@ -152,6 +149,8 @@ class UUIDSearch(models.Model):
             models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
+            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
+            models.Index(fields=["graph_slug", "node_alias", "value"]),
         ]
 
 
@@ -176,6 +175,8 @@ class DateSearch(models.Model):
             models.Index(fields=["node_alias"]),
             models.Index(fields=["datatype"]),
             models.Index(fields=["value"]),
+            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
+            models.Index(fields=["graph_slug", "node_alias", "value"]),
         ]
 
 
@@ -201,6 +202,10 @@ class DateRangeSearch(models.Model):
             models.Index(fields=["node_alias"]),
             models.Index(fields=["datatype"]),
             models.Index(fields=["start_value", "end_value"]),
+            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
+            models.Index(
+                fields=["graph_slug", "node_alias", "start_value", "end_value"]
+            ),
         ]
 
 
@@ -225,4 +230,6 @@ class BooleanSearch(models.Model):
             models.Index(fields=["node_alias"]),
             models.Index(fields=["datatype"]),
             models.Index(fields=["value"]),
+            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
+            models.Index(fields=["graph_slug", "node_alias", "value"]),
         ]

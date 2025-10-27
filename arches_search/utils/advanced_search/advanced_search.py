@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Any, Dict, Tuple, Union
 
 from django.db.models import Exists, Q, QuerySet, F
@@ -19,6 +20,14 @@ from django.utils.translation import gettext as _
 
 
 class AdvancedSearchQueryCompiler:
+    @lru_cache(maxsize=128)
+    def get_graph_id_for_slug(self, graph_slug: str):
+        return (
+            arches_models.GraphModel.objects.only("graphid")
+            .get(slug=graph_slug)
+            .graphid
+        )
+
     def __init__(self, payload_query: Dict[str, Any]) -> None:
         self.graph_slug = payload_query.get("graph_slug")
         self.payload_query = payload_query
@@ -37,7 +46,9 @@ class AdvancedSearchQueryCompiler:
             self.facet_registry,
             self.path_navigator,
         )
-        self.group_compiler = GroupCompiler(self.clause_compiler)
+        self.group_compiler = GroupCompiler(
+            self.clause_compiler, get_graph_id_for_slug=self.get_graph_id_for_slug
+        )
 
     def compile(self) -> Tuple[str, Union[Q, Exists]]:
         if not arches_models.GraphModel.objects.filter(slug=self.graph_slug).exists():
@@ -47,9 +58,10 @@ class AdvancedSearchQueryCompiler:
 
     def build_resources_queryset(self) -> QuerySet:
         compiled_advanced_search_query = self.compile()
+        graph_id = self.get_graph_id_for_slug(self.graph_slug)
 
         base_queryset = (
-            arches_models.ResourceInstance.objects.filter(graph__slug=self.graph_slug)
+            arches_models.ResourceInstance.objects.filter(graph_id=graph_id)
             .only("resourceinstanceid")
             .annotate(
                 anchor_resourceinstanceid=F("resourceinstanceid"),
@@ -63,11 +75,6 @@ class AdvancedSearchQueryCompiler:
         ):
             return base_queryset
 
-        print(
-            base_queryset.filter(compiled_advanced_search_query)
-            .only("resourceinstanceid")
-            .query
-        )
         return base_queryset.filter(compiled_advanced_search_query).only(
             "resourceinstanceid"
         )

@@ -66,15 +66,46 @@ class ClauseCompiler:
             right_hand_side_value=right_hand_side_value,
         )
 
-        filtered_subject = subject_queryset.filter(condition_expression).order_by()[:1]
+        filtered_subject = subject_queryset.filter(condition_expression).order_by()
         return self._apply_exists(filtered_subject, facet.is_orm_template_negated)
 
     def _build_condition_from_facet(
         self, facet: Any, field_name: str, right_hand_side_value: Any
-    ) -> Q:
+    ) -> Union[Q, Exists]:
+        if (
+            isinstance(right_hand_side_value, dict)
+            and right_hand_side_value.get("__adv_kind") == "RESULTSET_IDS"
+        ):
+            return Exists(
+                right_hand_side_value["unioned_ids_qs"].filter(
+                    resourceinstanceid=OuterRef(field_name)
+                )
+            )
+
+        if isinstance(right_hand_side_value, Subquery) and field_name == "value":
+            right_hand_side_queryset = getattr(right_hand_side_value, "queryset", None)
+            try:
+                if right_hand_side_queryset is not None and hasattr(
+                    right_hand_side_queryset.model, "_meta"
+                ):
+                    value_field_names = {
+                        field.name
+                        for field in right_hand_side_queryset.model._meta.concrete_fields
+                    }
+
+                    if "value" in value_field_names:
+                        return Exists(
+                            right_hand_side_queryset.filter(
+                                value=OuterRef(field_name)
+                            ).values("value")
+                        )
+            except Exception:
+                pass
+
         is_collection = isinstance(
             right_hand_side_value, (list, tuple, Subquery)
         ) and not isinstance(right_hand_side_value, OuterRef)
+
         base_key = f"{field_name}__in" if is_collection else field_name
 
         if facet.orm_template is None:
@@ -88,12 +119,10 @@ class ClauseCompiler:
 
         if "{col}" in facet.orm_template:
             lookup_key = facet.orm_template.replace("{col}", field_name)
-
             if is_collection and (
                 lookup_key == field_name or lookup_key.endswith("__exact")
             ):
                 lookup_key = f"{field_name}__in"
-
             return Q(**{lookup_key: right_hand_side_value})
 
         return Q(**{base_key: right_hand_side_value})
@@ -105,7 +134,7 @@ class ClauseCompiler:
         anchor_graph_slug: str,
         parent_graph_slug: Optional[str],
         unioned_subgroup_ids_queryset: Optional[QuerySet] = None,
-    ) -> Union[Any, Subquery, OuterRef]:
+    ) -> Union[Any, Subquery, OuterRef, Dict[str, Any]]:
         if operand_type == "LITERAL":
             return operand_value
 
@@ -119,7 +148,10 @@ class ClauseCompiler:
 
             path_segments = operand_value or []
             if not path_segments:
-                return Subquery(unioned_subgroup_ids_queryset)
+                return {
+                    "__adv_kind": "RESULTSET_IDS",
+                    "unioned_ids_qs": unioned_subgroup_ids_queryset,
+                }
 
             last_graph_slug, last_node_alias = path_segments[-1]
             last_datatype_name = (
@@ -148,7 +180,6 @@ class ClauseCompiler:
 
         if operand_type == "SELF":
             path_segments = operand_value or []
-
             if not path_segments:
                 return OuterRef("anchor_resourceinstanceid")
 
@@ -183,8 +214,4 @@ class ClauseCompiler:
         exists_expression = (
             candidate if isinstance(candidate, Exists) else Exists(candidate)
         )
-
-        if is_negated:
-            return ~exists_expression
-
-        return exists_expression
+        return ~exists_expression if is_negated else exists_expression
