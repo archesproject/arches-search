@@ -9,25 +9,19 @@ def forwards_func(apps, schema_editor):
         "arches_search", "DDatatypeXAdvancedSearchModel"
     )
 
+    def get_content_type(app_label: str, model_name: str):
+        content_type, _created = ContentType.objects.get_or_create(
+            app_label=app_label, model=model_name
+        )
+        return content_type
+
     search_model_ct = {
-        "termsearch": ContentType.objects.get(
-            app_label="arches_search", model="termsearch"
-        ),
-        "numericsearch": ContentType.objects.get(
-            app_label="arches_search", model="numericsearch"
-        ),
-        "uuidsearch": ContentType.objects.get(
-            app_label="arches_search", model="uuidsearch"
-        ),
-        "datesearch": ContentType.objects.get(
-            app_label="arches_search", model="datesearch"
-        ),
-        "daterangesearch": ContentType.objects.get(
-            app_label="arches_search", model="daterangesearch"
-        ),
-        "booleansearch": ContentType.objects.get(
-            app_label="arches_search", model="booleansearch"
-        ),
+        "termsearch": get_content_type("arches_search", "termsearch"),
+        "numericsearch": get_content_type("arches_search", "numericsearch"),
+        "uuidsearch": get_content_type("arches_search", "uuidsearch"),
+        "datesearch": get_content_type("arches_search", "datesearch"),
+        "daterangesearch": get_content_type("arches_search", "daterangesearch"),
+        "booleansearch": get_content_type("arches_search", "booleansearch"),
     }
 
     datatype_to_model = {
@@ -52,7 +46,7 @@ def forwards_func(apps, schema_editor):
         "url": "termsearch",
     }
 
-    field_names = {f.name for f in DDatatype._meta.get_fields()}
+    field_names = {field.name for field in DDatatype._meta.get_fields()}
     datatype_lookup_field = "datatype" if "datatype" in field_names else "name"
 
     for datatype_code, model_key in datatype_to_model.items():
