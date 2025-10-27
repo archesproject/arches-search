@@ -123,29 +123,12 @@ watch(
     { immediate: true },
 );
 
-watch(
-    selectedAdvancedSearchFacet,
-    (updatedAdvancedSearchFacet, currentAdvancedSearchFacet) => {
-        if (updatedAdvancedSearchFacet === currentAdvancedSearchFacet) {
-            return;
-        }
-
-        if (currentAdvancedSearchFacet == null && props.clause.operands) {
-            updateClause(props.clause, { operands: props.clause.operands });
-            return;
-        }
-
-        updateClause(props.clause, { operands: [] });
-    },
-    { immediate: true },
-);
-
 watch(operator, (nextOperator, previousOperator) => {
     if (nextOperator === previousOperator) {
         return;
     }
 
-    updateClause(props.clause, { operator: nextOperator, operands: [] });
+    updateClause(props.clause, { operator: nextOperator });
 });
 
 function onSubjectUpdate(updatedSubjectPathSequence: Array<[string, string]>) {
