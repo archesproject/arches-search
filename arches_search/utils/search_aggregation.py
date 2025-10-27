@@ -40,7 +40,7 @@ def build_value_subquery(
     return Subquery(qs.values("value")[:1])
 
 
-def build_nested_subquery(group_spec, parent_ref_field="resourceinstanceid"):
+def build_subquery(group_spec, parent_ref_field="resourceinstanceid"):
     """
     Recursively build nested subqueries for deeply linked nodes.
     """
@@ -54,9 +54,7 @@ def build_nested_subquery(group_spec, parent_ref_field="resourceinstanceid"):
     # Handle nested aggregations recursively
     for agg in group_spec.get("aggregations", []):
         for nested_group in agg.get("group_by", []):
-            nested_subquery = build_nested_subquery(
-                nested_group, parent_ref_field="value"
-            )
+            nested_subquery = build_subquery(nested_group, parent_ref_field="value")
             nested_field = nested_group["field"]
 
             # Annotate the current subquery with the nested subquery
@@ -107,21 +105,15 @@ def build_aggregations(queryset, aggregations):
         for group_spec in group_bys:
             field_alias = group_spec["field"]
             local_queryset = local_queryset.annotate(
-                **{field_alias: build_nested_subquery(group_spec)}
+                **{field_alias: build_subquery(group_spec)}
             )
 
         metric_annotations = {}
         for metric_spec in metrics:
             alias = metric_spec["alias"]
             aggregate_fn = get_aggregate_function(metric_spec["fn"])
-            field = metric_spec.get("field", "value")
 
-            # Use our unified helper
-            subquery = build_value_subquery(
-                search_table=metric_spec["search_table"],
-                node_alias=metric_spec["node_alias"],
-                parent_ref_field="resourceinstanceid",
-            )
+            subquery = build_subquery(metric_spec)
             metric_annotations[alias] = aggregate_fn(subquery)
 
         if metric_annotations:
