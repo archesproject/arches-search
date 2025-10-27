@@ -35,7 +35,7 @@ class GroupCompiler:
             ).only("resourceinstanceid")
 
             filtered_subgroup_queryset = subgroup_base_queryset.annotate(
-                parent_resourceinstanceid=OuterRef("resourceinstanceid")
+                parent_resourceinstanceid=OuterRef("parent_resourceinstanceid")
             ).filter(compiled_subgroup)
 
             subgroup_ids_queryset.append(

@@ -121,7 +121,7 @@ class ClauseCompiler:
             if not path_segments:
                 return Subquery(unioned_subgroup_ids_queryset)
 
-            last_graph_slug, last_node_alias = path_segments[-1].split(":")
+            last_graph_slug, last_node_alias = path_segments[-1]
             last_datatype_name = (
                 self.path_navigator.node_alias_datatype_registry.lookup_node_datatype(
                     last_graph_slug,

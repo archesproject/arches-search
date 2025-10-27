@@ -39,7 +39,7 @@ class PathNavigator:
             )
             return Subquery(base_queryset)
 
-        first_graph_slug, first_node_alias = path_segments[0].split(":")
+        first_graph_slug, first_node_alias = path_segments[0]
         first_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
             first_graph_slug, first_node_alias
         )
@@ -86,7 +86,7 @@ class PathNavigator:
         accumulated_owner_ids: Subquery = Subquery(first_owner_ids_queryset)
 
         for hop_segment in path_segments[1:-1]:
-            hop_graph_slug, hop_node_alias = hop_segment.split(":")
+            hop_graph_slug, hop_node_alias = hop_segment
             hop_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
                 hop_graph_slug, hop_node_alias
             )
@@ -132,7 +132,7 @@ class PathNavigator:
             )
             return Subquery(base_queryset)
 
-        last_graph_slug, last_node_alias = path_segments[-1].split(":")
+        last_graph_slug, last_node_alias = path_segments[-1]
         last_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
             last_graph_slug, last_node_alias
         )
@@ -186,7 +186,7 @@ class PathNavigator:
         if not path_segments:
             raise ValueError(_("Path must not be empty."))
 
-        last_graph_slug, last_node_alias = path_segments[-1].split(":")
+        last_graph_slug, last_node_alias = path_segments[-1]
         last_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
             last_graph_slug, last_node_alias
         )

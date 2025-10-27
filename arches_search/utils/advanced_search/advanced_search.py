@@ -57,6 +57,12 @@ class AdvancedSearchQueryCompiler:
         ):
             return base_queryset
 
+        print(
+            base_queryset.filter(compiled_advanced_search_query)
+            .only("resourceinstanceid")
+            .query
+        )
+
         return base_queryset.filter(compiled_advanced_search_query).only(
             "resourceinstanceid"
         )
