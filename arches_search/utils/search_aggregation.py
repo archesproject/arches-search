@@ -121,18 +121,21 @@ def build_aggregations(queryset, aggregations):
 
         group_bys = agg.get("group_by", [])
         metrics = agg.get("metrics", [])
+        local_queryset = queryset
 
         for group_spec in group_bys:
             field_alias = group_spec["field"]
-            queryset = queryset.annotate(
+            local_queryset = local_queryset.annotate(
                 **{field_alias: build_nested_subquery(group_spec)}
             )
 
         metric_annotations = _build_annotations(metrics)
         if metric_annotations:
             group_fields = [g["field"] for g in group_bys]
-            queryset = queryset.values(*group_fields).annotate(**metric_annotations)
+            local_queryset = local_queryset.values(*group_fields).annotate(
+                **metric_annotations
+            )
 
-        results[name] = list(queryset)
+        results[name] = list(local_queryset)
 
     return results
