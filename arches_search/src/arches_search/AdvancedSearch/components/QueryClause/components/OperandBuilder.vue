@@ -31,6 +31,7 @@ type OperandType =
     | typeof LITERAL
     | typeof PARENT
     | typeof RESULTSET;
+
 type Operand =
     | LiteralOperand
     | SelfOperand
@@ -47,7 +48,7 @@ const {
     subjectTerminalNode,
     subjectTerminalGraph,
 } = defineProps<{
-    modelValue: Operand | null | undefined;
+    modelValue: Record<string, unknown> | null | undefined;
     groupSelectedGraph: Record<string, unknown>;
     parentGroupSelectedGraph?: Record<string, unknown>;
     subjectTerminalNode: Node;
@@ -59,7 +60,11 @@ const emit = defineEmits<{ (e: "update:modelValue", value: Operand): void }>();
 const operandOriginOptions = [
     { label: $gettext("LITERAL"), value: LITERAL },
     { label: $gettext("SELF"), value: SELF },
-    { label: $gettext("PARENT"), value: PARENT },
+    {
+        label: $gettext("PARENT"),
+        value: PARENT,
+        disabled: !parentGroupSelectedGraph,
+    },
     { label: $gettext("RESULTSET"), value: RESULTSET },
 ];
 
@@ -68,9 +73,11 @@ const operandType = ref<OperandType>();
 const operandValue = ref<unknown>();
 
 const pathSequenceSeedGraph = computed<Record<string, unknown>>(() => {
-    return operandType.value === PARENT
-        ? parentGroupSelectedGraph!
-        : groupSelectedGraph;
+    if (operandType.value === PARENT) {
+        return parentGroupSelectedGraph!;
+    } else {
+        return groupSelectedGraph;
+    }
 });
 
 watchEffect(() => {
@@ -82,7 +89,7 @@ watchEffect(() => {
     }
 
     isSyncingFromProps.value = true;
-    operandType.value = modelValue.type;
+    operandType.value = modelValue.type as OperandType;
     operandValue.value = modelValue.value;
 
     nextTick(() => {
@@ -142,6 +149,7 @@ function onPathSequenceUpdate(updatedPathSequence: Array<[string, string]>) {
 <template>
     <div class="operand-builder">
         <Select
+            option-disabled="disabled"
             option-label="label"
             option-value="value"
             :model-value="operandType"
@@ -149,20 +157,22 @@ function onPathSequenceUpdate(updatedPathSequence: Array<[string, string]>) {
             @update:model-value="onOperandTypeUpdate"
         />
 
+        <!-- prettier-ignore -->
         <GenericWidget
             v-if="operandType === LITERAL"
             mode="edit"
-            :graph-slug="subjectTerminalGraph.slug as string"
+            :graph-slug="(subjectTerminalGraph.slug as string)"
             :node-alias="subjectTerminalNode.alias"
             :should-show-label="false"
             :aliased-node-data="{ node_value: operandValue }"
             @update:value="onGenericWidgetUpdate"
         />
 
+        <!-- prettier-ignore -->
         <PathBuilder
             v-else-if="operandType !== RESULTSET"
             :anchor-graph="pathSequenceSeedGraph"
-            :path-sequence="operandValue as [string, string][]"
+            :path-sequence="(operandValue as [string, string][])"
             @update:path-sequence="onPathSequenceUpdate"
         />
     </div>

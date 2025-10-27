@@ -1,8 +1,9 @@
 export type LogicOperator = "AND" | "OR";
 
 export type Clause = {
-    operator: string | null;
-    params: unknown[];
+    subject?: Array<[string, string]>;
+    operands?: { [key: string]: unknown }[];
+    operator?: string | null;
 };
 
 export type GroupPayload = {
@@ -76,8 +77,9 @@ export function removeGroup(
 
 export function addEmptyClause(targetGroup: GroupPayload): void {
     targetGroup.clauses.push({
+        subject: [],
+        operands: [],
         operator: null,
-        params: [],
     });
 }
 

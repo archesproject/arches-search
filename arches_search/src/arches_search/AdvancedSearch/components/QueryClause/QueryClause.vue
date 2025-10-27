@@ -1,207 +1,229 @@
 <script setup lang="ts">
-import { computed, defineEmits, defineProps, inject, watch } from "vue";
+import { computed, defineEmits, defineProps, inject, ref, watch } from "vue";
+
 import { useGettext } from "vue3-gettext";
 
 import Select from "primevue/select";
 import Button from "primevue/button";
-import GenericWidget from "@/arches_component_lab/generics/GenericWidget/GenericWidget.vue";
+
+import PathBuilder from "@/arches_search/AdvancedSearch/components/QueryClause/components/PathBuilder.vue";
+import OperandBuilder from "@/arches_search/AdvancedSearch/components/QueryClause/components/OperandBuilder.vue";
+
+import { updateClause } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
 import type { Ref } from "vue";
-import {
-    updateClause,
-    type Clause,
-} from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 import type {
     AdvancedSearchFacet,
-    GraphModel,
     Node,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import type { Clause } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
 const { $gettext } = useGettext();
 
-const { clause } = defineProps<{ clause: Clause }>();
+const props = defineProps<{
+    clause: Clause;
+    groupSelectedGraph: { [key: string]: unknown };
+    parentGroupSelectedGraph?: { [key: string]: unknown } | undefined;
+}>();
 
 const emit = defineEmits<{
     (e: "request:removeClause", targetClause: Clause): void;
 }>();
 
-const facetsByDatatype = inject<Ref<{ [key: string]: AdvancedSearchFacet[] }>>(
-    "advancedSearchFacets",
-)!;
-const selectedGraph = inject<Ref<GraphModel | null>>("selectedGraph")!;
-const selectedGraphNodes = inject<Ref<Node[]>>("selectedGraphNodes")!;
+const datatypesToAdvancedSearchFacets = inject<
+    Ref<Record<string, AdvancedSearchFacet[]>>
+>("datatypesToAdvancedSearchFacets")!;
+const graphs = inject<Ref<Record<string, unknown>[]>>("graphs")!;
+const getNodesForGraphId =
+    inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId")!;
 
-const selectedNode = computed(() => {
+const operator = ref<string | null>(null);
+const subjectTerminalNode = ref<Node | null>(null);
+const subjectTerminalGraph = ref<Record<string, unknown> | null>(null);
+
+const subjectPathSequence = computed<Array<[string, string]>>(() => {
+    return props.clause.subject ?? [];
+});
+
+const subjectPathTerminalGraphSlugNodeAlias = computed<[string, string] | null>(
+    () => {
+        if (subjectPathSequence.value.length === 0) {
+            return null;
+        }
+        return subjectPathSequence.value[subjectPathSequence.value.length - 1];
+    },
+);
+
+const operatorOptions = computed(() => {
+    if (!subjectTerminalNode.value?.datatype) {
+        return [];
+    }
     return (
-        selectedGraphNodes.value.find((candidateNode) => {
-            return candidateNode["alias"] === clause.node_alias;
-        }) ?? null
+        datatypesToAdvancedSearchFacets.value[
+            subjectTerminalNode.value.datatype
+        ] ?? []
     );
 });
 
-const selectedOperatorOptions = computed(() => {
-    const datatype = selectedNode.value?.datatype ?? null;
-
-    if (!datatype) {
-        return [];
-    }
-
-    const facets = facetsByDatatype.value?.[datatype] ?? [];
-    return facets.map((facetItem) => {
-        return {
-            label: facetItem.label,
-            value: facetItem.operator,
-        };
-    });
-});
-
-const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(() => {
-    const datatype = selectedNode.value?.datatype ?? null;
-
-    if (!datatype) {
+const selectedAdvancedSearchFacet = computed(() => {
+    if (!operator.value) {
         return null;
     }
-
-    const facetList = facetsByDatatype.value?.[datatype] ?? [];
     return (
-        facetList.find((facetItem) => {
-            return facetItem.operator === clause.operator;
+        operatorOptions.value.find((advancedSearchFacet) => {
+            return advancedSearchFacet.operator === operator.value;
         }) ?? null
     );
 });
 
 watch(
-    selectedNode,
-    (newSelectedNode) => {
-        if (!newSelectedNode) {
-            updateClause(clause, {
-                datatype: null,
-            });
-            return;
-        }
-
-        updateClause(clause, {
-            datatype: newSelectedNode.datatype,
-        });
+    () => props.clause.operator,
+    (nextOperator) => {
+        operator.value = nextOperator ?? null;
     },
     { immediate: true },
 );
 
 watch(
-    () => clause.node_alias,
-    (newNodeAlias, previousNodeAlias) => {
-        if (
-            previousNodeAlias === undefined ||
-            newNodeAlias === previousNodeAlias
-        ) {
+    subjectPathTerminalGraphSlugNodeAlias,
+    async (updatedSubjectTerminalGraphSlugNodeAlias) => {
+        subjectTerminalNode.value = null;
+        subjectTerminalGraph.value = null;
+
+        if (!updatedSubjectTerminalGraphSlugNodeAlias) {
             return;
         }
 
-        updateClause(clause, {
-            operator: null,
-            params: [],
-        });
+        const [terminalGraphSlug, terminalNodeAlias] =
+            updatedSubjectTerminalGraphSlugNodeAlias;
+
+        if (!terminalGraphSlug || !terminalNodeAlias) {
+            return;
+        }
+
+        const terminalGraph = graphs.value.find(
+            (graph) => graph.slug === terminalGraphSlug,
+        );
+        const nodes = await getNodesForGraphId(
+            terminalGraph!.graphid as string,
+        );
+
+        subjectTerminalGraph.value = terminalGraph ?? null;
+        subjectTerminalNode.value =
+            nodes.find((node) => node.alias === terminalNodeAlias) ?? null;
     },
+    { immediate: true },
 );
 
 watch(
     selectedAdvancedSearchFacet,
-    (facet) => {
-        if (!facet) {
+    (updatedAdvancedSearchFacet, currentAdvancedSearchFacet) => {
+        if (updatedAdvancedSearchFacet === currentAdvancedSearchFacet) {
             return;
         }
 
-        const currentParams = Array.isArray(clause.params) ? clause.params : [];
+        if (currentAdvancedSearchFacet == null && props.clause.operands) {
+            updateClause(props.clause, { operands: props.clause.operands });
+            return;
+        }
 
-        updateClause(clause, {
-            params: Array.from({ length: facet.arity }, (_, parameterIndex) => {
-                return currentParams[parameterIndex];
-            }),
-        });
+        updateClause(props.clause, { operands: [] });
     },
     { immediate: true },
 );
 
-function updateParameterAtIndex(parameterIndex: number, newValue: unknown) {
-    const workingParams = [...clause.params];
-    workingParams[parameterIndex] = foo(newValue as Record<string, unknown>);
+watch(operator, (nextOperator, previousOperator) => {
+    if (nextOperator === previousOperator) {
+        return;
+    }
 
-    updateClause(clause, {
-        params: workingParams,
+    updateClause(props.clause, { operator: nextOperator, operands: [] });
+});
+
+function onSubjectUpdate(updatedSubjectPathSequence: Array<[string, string]>) {
+    if (props.clause.subject === updatedSubjectPathSequence) {
+        return;
+    }
+
+    updateClause(props.clause, {
+        subject: updatedSubjectPathSequence,
+        operator: null,
+        operands: [],
     });
 }
 
-// TODO: Move to own util
-function foo(valueFromGenericWidget: Record<string, unknown>) {
-    const datatype = selectedNode.value?.datatype ?? null;
+function onOperandUpdate(parameterIndex: number, updatedOperand: unknown) {
+    const currentOperands = props.clause.operands ?? [];
+    const updatedOperands = [...currentOperands];
 
-    if (datatype === "string") {
-        return valueFromGenericWidget?.["display_value"];
-    } else {
-        return valueFromGenericWidget?.["node_value"];
-    }
+    updatedOperands[parameterIndex] = updatedOperand as {
+        [key: string]: unknown;
+    };
+
+    updateClause(props.clause, { operands: updatedOperands });
 }
 
 function onRemoveSelf() {
-    emit("request:removeClause", clause);
+    emit("request:removeClause", props.clause);
 }
 </script>
 
 <template>
     <div class="query-clause">
-        <div style="display: flex; justify-content: flex-end">
-            <Button
-                icon="pi pi-times"
-                severity="danger"
-                @click="onRemoveSelf"
-            />
-        </div>
+        <Button
+            style="align-self: flex-end"
+            icon="pi pi-times"
+            severity="danger"
+            @click="onRemoveSelf"
+        />
 
         <div>
-            <Select
-                option-label="name"
-                option-value="alias"
-                :model-value="clause.node_alias"
-                :options="selectedGraphNodes"
-                :placeholder="$gettext('Select a node...')"
-                @update:model-value="
-                    (value) => updateClause(clause, { node_alias: value })
+            <!-- :key is here to force PathBuilder to remount on subjectPathSequence change, to prevent an infinite recursion loop -->
+            <PathBuilder
+                :key="
+                    subjectPathSequence
+                        .map(
+                            ([graphSlug, nodeAlias]) =>
+                                `${graphSlug}:${nodeAlias}`,
+                        )
+                        .join(':')
                 "
+                :path-sequence="subjectPathSequence"
+                :anchor-graph="groupSelectedGraph"
+                @update:path-sequence="onSubjectUpdate"
             />
 
             <Select
+                v-model="operator"
+                :options="operatorOptions"
                 option-label="label"
-                option-value="value"
-                :model-value="clause.operator"
-                :disabled="selectedOperatorOptions.length === 0"
-                :options="selectedOperatorOptions"
+                option-value="operator"
+                :disabled="operatorOptions.length === 0"
                 :placeholder="$gettext('Select an operator...')"
-                @update:model-value="
-                    (value) => updateClause(clause, { operator: value })
-                "
             />
-        </div>
 
-        <div
-            v-if="
-                selectedAdvancedSearchFacet &&
-                selectedAdvancedSearchFacet.arity > 0
-            "
-        >
-            <GenericWidget
-                v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
-                :key="`facet-param-${parameterIndex - 1}`"
-                mode="edit"
-                :graph-slug="selectedGraph!.slug"
-                :node-alias="clause.node_alias!"
-                :should-show-label="false"
-                :aliased-node-data="{
-                    node_value: clause.params?.[parameterIndex - 1] ?? null,
-                }"
-                @update:value="
-                    updateParameterAtIndex(parameterIndex - 1, $event)
+            <div
+                v-if="
+                    selectedAdvancedSearchFacet &&
+                    selectedAdvancedSearchFacet.arity > 0
                 "
-            />
+            >
+                <!-- prettier-ignore -->
+                <OperandBuilder
+                    v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
+                    :key="`operand-${parameterIndex - 1}`"
+                    :model-value="props.clause.operands?.[parameterIndex - 1]"
+                    :group-selected-graph="groupSelectedGraph"
+                    :parent-group-selected-graph="
+                        props.parentGroupSelectedGraph
+                    "
+                    :subject-terminal-node="subjectTerminalNode!"
+                    :subject-terminal-graph="subjectTerminalGraph!"
+                    @update:model-value="
+                        onOperandUpdate(parameterIndex - 1, $event)
+                    "
+                />
+            </div>
         </div>
     </div>
 </template>
@@ -213,5 +235,7 @@ function onRemoveSelf() {
     background: var(--p-content-background);
     color: var(--p-text-color);
     padding: 1rem;
+    display: flex;
+    flex-direction: column;
 }
 </style>
