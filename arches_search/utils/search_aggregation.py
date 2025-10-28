@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, QuerySet
 from typing import Optional, Dict, Any
 
 from arches_search.utils.advanced_search import SEARCH_TABLE_TO_MODEL
@@ -24,9 +24,12 @@ def build_value_subquery(
     node_alias: str,
     parent_ref_field: str = "resourceinstanceid",
     where: Optional[Dict[str, Any]] = None,
+    value_field: str = "value",
+    annotations: Optional[Dict[str, Any]] = None,
 ) -> Subquery:
     """
-    Builds a base Subquery that returns a single 'value' field from the given search table.
+    Builds a base Subquery that returns a single 'value' field by default
+      from the given search table.
     Shared by both group_by and metric builders.
     """
     model = get_search_model(search_table)
@@ -35,9 +38,11 @@ def build_value_subquery(
         "resourceinstanceid": OuterRef(parent_ref_field),
     }
     qs = model.objects.filter(**filters)
+    if annotations:
+        qs = qs.annotate(**annotations)
     if where:
         qs = qs.filter(**where)
-    return Subquery(qs.values("value")[:1])
+    return Subquery(qs.values(value_field)[:1])
 
 
 def build_subquery(group_spec, parent_ref_field="resourceinstanceid"):
@@ -58,20 +63,14 @@ def build_subquery(group_spec, parent_ref_field="resourceinstanceid"):
             nested_field = nested_group["field"]
 
             # Annotate the current subquery with the nested subquery
-            model = get_search_model(group_spec["search_table"])
-            qs = (
-                model.objects.filter(
-                    node_alias=group_spec["node_alias"],
-                    resourceinstanceid=OuterRef(parent_ref_field),
-                )
-                .annotate(**{nested_field: nested_subquery})
-                .values(nested_field)[:1]
+            subquery = build_value_subquery(
+                search_table=group_spec["search_table"],
+                node_alias=group_spec["node_alias"],
+                parent_ref_field=parent_ref_field,
+                where=group_spec.get("where"),
+                value_field=nested_group["field"],
+                annotations={nested_group["field"]: nested_subquery},
             )
-
-            if group_spec.get("where"):
-                qs = qs.filter(**group_spec["where"])
-
-            subquery = Subquery(qs)
 
     return subquery
 
@@ -83,7 +82,6 @@ def build_aggregations(queryset, aggregations):
         name = agg["name"]
 
         if "aggregate" in agg:
-            # annotations = _build_annotations(agg["aggregate"])
             annotations = {}
             for aggregate in agg["aggregate"]:
                 field = aggregate.get("field", "value")
