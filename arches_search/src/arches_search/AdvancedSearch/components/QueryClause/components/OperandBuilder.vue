@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-    computed,
-    defineEmits,
-    defineProps,
-    ref,
-    watch,
-    watchEffect,
-    nextTick,
-} from "vue";
+import { computed, defineEmits, defineProps, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Select from "primevue/select";
@@ -68,9 +60,9 @@ const operandOriginOptions = [
     { label: $gettext("RESULTSET"), value: RESULTSET },
 ];
 
-const isSyncingFromProps = ref(false);
-const operandType = ref<OperandType>();
-const operandValue = ref<unknown>();
+const operandType = ref<OperandType>(LITERAL);
+const operandValue = ref<unknown>(null);
+const literalAliasedNodeData = ref<Record<string, unknown> | undefined>();
 
 const pathSequenceSeedGraph = computed<Record<string, unknown>>(() => {
     if (operandType.value === PARENT) {
@@ -80,42 +72,40 @@ const pathSequenceSeedGraph = computed<Record<string, unknown>>(() => {
     }
 });
 
-watchEffect(() => {
-    if (!modelValue) {
-        operandType.value = LITERAL;
-        operandValue.value = null;
+watch(
+    () => modelValue,
+    (nextModel) => {
+        if (!nextModel) {
+            operandType.value = LITERAL;
+            operandValue.value = null;
+            literalAliasedNodeData.value = undefined;
+            return;
+        }
 
-        return;
-    }
-
-    isSyncingFromProps.value = true;
-    operandType.value = modelValue.type as OperandType;
-    operandValue.value = modelValue.value;
-
-    nextTick(() => {
-        isSyncingFromProps.value = false;
-    });
-});
-
-watch([operandType, operandValue], ([updatedOperandType, nextValue]) => {
-    if (isSyncingFromProps.value) {
-        return;
-    }
-
-    emit("update:modelValue", {
-        type: updatedOperandType,
-        value: nextValue,
-    } as Operand);
-});
+        literalAliasedNodeData.value = undefined;
+        operandType.value = nextModel.type as OperandType;
+        operandValue.value = nextModel.value;
+    },
+    { immediate: true },
+);
 
 function coerceGenericWidgetValue(
     genericWidgetValue: Record<string, unknown>,
     datatype: string,
 ): unknown {
-    if (datatype === "string") {
-        return genericWidgetValue.display_value;
+    if (datatype === "resource-instance-list") {
+        const nodeValue = (genericWidgetValue as { node_value: unknown })
+            .node_value as unknown[];
+        return [
+            ...nodeValue.map(
+                (listItem: unknown) =>
+                    (listItem as { resourceId: unknown }).resourceId,
+            ),
+        ];
+    } else if (datatype === "string") {
+        return (genericWidgetValue as { display_value: unknown }).display_value;
     } else {
-        return genericWidgetValue.node_value;
+        return (genericWidgetValue as { node_value: unknown }).node_value;
     }
 }
 
@@ -124,25 +114,38 @@ function onOperandTypeUpdate(updatedOperandType: OperandType) {
         return;
     }
 
+    literalAliasedNodeData.value = undefined;
     operandType.value = updatedOperandType;
     operandValue.value = updatedOperandType === LITERAL ? null : [];
+
+    emit("update:modelValue", {
+        type: operandType.value,
+        value: operandValue.value,
+    } as Operand);
 }
 
 function onGenericWidgetUpdate(
     updatedGenericWidgetValue: Record<string, unknown>,
 ) {
+    literalAliasedNodeData.value = updatedGenericWidgetValue;
     operandValue.value = coerceGenericWidgetValue(
         updatedGenericWidgetValue,
         subjectTerminalNode.datatype,
     );
+
+    emit("update:modelValue", {
+        type: operandType.value,
+        value: operandValue.value,
+    } as Operand);
 }
 
 function onPathSequenceUpdate(updatedPathSequence: Array<[string, string]>) {
-    if (isSyncingFromProps.value) {
-        return;
-    }
-
     operandValue.value = updatedPathSequence;
+
+    emit("update:modelValue", {
+        type: operandType.value,
+        value: operandValue.value,
+    } as Operand);
 }
 </script>
 
@@ -164,7 +167,7 @@ function onPathSequenceUpdate(updatedPathSequence: Array<[string, string]>) {
             :graph-slug="(subjectTerminalGraph.slug as string)"
             :node-alias="subjectTerminalNode.alias"
             :should-show-label="false"
-            :aliased-node-data="{ node_value: operandValue }"
+            :aliased-node-data="literalAliasedNodeData"
             @update:value="onGenericWidgetUpdate"
         />
 
