@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional, Union
+import uuid
 
 from django.db.models import Exists, OuterRef, Q, QuerySet, Subquery
 from arches.app.models import models as arches_models
@@ -33,7 +34,7 @@ class ClauseCompiler:
         if not clause_payload["subject"]:
             return Exists(arches_models.ResourceInstance.objects.none())
 
-        subject_datatype_name, _subject_model, subject_queryset = (
+        terminal_subject_node_datatype_name, _subject_model, subject_queryset = (
             self.path_navigator.build_path_queryset(
                 path_segments=clause_payload["subject"],
                 context_graph_slug=anchor_graph_slug,
@@ -41,7 +42,7 @@ class ClauseCompiler:
         )
 
         facet = self.facet_registry.get_facet(
-            subject_datatype_name=subject_datatype_name,
+            subject_datatype_name=terminal_subject_node_datatype_name,
             operator_token=clause_payload["operator"],
         )
 
@@ -55,6 +56,7 @@ class ClauseCompiler:
         right_hand_side_value = self._compile_right_hand_side_expression(
             operand_type=operand["type"],
             operand_value=operand["value"],
+            terminal_subject_node_datatype_name=terminal_subject_node_datatype_name,
             anchor_graph_slug=anchor_graph_slug,
             parent_graph_slug=parent_graph_slug,
             unioned_subgroup_ids_queryset=unioned_subgroup_ids_queryset,
@@ -131,11 +133,21 @@ class ClauseCompiler:
         self,
         operand_type: str,
         operand_value: Any,
+        terminal_subject_node_datatype_name: str,
         anchor_graph_slug: str,
         parent_graph_slug: Optional[str],
         unioned_subgroup_ids_queryset: Optional[QuerySet] = None,
     ) -> Union[Any, Subquery, OuterRef, Dict[str, Any]]:
         if operand_type == "LITERAL":
+            try:
+                uuid.UUID(operand_value)
+                return [operand_value]
+            except (ValueError, TypeError):
+                pass
+
+            if terminal_subject_node_datatype_name == "date":
+                return int(operand_value.replace("-", ""))
+
             return operand_value
 
         if operand_type == "RESULTSET":

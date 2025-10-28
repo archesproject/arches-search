@@ -93,14 +93,21 @@ function coerceGenericWidgetValue(
     genericWidgetValue: Record<string, unknown>,
     datatype: string,
 ): unknown {
-    if (datatype === "resource-instance-list") {
-        const nodeValue = (genericWidgetValue as { node_value: unknown })
-            .node_value as unknown[];
+    if (datatype === "resource-instance") {
+        const genericWidgetNodeValue = genericWidgetValue.node_value as {
+            [key: string]: unknown;
+        };
+
+        console.log("genericWidgetNodeValue", genericWidgetNodeValue);
+
+        return genericWidgetNodeValue.resourceId;
+    } else if (datatype === "resource-instance-list") {
+        const nodeValue = genericWidgetValue.node_value as unknown[];
+
         return [
-            ...nodeValue.map(
-                (listItem: unknown) =>
-                    (listItem as { resourceId: unknown }).resourceId,
-            ),
+            ...nodeValue.map((listItem) => {
+                return (listItem as { [key: string]: unknown }).resourceId;
+            }),
         ];
     } else if (datatype === "string") {
         return (genericWidgetValue as { display_value: unknown }).display_value;
