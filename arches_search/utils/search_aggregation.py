@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import OuterRef, Subquery, QuerySet
+from django.db.models import OuterRef, Subquery, Q
 from typing import Optional, Dict, Any
 
 from arches_search.utils.advanced_search import SEARCH_TABLE_TO_MODEL
@@ -81,21 +81,6 @@ def build_aggregations(queryset, aggregations):
     for agg in aggregations:
         name = agg["name"]
 
-        if "aggregate" in agg:
-            annotations = {}
-            for aggregate in agg["aggregate"]:
-                field = aggregate.get("field", "value")
-                aggregate_fn = get_aggregate_function(aggregate["fn"])
-                kwargs = dict(aggregate.get("kwargs") or {})
-
-                if aggregate.get("where"):
-                    kwargs["filter"] = Q(**aggregate.get("where"))
-                if aggregate.get("distinct"):
-                    kwargs["distinct"] = True
-                annotations[aggregate["alias"]] = aggregate_fn(field, **kwargs)
-            results[name] = queryset.aggregate(**annotations)
-            continue
-
         group_bys = agg.get("group_by", [])
         metrics = agg.get("metrics", [])
         local_queryset = queryset
@@ -121,5 +106,23 @@ def build_aggregations(queryset, aggregations):
             )
 
         results[name] = list(local_queryset)
+
+        # These "simple" aggregates operate on the entire local queryset level
+        # and essentially ignore any grouping but allow for further aggregation of the annotated values.
+        # These values are returned as a single dictionary keyed by the aggregation name.
+        if "aggregate" in agg:
+            for aggregate in agg["aggregate"]:
+                field = aggregate.get("field", "value")
+                aggregate_fn = get_aggregate_function(aggregate["fn"])
+                kwargs = dict(aggregate.get("kwargs") or {})
+
+                if aggregate.get("where"):
+                    kwargs["filter"] = Q(**aggregate.get("where"))
+                if aggregate.get("distinct"):
+                    kwargs["distinct"] = True
+
+                results[aggregate.get("name")] = local_queryset.aggregate(
+                    **{aggregate.get("alias"): aggregate_fn(field, **kwargs)}
+                )
 
     return results
