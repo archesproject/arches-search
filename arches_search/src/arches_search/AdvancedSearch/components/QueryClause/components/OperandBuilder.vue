@@ -98,8 +98,6 @@ function coerceGenericWidgetValue(
             [key: string]: unknown;
         };
 
-        console.log("genericWidgetNodeValue", genericWidgetNodeValue);
-
         return genericWidgetNodeValue.resourceId;
     } else if (datatype === "resource-instance-list") {
         const nodeValue = genericWidgetValue.node_value as unknown[];
