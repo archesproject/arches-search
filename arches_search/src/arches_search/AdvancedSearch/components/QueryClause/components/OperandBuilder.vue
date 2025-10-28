@@ -14,7 +14,7 @@ import Select from "primevue/select";
 import GenericWidget from "@/arches_component_lab/generics/GenericWidget/GenericWidget.vue";
 import PathBuilder from "@/arches_search/AdvancedSearch/components/QueryClause/components/PathBuilder.vue";
 
-import type { Node } from "@/arches_search/AdvancedSearch/types.ts";
+import type { Node } from "@/arches_search/AdvancedSearch/types";
 
 const LITERAL = "LITERAL";
 const SELF = "SELF";

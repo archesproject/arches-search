@@ -15,9 +15,8 @@ import {
     getSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
 
-import type { GroupPayload } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
-
-import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types.ts";
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/utils/query-tree";
+import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types";
 
 const { $gettext } = useGettext();
 

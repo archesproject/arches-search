@@ -31,7 +31,7 @@ import type { Ref } from "vue";
 import type {
     GroupPayload,
     Clause,
-} from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
+} from "@/arches_search/AdvancedSearch/utils/query-tree";
 
 const AND = "AND";
 const OR = "OR";

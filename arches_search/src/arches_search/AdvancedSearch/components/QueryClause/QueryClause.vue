@@ -23,8 +23,8 @@ import type { Ref } from "vue";
 import type {
     AdvancedSearchFacet,
     Node,
-} from "@/arches_search/AdvancedSearch/types.ts";
-import type { Clause } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
+} from "@/arches_search/AdvancedSearch/types";
+import type { Clause } from "@/arches_search/AdvancedSearch/utils/query-tree";
 
 const { $gettext } = useGettext();
 
