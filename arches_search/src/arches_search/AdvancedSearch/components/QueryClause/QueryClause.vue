@@ -48,6 +48,7 @@ const getNodesForGraphId =
 const operator = ref<string | null>(null);
 const subjectTerminalNode = ref<Node | null>(null);
 const subjectTerminalGraph = ref<Record<string, unknown> | null>(null);
+const operandKeysByIndex = ref<string[]>([]);
 
 const subjectPathSequence = computed<Array<[string, string]>>(() => {
     return props.clause.subject ?? [];
@@ -131,6 +132,13 @@ watch(operator, (nextOperator, previousOperator) => {
     updateClause(props.clause, { operator: nextOperator });
 });
 
+function getOperandKey(index: number): string {
+    if (!operandKeysByIndex.value[index]) {
+        operandKeysByIndex.value[index] = useId();
+    }
+    return operandKeysByIndex.value[index];
+}
+
 function onSubjectUpdate(updatedSubjectPathSequence: Array<[string, string]>) {
     if (props.clause.subject === updatedSubjectPathSequence) {
         return;
@@ -202,7 +210,7 @@ function onRemoveSelf() {
                 <!-- prettier-ignore -->
                 <OperandBuilder
                     v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
-                    :key="useId() + parameterIndex"
+                    :key="getOperandKey(parameterIndex - 1)"
                     :model-value="props.clause.operands?.[parameterIndex - 1]"
                     :group-selected-graph="groupSelectedGraph"
                     :parent-group-selected-graph="
