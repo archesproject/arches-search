@@ -43,6 +43,8 @@ class NodeAliasDatatypeRegistry:
                 for operand_payload in clause_payload.get("operands", []):
                     if not isinstance(operand_payload, dict):
                         continue
+                    if operand_payload.get("type") == "LITERAL":
+                        continue
 
                     value_segments = operand_payload.get("value")
                     if isinstance(value_segments, list):
