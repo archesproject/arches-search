@@ -119,8 +119,8 @@ def build_subquery(
                 node_alias=group_spec["node_alias"],
                 parent_ref_field=parent_ref_field,
                 where=group_spec.get("where"),
-                value_field=nested_group["field"],
-                annotations={nested_group["field"]: nested_subquery},
+                value_field=nested_group["alias"],
+                annotations={nested_group["alias"]: nested_subquery},
             )
 
     return subquery
@@ -155,7 +155,7 @@ def build_aggregations(
 
         # Apply group-by subqueries
         for group_spec in group_bys:
-            field_alias = group_spec["field"]
+            field_alias = group_spec["alias"]
             local_queryset = local_queryset.annotate(
                 **{field_alias: build_subquery(group_spec)}
             )
@@ -170,7 +170,7 @@ def build_aggregations(
 
         # Apply metric annotations and group-by fields
         if metric_annotations:
-            group_fields = [g["field"] for g in group_bys]
+            group_fields = [g["alias"] for g in group_bys]
             local_queryset = local_queryset.values(*group_fields).annotate(
                 **metric_annotations
             )
@@ -189,8 +189,8 @@ def build_aggregations(
                 if aggregate.get("distinct"):
                     kwargs["distinct"] = True
 
-                results[aggregate.get("name")] = local_queryset.aggregate(
+                results[aggregate.get("alias")] = local_queryset.aggregate(
                     **{aggregate.get("alias"): aggregate_fn(field, **kwargs)}
-                )
+                )[aggregate.get("alias")]
 
     return results
