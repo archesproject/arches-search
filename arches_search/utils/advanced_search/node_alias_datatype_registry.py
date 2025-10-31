@@ -16,12 +16,7 @@ class NodeAliasDatatypeRegistry:
     def _add_segment_if_valid(
         self, path_segment: Any, graph_slug_to_node_aliases: Dict[str, Set[str]]
     ) -> None:
-        if not isinstance(path_segment, str):
-            return
-        if ":" not in path_segment:
-            return
-
-        graph_slug, node_alias = path_segment.split(":", 1)
+        graph_slug, node_alias = path_segment
         alias_set = graph_slug_to_node_aliases.get(graph_slug)
 
         if alias_set is None:
@@ -47,6 +42,8 @@ class NodeAliasDatatypeRegistry:
 
                 for operand_payload in clause_payload.get("operands", []):
                     if not isinstance(operand_payload, dict):
+                        continue
+                    if operand_payload.get("type") == "LITERAL":
                         continue
 
                     value_segments = operand_payload.get("value")

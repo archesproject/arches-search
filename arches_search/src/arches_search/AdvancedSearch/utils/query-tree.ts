@@ -1,16 +1,17 @@
 export type LogicOperator = "AND" | "OR";
 
 export type Clause = {
-    node_alias: string | null;
-    datatype: string | null;
-    operator: string | null;
-    params: unknown[];
+    subject?: Array<[string, string]>;
+    operands?: { [key: string]: unknown }[];
+    operator?: string | null;
 };
 
 export type GroupPayload = {
+    graph_slug: string | undefined;
     logic: LogicOperator;
     clauses: Clause[];
     groups: GroupPayload[];
+    aggregations: Aggregation[];
 };
 
 export type AggregationMetric = {
@@ -29,30 +30,31 @@ export type Aggregation = {
     limit?: number;
 };
 
-export type QueryPayload = {
-    graph_slug: string | null | undefined;
-    query: GroupPayload;
-    aggregations: Aggregation[];
-};
-
-export function initializeQueryTree(graphSlug?: string | null): QueryPayload {
+export function initializeQueryTree(graphSlug?: string | null): GroupPayload {
     return {
-        graph_slug: graphSlug ?? null,
-        query: {
-            logic: "AND",
-            clauses: [],
-            groups: [],
-        },
+        graph_slug: graphSlug ?? undefined,
+        logic: "AND",
+        clauses: [],
+        groups: [],
         aggregations: [],
     };
 }
 
 export function addEmptyGroup(targetGroup: GroupPayload): void {
     targetGroup.groups.push({
+        graph_slug: targetGroup.graph_slug,
         logic: "AND",
         clauses: [],
         groups: [],
+        aggregations: [],
     });
+}
+
+export function updateGroupGraphSlug(
+    targetGroup: GroupPayload,
+    newGraphSlug: string | undefined,
+) {
+    targetGroup.graph_slug = newGraphSlug;
 }
 
 export function updateGroupLogic(
@@ -75,10 +77,9 @@ export function removeGroup(
 
 export function addEmptyClause(targetGroup: GroupPayload): void {
     targetGroup.clauses.push({
-        node_alias: null,
-        datatype: null,
+        subject: [],
+        operands: [],
         operator: null,
-        params: [],
     });
 }
 

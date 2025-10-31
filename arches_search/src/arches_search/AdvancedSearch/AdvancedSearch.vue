@@ -1,116 +1,137 @@
 <script setup lang="ts">
-import { defineProps, provide, ref, watch, watchEffect } from "vue";
-
+import { defineProps, provide, ref, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
 import Message from "primevue/message";
 import Skeleton from "primevue/skeleton";
 
-import GraphSelection from "@/arches_search/AdvancedSearch/components/GraphSelection/GraphSelection.vue";
 import QueryGroup from "@/arches_search/AdvancedSearch/components/QueryGroup.vue";
 
 import {
     getAdvancedSearchFacets,
+    getGraphs,
+    getNodesForGraphId as fetchNodesForGraphId,
     getSearchResults,
-    getNodes,
 } from "@/arches_search/AdvancedSearch/api.ts";
-import { initializeQueryTree } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
-import type { QueryPayload } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
-import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types.ts";
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/utils/query-tree";
+import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types";
 
 const { $gettext } = useGettext();
 
-const { query } = defineProps<{
-    query?: QueryPayload;
-}>();
+const { query } = defineProps<{ query?: GroupPayload }>();
 
-const isLoading = ref(false);
-const configurationError = ref<Error>();
+const isLoading = ref(true);
+const fetchError = ref<Error | null>(null);
 
-const advancedSearchFacets = ref();
-const queryTree = ref<QueryPayload>();
-const selectedGraph = ref<{ [key: string]: unknown } | null>();
-const selectedGraphNodes = ref<{ [key: string]: unknown }[]>([]);
+const rootGroupPayload = ref<GroupPayload>();
 
-provide("advancedSearchFacets", advancedSearchFacets);
-provide("selectedGraph", selectedGraph);
-provide("selectedGraphNodes", selectedGraphNodes);
-
-watchEffect(() => {
-    queryTree.value = initializeQueryTree();
-    fetchAdvancedSearchFacets();
-});
-
-watch(
-    () => query,
-    (newInitialQuery) => {
-        if (newInitialQuery) {
-            queryTree.value = newInitialQuery;
-        }
-    },
-    { immediate: true },
+const datatypesToAdvancedSearchFacets = ref<{ [datatype: string]: unknown[] }>(
+    {},
 );
+const graphs = ref([]);
 
-watch(selectedGraph, async (newSelectedGraph, previousSelectedGraph) => {
-    if (!newSelectedGraph) {
-        selectedGraphNodes.value = [];
-        queryTree.value = initializeQueryTree(null);
+const graphIdsToNodes = ref<{ [graphId: string]: unknown[] }>({});
+const inflightLoads: Map<string, Promise<unknown[]>> = new Map();
 
-        return;
-    }
+provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
+provide("graphs", graphs);
+provide("getNodesForGraphId", getNodesForGraphId);
 
-    await fetchNodes(newSelectedGraph.graphid as string);
-
-    if (
-        previousSelectedGraph ||
-        queryTree.value?.graph_slug !== newSelectedGraph.slug
-    ) {
-        queryTree.value = initializeQueryTree(newSelectedGraph.slug as string);
-    }
-});
-
-function onGraphSelected(graph: { [key: string]: unknown } | null) {
-    selectedGraph.value = graph;
-}
-
-async function fetchNodes(graphId: string) {
+watchEffect(async () => {
     try {
-        const fetchedGraphNodes = await getNodes(graphId);
-        selectedGraphNodes.value = Object.values(fetchedGraphNodes);
-    } catch (error) {
-        configurationError.value = error as Error;
-    }
-}
+        isLoading.value = true;
+        fetchError.value = null;
 
-async function fetchAdvancedSearchFacets() {
-    isLoading.value = true;
-    try {
-        const fetchedFacets = await getAdvancedSearchFacets();
+        seedRootGroup();
 
-        advancedSearchFacets.value = fetchedFacets.reduce(
-            (
-                acc: { [key: string]: AdvancedSearchFacet[] },
-                facet: AdvancedSearchFacet,
-            ) => {
-                if (facet.datatype_id) {
-                    acc[facet.datatype_id] = acc[facet.datatype_id] || [];
-                    acc[facet.datatype_id].push(facet);
-                }
-                return acc;
-            },
-            {},
-        );
+        await Promise.all([fetchGraphs(), fetchFacets()]);
     } catch (error) {
-        configurationError.value = error as Error;
+        fetchError.value = error as Error;
     } finally {
         isLoading.value = false;
+    }
+});
+
+async function getNodesForGraphId(graphId: string): Promise<unknown[]> {
+    const cachedNodes = graphIdsToNodes.value[graphId];
+    if (cachedNodes) {
+        return cachedNodes;
+    }
+
+    const isAlreadyRequested = Boolean(inflightLoads.get(graphId));
+    if (isAlreadyRequested) {
+        return await inflightLoads.get(graphId)!;
+    }
+
+    const pendingNodesRequest = fetchNodesForGraphId(graphId)
+        .then((nodesMap) => {
+            const nodes = Object.values(nodesMap);
+
+            graphIdsToNodes.value = {
+                ...graphIdsToNodes.value,
+                [graphId]: nodes,
+            };
+            inflightLoads.delete(graphId);
+
+            return nodes;
+        })
+        .catch((error) => {
+            inflightLoads.delete(graphId);
+            fetchError.value = error as Error;
+
+            throw error;
+        });
+
+    inflightLoads.set(graphId, pendingNodesRequest);
+    return await pendingNodesRequest;
+}
+
+async function fetchFacets() {
+    const facets = await getAdvancedSearchFacets();
+
+    datatypesToAdvancedSearchFacets.value = facets.reduce(
+        (
+            datatypeToAdvancedSearchFacets: Record<
+                string,
+                AdvancedSearchFacet[]
+            >,
+            advancedSearchFacet: AdvancedSearchFacet,
+        ) => {
+            const existingFacetsForDatatype =
+                datatypeToAdvancedSearchFacets[
+                    advancedSearchFacet.datatype_id
+                ] ?? [];
+            datatypeToAdvancedSearchFacets[advancedSearchFacet.datatype_id] =
+                existingFacetsForDatatype.concat([advancedSearchFacet]);
+
+            return datatypeToAdvancedSearchFacets;
+        },
+        {},
+    );
+}
+
+async function fetchGraphs() {
+    graphs.value = await getGraphs();
+}
+
+function seedRootGroup() {
+    if (query) {
+        rootGroupPayload.value = structuredClone(query);
+    } else {
+        rootGroupPayload.value = {
+            graph_slug: undefined,
+            logic: "AND",
+            clauses: [],
+            groups: [],
+            aggregations: [],
+        };
     }
 }
 
 async function search() {
-    const results = await getSearchResults(queryTree.value!);
+    const results = await getSearchResults(rootGroupPayload.value!);
     console.log("Search results:", results);
 }
 </script>
@@ -119,30 +140,24 @@ async function search() {
     <div class="advanced-search">
         <Skeleton
             v-if="isLoading"
-            style="height: 10rem"
+            style="height: 100%"
         />
+
         <Message
-            v-else-if="configurationError"
+            v-else-if="fetchError"
             severity="error"
         >
-            {{ configurationError.message }}
+            {{ fetchError.message }}
         </Message>
-        <div v-else>
-            <GraphSelection
-                :initial-graph-slug="queryTree?.graph_slug"
-                @update:selected-graph="onGraphSelected"
-            />
 
-            <QueryGroup
-                v-if="queryTree && selectedGraph"
-                :group="queryTree.query"
-            />
+        <div v-else>
+            <QueryGroup :group-payload="rootGroupPayload!" />
 
             <Button
                 icon="pi pi-search"
                 size="large"
-                :disabled="!queryTree?.graph_slug"
                 :label="$gettext('Search')"
+                style="margin-top: 1rem; align-self: flex-start"
                 @click="search"
             />
         </div>

@@ -1,9 +1,20 @@
 <script setup lang="ts">
-import { computed, defineProps, defineEmits, useId } from "vue";
+import {
+    computed,
+    defineEmits,
+    defineProps,
+    inject,
+    ref,
+    useId,
+    watch,
+} from "vue";
 
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
+import Select from "primevue/select";
+import Message from "primevue/message";
+import Skeleton from "primevue/skeleton";
 
 import QueryClause from "@/arches_search/AdvancedSearch/components/QueryClause/QueryClause.vue";
 
@@ -13,81 +24,147 @@ import {
     removeGroup,
     removeClause,
     updateGroupLogic,
+    updateGroupGraphSlug,
 } from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
 
+import type { Ref } from "vue";
 import type {
     GroupPayload,
     Clause,
-} from "@/arches_search/AdvancedSearch/utils/query-tree.ts";
+} from "@/arches_search/AdvancedSearch/utils/query-tree";
+
+const AND = "AND";
+const OR = "OR";
 
 const { $gettext } = useGettext();
 
-const { group, recursionDepth } = defineProps<{
-    group: GroupPayload;
+const { groupPayload, recursionDepth, parentSelectedGraph } = defineProps<{
+    groupPayload: GroupPayload;
     recursionDepth?: number;
+    parentSelectedGraph?: Record<string, unknown> | undefined;
 }>();
 
 const emit = defineEmits<{
     (e: "request:removeGroup", targetGroup: GroupPayload): void;
 }>();
 
-const keyedClauses = computed(() =>
-    group.clauses.map((currentClause) => ({
-        clause: currentClause,
-        key: useId(),
-    })),
+const isLoading = ref(false);
+const configurationError = ref<Error>();
+
+const graphs = inject<Ref<Record<string, unknown>[]>>("graphs")!;
+const selectedGraph = ref<Record<string, unknown> | undefined>();
+
+watch(
+    () => groupPayload,
+    (updatedGroup) => {
+        const graphSlug = updatedGroup?.graph_slug;
+
+        if (graphSlug) {
+            selectedGraph.value = graphs.value.find(
+                (graph) => graph.slug === graphSlug,
+            );
+        } else {
+            selectedGraph.value = undefined;
+        }
+    },
+    { immediate: true },
 );
 
-const keyedGroups = computed(() =>
-    group.groups.map((currentGroup) => ({
-        group: currentGroup,
-        key: useId(),
-    })),
-);
+watch(selectedGraph, (newSelectedGraph, oldSelectedGraph) => {
+    const newSlug = newSelectedGraph?.slug as string | undefined;
+    const oldSlug = oldSelectedGraph?.slug as string | undefined;
+
+    if (newSlug === oldSlug) {
+        return;
+    }
+
+    updateGroupGraphSlug(groupPayload, newSlug);
+
+    for (const clause of groupPayload.clauses) {
+        removeClause(groupPayload, clause);
+    }
+});
+
+const isRootGroup = computed(() => {
+    if (!recursionDepth) {
+        return true;
+    }
+    return recursionDepth === 0;
+});
+
+const keyedClauses = computed(() => {
+    return groupPayload.clauses.map((currentClause) => {
+        return { clause: currentClause, key: useId() };
+    });
+});
+
+const keyedGroups = computed(() => {
+    return groupPayload.groups.map((currentGroup) => {
+        return { groupPayload: currentGroup, key: useId() };
+    });
+});
 
 function onToggleLogic() {
-    updateGroupLogic(group, group.logic === "AND" ? "OR" : "AND");
+    const newLogic = groupPayload.logic === AND ? OR : AND;
+    updateGroupLogic(groupPayload, newLogic);
 }
 
 function onAddSubgroup() {
-    addEmptyGroup(group);
+    addEmptyGroup(groupPayload);
 }
 
 function onAddClause() {
-    addEmptyClause(group);
+    addEmptyClause(groupPayload);
 }
 
-function onRequestRemoveChild(targetGroup: GroupPayload) {
-    removeGroup(group, targetGroup);
+function onRemoveChildGroup(target: GroupPayload) {
+    removeGroup(groupPayload, target);
 }
 
-function onRequestRemoveClause(targetClause: Clause) {
-    removeClause(group, targetClause);
+function onRemoveClause(target: Clause) {
+    removeClause(groupPayload, target);
 }
 
-function onRequestRemoveSelf() {
-    emit("request:removeGroup", group);
+function onRemoveSelf() {
+    emit("request:removeGroup", groupPayload);
 }
 </script>
 
 <template>
-    <div class="query-group">
-        <div
-            style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding-bottom: 1rem;
-            "
-        >
+    <Skeleton
+        v-if="isLoading"
+        style="height: 100%"
+    />
+    <Message
+        v-else-if="configurationError"
+        severity="error"
+    >
+        {{ configurationError.message }}
+    </Message>
+    <div
+        v-else
+        class="query-group"
+    >
+        <div class="query-group-controls">
             <div>
                 <Button
-                    v-if="group.groups.length + group.clauses.length > 1"
-                    :label="group.logic"
+                    v-if="
+                        groupPayload.groups.length +
+                            groupPayload.clauses.length >
+                        1
+                    "
+                    :label="groupPayload.logic"
                     @click="onToggleLogic"
                 />
+                <Select
+                    v-model="selectedGraph"
+                    :options="graphs"
+                    option-label="name"
+                    :placeholder="$gettext('Select graph…')"
+                />
             </div>
-            <div>
+
+            <div style="display: flex; gap: 0.5rem">
                 <Button
                     icon="pi pi-plus"
                     :label="$gettext('Add Group')"
@@ -99,30 +176,33 @@ function onRequestRemoveSelf() {
                     @click="onAddClause"
                 />
                 <Button
-                    v-if="recursionDepth"
+                    v-if="!isRootGroup"
                     icon="pi pi-times"
                     severity="danger"
-                    @click="onRequestRemoveSelf"
+                    @click="onRemoveSelf"
                 />
             </div>
         </div>
 
-        <div v-if="group.clauses.length">
+        <div v-if="selectedGraph && groupPayload.clauses.length">
             <QueryClause
                 v-for="item in keyedClauses"
                 :key="item.key"
+                :group-selected-graph="selectedGraph"
+                :parent-group-selected-graph="parentSelectedGraph"
                 :clause="item.clause"
-                @request:remove-clause="onRequestRemoveClause"
+                @request:remove-clause="onRemoveClause"
             />
         </div>
 
-        <div v-if="group.groups.length">
+        <div v-if="groupPayload.groups.length">
             <QueryGroup
                 v-for="item in keyedGroups"
                 :key="item.key"
-                :group="item.group"
+                :group-payload="item.groupPayload"
                 :recursion-depth="(recursionDepth || 0) + 1"
-                @request:remove-group="onRequestRemoveChild"
+                :parent-selected-graph="selectedGraph"
+                @request:remove-group="onRemoveChildGroup"
             />
         </div>
     </div>
@@ -134,6 +214,15 @@ function onRequestRemoveSelf() {
     border-radius: var(--p-content-border-radius);
     background: var(--p-content-background);
     color: var(--p-text-color);
+    display: flex;
+    flex-direction: column;
     padding: 1rem;
+    width: 100%;
+}
+
+.query-group-controls {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
 }
 </style>

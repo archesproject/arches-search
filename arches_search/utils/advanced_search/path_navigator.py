@@ -27,7 +27,7 @@ class PathNavigator:
         self,
         outer_resource_instance_id_reference: str,
         starting_graph_slug: str,
-        path_segments: Sequence[str],
+        path_segments: Sequence[Tuple[str, str]],
     ) -> Subquery:
         if not path_segments:
             base_queryset = (
@@ -39,7 +39,7 @@ class PathNavigator:
             )
             return Subquery(base_queryset)
 
-        first_graph_slug, first_node_alias = path_segments[0].split(":")
+        first_graph_slug, first_node_alias = path_segments[0]
         first_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
             first_graph_slug, first_node_alias
         )
@@ -86,7 +86,7 @@ class PathNavigator:
         accumulated_owner_ids: Subquery = Subquery(first_owner_ids_queryset)
 
         for hop_segment in path_segments[1:-1]:
-            hop_graph_slug, hop_node_alias = hop_segment.split(":")
+            hop_graph_slug, hop_node_alias = hop_segment
             hop_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
                 hop_graph_slug, hop_node_alias
             )
@@ -120,7 +120,7 @@ class PathNavigator:
         self,
         outer_resource_instance_id_reference: str,
         starting_graph_slug: str,
-        path_segments: Sequence[str],
+        path_segments: Sequence[Tuple[str, str]],
     ) -> Subquery:
         if not path_segments:
             base_queryset = (
@@ -132,7 +132,7 @@ class PathNavigator:
             )
             return Subquery(base_queryset)
 
-        last_graph_slug, last_node_alias = path_segments[-1].split(":")
+        last_graph_slug, last_node_alias = path_segments[-1]
         last_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
             last_graph_slug, last_node_alias
         )
@@ -180,13 +180,13 @@ class PathNavigator:
 
     def build_path_queryset(
         self,
-        path_segments: Sequence[str],
+        path_segments: Sequence[Tuple[str, str]],
         context_graph_slug: str,
     ) -> Tuple[str, Any, QuerySet]:
         if not path_segments:
             raise ValueError(_("Path must not be empty."))
 
-        last_graph_slug, last_node_alias = path_segments[-1].split(":")
+        last_graph_slug, last_node_alias = path_segments[-1]
         last_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
             last_graph_slug, last_node_alias
         )
@@ -195,22 +195,27 @@ class PathNavigator:
         )
 
         if len(path_segments) == 1:
+            base_qs = last_model.objects.only(
+                "graph_slug", "node_alias", "resourceinstanceid", "value"
+            ).filter(
+                graph_slug=last_graph_slug,
+                node_alias=last_node_alias,
+            )
+
+            base_qs = base_qs.annotate(
+                anchor_resourceinstanceid=OuterRef("resourceinstanceid"),
+                parent_resourceinstanceid=OuterRef("parent_resourceinstanceid"),
+            )
+
             if last_graph_slug == context_graph_slug:
-                queryset = last_model.objects.only(
-                    "graph_slug", "node_alias", "resourceinstanceid", "value"
-                ).filter(
-                    graph_slug=last_graph_slug,
-                    node_alias=last_node_alias,
+                queryset = base_qs.filter(
                     resourceinstanceid=OuterRef("resourceinstanceid"),
                 )
             else:
-                queryset = last_model.objects.only(
-                    "graph_slug", "node_alias", "resourceinstanceid", "value"
-                ).filter(
-                    graph_slug=last_graph_slug,
-                    node_alias=last_node_alias,
+                queryset = base_qs.filter(
                     value=OuterRef("resourceinstanceid"),
                 )
+
             return last_datatype_name, last_model, queryset
 
         accumulated_owner_ids = self._build_resource_instance_ids_subquery(
@@ -220,7 +225,10 @@ class PathNavigator:
         )
         queryset = (
             last_model.objects.only("value")
-            .annotate(**{"anchor_resourceinstanceid": OuterRef("resourceinstanceid")})
+            .annotate(
+                anchor_resourceinstanceid=OuterRef("resourceinstanceid"),
+                parent_resourceinstanceid=OuterRef("parent_resourceinstanceid"),
+            )
             .filter(
                 graph_slug=last_graph_slug,
                 node_alias=last_node_alias,
