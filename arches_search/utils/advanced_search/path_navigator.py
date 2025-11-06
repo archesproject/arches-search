@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Tuple, Sequence, Dict, Any
 
 from django.db.models import QuerySet, OuterRef
+from django.utils.translation import gettext as _
 from arches_search.utils.advanced_search.search_model_registry import (
     SearchModelRegistry,
 )
@@ -24,7 +25,7 @@ class PathNavigator:
         path_segments: Sequence[Tuple[str, str]] | None = None,
     ) -> Tuple[str, str, QuerySet]:
         if not path_segments:
-            raise ValueError("path must contain at least one segment")
+            raise ValueError(_("path must contain at least one segment"))
 
         terminal_graph_slug, terminal_node_alias = path_segments[-1]
         terminal_datatype_name = (
@@ -35,12 +36,9 @@ class PathNavigator:
         terminal_search_model = self.search_model_registry.get_model_for_datatype(
             terminal_datatype_name
         )
-
         terminal_queryset = terminal_search_model.objects.filter(
-            graph_slug=terminal_graph_slug,
-            node_alias=terminal_node_alias,
+            graph_slug=terminal_graph_slug, node_alias=terminal_node_alias
         ).order_by()
-
         return terminal_datatype_name, terminal_graph_slug, terminal_queryset
 
     def build_relationship_pairs(
@@ -48,32 +46,36 @@ class PathNavigator:
         relationship_context: Dict[str, Any],
     ) -> Tuple[Dict[str, Any], QuerySet]:
         relationship_path = relationship_context["path"]
-        is_inverse_relationship = bool(relationship_context.get("is_inverse"))
+        is_inverse_relationship: bool = relationship_context["is_inverse"]
 
-        terminal_datatype_name, terminal_graph_slug, pair_raw = (
+        terminal_datatype_name, terminal_graph_slug, base_pair_rows = (
             self.build_path_queryset(relationship_path)
         )
-        if (terminal_datatype_name or "").lower() not in [
+        if terminal_datatype_name.lower() not in {
             "resource-instance",
             "resource-instance-list",
-        ]:
-            raise ValueError("Relationship must end on a resource-instance node")
+        }:
+            raise ValueError(
+                _(
+                    "Relationship must end on a resource-instance or resource-instance-list node"
+                )
+            )
 
         if is_inverse_relationship:
-            pairs_scoped_to_anchor = pair_raw.filter(
+            pairs_scoped_to_anchor = base_pair_rows.filter(
                 value=OuterRef("resourceinstanceid")
             )
             anchor_id_field = "value"
             child_id_field = "resourceinstanceid"
         else:
-            pairs_scoped_to_anchor = pair_raw.filter(
+            pairs_scoped_to_anchor = base_pair_rows.filter(
                 resourceinstanceid=OuterRef("resourceinstanceid")
             )
             anchor_id_field = "resourceinstanceid"
             child_id_field = "value"
 
         compiled_pair_info = {
-            "pair_queryset": pair_raw,
+            "pair_queryset": base_pair_rows,
             "anchor_id_field": anchor_id_field,
             "child_id_field": child_id_field,
             "terminal_graph_slug": terminal_graph_slug,
@@ -88,20 +90,24 @@ class PathNavigator:
         is_inverse_relationship: bool,
         correlate_on_field: str,
     ) -> Tuple[str, str, QuerySet, str]:
-        terminal_datatype_name, terminal_graph_slug, pair_raw = (
+        terminal_datatype_name, terminal_graph_slug, base_pair_rows = (
             self.build_path_queryset(path_segments)
         )
-        if (terminal_datatype_name or "").lower() not in [
+        if terminal_datatype_name.lower() not in {
             "resource-instance",
             "resource-instance-list",
-        ]:
-            raise ValueError("Nested relationship must end on a resource-instance node")
+        }:
+            raise ValueError(
+                _(
+                    "Nested relationship must end on a resource-instance or resource-instance-list node"
+                )
+            )
 
         if is_inverse_relationship:
-            scoped_pairs = pair_raw.filter(value=OuterRef(correlate_on_field))
+            scoped_pairs = base_pair_rows.filter(value=OuterRef(correlate_on_field))
             nested_child_id_field = "resourceinstanceid"
         else:
-            scoped_pairs = pair_raw.filter(
+            scoped_pairs = base_pair_rows.filter(
                 resourceinstanceid=OuterRef(correlate_on_field)
             )
             nested_child_id_field = "value"
@@ -112,15 +118,3 @@ class PathNavigator:
             scoped_pairs,
             nested_child_id_field,
         )
-
-    def datatype_for(self, graph_slug: str, node_alias: str) -> str:
-        return self.node_alias_datatype_registry.get_datatype_for_alias(
-            graph_slug, node_alias
-        )
-
-    def terminal_graph_slug(self, path, is_inverse: bool = False) -> str:
-        # your paths already specify the terminal segment explicitly
-        # inverse doesn’t change which graph the terminal segment names
-        if not path:
-            raise ValueError("path must contain at least one segment")
-        return path[-1][0]
