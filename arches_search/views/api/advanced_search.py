@@ -13,7 +13,7 @@ class AdvancedSearchAPI(APIBase):
     def post(self, request):
 
         def run_case(case_name, payload, expected_count=None):
-            results_queryset = AdvancedSearchQueryCompiler(payload).build_queryset()
+            results_queryset = AdvancedSearchQueryCompiler(payload).compile()
             resource_ids = list(
                 results_queryset.values_list("resourceinstanceid", flat=True)
             )

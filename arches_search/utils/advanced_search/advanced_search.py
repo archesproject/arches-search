@@ -1,5 +1,5 @@
-from typing import Any, Dict, List, Tuple
-from django.db.models import Q, Exists
+from typing import Any, Dict
+from django.db.models import QuerySet
 from arches.app.models import models as arches_models
 
 from arches_search.utils.advanced_search.node_alias_datatype_registry import (
@@ -28,19 +28,12 @@ class AdvancedSearchQueryCompiler:
         )
         self.group_compiler = GroupCompiler(self.clause_compiler, self.path_navigator)
 
-    def compile(self) -> Tuple[Q, List[Exists]]:
+    def compile(self) -> QuerySet:
         anchor_graph_slug = self.payload_query.get("graph_slug")
-
         combined_predicate, existence_predicates = self.group_compiler.compile(
             group_payload=self.payload_query,
             anchor_graph_slug=anchor_graph_slug,
         )
-
-        return combined_predicate, existence_predicates
-
-    def build_queryset(self):
-        anchor_graph_slug = self.payload_query.get("graph_slug")
-        combined_predicate, existence_predicates = self.compile()
 
         queryset = arches_models.ResourceInstance.objects.only(
             "resourceinstanceid"
