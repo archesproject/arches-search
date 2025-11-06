@@ -1,4 +1,3 @@
-# clause_compiler.py
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -114,7 +113,11 @@ class ClauseCompiler:
             return ~Exists(matching_rows)
 
         if not is_template_negated:
-            violating_rows = correlated_rows.exclude(pk__in=matching_rows.values("pk"))
+            violating_rows = (
+                correlated_rows.exclude(predicate_expression)
+                if isinstance(predicate_expression, Q)
+                else correlated_rows.exclude(**predicate_expression)
+            )
             return Exists(correlated_rows) & ~Exists(violating_rows)
 
         positive_facet = self.facet_registry.get_positive_facet_for(
@@ -339,8 +342,12 @@ class ClauseCompiler:
                             ~predicate_expression
                         )
                     else:
-                        positive_matches_resource = rows_correlated_to_resource.exclude(
-                            pk__in=matching_rows_resource.values("pk")
+                        positive_matches_resource = (
+                            rows_correlated_to_resource.exclude(predicate_expression)
+                            if isinstance(predicate_expression, Q)
+                            else rows_correlated_to_resource.exclude(
+                                **predicate_expression
+                            )
                         )
 
                     has_no_positive_matches = Q(~Exists(positive_matches_resource)) & Q(
@@ -487,8 +494,8 @@ class ClauseCompiler:
             _, _, rhs_rows = self.path_navigator.build_path_queryset(rhs_path_sequence)
             rhs_scalar_value = rhs_rows.filter(
                 resourceinstanceid=OuterRef("_anchor_resource_id")
-            ).values("value")
-            predicate_parameters = [Subquery(rhs_scalar_value[:1])]
+            ).values("value")[:1]
+            predicate_parameters = [Subquery(rhs_scalar_value)]
         else:
             predicate_parameters = [
                 (item["value"] if isinstance(item, dict) else item)
@@ -590,25 +597,20 @@ class ClauseCompiler:
                         positive_expression, _ = self._predicate_for(
                             datatype_name, positive_facet.operator, literal_values
                         )
-                        positive_filtered = (
-                            correlated_rows.filter(positive_expression)
+                        predicate_rows = (
+                            correlated_rows.exclude(positive_expression)
                             if isinstance(positive_expression, Q)
-                            else correlated_rows.filter(**positive_expression)
-                        )
-                        predicate_rows = correlated_rows.exclude(
-                            pk__in=positive_filtered.values("pk")
+                            else correlated_rows.exclude(**positive_expression)
                         )
                     elif isinstance(predicate_expression, Q) and getattr(
                         predicate_expression, "negated", False
                     ):
-                        predicate_rows = correlated_rows.exclude(
-                            pk__in=correlated_rows.filter(~predicate_expression).values(
-                                "pk"
-                            )
-                        )
+                        predicate_rows = correlated_rows.exclude(~predicate_expression)
                     else:
-                        predicate_rows = correlated_rows.exclude(
-                            pk__in=filtered.values("pk")
+                        predicate_rows = (
+                            correlated_rows.exclude(predicate_expression)
+                            if isinstance(predicate_expression, Q)
+                            else correlated_rows.exclude(**predicate_expression)
                         )
 
             accumulated_rows = (
