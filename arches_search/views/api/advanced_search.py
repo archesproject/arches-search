@@ -2310,6 +2310,58 @@ class AdvancedSearchAPI(APIBase):
                     },
                     "expected_count": 2,
                 },
+                {
+                    "name": "PERSON — favorite_person inverse ANY, dog's tail_length == 25 OR 999",
+                    "payload": {
+                        "graph_slug": "person",
+                        "scope": "RESOURCE",
+                        "logic": "OR",
+                        "clauses": [],
+                        "groups": [
+                            {
+                                "graph_slug": "dog",
+                                "scope": "RESOURCE",
+                                "logic": "AND",
+                                "clauses": [
+                                    {
+                                        "type": "LITERAL",
+                                        "quantifier": "ANY",
+                                        "subject": [["dog", "tail_length"]],
+                                        "operator": "EQUALS",
+                                        "operands": [{"type": "LITERAL", "value": 25}],
+                                    }
+                                ],
+                                "groups": [],
+                                "aggregations": [],
+                                "relationship": None,
+                            },
+                            {
+                                "graph_slug": "dog",
+                                "scope": "RESOURCE",
+                                "logic": "AND",
+                                "clauses": [
+                                    {
+                                        "type": "LITERAL",
+                                        "quantifier": "ANY",
+                                        "subject": [["dog", "tail_length"]],
+                                        "operator": "EQUALS",
+                                        "operands": [{"type": "LITERAL", "value": 999}],
+                                    }
+                                ],
+                                "groups": [],
+                                "aggregations": [],
+                                "relationship": None,
+                            },
+                        ],
+                        "aggregations": [],
+                        "relationship": {
+                            "path": [["dog", "favorite_person"]],
+                            "is_inverse": True,
+                            "traversal_quantifiers": ["ANY"],
+                        },
+                    },
+                    "expected_count": 2,
+                },
             ]
 
             case_results = [

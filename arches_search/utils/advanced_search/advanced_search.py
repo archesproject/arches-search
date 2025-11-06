@@ -47,7 +47,6 @@ class AdvancedSearchQueryCompiler:
         if filter_predicate:
             queryset = queryset.filter(filter_predicate)
 
-        if queryset.exists():
-            print("[ADV][TOP] FINAL SQL:", str(queryset.query))
+        print("[ADV][TOP] FINAL SQL:", str(queryset.query))
 
         return queryset
