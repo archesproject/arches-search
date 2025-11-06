@@ -214,7 +214,7 @@ class GroupCompiler:
         if scope_token == SCOPE_TILE:
             return self.clause_compiler.compile_relationshipless_tile_group_to_q(
                 group_payload=group_payload,
-                logic=logic_token,
+                use_and_logic=(logic_token == LOGIC_AND),
             )
 
         has_any_piece = False

@@ -5,7 +5,6 @@ from django.db.models import Exists, OuterRef, Q, QuerySet, Subquery
 from arches.app.models import models as arches_models
 
 
-LOGIC_AND = "AND"
 SCOPE_RESOURCE = "RESOURCE"
 SCOPE_TILE = "TILE"
 
@@ -182,15 +181,15 @@ class ClauseCompiler:
     ) -> Optional[Q]:
         if (scope or "").upper() == SCOPE_TILE:
             return self.compile_relationshipless_tile_group_to_q(
-                {"clauses": [clause_payload], "logic": LOGIC_AND},
-                LOGIC_AND,
+                {"clauses": [clause_payload], "logic": "AND"},
+                use_and_logic=True,
             )
         return Q(self.compile(clause_payload, correlate_to_tile=False))
 
     def compile_relationshipless_tile_group_to_q(
         self,
         group_payload: Dict[str, Any],
-        logic: str,
+        use_and_logic: bool,
     ) -> Q:
         clause_payloads = group_payload.get("clauses") or []
         if not clause_payloads:
@@ -331,7 +330,7 @@ class ClauseCompiler:
                         Exists(tiles_for_anchor_resource.values("tileid")[:1])
                     )
                     resource_level_conditions.append(
-                        requires_all_tiles_match & has_at_leleast_one_tile
+                        requires_all_tiles_match & has_at_least_one_tile
                     )
                 else:
                     positive_facet = self.facet_registry.get_positive_facet_for(
@@ -370,7 +369,7 @@ class ClauseCompiler:
         if not tileid_subqueries_for_any:
             any_expression = Q()
         else:
-            if logic.upper() == LOGIC_AND:
+            if use_and_logic:
                 tiles_requiring_all = tiles_for_anchor_resource
                 for tileid_subquery in tileid_subqueries_for_any:
                     tiles_requiring_all = tiles_requiring_all.filter(
@@ -392,7 +391,7 @@ class ClauseCompiler:
         if not resource_level_conditions:
             return any_expression
 
-        if logic.upper() == LOGIC_AND:
+        if use_and_logic:
             combined = Q()
             for condition in resource_level_conditions:
                 combined &= condition
@@ -550,7 +549,7 @@ class ClauseCompiler:
         for child_group_payload in group_payload.get("groups") or []:
             if (child_group_payload.get("relationship") or {}).get("path"):
                 continue
-            if (child_group_payload.get("logic") or LOGIC_AND).upper() != LOGIC_AND:
+            if (child_group_payload.get("logic") or "AND").upper() != "AND":
                 return None
 
             pending_nodes: List[Dict[str, Any]] = [child_group_payload]
