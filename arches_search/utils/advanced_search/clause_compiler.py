@@ -257,30 +257,33 @@ class ClauseCompiler:
                             )
                         )
                     )
-                elif quantifier_token == QUANTIFIER_NONE:
+                    continue
+
+                if quantifier_token == QUANTIFIER_NONE:
                     resource_level_conditions.append(
                         Q(~Exists(rows_correlated_to_resource))
                         if presence_means_match
                         else Q(Exists(rows_correlated_to_resource))
                     )
+                    continue
+
+                tiles_missing_match = tiles_for_anchor_resource.filter(
+                    ~Exists(
+                        rows_correlated_to_tile_resource.filter(
+                            tileid=OuterRef("tileid")
+                        )
+                    )
+                )
+                requires_all_tiles_match = Q(~Exists(tiles_missing_match))
+                has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
+                if presence_means_match:
+                    resource_level_conditions.append(
+                        requires_all_tiles_match & has_at_least_one_tile
+                    )
                 else:
-                    if presence_means_match:
-                        tiles_missing_match = tiles_for_anchor_resource.filter(
-                            ~Exists(
-                                rows_correlated_to_tile_resource.filter(
-                                    tileid=OuterRef("tileid")
-                                )
-                            )
-                        )
-                        requires_all_tiles_match = Q(~Exists(tiles_missing_match))
-                        has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
-                        resource_level_conditions.append(
-                            requires_all_tiles_match & has_at_least_one_tile
-                        )
-                    else:
-                        resource_level_conditions.append(
-                            Q(Exists(tiles_for_anchor_resource))
-                        )
+                    resource_level_conditions.append(
+                        Q(~Exists(tiles_for_anchor_resource))
+                    )
                 continue
 
             literal_values = [
@@ -303,57 +306,58 @@ class ClauseCompiler:
             ).filter(tileid=OuterRef("tileid"))
 
             if quantifier_token == QUANTIFIER_ANY:
-                per_tile_exists_conditions.append(
-                    Q(Exists(matches_in_this_tile))
-                    if not is_template_negated
-                    else Q(~Exists(matches_in_this_tile))
-                )
-            elif quantifier_token == QUANTIFIER_NONE:
-                resource_level_conditions.append(Q(~Exists(matching_rows_resource)))
-            else:
-                if not is_template_negated:
-                    tiles_missing_match = tiles_for_anchor_resource.filter(
-                        ~Exists(matches_in_this_tile)
-                    )
-                    requires_all_tiles_match = Q(~Exists(tiles_missing_match))
-                    has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
-                    resource_level_conditions.append(
-                        requires_all_tiles_match & has_at_least_one_tile
-                    )
-                else:
-                    positive_facet = self.facet_registry.get_positive_facet_for(
-                        operator_token, datatype_name
-                    )
-                    if positive_facet is not None:
-                        positive_expression, _ = self._predicate_for(
-                            datatype_name, positive_facet.operator, literal_values
-                        )
-                        positive_matches_resource = (
-                            rows_correlated_to_resource.filter(positive_expression)
-                            if isinstance(positive_expression, Q)
-                            else rows_correlated_to_resource.filter(
-                                **positive_expression
-                            )
-                        )
-                    elif isinstance(predicate_expression, Q) and getattr(
-                        predicate_expression, "negated", False
-                    ):
-                        positive_matches_resource = rows_correlated_to_resource.filter(
-                            ~predicate_expression
-                        )
-                    else:
-                        positive_matches_resource = (
-                            rows_correlated_to_resource.exclude(predicate_expression)
-                            if isinstance(predicate_expression, Q)
-                            else rows_correlated_to_resource.exclude(
-                                **predicate_expression
-                            )
-                        )
+                per_tile_exists_conditions.append(Q(Exists(matches_in_this_tile)))
+                continue
 
-                    has_no_positive_matches = Q(~Exists(positive_matches_resource)) & Q(
-                        Exists(tiles_for_anchor_resource)
+            if quantifier_token == QUANTIFIER_NONE:
+                resource_level_conditions.append(Q(~Exists(matching_rows_resource)))
+                continue
+
+            has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
+
+            if not is_template_negated:
+                tiles_missing_match = tiles_for_anchor_resource.filter(
+                    ~Exists(matches_in_this_tile)
+                )
+                requires_all_tiles_match = Q(~Exists(tiles_missing_match))
+                resource_level_conditions.append(
+                    requires_all_tiles_match & has_at_least_one_tile
+                )
+                continue
+
+            positive_facet = self.facet_registry.get_positive_facet_for(
+                operator_token, datatype_name
+            )
+            if positive_facet is not None:
+                positive_expression, _ = self._predicate_for(
+                    datatype_name, positive_facet.operator, literal_values
+                )
+                positive_matches_in_this_tile = (
+                    rows_correlated_to_tile_resource.filter(positive_expression)
+                    if isinstance(positive_expression, Q)
+                    else rows_correlated_to_tile_resource.filter(**positive_expression)
+                ).filter(tileid=OuterRef("tileid"))
+            elif isinstance(predicate_expression, Q) and getattr(
+                predicate_expression, "negated", False
+            ):
+                positive_matches_in_this_tile = rows_correlated_to_tile_resource.filter(
+                    ~predicate_expression
+                ).filter(tileid=OuterRef("tileid"))
+            else:
+                positive_matches_in_this_tile = (
+                    rows_correlated_to_tile_resource.exclude(predicate_expression)
+                    if isinstance(predicate_expression, Q)
+                    else rows_correlated_to_tile_resource.exclude(
+                        **predicate_expression
                     )
-                    resource_level_conditions.append(has_no_positive_matches)
+                ).filter(tileid=OuterRef("tileid"))
+
+            tiles_with_violations = tiles_for_anchor_resource.filter(
+                Exists(positive_matches_in_this_tile)
+            )
+            resource_level_conditions.append(
+                Q(~Exists(tiles_with_violations)) & has_at_least_one_tile
+            )
 
         if not per_tile_exists_conditions:
             any_expression = Q()

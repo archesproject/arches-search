@@ -57,6 +57,4 @@ class AdvancedSearchQueryCompiler:
         if filter_predicate:
             queryset = queryset.filter(filter_predicate)
 
-        print("[ADV][TOP] QUERY_PAYLOAD:", self.payload_query)
-        print("[ADV][TOP] FINAL SQL:", str(queryset.query))
         return queryset
