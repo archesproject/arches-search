@@ -16,15 +16,21 @@ QUANTIFIER_NONE = "NONE"
 CLAUSE_TYPE_LITERAL = "LITERAL"
 CLAUSE_TYPE_RELATED = "RELATED"
 
-OPERATOR_HAS_ANY_VALUE = "HAS_ANY_VALUE"
-OPERATOR_HAS_NO_VALUE = "HAS_NO_VALUE"
-
 
 class ClauseCompiler:
     def __init__(self, search_model_registry, facet_registry, path_navigator) -> None:
         self.search_model_registry = search_model_registry
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
+
+    def _presence_means_match_for_zero_operands(
+        self, datatype_name: str, operator_token: str
+    ) -> bool:
+        facet = self.facet_registry.get_facet(datatype_name, operator_token)
+        accepts_no_operands = not bool(getattr(facet, "operand_types", None))
+        if not accepts_no_operands:
+            return False
+        return bool(getattr(facet, "is_orm_template_negated", False))
 
     def compile(
         self,
@@ -67,15 +73,9 @@ class ClauseCompiler:
         )
 
         if not operand_items:
-            if operator_token == OPERATOR_HAS_ANY_VALUE:
-                presence_means_match = True
-            elif operator_token == OPERATOR_HAS_NO_VALUE:
-                presence_means_match = False
-            else:
-                facet = self.facet_registry.get_facet(datatype_name, operator_token)
-                presence_means_match = not bool(
-                    getattr(facet, "is_orm_template_negated", False)
-                )
+            presence_means_match = self._presence_means_match_for_zero_operands(
+                datatype_name, operator_token
+            )
 
             if quantifier_token == QUANTIFIER_NONE:
                 return (
@@ -150,15 +150,28 @@ class ClauseCompiler:
             **{anchor_id_field: OuterRef("resourceinstanceid")}
         ).order_by()
 
-        if operator_token == OPERATOR_HAS_ANY_VALUE:
-            if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
-                return Exists(correlated_pairs)
-            return ~Exists(correlated_pairs)
+        terminal_graph_slug, terminal_node_alias = subject_path_sequence[-1]
+        terminal_datatype_name = (
+            self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+                terminal_graph_slug, terminal_node_alias
+            )
+        )
+        presence_means_match = self._presence_means_match_for_zero_operands(
+            terminal_datatype_name, operator_token
+        )
 
-        if operator_token == OPERATOR_HAS_NO_VALUE:
-            if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
-                return ~Exists(correlated_pairs)
-            return Exists(correlated_pairs)
+        if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
+            return (
+                Exists(correlated_pairs)
+                if presence_means_match
+                else ~Exists(correlated_pairs)
+            )
+        if quantifier_token == QUANTIFIER_NONE:
+            return (
+                ~Exists(correlated_pairs)
+                if presence_means_match
+                else Exists(correlated_pairs)
+            )
 
         return Exists(arches_models.ResourceInstance.objects.none())
 
@@ -214,15 +227,9 @@ class ClauseCompiler:
             )
 
             if not operand_items:
-                if operator_token == OPERATOR_HAS_ANY_VALUE:
-                    presence_means_match = True
-                elif operator_token == OPERATOR_HAS_NO_VALUE:
-                    presence_means_match = False
-                else:
-                    facet = self.facet_registry.get_facet(datatype_name, operator_token)
-                    presence_means_match = not bool(
-                        getattr(facet, "is_orm_template_negated", False)
-                    )
+                presence_means_match = self._presence_means_match_for_zero_operands(
+                    datatype_name, operator_token
+                )
 
                 if quantifier_token == QUANTIFIER_ANY:
                     subquery_tile_if_match = rows_correlated_to_tile_resource.filter(
@@ -324,7 +331,7 @@ class ClauseCompiler:
                         Exists(tiles_for_anchor_resource.values("tileid")[:1])
                     )
                     resource_level_conditions.append(
-                        requires_all_tiles_match & has_at_least_one_tile
+                        requires_all_tiles_match & has_at_leleast_one_tile
                     )
                 else:
                     positive_facet = self.facet_registry.get_positive_facet_for(
@@ -417,15 +424,9 @@ class ClauseCompiler:
                     subject_graph_slug, subject_node_alias
                 )
             )
-            if operator_token == OPERATOR_HAS_ANY_VALUE:
-                presence_means_match = True
-            elif operator_token == OPERATOR_HAS_NO_VALUE:
-                presence_means_match = False
-            else:
-                facet = self.facet_registry.get_facet(datatype_name, operator_token)
-                presence_means_match = not bool(
-                    getattr(facet, "is_orm_template_negated", False)
-                )
+            presence_means_match = self._presence_means_match_for_zero_operands(
+                datatype_name, operator_token
+            )
             return (
                 pairs_queryset.filter(Exists(correlated_rows))
                 if presence_means_match
@@ -592,20 +593,12 @@ class ClauseCompiler:
                 datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
                     subject_graph_slug, subject_node_alias
                 )
-                if operator_token == OPERATOR_HAS_NO_VALUE:
-                    predicate_rows = correlated_rows.none()
-                elif operator_token == OPERATOR_HAS_ANY_VALUE:
-                    predicate_rows = correlated_rows
-                else:
-                    facet = self.facet_registry.get_facet(datatype_name, operator_token)
-                    is_template_negated = bool(
-                        getattr(facet, "is_orm_template_negated", False)
-                    )
-                    predicate_rows = (
-                        correlated_rows.none()
-                        if is_template_negated
-                        else correlated_rows
-                    )
+                presence_means_match = self._presence_means_match_for_zero_operands(
+                    datatype_name, operator_token
+                )
+                predicate_rows = (
+                    correlated_rows if presence_means_match else correlated_rows.none()
+                )
             else:
                 datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
                     subject_graph_slug, subject_node_alias

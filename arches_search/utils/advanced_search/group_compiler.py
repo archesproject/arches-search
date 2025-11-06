@@ -401,10 +401,18 @@ class GroupCompiler:
             if (
                 subject_graph_slug == terminal_graph_slug
                 and subject_node_alias == terminal_node_alias
-                and operator_token == "HAS_ANY_VALUE"
                 and not has_operands
             ):
-                continue
+                datatype_name_skip = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+                    subject_graph_slug, subject_node_alias
+                )
+                presence_means_match_skip = (
+                    self.clause_compiler._presence_means_match_for_zero_operands(
+                        datatype_name_skip, operator_token
+                    )
+                )
+                if presence_means_match_skip:
+                    continue
 
             related_exists_qs = self.clause_compiler.related_child_exists_qs(
                 related_clause_payload, compiled_pair_info
@@ -416,29 +424,16 @@ class GroupCompiler:
                 datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
                     subject_graph_slug, subject_node_alias
                 )
-                predicate_expression, is_negated_template = (
-                    self.clause_compiler.facet_registry.predicate(
-                        datatype_name,
-                        related_clause_payload["operator"],
-                        "value",
-                        [True],
+                presence_means_match = (
+                    self.clause_compiler._presence_means_match_for_zero_operands(
+                        datatype_name, operator_token
                     )
                 )
-
-                if operator_token == "HAS_NO_VALUE":
-                    constrained_child_pairs = constrained_child_pairs.filter(
-                        ~Exists(related_exists_qs)
-                    )
-                elif operator_token == "HAS_ANY_VALUE":
-                    constrained_child_pairs = constrained_child_pairs.filter(
-                        Exists(related_exists_qs)
-                    )
-                else:
-                    constrained_child_pairs = constrained_child_pairs.filter(
-                        ~Exists(related_exists_qs)
-                        if is_negated_template
-                        else Exists(related_exists_qs)
-                    )
+                constrained_child_pairs = (
+                    constrained_child_pairs.filter(Exists(related_exists_qs))
+                    if presence_means_match
+                    else constrained_child_pairs.filter(~Exists(related_exists_qs))
+                )
                 had_any_inner_filters = True
             else:
                 constrained_child_pairs = constrained_child_pairs.filter(
