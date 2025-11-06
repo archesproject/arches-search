@@ -30,7 +30,7 @@ class AdvancedSearchQueryCompiler:
 
     def compile(self) -> QuerySet:
         anchor_graph_slug = self.payload_query.get("graph_slug")
-        combined_predicate, existence_predicates = self.group_compiler.compile(
+        filter_predicate, existence_predicates = self.group_compiler.compile(
             group_payload=self.payload_query,
             anchor_graph_slug=anchor_graph_slug,
         )
@@ -42,8 +42,8 @@ class AdvancedSearchQueryCompiler:
         for existence_predicate in existence_predicates:
             queryset = queryset.filter(existence_predicate)
 
-        if combined_predicate:
-            queryset = queryset.filter(combined_predicate)
+        if filter_predicate:
+            queryset = queryset.filter(filter_predicate)
 
         if queryset.exists():
             print("[ADV][TOP] FINAL SQL:", str(queryset.query))
