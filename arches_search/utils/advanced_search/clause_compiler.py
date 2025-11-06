@@ -40,7 +40,7 @@ class ClauseCompiler:
 
         datatype_name = self._datatype_for_alias(subject_graph_slug, subject_alias)
         facet = self._facet(datatype_name, clause_payload.get("operator"))
-        operands = clause_payload.get("operands") or []
+        operand_items = clause_payload.get("operands") or []
 
         correlation_filters = (
             {
@@ -50,13 +50,12 @@ class ClauseCompiler:
             if correlate_to_tile
             else {"resourceinstanceid": OuterRef("resourceinstanceid")}
         )
-
         correlated_rows = subject_rows.filter(**correlation_filters).order_by()
 
         operator_upper = (clause_payload.get("operator") or "").upper()
         is_orm_template_negated = bool(getattr(facet, "is_orm_template_negated", False))
 
-        if not operands:
+        if not operand_items:
             if operator_upper == "HAS_ANY_VALUE":
                 return (
                     Exists(correlated_rows)
@@ -81,7 +80,7 @@ class ClauseCompiler:
                 else Exists(correlated_rows)
             )
 
-        params = self._literal_params(operands)
+        params = self._literal_params(operand_items)
         raw_predicate = self._predicate_from_facet(
             facet=facet, column_name="value", params=params
         )
@@ -105,15 +104,14 @@ class ClauseCompiler:
                 positive_facet = None
 
             if positive_facet is not None:
-                pos_pred = self._predicate_from_facet(
+                positive_predicate = self._predicate_from_facet(
                     facet=positive_facet, column_name="value", params=params
                 )
-                pos_filtered = (
-                    correlated_rows.filter(pos_pred)
-                    if isinstance(pos_pred, Q)
-                    else correlated_rows.filter(**pos_pred)
+                violating_rows = (
+                    correlated_rows.filter(positive_predicate)
+                    if isinstance(positive_predicate, Q)
+                    else correlated_rows.filter(**positive_predicate)
                 )
-                violating_rows = pos_filtered
             elif isinstance(raw_predicate, Q) and getattr(
                 raw_predicate, "negated", False
             ):
@@ -148,27 +146,27 @@ class ClauseCompiler:
             return None
 
         operator_token = clause_payload.get("operator") or ""
-        operands = clause_payload.get("operands") or []
+        operand_items = clause_payload.get("operands") or []
         datatype_name = self._datatype_for_alias(subject_graph_slug, subject_alias)
         facet = self._facet(datatype_name, operator_token)
 
-        if not operands:
+        if not operand_items:
             return correlated_subject_rows
 
-        rhs_operand = next(
+        right_hand_operand = next(
             (
                 operand
-                for operand in operands
+                for operand in operand_items
                 if isinstance(operand, dict)
                 and (operand.get("type") or "").upper() == "PATH"
                 and "value" in operand
             ),
             None,
         )
-        if rhs_operand:
-            rhs_path: Sequence[Tuple[str, str]] = rhs_operand["value"]
-            _rhs_dtype, _rhs_graph, rhs_rows = self.path_navigator.build_path_queryset(
-                rhs_path
+        if right_hand_operand:
+            rhs_path: Sequence[Tuple[str, str]] = right_hand_operand["value"]
+            _rhs_datatype_ignore, _rhs_graph_ignore, rhs_rows = (
+                self.path_navigator.build_path_queryset(rhs_path)
             )
             rhs_scalar = Subquery(
                 rhs_rows.filter(
@@ -177,7 +175,7 @@ class ClauseCompiler:
             )
             params = [rhs_scalar]
         else:
-            params = self._literal_params(operands)
+            params = self._literal_params(operand_items)
 
         predicate = self._predicate_from_facet(
             facet=facet, column_name="value", params=params
@@ -207,7 +205,7 @@ class ClauseCompiler:
 
         datatype_name = self._datatype_for_alias(subject_graph_slug, subject_alias)
         facet = self._facet(datatype_name, clause_payload.get("operator"))
-        operands = clause_payload.get("operands") or []
+        operand_items = clause_payload.get("operands") or []
 
         correlation_filters: Dict[str, Any] = (
             {
@@ -217,27 +215,30 @@ class ClauseCompiler:
             if correlate_to_tile
             else {"resourceinstanceid": OuterRef("resourceinstanceid")}
         )
+        correlated_rows = subject_rows.filter(**correlation_filters)
 
-        correlated = subject_rows.filter(**correlation_filters)
-
-        if not operands:
+        if not operand_items:
             operator_upper = (clause_payload.get("operator") or "").upper()
             if operator_upper == "HAS_NO_VALUE":
-                return ~Exists(correlated)
+                return ~Exists(correlated_rows)
             if operator_upper == "HAS_ANY_VALUE":
-                return Exists(correlated)
-            is_negated = bool(getattr(facet, "is_orm_template_negated", False))
-            return ~Exists(correlated) if is_negated else Exists(correlated)
+                return Exists(correlated_rows)
+            is_negated_template = bool(getattr(facet, "is_orm_template_negated", False))
+            return (
+                ~Exists(correlated_rows)
+                if is_negated_template
+                else Exists(correlated_rows)
+            )
 
         predicate = self._predicate_from_facet(
-            facet=facet, column_name="value", params=self._literal_params(operands)
+            facet=facet, column_name="value", params=self._literal_params(operand_items)
         )
-        filtered = (
-            correlated.filter(predicate)
+        filtered_rows = (
+            correlated_rows.filter(predicate)
             if isinstance(predicate, Q)
-            else correlated.filter(**predicate)
+            else correlated_rows.filter(**predicate)
         )
-        return Exists(filtered)
+        return Exists(filtered_rows)
 
     def _correlated_subject_rows(
         self,
@@ -257,19 +258,19 @@ class ClauseCompiler:
         return self.facet_registry.get_facet(datatype_name, (operator_token or ""))
 
     def _literal_params(self, operands: List[Any]) -> List[Any]:
-        out: List[Any] = []
+        values: List[Any] = []
         for operand in operands:
             if operand is None:
                 continue
             if isinstance(operand, dict):
-                t = (operand.get("type") or "").upper()
-                if t == "LITERAL" and "value" in operand:
-                    out.append(operand["value"])
-                elif "value" in operand and t == "":
-                    out.append(operand["value"])
+                operand_type = (operand.get("type") or "").upper()
+                if operand_type == "LITERAL" and "value" in operand:
+                    values.append(operand["value"])
+                elif "value" in operand and operand_type == "":
+                    values.append(operand["value"])
             else:
-                out.append(operand)
-        return out
+                values.append(operand)
+        return values
 
     def _predicate_from_facet(
         self, *, facet, column_name: str, params: Sequence[Any]
@@ -278,8 +279,8 @@ class ClauseCompiler:
             "{col}", column_name
         )
         is_orm_template_negated = bool(getattr(facet, "is_orm_template_negated", False))
-        value: Any = params[0] if params else True
-        kwargs = {lookup_key: value}
+        single_value: Any = params[0] if params else True
+        kwargs = {lookup_key: single_value}
         return ~Q(**kwargs) if is_orm_template_negated else kwargs
 
     def _datatype_for_alias(self, graph_slug: str, node_alias: str) -> str:
@@ -303,13 +304,13 @@ class ClauseCompiler:
                 graph_slug, node_alias
             )
         except Exception:
-            pass
+            model = None
         if model is None:
             try:
                 datatype_name = self._datatype_for_alias(graph_slug, node_alias)
                 model = self.search_model_registry.get_model_for_datatype(datatype_name)
             except Exception:
-                pass
+                model = None
         if model is None:
             return None
         return model.objects.filter(
