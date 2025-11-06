@@ -601,3 +601,130 @@ class ClauseCompiler:
             else:
                 literal_values.append(operand_item)
         return literal_values
+
+    def child_ok_rows_from_literals(
+        self, group_payload: Dict[str, Any], compiled_pair_info: Dict[str, Any]
+    ) -> Optional[QuerySet]:
+        terminal_graph_slug = compiled_pair_info["terminal_graph_slug"]
+        child_id_field = compiled_pair_info["child_id_field"]
+
+        literal_clauses: List[Dict[str, Any]] = []
+        for child_group_payload in group_payload.get("groups") or []:
+            if (child_group_payload.get("relationship") or {}).get("path"):
+                continue
+            if (child_group_payload.get("logic") or "AND").upper() != "AND":
+                return None
+
+            child_group_graph_slug = (
+                child_group_payload.get("graph_slug") or ""
+            ).strip()
+            stack: List[Dict[str, Any]] = [child_group_payload]
+            while stack:
+                node_payload = stack.pop()
+                if (node_payload.get("relationship") or {}).get("path"):
+                    continue
+                for clause_payload in node_payload.get("clauses") or []:
+                    if (clause_payload.get("type") or "").upper() != "LITERAL":
+                        continue
+                    subject_path = clause_payload.get("subject") or []
+                    subject_graph_slug, subject_alias = (
+                        subject_path[0] if subject_path else ("", "")
+                    )
+                    if not subject_graph_slug or (
+                        child_group_graph_slug
+                        and subject_graph_slug != child_group_graph_slug
+                    ):
+                        continue
+                    if subject_graph_slug != terminal_graph_slug:
+                        return None
+                    literal_clauses.append(clause_payload)
+                for nested_group_payload in node_payload.get("groups") or []:
+                    stack.append(nested_group_payload)
+
+        if not literal_clauses:
+            return None
+
+        child_ok_rows: Optional[QuerySet] = None
+        for clause_payload in literal_clauses:
+            subject_path = clause_payload.get("subject") or []
+            subject_graph_slug, subject_alias = (
+                subject_path[0] if subject_path else ("", "")
+            )
+            subject_rows = self.rows_for(subject_graph_slug, subject_alias)
+            if subject_rows is None:
+                continue
+
+            datatype_name = (
+                self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+                    subject_graph_slug, subject_alias
+                )
+            )
+            facet_registry = self.facet_registry
+            operand_items = clause_payload.get("operands") or []
+
+            correlated = subject_rows.filter(
+                resourceinstanceid=OuterRef(child_id_field)
+            ).order_by()
+
+            if not operand_items:
+                facet = facet_registry.get_facet(
+                    datatype_name, clause_payload.get("operator")
+                )
+                operator_upper = (clause_payload.get("operator") or "").upper()
+                is_negated_template = bool(
+                    getattr(facet, "is_orm_template_negated", False)
+                )
+                if operator_upper == "HAS_NO_VALUE":
+                    predicate_queryset = correlated.none()
+                elif operator_upper == "HAS_ANY_VALUE":
+                    predicate_queryset = correlated
+                else:
+                    predicate_queryset = (
+                        correlated.none() if is_negated_template else correlated
+                    )
+            else:
+                params = self._literal_params(operand_items)
+                predicate_expr, is_negated_template = facet_registry.predicate(
+                    datatype_name, clause_payload.get("operator"), "value", params
+                )
+                filtered = (
+                    correlated.filter(predicate_expr)
+                    if isinstance(predicate_expr, Q)
+                    else correlated.filter(**predicate_expr)
+                )
+                if not is_negated_template:
+                    predicate_queryset = filtered
+                else:
+                    positive_facet = facet_registry.get_positive_facet_for(
+                        clause_payload.get("operator"), datatype_name
+                    )
+                    if positive_facet is not None:
+                        positive_expr, _ = facet_registry.predicate(
+                            datatype_name, positive_facet.operator, "value", params
+                        )
+                        positive_filtered = (
+                            correlated.filter(positive_expr)
+                            if isinstance(positive_expr, Q)
+                            else correlated.filter(**positive_expr)
+                        )
+                        predicate_queryset = correlated.exclude(
+                            pk__in=positive_filtered.values("pk")
+                        )
+                    elif isinstance(predicate_expr, Q) and getattr(
+                        predicate_expr, "negated", False
+                    ):
+                        predicate_queryset = correlated.exclude(
+                            pk__in=correlated.filter(~predicate_expr).values("pk")
+                        )
+                    else:
+                        predicate_queryset = correlated.exclude(
+                            pk__in=filtered.values("pk")
+                        )
+
+            child_ok_rows = (
+                predicate_queryset
+                if child_ok_rows is None
+                else child_ok_rows.filter(pk__in=predicate_queryset.values("pk"))
+            )
+
+        return child_ok_rows
