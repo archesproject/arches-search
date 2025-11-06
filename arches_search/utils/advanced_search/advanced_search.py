@@ -1,3 +1,4 @@
+# advanced_search.py (excerpt with compiler wiring unchanged except for prints kept)
 from typing import Any, Dict, List, Optional, Tuple, Sequence
 from django.db.models import Q, Exists, OuterRef
 from arches.app.models import models as arches_models
@@ -17,24 +18,17 @@ from arches_search.utils.advanced_search.group_compiler import GroupCompiler
 class AdvancedSearchQueryCompiler:
     def __init__(self, payload_query: Dict[str, Any]) -> None:
         self.payload_query = payload_query
-        self.node_alias_datatype_registry = NodeAliasDatatypeRegistry(
-            payload_query=self.payload_query
-        )
-        self.search_model_registry = SearchModelRegistry()
         self.facet_registry = FacetRegistry()
+        self.search_model_registry = SearchModelRegistry()
+        self.node_alias_registry = NodeAliasDatatypeRegistry(payload_query)
         self.path_navigator = PathNavigator(
-            search_model_registry=self.search_model_registry,
-            node_alias_datatype_registry=self.node_alias_datatype_registry,
+            self.search_model_registry, self.node_alias_registry
         )
         self.clause_compiler = ClauseCompiler(
-            search_model_registry=self.search_model_registry,
-            facet_registry=self.facet_registry,
-            path_navigator=self.path_navigator,
+            self.search_model_registry, self.facet_registry, self.path_navigator
         )
-        self.group_compiler = GroupCompiler(
-            clause_compiler=self.clause_compiler,
-            path_navigator=self.path_navigator,
-        )
+        self.path_navigator.attach_clause_compiler_for_fastpath(self.clause_compiler)
+        self.group_compiler = GroupCompiler(self.clause_compiler, self.path_navigator)
 
     def compile(self) -> Tuple[Q, List[Exists]]:
         graph_slug = self.payload_query.get("graph_slug")
@@ -53,17 +47,12 @@ class AdvancedSearchQueryCompiler:
             if self._looks_like_zero_arity_related_leg_shape(
                 self.payload_query, relationship_context
             ):
-                try:
-                    leg_path = relationship_context.get("path")
-                    is_inverse_relationship = bool(
-                        relationship_context.get("is_inverse")
-                    )
-                    compiled_exists_list.append(
-                        self._leg_exists_for_path(leg_path, is_inverse_relationship)
-                    )
-                    print("[ADV][TOP] patched leg EXISTS via zero-arity RELATED shape")
-                except Exception as exc:
-                    print("[ADV][TOP] failed to patch leg EXISTS:", exc)
+                leg_path = relationship_context.get("path")
+                is_inverse_relationship = bool(relationship_context.get("is_inverse"))
+                compiled_exists_list.append(
+                    self._leg_exists_for_path(leg_path, is_inverse_relationship)
+                )
+                print("[ADV][TOP] patched leg EXISTS via zero-arity RELATED shape")
 
         print("[ADV][TOP] compiled Q: %r", compiled_q)
         print("[ADV][TOP] compiled exists filters count=%s", len(compiled_exists_list))

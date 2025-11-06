@@ -42,7 +42,6 @@ class GroupCompiler:
             compiled_pair_info, pairs_scoped_to_anchor = (
                 self.path_navigator.build_relationship_pairs(relationship_context)
             )
-
             child_id_field = compiled_pair_info["child_id_field"]
             original_pairs_no_self = pairs_scoped_to_anchor.exclude(
                 **{child_id_field: OuterRef("resourceinstanceid")}
@@ -54,16 +53,15 @@ class GroupCompiler:
                 base_pairs=original_pairs_no_self,
             )
 
-            hop_mode = (
-                (relationship_context.get("traversal_quantifiers") or ["ANY"])[0]
-                or "ANY"
-            ).upper()
+            hop_info = self.path_navigator.normalize_relationship_context(
+                relationship_context
+            )
+            hop_mode = hop_info["hop_quantifier"]
+            is_inverse = hop_info["is_inverse"]
+            path_segments = hop_info["path_segments"]
+            inverse_single_hop = is_inverse and len(path_segments) == 1
 
-            # Normalize: inverse single-hop + RELATED present -> treat ALL as ANY
-            if (
-                relationship_context.get("is_inverse")
-                and len((relationship_context.get("path") or [])) == 1
-            ):
+            if is_inverse and len(path_segments) == 1:
                 has_related_clause = any(
                     (clause.get("type") or "").upper() == "RELATED"
                     for clause in (group_payload.get("clauses") or [])
@@ -73,185 +71,18 @@ class GroupCompiler:
 
             if hop_mode == "ANY":
                 exists_filters.append(Exists(matches_per_child))
-
             elif hop_mode == "NONE":
                 if inner_filters_present:
-                    none_expression = Exists(original_pairs_no_self) & ~Exists(
-                        matches_per_child
+                    exists_filters.append(
+                        Exists(original_pairs_no_self) & ~Exists(matches_per_child)
                     )
-                    exists_filters.append(none_expression)
                 else:
                     exists_filters.append(~Exists(original_pairs_no_self))
-
             else:
-                # ALL
-                is_inverse = bool(relationship_context.get("is_inverse"))
-                path_segments = relationship_context.get("path") or []
-                inverse_single_hop = is_inverse and len(path_segments) == 1
-
-                def build_child_ok_rows_from_literals() -> Optional[QuerySet]:
-                    terminal_graph_slug = compiled_pair_info["terminal_graph_slug"]
-
-                    literal_clauses: List[Dict[str, Any]] = []
-                    for child_group_payload in group_payload.get("groups") or []:
-                        if (child_group_payload.get("relationship") or {}).get("path"):
-                            continue
-                        if (child_group_payload.get("logic") or "AND").upper() != "AND":
-                            return None
-
-                        child_group_graph_slug = (
-                            child_group_payload.get("graph_slug") or ""
-                        ).strip()
-
-                        stack: List[Dict[str, Any]] = [child_group_payload]
-                        while stack:
-                            node_payload = stack.pop()
-                            if (node_payload.get("relationship") or {}).get("path"):
-                                continue
-                            for clause_payload in node_payload.get("clauses") or []:
-                                if (
-                                    clause_payload.get("type") or ""
-                                ).upper() != "LITERAL":
-                                    continue
-                                subject_graph_slug, subject_alias = (
-                                    self.clause_compiler._unpack_single_path(
-                                        clause_payload.get("subject") or []
-                                    )
-                                )
-                                if not subject_graph_slug or (
-                                    child_group_graph_slug
-                                    and subject_graph_slug != child_group_graph_slug
-                                ):
-                                    continue
-                                if subject_graph_slug != terminal_graph_slug:
-                                    return None
-                                literal_clauses.append(clause_payload)
-                            for nested_group_payload in (
-                                node_payload.get("groups") or []
-                            ):
-                                stack.append(nested_group_payload)
-
-                    if not literal_clauses:
-                        return None
-
-                    child_ok_rows: Optional[QuerySet] = None
-                    for clause_payload in literal_clauses:
-                        subject_graph_slug, subject_alias = (
-                            self.clause_compiler._unpack_single_path(
-                                clause_payload.get("subject") or []
-                            )
-                        )
-                        subject_rows = self.clause_compiler._search_rows(
-                            subject_graph_slug, subject_alias
-                        )
-                        if subject_rows is None:
-                            continue
-
-                        datatype_name = self.clause_compiler._datatype_for_alias(
-                            subject_graph_slug, subject_alias
-                        )
-                        facet = self.clause_compiler._facet(
-                            datatype_name, clause_payload.get("operator")
-                        )
-                        operand_items = clause_payload.get("operands") or []
-
-                        correlated = subject_rows.filter(
-                            resourceinstanceid=OuterRef(child_id_field)
-                        ).order_by()
-
-                        if not operand_items:
-                            operator_upper = (
-                                clause_payload.get("operator") or ""
-                            ).upper()
-                            is_negated_template = bool(
-                                getattr(facet, "is_orm_template_negated", False)
-                            )
-                            if operator_upper == "HAS_NO_VALUE":
-                                predicate_queryset = correlated.none()
-                            elif operator_upper == "HAS_ANY_VALUE":
-                                predicate_queryset = correlated
-                            else:
-                                predicate_queryset = (
-                                    correlated.none()
-                                    if is_negated_template
-                                    else correlated
-                                )
-                        else:
-                            predicate = self.clause_compiler._predicate_from_facet(
-                                facet=facet,
-                                column_name="value",
-                                params=self.clause_compiler._literal_params(
-                                    operand_items
-                                ),
-                            )
-                            is_negated_template = bool(
-                                getattr(facet, "is_orm_template_negated", False)
-                            )
-                            filtered = (
-                                correlated.filter(predicate)
-                                if isinstance(predicate, Q)
-                                else correlated.filter(**predicate)
-                            )
-                            if not is_negated_template:
-                                predicate_queryset = filtered
-                            else:
-                                positive_facet = None
-                                facet_registry = getattr(
-                                    self.clause_compiler, "facet_registry", None
-                                )
-                                if facet_registry and hasattr(
-                                    facet_registry, "get_positive_facet_for"
-                                ):
-                                    positive_facet = (
-                                        facet_registry.get_positive_facet_for(
-                                            clause_payload.get("operator"),
-                                            datatype_name,
-                                        )
-                                    )
-
-                                if positive_facet is not None:
-                                    positive_predicate = (
-                                        self.clause_compiler._predicate_from_facet(
-                                            facet=positive_facet,
-                                            column_name="value",
-                                            params=self.clause_compiler._literal_params(
-                                                operand_items
-                                            ),
-                                        )
-                                    )
-                                    positive_filtered = (
-                                        correlated.filter(positive_predicate)
-                                        if isinstance(positive_predicate, Q)
-                                        else correlated.filter(**positive_predicate)
-                                    )
-                                    predicate_queryset = correlated.exclude(
-                                        pk__in=positive_filtered.values("pk")
-                                    )
-                                elif isinstance(predicate, Q) and getattr(
-                                    predicate, "negated", False
-                                ):
-                                    predicate_queryset = correlated.exclude(
-                                        pk__in=correlated.filter(~predicate).values(
-                                            "pk"
-                                        )
-                                    )
-                                else:
-                                    predicate_queryset = correlated.exclude(
-                                        pk__in=filtered.values("pk")
-                                    )
-
-                        child_ok_rows = (
-                            predicate_queryset
-                            if child_ok_rows is None
-                            else child_ok_rows.filter(
-                                pk__in=predicate_queryset.values("pk")
-                            )
-                        )
-
-                    return child_ok_rows
-
                 if inverse_single_hop:
-                    child_ok_rows = build_child_ok_rows_from_literals()
+                    child_ok_rows = self.path_navigator.child_ok_rows_from_literals(
+                        group_payload, compiled_pair_info
+                    )
                 else:
                     child_ok_rows = None
 
@@ -281,12 +112,13 @@ class GroupCompiler:
         for clause_payload in group_payload.get("clauses") or []:
             if (clause_payload.get("type") or "").upper() == "RELATED":
                 continue
-            literal_exists_expression = self.clause_compiler.compile(
-                clause_payload,
-                anchor_graph_slug,
-                correlate_to_tile=correlate_to_tile,
+            exists_filters.append(
+                self.clause_compiler.compile(
+                    clause_payload,
+                    anchor_graph_slug,
+                    correlate_to_tile=correlate_to_tile,
+                )
             )
-            exists_filters.append(literal_exists_expression)
 
         child_q_expression, child_exists_filters = self._compile_children(
             subgroups=(group_payload.get("groups") or []),
@@ -369,7 +201,7 @@ class GroupCompiler:
 
         scope = (group_payload.get("scope") or "RESOURCE").upper()
         if scope == "TILE":
-            return self._compile_relationshipless_tile_scoped_group_to_q(
+            return self.clause_compiler.compile_relationshipless_tile_group_to_q(
                 group_payload=group_payload,
                 anchor_graph_slug=anchor_graph_slug,
                 logic=logic,
@@ -379,19 +211,22 @@ class GroupCompiler:
         has_any_piece = False
 
         for clause_payload in group_payload.get("clauses") or []:
-            clause_q_expression = self._q_for_relationshipless_in_graph_literal(
-                clause_payload, anchor_graph_slug
+            clause_q_expression = self.clause_compiler.compile_literal_to_q(
+                clause_payload=clause_payload,
+                anchor_graph_slug=anchor_graph_slug,
+                scope="RESOURCE",
             )
             if clause_q_expression is None:
                 return None
-            if not has_any_piece:
-                combined_q_expression = clause_q_expression
-            else:
-                combined_q_expression = (
+            combined_q_expression = (
+                clause_q_expression
+                if not has_any_piece
+                else (
                     (combined_q_expression & clause_q_expression)
                     if logic == "AND"
                     else (combined_q_expression | clause_q_expression)
                 )
+            )
             has_any_piece = True
 
         for child_group_payload in group_payload.get("groups") or []:
@@ -400,325 +235,20 @@ class GroupCompiler:
             )
             if child_q_expression is None:
                 return None
-            if not has_any_piece:
-                combined_q_expression = child_q_expression
-            else:
-                combined_q_expression = (
+            combined_q_expression = (
+                child_q_expression
+                if not has_any_piece
+                else (
                     (combined_q_expression & child_q_expression)
                     if logic == "AND"
                     else (combined_q_expression | child_q_expression)
                 )
+            )
             has_any_piece = True
 
         if not has_any_piece:
             return Q() if logic == "AND" else Q(pk__in=[])
         return combined_q_expression
-
-    def _compile_relationshipless_tile_scoped_group_to_q(
-        self,
-        *,
-        group_payload: Dict[str, Any],
-        anchor_graph_slug: str,
-        logic: str,
-    ) -> Q:
-        clauses = group_payload.get("clauses") or []
-        if not clauses:
-            return Q()
-
-        tileid_subqueries_for_any: List[Subquery] = []
-        resource_level_conditions: List[Q] = []
-
-        tiles_base = arches_models.Tile.objects.filter(
-            resourceinstance_id=OuterRef("resourceinstanceid")
-        ).order_by()
-
-        for clause_index, clause_payload in enumerate(clauses, start=1):
-            subject_graph_slug, subject_alias = (
-                self.clause_compiler._unpack_single_path(
-                    clause_payload.get("subject") or []
-                )
-            )
-            if subject_graph_slug != anchor_graph_slug:
-                empty_tile_subquery = arches_models.Tile.objects.none().values(
-                    "tileid"
-                )[:1]
-                tileid_subqueries_for_any.append(Subquery(empty_tile_subquery))
-                continue
-
-            subject_rows = self.clause_compiler._search_rows(
-                subject_graph_slug, subject_alias
-            )
-            if subject_rows is None:
-                empty_tile_subquery = arches_models.Tile.objects.none().values(
-                    "tileid"
-                )[:1]
-                tileid_subqueries_for_any.append(Subquery(empty_tile_subquery))
-                continue
-
-            datatype_name = self.clause_compiler._datatype_for_alias(
-                subject_graph_slug, subject_alias
-            )
-            facet = self.clause_compiler._facet(
-                datatype_name, clause_payload.get("operator")
-            )
-            operator_upper = (clause_payload.get("operator") or "").upper()
-            operand_items = clause_payload.get("operands") or []
-            is_negated_template = bool(getattr(facet, "is_orm_template_negated", False))
-            quantifier = (clause_payload.get("quantifier") or "ANY").upper()
-            if quantifier not in ("ANY", "ALL", "NONE"):
-                quantifier = "ANY"
-
-            subject_rows_correlated_to_tile = subject_rows.filter(
-                resourceinstanceid=OuterRef("resourceinstance_id")
-            ).order_by()
-
-            subject_rows_correlated_to_resource = subject_rows.filter(
-                resourceinstanceid=OuterRef("resourceinstanceid")
-            ).order_by()
-
-            if not operand_items:
-                if operator_upper == "HAS_NO_VALUE":
-                    matches_rows_tile = subject_rows_correlated_to_tile.none()
-                    matches_rows_resource = subject_rows_correlated_to_resource.none()
-                elif operator_upper == "HAS_ANY_VALUE":
-                    matches_rows_tile = subject_rows_correlated_to_tile
-                    matches_rows_resource = subject_rows_correlated_to_resource
-                else:
-                    matches_rows_tile = (
-                        subject_rows_correlated_to_tile.none()
-                        if is_negated_template
-                        else subject_rows_correlated_to_tile
-                    )
-                    matches_rows_resource = (
-                        subject_rows_correlated_to_resource.none()
-                        if is_negated_template
-                        else subject_rows_correlated_to_resource
-                    )
-            else:
-                params = self.clause_compiler._literal_params(operand_items)
-                predicate = self.clause_compiler._predicate_from_facet(
-                    facet=facet, column_name="value", params=params
-                )
-                matches_rows_tile = (
-                    subject_rows_correlated_to_tile.filter(predicate)
-                    if isinstance(predicate, Q)
-                    else subject_rows_correlated_to_tile.filter(**predicate)
-                )
-                matches_rows_resource = (
-                    subject_rows_correlated_to_resource.filter(predicate)
-                    if isinstance(predicate, Q)
-                    else subject_rows_correlated_to_resource.filter(**predicate)
-                )
-
-            matches_on_tile = matches_rows_tile.filter(tileid=OuterRef("tileid"))
-
-            if quantifier == "ANY":
-                if not is_negated_template:
-                    subquery_this_tile_if_match = matches_on_tile.values("tileid")[:1]
-                    tileid_subqueries_for_any.append(
-                        Subquery(subquery_this_tile_if_match)
-                    )
-                else:
-                    this_tile_no_match = (
-                        arches_models.Tile.objects.filter(tileid=OuterRef("tileid"))
-                        .filter(~Exists(matches_on_tile))
-                        .values("tileid")[:1]
-                    )
-                    tileid_subqueries_for_any.append(Subquery(this_tile_no_match))
-
-            elif quantifier == "NONE":
-                resource_level_conditions.append(Q(~Exists(matches_rows_resource)))
-
-            else:
-                # ALL
-                if not is_negated_template:
-                    tiles_without_match = tiles_base.filter(
-                        ~Exists(matches_on_tile)
-                    ).values("tileid")
-                    resource_condition = Q(
-                        ~Exists(
-                            tiles_base.filter(
-                                tileid__in=Subquery(tiles_without_match)
-                            ).values("tileid")[:1]
-                        )
-                    ) & Q(Exists(tiles_base.values("tileid")[:1]))
-                    resource_level_conditions.append(resource_condition)
-                else:
-                    params = self.clause_compiler._literal_params(operand_items)
-                    positive_facet = None
-                    facet_registry = getattr(
-                        self.clause_compiler, "facet_registry", None
-                    )
-                    if facet_registry and hasattr(
-                        facet_registry, "get_positive_facet_for"
-                    ):
-                        positive_facet = facet_registry.get_positive_facet_for(
-                            clause_payload.get("operator"), datatype_name
-                        )
-
-                    if positive_facet is not None:
-                        positive_predicate = self.clause_compiler._predicate_from_facet(
-                            facet=positive_facet, column_name="value", params=params
-                        )
-                        positive_matches_resource = (
-                            subject_rows_correlated_to_resource.filter(
-                                positive_predicate
-                            )
-                            if isinstance(positive_predicate, Q)
-                            else subject_rows_correlated_to_resource.filter(
-                                **positive_predicate
-                            )
-                        )
-                    else:
-                        positive_matches_resource = (
-                            subject_rows_correlated_to_resource.exclude(
-                                pk__in=matches_rows_resource.values("pk")
-                            )
-                        )
-
-                    resource_condition = Q(~Exists(positive_matches_resource)) & Q(
-                        Exists(tiles_base.values("tileid")[:1])
-                    )
-                    resource_level_conditions.append(resource_condition)
-
-        if tileid_subqueries_for_any:
-            if logic.upper() == "AND":
-                combined_tiles_queryset = tiles_base
-                for subquery_item in tileid_subqueries_for_any:
-                    combined_tiles_queryset = combined_tiles_queryset.filter(
-                        tileid__in=subquery_item
-                    )
-                any_exists_expression = Q(
-                    Exists(combined_tiles_queryset.values("tileid")[:1])
-                )
-            else:
-                or_expression = Q(pk__in=[])
-                for subquery_item in tileid_subqueries_for_any:
-                    or_expression = or_expression | Q(tileid__in=subquery_item)
-                any_exists_expression = Q(
-                    Exists(tiles_base.filter(or_expression).values("tileid")[:1])
-                )
-        else:
-            any_exists_expression = Q()
-
-        if resource_level_conditions:
-            if logic.upper() == "AND":
-                resource_expression = Q()
-                for condition_expression in resource_level_conditions:
-                    resource_expression &= condition_expression
-                final_expression = any_exists_expression & resource_expression
-            else:
-                resource_expression = Q()
-                for condition_expression in resource_level_conditions:
-                    resource_expression |= condition_expression
-                final_expression = any_exists_expression | resource_expression
-            return final_expression
-
-        return any_exists_expression
-
-    def _q_for_relationshipless_in_graph_literal(
-        self, clause_payload: Dict[str, Any], anchor_graph_slug: str
-    ) -> Optional[Q]:
-        if (clause_payload.get("type") or "").upper() != "LITERAL":
-            return None
-
-        subject_graph_slug, subject_alias = self.clause_compiler._unpack_single_path(
-            clause_payload.get("subject") or []
-        )
-        if subject_graph_slug != anchor_graph_slug:
-            return Q(pk__in=[])
-
-        subject_rows = self.clause_compiler._search_rows(
-            subject_graph_slug, subject_alias
-        )
-        if subject_rows is None:
-            return Q(pk__in=[])
-
-        datatype_name = self.clause_compiler._datatype_for_alias(
-            subject_graph_slug, subject_alias
-        )
-        facet = self.clause_compiler._facet(
-            datatype_name, clause_payload.get("operator")
-        )
-        operator_upper = (clause_payload.get("operator") or "").upper()
-        operand_items = clause_payload.get("operands") or []
-        is_negated_template = bool(getattr(facet, "is_orm_template_negated", False))
-
-        quantifier = (clause_payload.get("quantifier") or "ANY").upper()
-        if quantifier not in ("ANY", "ALL", "NONE"):
-            quantifier = "ANY"
-
-        correlated_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef("resourceinstanceid")
-        ).order_by()
-
-        if not operand_items:
-            if operator_upper == "HAS_NO_VALUE":
-                return (
-                    Q(~Exists(correlated_rows))
-                    if quantifier in ("ANY", "ALL")
-                    else Q(Exists(correlated_rows))
-                )
-            if operator_upper == "HAS_ANY_VALUE":
-                return (
-                    Q(Exists(correlated_rows))
-                    if quantifier in ("ANY", "ALL")
-                    else Q(~Exists(correlated_rows))
-                )
-            if not is_negated_template:
-                return (
-                    Q(Exists(correlated_rows))
-                    if quantifier in ("ANY", "ALL")
-                    else Q(~Exists(correlated_rows))
-                )
-            return (
-                Q(~Exists(correlated_rows))
-                if quantifier in ("ANY", "ALL")
-                else Q(Exists(correlated_rows))
-            )
-
-        params = self.clause_compiler._literal_params(operand_items)
-        raw_predicate = self.clause_compiler._predicate_from_facet(
-            facet=facet, column_name="value", params=params
-        )
-
-        matches = (
-            correlated_rows.filter(raw_predicate)
-            if isinstance(raw_predicate, Q)
-            else correlated_rows.filter(**raw_predicate)
-        )
-
-        if not is_negated_template:
-            violators = correlated_rows.exclude(pk__in=matches.values("pk"))
-        else:
-            positive_facet = None
-            facet_registry = getattr(self.clause_compiler, "facet_registry", None)
-            if facet_registry and hasattr(facet_registry, "get_positive_facet_for"):
-                positive_facet = facet_registry.get_positive_facet_for(
-                    clause_payload.get("operator"), datatype_name
-                )
-
-            if positive_facet is not None:
-                positive_predicate = self.clause_compiler._predicate_from_facet(
-                    facet=positive_facet, column_name="value", params=params
-                )
-                violators = (
-                    correlated_rows.filter(positive_predicate)
-                    if isinstance(positive_predicate, Q)
-                    else correlated_rows.filter(**positive_predicate)
-                )
-            elif isinstance(raw_predicate, Q) and getattr(
-                raw_predicate, "negated", False
-            ):
-                violators = correlated_rows.filter(~raw_predicate)
-            else:
-                violators = correlated_rows.exclude(pk__in=matches.values("pk"))
-
-        if quantifier == "ANY":
-            return Q(Exists(matches))
-        if quantifier == "NONE":
-            return Q(~Exists(matches))
-        return Q(Exists(correlated_rows) & ~Exists(violators))
 
     def _apply_group_constraints(
         self,
@@ -726,101 +256,10 @@ class GroupCompiler:
         compiled_pair_info: Dict[str, Any],
         base_pairs: QuerySet,
     ) -> Tuple[QuerySet, bool]:
-        """
-        Push constraints from relationship-less AND child groups and one nested leg (single hop)
-        down onto the leg's pairs queryset. Also handle RELATED clauses aimed at the terminal child.
-        """
         matches_per_child = base_pairs
         touched_any = False
-
         child_id_field = compiled_pair_info["child_id_field"]
 
-        def apply_literal_clause_to_pairs(
-            pairs_queryset: QuerySet,
-            clause_payload: Dict[str, Any],
-            correlate_field: str,
-        ) -> Tuple[QuerySet, bool]:
-            subject_graph_slug, subject_alias = (
-                self.clause_compiler._unpack_single_path(
-                    clause_payload.get("subject") or []
-                )
-            )
-            subject_rows = self.clause_compiler._search_rows(
-                subject_graph_slug, subject_alias
-            )
-            if subject_rows is None:
-                return pairs_queryset, False
-
-            datatype_name = self.clause_compiler._datatype_for_alias(
-                subject_graph_slug, subject_alias
-            )
-            facet = self.clause_compiler._facet(
-                datatype_name, clause_payload.get("operator")
-            )
-            operand_items = clause_payload.get("operands") or []
-            correlated = subject_rows.filter(
-                resourceinstanceid=OuterRef(correlate_field)
-            ).order_by()
-
-            if not operand_items:
-                operator_upper = (clause_payload.get("operator") or "").upper()
-                if operator_upper == "HAS_NO_VALUE":
-                    return pairs_queryset.filter(~Exists(correlated)), True
-                if operator_upper == "HAS_ANY_VALUE":
-                    return pairs_queryset.filter(Exists(correlated)), True
-                is_negated_template = bool(
-                    getattr(facet, "is_orm_template_negated", False)
-                )
-                return (
-                    pairs_queryset.filter(~Exists(correlated))
-                    if is_negated_template
-                    else pairs_queryset.filter(Exists(correlated))
-                ), True
-
-            predicate = self.clause_compiler._predicate_from_facet(
-                facet=facet,
-                column_name="value",
-                params=self.clause_compiler._literal_params(operand_items),
-            )
-            is_negated_template = bool(getattr(facet, "is_orm_template_negated", False))
-            filtered = (
-                correlated.filter(predicate)
-                if isinstance(predicate, Q)
-                else correlated.filter(**predicate)
-            )
-
-            if not is_negated_template:
-                return pairs_queryset.filter(Exists(filtered)), True
-
-            positive_facet = None
-            facet_registry = getattr(self.clause_compiler, "facet_registry", None)
-            if facet_registry and hasattr(facet_registry, "get_positive_facet_for"):
-                positive_facet = facet_registry.get_positive_facet_for(
-                    clause_payload.get("operator"), datatype_name
-                )
-
-            if positive_facet is not None:
-                positive_predicate = self.clause_compiler._predicate_from_facet(
-                    facet=positive_facet,
-                    column_name="value",
-                    params=self.clause_compiler._literal_params(operand_items),
-                )
-                positive_filtered = (
-                    correlated.filter(positive_predicate)
-                    if isinstance(positive_predicate, Q)
-                    else correlated.filter(**positive_predicate)
-                )
-                return pairs_queryset.filter(~Exists(positive_filtered)), True
-
-            if isinstance(predicate, Q) and getattr(predicate, "negated", False):
-                return (
-                    pairs_queryset.filter(~Exists(correlated.filter(~predicate))),
-                    True,
-                )
-
-            return pairs_queryset.filter(~Exists(filtered)), True
-
-        # 1) Relationship-less AND child groups
         for child_group_payload in group_payload.get("groups") or []:
             if (child_group_payload.get("relationship") or {}).get("path"):
                 continue
@@ -839,10 +278,9 @@ class GroupCompiler:
                 for clause_payload in node_payload.get("clauses") or []:
                     if (clause_payload.get("type") or "").upper() != "LITERAL":
                         continue
+                    subject_path = clause_payload.get("subject") or []
                     subject_graph_slug, _subject_alias = (
-                        self.clause_compiler._unpack_single_path(
-                            clause_payload.get("subject") or []
-                        )
+                        subject_path[0] if subject_path else ("", "")
                     )
                     if (
                         child_group_graph_slug
@@ -850,14 +288,17 @@ class GroupCompiler:
                         and subject_graph_slug != child_group_graph_slug
                     ):
                         continue
-                    matches_per_child, did_apply = apply_literal_clause_to_pairs(
-                        matches_per_child, clause_payload, child_id_field
+                    matches_per_child, did_apply = (
+                        self.clause_compiler.filter_pairs_by_clause(
+                            pairs_queryset=matches_per_child,
+                            clause_payload=clause_payload,
+                            correlate_field=child_id_field,
+                        )
                     )
                     touched_any = touched_any or did_apply
                 for nested_group_payload in node_payload.get("groups") or []:
                     stack.append(nested_group_payload)
 
-        # 2) One nested leg (single hop) directly under this relationship-bearing group
         nested_group_payload = next(
             (
                 nested
@@ -899,22 +340,19 @@ class GroupCompiler:
                 nested_literal_clauses = [
                     clause_payload
                     for clause_payload in literal_clauses_all
-                    if self.clause_compiler._unpack_single_path(
-                        clause_payload.get("subject") or []
-                    )[0]
+                    if ((clause_payload.get("subject") or [("", "")])[0])[0]
                     == nested_terminal_graph
                 ]
                 if not nested_literal_clauses:
                     filtered_literals: List[Dict[str, Any]] = []
                     for clause_payload in literal_clauses_all:
+                        subject_path = clause_payload.get("subject") or []
                         subject_graph_slug, subject_alias = (
-                            self.clause_compiler._unpack_single_path(
-                                clause_payload.get("subject") or []
-                            )
+                            subject_path[0] if subject_path else ("", "")
                         )
                         if not subject_graph_slug:
                             continue
-                        rows_model = self.clause_compiler._search_rows(
+                        rows_model = self.clause_compiler.rows_for(
                             subject_graph_slug, subject_alias
                         )
                         if rows_model is not None:
@@ -923,8 +361,12 @@ class GroupCompiler:
 
                 nested_ok_pairs = nested_pairs
                 for clause_payload in nested_literal_clauses:
-                    nested_ok_pairs, did_apply = apply_literal_clause_to_pairs(
-                        nested_ok_pairs, clause_payload, nested_child_field
+                    nested_ok_pairs, did_apply = (
+                        self.clause_compiler.filter_pairs_by_clause(
+                            pairs_queryset=nested_ok_pairs,
+                            clause_payload=clause_payload,
+                            correlate_field=nested_child_field,
+                        )
                     )
                     touched_any = touched_any or did_apply
 
@@ -948,22 +390,19 @@ class GroupCompiler:
                     )
                     touched_any = True
 
-        # 3) RELATED clauses aimed at the terminal child
         terminal_graph_slug = compiled_pair_info["terminal_graph_slug"]
         terminal_node_alias = compiled_pair_info["terminal_node_alias"]
         for related_clause_payload in group_payload.get("clauses") or []:
             if (related_clause_payload.get("type") or "").upper() != "RELATED":
                 continue
 
+            subject_path = related_clause_payload.get("subject") or []
             subject_graph_slug, subject_alias = (
-                self.clause_compiler._unpack_single_path(
-                    related_clause_payload.get("subject") or []
-                )
+                subject_path[0] if subject_path else ("", "")
             )
             operator_upper = (related_clause_payload.get("operator") or "").upper()
             has_operands = bool(related_clause_payload.get("operands"))
 
-            # Skip trivial HAS_ANY_VALUE on the terminal node (leg existence already enforces it)
             if (
                 subject_graph_slug == terminal_graph_slug
                 and subject_alias == terminal_node_alias
@@ -979,15 +418,16 @@ class GroupCompiler:
                 continue
 
             if not has_operands:
-                facet = self.clause_compiler._facet(
-                    self.clause_compiler._datatype_for_alias(
-                        subject_graph_slug, subject_alias
-                    ),
+                datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+                    subject_graph_slug, subject_alias
+                )
+                predicate_info = self.clause_compiler.facet_registry.predicate(
+                    datatype_name,
                     related_clause_payload.get("operator"),
+                    "value",
+                    [True],
                 )
-                is_negated_template = bool(
-                    getattr(facet, "is_orm_template_negated", False)
-                )
+                is_negated_template = predicate_info[1]
                 if operator_upper == "HAS_NO_VALUE":
                     matches_per_child = matches_per_child.filter(
                         ~Exists(related_exists_queryset)
