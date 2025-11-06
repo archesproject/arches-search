@@ -1253,7 +1253,6 @@ class AdvancedSearchAPI(APIBase):
                     },
                     "expected_count": 2,
                 },
-                # ----- additional_test_cases -----
                 {
                     "name": "PERSON — HAS_ANY_VALUE pets",
                     "payload": {

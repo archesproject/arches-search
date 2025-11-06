@@ -37,9 +37,19 @@ class AdvancedSearchQueryCompiler:
             group_payload=self.payload_query,
         )
 
-        queryset = arches_models.ResourceInstance.objects.only(
-            "resourceinstanceid"
-        ).filter(graph__slug=self.payload_query["graph_slug"])
+        anchor_graph_id = (
+            arches_models.Graph.objects.filter(slug=self.payload_query["graph_slug"])
+            .values_list("graphid", flat=True)
+            .first()
+        )
+        if anchor_graph_id is None:
+            raise ValueError(f"Unknown graph slug: {self.payload_query['graph_slug']}")
+
+        queryset = (
+            arches_models.ResourceInstance.objects.only("resourceinstanceid")
+            .filter(graph_id=anchor_graph_id)
+            .order_by()
+        )
 
         for existence_predicate in existence_predicates:
             queryset = queryset.filter(existence_predicate)
@@ -48,5 +58,4 @@ class AdvancedSearchQueryCompiler:
             queryset = queryset.filter(filter_predicate)
 
         print("[ADV][TOP] FINAL SQL:", str(queryset.query))
-
         return queryset
