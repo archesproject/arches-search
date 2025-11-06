@@ -34,147 +34,144 @@ class GroupCompiler:
     def compile(
         self,
         group_payload: Dict[str, Any],
-        anchor_graph_slug: str,
         current_context_side: str = CONTEXT_ANCHOR,
         relationship_context_for_parent: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Q, List[Exists]]:
-        relationship_context = group_payload.get("relationship")
-        relationship_path_segments = (relationship_context or {}).get("path")
-        has_relationship = bool(relationship_path_segments)
+        relationship_block = group_payload.get("relationship")
+        path_segments = (relationship_block or {}).get("path")
+        has_relationship = bool(path_segments)
 
         if not has_relationship:
             relationshipless_q = self._compile_relationshipless_group_to_q(
-                group_payload, anchor_graph_slug
+                group_payload
             )
             if relationshipless_q is not None:
                 return relationshipless_q, []
 
-        exists_predicates: List[Exists] = []
-        compiled_pair_info: Optional[Dict[str, Any]] = None
-        pairs_scoped_to_anchor: Optional[QuerySet] = None
+        existence_predicates: List[Exists] = []
+        relationship_pairs_info: Optional[Dict[str, Any]] = None
+        pairs_scoped_to_anchor_resource: Optional[QuerySet] = None
 
         if has_relationship:
-            compiled_pair_info, pairs_scoped_to_anchor = (
-                self.path_navigator.build_relationship_pairs(relationship_context)
+            relationship_pairs_info, pairs_scoped_to_anchor_resource = (
+                self.path_navigator.build_relationship_pairs(relationship_block)
             )
-            child_identifier_field = compiled_pair_info["child_id_field"]
-            base_pairs_excluding_self = pairs_scoped_to_anchor.exclude(
-                **{child_identifier_field: OuterRef("resourceinstanceid")}
+            child_id_field_name = relationship_pairs_info["child_id_field"]
+
+            pairs_excluding_self = pairs_scoped_to_anchor_resource.exclude(
+                **{child_id_field_name: OuterRef("resourceinstanceid")}
             )
 
-            constrained_child_rows, inner_filters_present = (
-                self._apply_group_constraints(
-                    group_payload=group_payload,
-                    compiled_pair_info=compiled_pair_info,
-                    base_pairs=base_pairs_excluding_self,
-                )
+            qualifying_child_pairs, had_inner_filters = self._apply_group_constraints(
+                group_payload=group_payload,
+                compiled_pair_info=relationship_pairs_info,
+                base_pairs=pairs_excluding_self,
             )
 
-            hop_info = self.path_navigator.normalize_relationship_context(
-                relationship_context
+            normalized_relationship = (
+                self.path_navigator.normalize_relationship_context(relationship_block)
             )
-            hop_quantifier = hop_info["hop_quantifier"]
-            is_inverse = hop_info["is_inverse"]
-            inverse_single_hop = is_inverse and len(hop_info["path_segments"]) == 1
+            traversal_quantifier = normalized_relationship["hop_quantifier"]
+            is_inverse_relationship = normalized_relationship["is_inverse"]
+            is_single_inverse_hop = (
+                is_inverse_relationship
+                and len(normalized_relationship["path_segments"]) == 1
+            )
 
-            if inverse_single_hop:
+            if is_single_inverse_hop:
                 has_related_clause = any(
-                    c["type"].upper() == CLAUSE_TYPE_RELATED
-                    for c in group_payload["clauses"]
+                    clause_item.get("type", "").upper() == CLAUSE_TYPE_RELATED
+                    for clause_item in group_payload.get("clauses") or []
                 )
-                if has_related_clause and hop_quantifier == QUANTIFIER_ALL:
-                    hop_quantifier = QUANTIFIER_ANY
+                if has_related_clause and traversal_quantifier == QUANTIFIER_ALL:
+                    traversal_quantifier = QUANTIFIER_ANY
 
-            if hop_quantifier == QUANTIFIER_ANY:
-                exists_predicates.append(Exists(constrained_child_rows))
-            elif hop_quantifier == QUANTIFIER_NONE:
-                if inner_filters_present:
-                    exists_predicates.append(
-                        Exists(base_pairs_excluding_self)
-                        & ~Exists(constrained_child_rows)
+            if traversal_quantifier == QUANTIFIER_ANY:
+                existence_predicates.append(Exists(qualifying_child_pairs))
+            elif traversal_quantifier == QUANTIFIER_NONE:
+                if had_inner_filters:
+                    existence_predicates.append(
+                        Exists(pairs_excluding_self) & ~Exists(qualifying_child_pairs)
                     )
                 else:
-                    exists_predicates.append(~Exists(base_pairs_excluding_self))
+                    existence_predicates.append(~Exists(pairs_excluding_self))
             else:
-                if inverse_single_hop:
-                    child_satisfying_rows = (
-                        self.clause_compiler.child_ok_rows_from_literals(
-                            group_payload, compiled_pair_info
-                        )
+                if is_single_inverse_hop:
+                    literal_ok_rows = self.clause_compiler.child_ok_rows_from_literals(
+                        group_payload, relationship_pairs_info
                     )
                 else:
-                    child_satisfying_rows = None
+                    literal_ok_rows = None
 
-                if inverse_single_hop and child_satisfying_rows is not None:
-                    violating_pairs = base_pairs_excluding_self.filter(
-                        ~Exists(child_satisfying_rows)
+                if is_single_inverse_hop and literal_ok_rows is not None:
+                    violating_pairs = pairs_excluding_self.filter(
+                        ~Exists(literal_ok_rows)
                     )
-                    exists_predicates.append(
-                        Exists(base_pairs_excluding_self) & ~Exists(violating_pairs)
+                    existence_predicates.append(
+                        Exists(pairs_excluding_self) & ~Exists(violating_pairs)
                     )
                 else:
-                    same_child_ok = constrained_child_rows.filter(
-                        **{child_identifier_field: OuterRef(child_identifier_field)}
+                    same_child_ok = qualifying_child_pairs.filter(
+                        **{child_id_field_name: OuterRef(child_id_field_name)}
                     )
-                    violating_pairs = base_pairs_excluding_self.filter(
+                    violating_pairs = pairs_excluding_self.filter(
                         ~Exists(same_child_ok)
                     )
-                    exists_predicates.append(
-                        Exists(base_pairs_excluding_self) & ~Exists(violating_pairs)
+                    existence_predicates.append(
+                        Exists(pairs_excluding_self) & ~Exists(violating_pairs)
                     )
 
-        correlate_to_tile = group_payload["scope"].upper() == SCOPE_TILE
+        correlate_to_tile_scope = (
+            group_payload.get("scope") or ""
+        ).upper() == SCOPE_TILE
 
-        for clause_payload in group_payload["clauses"]:
-            if clause_payload["type"].upper() == CLAUSE_TYPE_RELATED:
+        for clause_payload in group_payload.get("clauses") or []:
+            if (clause_payload.get("type") or "").upper() == CLAUSE_TYPE_RELATED:
                 continue
-            exists_predicates.append(
+            existence_predicates.append(
                 self.clause_compiler.compile(
                     clause_payload,
-                    anchor_graph_slug,
-                    correlate_to_tile=correlate_to_tile,
+                    correlate_to_tile=correlate_to_tile_scope,
                 )
             )
 
-        child_q, child_exists_predicates = self._compile_children(
-            subgroups=group_payload["groups"],
-            anchor_graph_slug=anchor_graph_slug,
+        children_q, children_existence_predicates = self._compile_children(
+            subgroups=group_payload.get("groups") or [],
             parent_has_relationship=has_relationship,
             current_context_side=(
                 CONTEXT_CHILD if has_relationship else current_context_side
             ),
             relationship_context_for_parent=(
-                compiled_pair_info
+                relationship_pairs_info
                 if has_relationship
                 else relationship_context_for_parent
             ),
         )
 
-        group_logic = group_payload["logic"].upper()
-        all_exists_predicates: List[Exists] = [
-            *exists_predicates,
-            *child_exists_predicates,
+        group_logic = (group_payload.get("logic") or LOGIC_AND).upper()
+        all_existence_predicates: List[Exists] = [
+            *existence_predicates,
+            *children_existence_predicates,
         ]
 
         if group_logic == LOGIC_OR:
-            q_expression = child_q if child_q is not None else Q()
-            for predicate in all_exists_predicates:
-                q_expression = q_expression | Q(predicate)
-            return q_expression, []
+            combined_q = children_q if children_q is not None else Q()
+            for exists_expr in all_existence_predicates:
+                combined_q = combined_q | Q(exists_expr)
+            return combined_q, []
 
-        q_expression = child_q if child_q is not None else Q()
-        return q_expression, all_exists_predicates
+        combined_q = children_q if children_q is not None else Q()
+        return combined_q, all_existence_predicates
 
     def _compile_children(
         self,
         subgroups: List[Dict[str, Any]],
-        anchor_graph_slug: str,
         parent_has_relationship: bool,
         current_context_side: str,
         relationship_context_for_parent: Optional[Dict[str, Any]],
     ) -> Tuple[Q, List[Exists]]:
-        combined_q = Q()
-        exists_predicates: List[Exists] = []
+        combined_children_q = Q()
+        accumulated_existence_predicates: List[Exists] = []
 
         for subgroup_payload in subgroups:
             subgroup_has_relationship = bool(
@@ -183,9 +180,8 @@ class GroupCompiler:
             if parent_has_relationship and subgroup_has_relationship:
                 continue
 
-            subgroup_q, subgroup_exists = self.compile(
+            subgroup_q, subgroup_existence_predicates = self.compile(
                 group_payload=subgroup_payload,
-                anchor_graph_slug=anchor_graph_slug,
                 current_context_side=(
                     CONTEXT_CHILD
                     if parent_has_relationship and not subgroup_has_relationship
@@ -201,34 +197,32 @@ class GroupCompiler:
             ):
                 continue
 
-            combined_q &= subgroup_q
-            exists_predicates.extend(subgroup_exists)
+            combined_children_q &= subgroup_q
+            accumulated_existence_predicates.extend(subgroup_existence_predicates)
 
-        return combined_q, exists_predicates
+        return combined_children_q, accumulated_existence_predicates
 
     def _compile_relationshipless_group_to_q(
-        self, group_payload: Dict[str, Any], anchor_graph_slug: str
+        self, group_payload: Dict[str, Any]
     ) -> Optional[Q]:
         if ((group_payload.get("relationship")) or {}).get("path"):
             return None
 
-        logic = group_payload["logic"].upper()
-        scope = group_payload["scope"].upper()
+        logic_token = (group_payload.get("logic") or LOGIC_AND).upper()
+        scope_token = (group_payload.get("scope") or SCOPE_RESOURCE).upper()
 
-        if scope == SCOPE_TILE:
+        if scope_token == SCOPE_TILE:
             return self.clause_compiler.compile_relationshipless_tile_group_to_q(
                 group_payload=group_payload,
-                anchor_graph_slug=anchor_graph_slug,
-                logic=logic,
+                logic=logic_token,
             )
 
         has_any_piece = False
         combined_q = Q()
 
-        for clause_payload in group_payload["clauses"]:
+        for clause_payload in group_payload.get("clauses") or []:
             clause_q = self.clause_compiler.compile_literal_to_q(
                 clause_payload=clause_payload,
-                anchor_graph_slug=anchor_graph_slug,
                 scope=SCOPE_RESOURCE,
             )
             combined_q = (
@@ -236,29 +230,29 @@ class GroupCompiler:
                 if not has_any_piece
                 else (
                     combined_q & clause_q
-                    if logic == LOGIC_AND
+                    if logic_token == LOGIC_AND
                     else combined_q | clause_q
                 )
             )
             has_any_piece = True
 
-        for child_group_payload in group_payload["groups"]:
-            child_q = self._compile_relationshipless_group_to_q(
-                child_group_payload, anchor_graph_slug
-            )
+        for child_group_payload in group_payload.get("groups") or []:
+            child_q = self._compile_relationshipless_group_to_q(child_group_payload)
             if child_q is None:
                 return None
             combined_q = (
                 child_q
                 if not has_any_piece
                 else (
-                    combined_q & child_q if logic == LOGIC_AND else combined_q | child_q
+                    combined_q & child_q
+                    if logic_token == LOGIC_AND
+                    else combined_q | child_q
                 )
             )
             has_any_piece = True
 
         if not has_any_piece:
-            return Q() if logic == LOGIC_AND else Q(pk__in=[])
+            return Q() if logic_token == LOGIC_AND else Q(pk__in=[])
         return combined_q
 
     def _apply_group_constraints(
@@ -267,17 +261,17 @@ class GroupCompiler:
         compiled_pair_info: Dict[str, Any],
         base_pairs: QuerySet,
     ) -> Tuple[QuerySet, bool]:
-        child_match_rows = base_pairs
-        inner_filters_present = False
-        child_identifier_field = compiled_pair_info["child_id_field"]
+        constrained_child_pairs = base_pairs
+        had_any_inner_filters = False
+        child_id_field_name = compiled_pair_info["child_id_field"]
 
-        for child_group_payload in group_payload["groups"]:
+        for child_group_payload in group_payload.get("groups") or []:
             if ((child_group_payload.get("relationship")) or {}).get("path"):
                 continue
-            if child_group_payload["logic"].upper() != LOGIC_AND:
+            if (child_group_payload.get("logic") or LOGIC_AND).upper() != LOGIC_AND:
                 continue
 
-            child_group_graph_slug = child_group_payload["graph_slug"].strip()
+            enforced_graph_slug = (child_group_payload.get("graph_slug") or "").strip()
             pending_nodes: List[Dict[str, Any]] = [child_group_payload]
 
             while pending_nodes:
@@ -285,34 +279,36 @@ class GroupCompiler:
                 if ((node_payload.get("relationship")) or {}).get("path"):
                     continue
 
-                for clause_payload in node_payload["clauses"]:
-                    if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
+                for clause_payload in node_payload.get("clauses") or []:
+                    if (
+                        clause_payload.get("type") or ""
+                    ).upper() != CLAUSE_TYPE_LITERAL:
                         continue
 
                     subject_graph_slug, _subject_alias = clause_payload["subject"][0]
                     if (
-                        child_group_graph_slug
+                        enforced_graph_slug
                         and subject_graph_slug
-                        and subject_graph_slug != child_group_graph_slug
+                        and subject_graph_slug != enforced_graph_slug
                     ):
                         continue
 
-                    child_match_rows, applied_here = (
+                    constrained_child_pairs, applied_here = (
                         self.clause_compiler.filter_pairs_by_clause(
-                            pairs_queryset=child_match_rows,
+                            pairs_queryset=constrained_child_pairs,
                             clause_payload=clause_payload,
-                            correlate_field=child_identifier_field,
+                            correlate_field=child_id_field_name,
                         )
                     )
-                    inner_filters_present = inner_filters_present or applied_here
+                    had_any_inner_filters = had_any_inner_filters or applied_here
 
-                for nested_group_payload in node_payload["groups"]:
+                for nested_group_payload in node_payload.get("groups") or []:
                     pending_nodes.append(nested_group_payload)
 
         nested_group_payload = next(
             (
                 nested
-                for nested in group_payload["groups"]
+                for nested in group_payload.get("groups") or []
                 if ((nested.get("relationship")) or {}).get("path")
             ),
             None,
@@ -325,125 +321,129 @@ class GroupCompiler:
                 nested_quantifier = (
                     nested_relationship.get("traversal_quantifiers") or [QUANTIFIER_ANY]
                 )[0].upper()
-                _, nested_terminal_graph, nested_pairs, nested_child_field = (
-                    self.path_navigator.build_scoped_pairs_for_path(
-                        path_segments=nested_path,
-                        is_inverse_relationship=bool(
-                            nested_relationship.get("is_inverse")
-                        ),
-                        correlate_on_field=child_identifier_field,
-                    )
+
+                (
+                    _anchor_graph_slug_ignored,
+                    _nested_terminal_graph_slug,
+                    nested_pairs_for_child,
+                    nested_child_id_field_name,
+                ) = self.path_navigator.build_scoped_pairs_for_path(
+                    path_segments=nested_path,
+                    is_inverse_relationship=bool(nested_relationship.get("is_inverse")),
+                    correlate_on_field=child_id_field_name,
                 )
 
                 literal_clauses_all: List[Dict[str, Any]] = []
-                stack: List[Dict[str, Any]] = [nested_group_payload]
-                while stack:
-                    node_payload = stack.pop()
+                stack_for_collection: List[Dict[str, Any]] = [nested_group_payload]
+                while stack_for_collection:
+                    node_payload = stack_for_collection.pop()
                     if not ((node_payload.get("relationship")) or {}).get("path"):
-                        for clause_payload in node_payload["clauses"]:
-                            if clause_payload["type"].upper() == CLAUSE_TYPE_LITERAL:
+                        for clause_payload in node_payload.get("clauses") or []:
+                            if (
+                                clause_payload.get("type") or ""
+                            ).upper() == CLAUSE_TYPE_LITERAL:
                                 literal_clauses_all.append(clause_payload)
-                    for deeper_group_payload in node_payload["groups"]:
-                        stack.append(deeper_group_payload)
+                    for deeper_group_payload in node_payload.get("groups") or []:
+                        stack_for_collection.append(deeper_group_payload)
 
-                nested_literal_clauses = [
-                    cp
-                    for cp in literal_clauses_all
-                    if cp["subject"][0][0] == nested_terminal_graph
-                ]
-                if not nested_literal_clauses:
-                    filtered_literals: List[Dict[str, Any]] = []
-                    for cp in literal_clauses_all:
-                        subject_graph_slug, subject_alias = cp["subject"][0]
-                        rows_model = self.clause_compiler.fetch_subject_rows(
-                            subject_graph_slug, subject_alias
-                        )
-                        if rows_model is not None:
-                            filtered_literals.append(cp)
-                    nested_literal_clauses = filtered_literals
-
-                nested_ok_pairs = nested_pairs
-                for cp in nested_literal_clauses:
+                nested_ok_pairs = nested_pairs_for_child
+                for clause_payload in literal_clauses_all:
                     nested_ok_pairs, applied_here = (
                         self.clause_compiler.filter_pairs_by_clause(
                             pairs_queryset=nested_ok_pairs,
-                            clause_payload=cp,
-                            correlate_field=nested_child_field,
+                            clause_payload=clause_payload,
+                            correlate_field=nested_child_id_field_name,
                         )
                     )
-                    inner_filters_present = inner_filters_present or applied_here
+                    had_any_inner_filters = had_any_inner_filters or applied_here
 
                 if nested_quantifier == QUANTIFIER_ANY:
-                    child_match_rows = child_match_rows.filter(Exists(nested_ok_pairs))
-                    inner_filters_present = True
-                elif nested_quantifier == QUANTIFIER_NONE:
-                    child_match_rows = child_match_rows.filter(
-                        Exists(nested_pairs) & ~Exists(nested_ok_pairs)
+                    constrained_child_pairs = constrained_child_pairs.filter(
+                        Exists(nested_ok_pairs)
                     )
-                    inner_filters_present = True
+                    had_any_inner_filters = True
+                elif nested_quantifier == QUANTIFIER_NONE:
+                    constrained_child_pairs = constrained_child_pairs.filter(
+                        Exists(nested_pairs_for_child) & ~Exists(nested_ok_pairs)
+                    )
+                    had_any_inner_filters = True
                 else:
                     same_child_ok = nested_ok_pairs.filter(
-                        **{nested_child_field: OuterRef(nested_child_field)}
+                        **{
+                            nested_child_id_field_name: OuterRef(
+                                nested_child_id_field_name
+                            )
+                        }
                     )
-                    violator_pairs = nested_pairs.filter(~Exists(same_child_ok))
-                    child_match_rows = child_match_rows.filter(
-                        Exists(nested_pairs) & ~Exists(violator_pairs)
+                    violating_pairs = nested_pairs_for_child.filter(
+                        ~Exists(same_child_ok)
                     )
-                    inner_filters_present = True
+                    constrained_child_pairs = constrained_child_pairs.filter(
+                        Exists(nested_pairs_for_child) & ~Exists(violating_pairs)
+                    )
+                    had_any_inner_filters = True
 
         terminal_graph_slug = compiled_pair_info["terminal_graph_slug"]
         terminal_node_alias = compiled_pair_info["terminal_node_alias"]
 
-        for related_clause_payload in group_payload["clauses"]:
-            if related_clause_payload["type"].upper() != CLAUSE_TYPE_RELATED:
+        for related_clause_payload in group_payload.get("clauses") or []:
+            if (
+                related_clause_payload.get("type") or ""
+            ).upper() != CLAUSE_TYPE_RELATED:
                 continue
 
-            subject_graph_slug, subject_alias = related_clause_payload["subject"][0]
-            operator_upper = related_clause_payload["operator"].upper()
-            has_operands = bool(related_clause_payload["operands"])
+            subject_graph_slug, subject_node_alias = related_clause_payload["subject"][
+                0
+            ]
+            operator_token = (related_clause_payload.get("operator") or "").upper()
+            has_operands = bool(related_clause_payload.get("operands"))
 
             if (
                 subject_graph_slug == terminal_graph_slug
-                and subject_alias == terminal_node_alias
-                and operator_upper == "HAS_ANY_VALUE"
+                and subject_node_alias == terminal_node_alias
+                and operator_token == "HAS_ANY_VALUE"
                 and not has_operands
             ):
                 continue
 
-            related_exists_queryset = self.clause_compiler.related_child_exists_qs(
+            related_exists_qs = self.clause_compiler.related_child_exists_qs(
                 related_clause_payload, compiled_pair_info
             )
-            if related_exists_queryset is None:
+            if related_exists_qs is None:
                 continue
 
             if not has_operands:
                 datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                    subject_graph_slug, subject_alias
+                    subject_graph_slug, subject_node_alias
                 )
-                predicate_info = self.clause_compiler.facet_registry.predicate(
-                    datatype_name,
-                    related_clause_payload["operator"],
-                    "value",
-                    [True],
-                )
-                is_negated_template = predicate_info[1]
-                if operator_upper == "HAS_NO_VALUE":
-                    child_match_rows = child_match_rows.filter(
-                        ~Exists(related_exists_queryset)
+                predicate_expression, is_negated_template = (
+                    self.clause_compiler.facet_registry.predicate(
+                        datatype_name,
+                        related_clause_payload["operator"],
+                        "value",
+                        [True],
                     )
-                elif operator_upper == "HAS_ANY_VALUE":
-                    child_match_rows = child_match_rows.filter(
-                        Exists(related_exists_queryset)
-                    )
-                else:
-                    child_match_rows = child_match_rows.filter(
-                        ~Exists(related_exists_queryset)
-                        if is_negated_template
-                        else Exists(related_exists_queryset)
-                    )
-            else:
-                child_match_rows = child_match_rows.filter(
-                    Exists(related_exists_queryset)
                 )
 
-        return child_match_rows, inner_filters_present
+                if operator_token == "HAS_NO_VALUE":
+                    constrained_child_pairs = constrained_child_pairs.filter(
+                        ~Exists(related_exists_qs)
+                    )
+                elif operator_token == "HAS_ANY_VALUE":
+                    constrained_child_pairs = constrained_child_pairs.filter(
+                        Exists(related_exists_qs)
+                    )
+                else:
+                    constrained_child_pairs = constrained_child_pairs.filter(
+                        ~Exists(related_exists_qs)
+                        if is_negated_template
+                        else Exists(related_exists_qs)
+                    )
+                had_any_inner_filters = True
+            else:
+                constrained_child_pairs = constrained_child_pairs.filter(
+                    Exists(related_exists_qs)
+                )
+                had_any_inner_filters = True
+
+        return constrained_child_pairs, had_any_inner_filters

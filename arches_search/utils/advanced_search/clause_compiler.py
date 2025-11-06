@@ -29,26 +29,22 @@ class ClauseCompiler:
     def compile(
         self,
         clause_payload: Dict[str, Any],
-        anchor_graph_slug: str,
         correlate_to_tile: bool = False,
     ) -> Exists:
-        if not clause_payload:
-            return Exists(arches_models.ResourceInstance.objects.none())
-        if (clause_payload.get("type") or "").upper() == CLAUSE_TYPE_RELATED:
-            return Exists(arches_models.ResourceInstance.objects.none())
+        clause_type = clause_payload["type"].upper()
+        if clause_type == CLAUSE_TYPE_LITERAL:
+            return self._compile_literal(clause_payload, correlate_to_tile)
+        if clause_type == CLAUSE_TYPE_RELATED:
+            return self._compile_related_presence(clause_payload)
+        return Exists(arches_models.ResourceInstance.objects.none())
 
-        subject_path = clause_payload.get("subject") or []
-        if not subject_path:
-            return Exists(arches_models.ResourceInstance.objects.none())
-
-        subject_graph_slug, subject_node_alias = subject_path[0]
-        if subject_graph_slug != anchor_graph_slug:
-            return Exists(arches_models.ResourceInstance.objects.none())
-
+    def _compile_literal(
+        self,
+        clause_payload: Dict[str, Any],
+        correlate_to_tile: bool,
+    ) -> Exists:
+        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
         subject_rows = self.fetch_subject_rows(subject_graph_slug, subject_node_alias)
-        if subject_rows is None:
-            return Exists(arches_models.ResourceInstance.objects.none())
-
         correlated_rows = (
             subject_rows.filter(
                 resourceinstanceid=OuterRef("resourceinstance_id"),
@@ -60,8 +56,8 @@ class ClauseCompiler:
             ).order_by()
         )
 
-        operator_token = (clause_payload.get("operator") or "").upper()
-        quantifier_token = (clause_payload.get("quantifier") or QUANTIFIER_ANY).upper()
+        operator_token = clause_payload["operator"].upper()
+        quantifier_token = clause_payload["quantifier"].upper()
         operand_items = clause_payload.get("operands") or []
 
         datatype_name = (
@@ -80,22 +76,22 @@ class ClauseCompiler:
                 presence_means_match = not bool(
                     getattr(facet, "is_orm_template_negated", False)
                 )
+
             if quantifier_token == QUANTIFIER_NONE:
                 return (
                     ~Exists(correlated_rows)
                     if presence_means_match
                     else Exists(correlated_rows)
                 )
-            if quantifier_token == QUANTIFIER_ANY or quantifier_token == QUANTIFIER_ALL:
+            if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
                 return (
                     Exists(correlated_rows)
                     if presence_means_match
                     else ~Exists(correlated_rows)
                 )
-            return Exists(arches_models.ResourceInstance.objects.none())
 
         literal_values = [
-            (item["value"] if isinstance(item, dict) and "value" in item else item)
+            (item["value"] if isinstance(item, dict) else item)
             for item in operand_items
         ]
         predicate_expression, is_template_negated = self.facet_registry.predicate(
@@ -139,38 +135,48 @@ class ClauseCompiler:
 
         return Exists(correlated_rows) & ~Exists(matching_rows)
 
+    def _compile_related_presence(
+        self,
+        clause_payload: Dict[str, Any],
+    ) -> Exists:
+        operator_token = clause_payload["operator"].upper()
+        quantifier_token = clause_payload["quantifier"].upper()
+        subject_path_sequence = clause_payload["subject"]
+
+        anchor_id_field, child_id_field, pairs_queryset = (
+            self.path_navigator.build_path_queryset(subject_path_sequence)
+        )
+        correlated_pairs = pairs_queryset.filter(
+            **{anchor_id_field: OuterRef("resourceinstanceid")}
+        ).order_by()
+
+        if operator_token == OPERATOR_HAS_ANY_VALUE:
+            if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
+                return Exists(correlated_pairs)
+            return ~Exists(correlated_pairs)
+
+        if operator_token == OPERATOR_HAS_NO_VALUE:
+            if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
+                return ~Exists(correlated_pairs)
+            return Exists(correlated_pairs)
+
+        return Exists(arches_models.ResourceInstance.objects.none())
+
     def compile_literal_to_q(
         self,
         clause_payload: Dict[str, Any],
-        anchor_graph_slug: str,
         scope: str,
     ) -> Optional[Q]:
-        if (clause_payload.get("type") or "").upper() != CLAUSE_TYPE_LITERAL:
-            return None
-
-        subject_path = clause_payload.get("subject") or []
-        if not subject_path:
-            return Q(pk__in=[])
-
-        subject_graph_slug, _ = subject_path[0]
-        if subject_graph_slug != anchor_graph_slug:
-            return Q(pk__in=[])
-
         if (scope or "").upper() == SCOPE_TILE:
             return self.compile_relationshipless_tile_group_to_q(
                 {"clauses": [clause_payload], "logic": LOGIC_AND},
-                anchor_graph_slug,
                 LOGIC_AND,
             )
-
-        return Q(
-            self.compile(clause_payload, anchor_graph_slug, correlate_to_tile=False)
-        )
+        return Q(self.compile(clause_payload, correlate_to_tile=False))
 
     def compile_relationshipless_tile_group_to_q(
         self,
         group_payload: Dict[str, Any],
-        anchor_graph_slug: str,
         logic: str,
     ) -> Q:
         clause_payloads = group_payload.get("clauses") or []
@@ -185,30 +191,13 @@ class ClauseCompiler:
         resource_level_conditions: List[Q] = []
 
         for clause_payload in clause_payloads:
-            subject_path = clause_payload.get("subject") or []
-            if not subject_path:
-                empty_tileids = arches_models.Tile.objects.none().values("tileid")[:1]
-                tileid_subqueries_for_any.append(Subquery(empty_tileids))
-                continue
-
-            subject_graph_slug, subject_node_alias = subject_path[0]
-            if subject_graph_slug != anchor_graph_slug:
-                empty_tileids = arches_models.Tile.objects.none().values("tileid")[:1]
-                tileid_subqueries_for_any.append(Subquery(empty_tileids))
-                continue
-
+            subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
             subject_rows = self.fetch_subject_rows(
                 subject_graph_slug, subject_node_alias
             )
-            if subject_rows is None:
-                empty_tileids = arches_models.Tile.objects.none().values("tileid")[:1]
-                tileid_subqueries_for_any.append(Subquery(empty_tileids))
-                continue
 
-            operator_token = (clause_payload.get("operator") or "").upper()
-            quantifier_token = (
-                clause_payload.get("quantifier") or QUANTIFIER_ANY
-            ).upper()
+            operator_token = clause_payload["operator"].upper()
+            quantifier_token = clause_payload["quantifier"].upper()
             operand_items = clause_payload.get("operands") or []
 
             rows_correlated_to_resource = subject_rows.filter(
@@ -283,14 +272,13 @@ class ClauseCompiler:
                             requires_all_tiles_match & has_at_least_one_tile
                         )
                     else:
-                        has_at_least_one_tile = Q(
-                            Exists(tiles_for_anchor_resource.values("tileid")[:1])
+                        resource_level_conditions.append(
+                            Q(Exists(tiles_for_anchor_resource.values("tileid")[:1]))
                         )
-                        resource_level_conditions.append(has_at_least_one_tile)
                 continue
 
             literal_values = [
-                (item["value"] if isinstance(item, dict) and "value" in item else item)
+                (item["value"] if isinstance(item, dict) else item)
                 for item in operand_items
             ]
             predicate_expression, is_template_negated = self.facet_registry.predicate(
@@ -309,18 +297,15 @@ class ClauseCompiler:
             ).filter(tileid=OuterRef("tileid"))
 
             if quantifier_token == QUANTIFIER_ANY:
-                if not is_template_negated:
-                    tileid_subqueries_for_any.append(
-                        Subquery(matches_in_this_tile.values("tileid")[:1])
+                tileid_subqueries_for_any.append(
+                    Subquery(matches_in_this_tile.values("tileid")[:1])
+                    if not is_template_negated
+                    else Subquery(
+                        arches_models.Tile.objects.filter(tileid=OuterRef("tileid"))
+                        .filter(~Exists(matches_in_this_tile))
+                        .values("tileid")[:1]
                     )
-                else:
-                    tileid_subqueries_for_any.append(
-                        Subquery(
-                            arches_models.Tile.objects.filter(tileid=OuterRef("tileid"))
-                            .filter(~Exists(matches_in_this_tile))
-                            .values("tileid")[:1]
-                        )
-                    )
+                )
             elif quantifier_token == QUANTIFIER_NONE:
                 resource_level_conditions.append(Q(~Exists(matching_rows_resource)))
             else:
@@ -369,6 +354,7 @@ class ClauseCompiler:
                         positive_matches_resource = rows_correlated_to_resource.exclude(
                             pk__in=matching_rows_resource.values("pk")
                         )
+
                     has_no_positive_matches = Q(~Exists(positive_matches_resource)) & Q(
                         Exists(tiles_for_anchor_resource.values("tileid")[:1])
                     )
@@ -377,7 +363,7 @@ class ClauseCompiler:
         if not tileid_subqueries_for_any:
             any_expression = Q()
         else:
-            if (logic or "").upper() == LOGIC_AND:
+            if logic.upper() == LOGIC_AND:
                 tiles_requiring_all = tiles_for_anchor_resource
                 for tileid_subquery in tileid_subqueries_for_any:
                     tiles_requiring_all = tiles_requiring_all.filter(
@@ -399,7 +385,7 @@ class ClauseCompiler:
         if not resource_level_conditions:
             return any_expression
 
-        if (logic or "").upper() == LOGIC_AND:
+        if logic.upper() == LOGIC_AND:
             combined = Q()
             for condition in resource_level_conditions:
                 combined &= condition
@@ -416,21 +402,14 @@ class ClauseCompiler:
         clause_payload: Dict[str, Any],
         correlate_field: str,
     ) -> Tuple[QuerySet, bool]:
-        subject_path = clause_payload.get("subject") or []
-        if not subject_path:
-            return pairs_queryset, False
-
-        subject_graph_slug, subject_node_alias = subject_path[0]
+        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
         subject_rows = self.fetch_subject_rows(subject_graph_slug, subject_node_alias)
-        if subject_rows is None:
-            return pairs_queryset, False
-
         correlated_rows = subject_rows.filter(
             resourceinstanceid=OuterRef(correlate_field)
         ).order_by()
 
+        operator_token = clause_payload["operator"].upper()
         operand_items = clause_payload.get("operands") or []
-        operator_token = (clause_payload.get("operator") or "").upper()
 
         if not operand_items:
             datatype_name = (
@@ -459,7 +438,7 @@ class ClauseCompiler:
             )
         )
         literal_values = [
-            (item["value"] if isinstance(item, dict) and "value" in item else item)
+            (item["value"] if isinstance(item, dict) else item)
             for item in operand_items
         ]
         predicate_expression, is_template_negated = self.facet_registry.predicate(
@@ -503,17 +482,8 @@ class ClauseCompiler:
     def related_child_exists_qs(
         self, clause_payload: Dict[str, Any], compiled_pair_info: Dict[str, Any]
     ) -> Optional[QuerySet]:
-        subject_path = clause_payload.get("subject") or []
-        if not subject_path:
-            return None
-
-        subject_graph_slug, subject_node_alias = subject_path[0]
-        if subject_graph_slug != compiled_pair_info["terminal_graph_slug"]:
-            return None
-
+        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
         subject_rows = self.fetch_subject_rows(subject_graph_slug, subject_node_alias)
-        if subject_rows is None:
-            return None
 
         correlated_subject_rows = (
             subject_rows.filter(
@@ -539,9 +509,7 @@ class ClauseCompiler:
             (
                 item
                 for item in operand_items
-                if isinstance(item, dict)
-                and (item.get("type") or "").upper() == "PATH"
-                and "value" in item
+                if isinstance(item, dict) and (item.get("type") or "").upper() == "PATH"
             ),
             None,
         )
@@ -557,7 +525,7 @@ class ClauseCompiler:
             predicate_parameters = [rhs_scalar_value]
         else:
             predicate_parameters = [
-                (item["value"] if isinstance(item, dict) and "value" in item else item)
+                (item["value"] if isinstance(item, dict) else item)
                 for item in operand_items
             ]
 
@@ -579,8 +547,7 @@ class ClauseCompiler:
         literal_clauses: List[Dict[str, Any]] = []
 
         for child_group_payload in group_payload.get("groups") or []:
-            relationship_block = child_group_payload.get("relationship") or {}
-            if relationship_block.get("path"):
+            if (child_group_payload.get("relationship") or {}).get("path"):
                 continue
             if (child_group_payload.get("logic") or LOGIC_AND).upper() != LOGIC_AND:
                 return None
@@ -588,8 +555,7 @@ class ClauseCompiler:
             pending_nodes: List[Dict[str, Any]] = [child_group_payload]
             while pending_nodes:
                 node_payload = pending_nodes.pop()
-                relationship_block = node_payload.get("relationship") or {}
-                if relationship_block.get("path"):
+                if (node_payload.get("relationship") or {}).get("path"):
                     continue
 
                 for clause_payload in node_payload.get("clauses") or []:
@@ -597,10 +563,7 @@ class ClauseCompiler:
                         clause_payload.get("type") or ""
                     ).upper() != CLAUSE_TYPE_LITERAL:
                         continue
-                    subject_path = clause_payload.get("subject") or []
-                    if not subject_path:
-                        continue
-                    subject_graph_slug, _ = subject_path[0]
+                    subject_graph_slug, _ = clause_payload["subject"][0]
                     if subject_graph_slug != terminal_graph_slug:
                         return None
                     literal_clauses.append(clause_payload)
@@ -618,17 +581,14 @@ class ClauseCompiler:
             subject_rows = self.fetch_subject_rows(
                 subject_graph_slug, subject_node_alias
             )
-            if subject_rows is None:
-                continue
-
             correlated_rows = subject_rows.filter(
                 resourceinstanceid=OuterRef(child_id_field)
             ).order_by()
 
-            operator_token = (clause_payload.get("operator") or "").upper()
-            operands = clause_payload.get("operands") or []
+            operator_token = clause_payload["operator"].upper()
+            operand_items = clause_payload.get("operands") or []
 
-            if not operands:
+            if not operand_items:
                 datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
                     subject_graph_slug, subject_node_alias
                 )
@@ -651,12 +611,8 @@ class ClauseCompiler:
                     subject_graph_slug, subject_node_alias
                 )
                 literal_values = [
-                    (
-                        item["value"]
-                        if isinstance(item, dict) and "value" in item
-                        else item
-                    )
-                    for item in operands
+                    (item["value"] if isinstance(item, dict) else item)
+                    for item in operand_items
                 ]
                 predicate_expression, is_template_negated = (
                     self.facet_registry.predicate(
@@ -668,7 +624,6 @@ class ClauseCompiler:
                     if isinstance(predicate_expression, Q)
                     else correlated_rows.filter(**predicate_expression)
                 )
-
                 if not is_template_negated:
                     predicate_rows = filtered
                 else:
@@ -714,13 +669,12 @@ class ClauseCompiler:
     def fetch_subject_rows(
         self, graph_slug: str, node_alias: str
     ) -> Optional[QuerySet]:
-        datatype = (
+        datatype_name = (
             self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
                 graph_slug, node_alias
             )
         )
-
-        model_class = self.search_model_registry.get_model_for_datatype(datatype)
+        model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
         return model_class.objects.filter(
             graph_slug=graph_slug, node_alias=node_alias
         ).order_by()
