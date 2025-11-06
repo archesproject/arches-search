@@ -31,6 +31,13 @@ class ClauseCompiler:
             return False
         return bool(getattr(facet, "is_orm_template_negated", False))
 
+    def _predicate_for(
+        self, datatype_name: str, operator_token: str, parameters: List[Any]
+    ) -> Tuple[Any, bool]:
+        return self.facet_registry.predicate(
+            datatype_name, operator_token, "value", parameters
+        )
+
     def compile(
         self,
         clause_payload: Dict[str, Any],
@@ -75,7 +82,6 @@ class ClauseCompiler:
             presence_means_match = self._presence_means_match_for_zero_operands(
                 datatype_name, operator_token
             )
-
             if quantifier_token == QUANTIFIER_NONE:
                 return (
                     ~Exists(correlated_rows)
@@ -93,9 +99,10 @@ class ClauseCompiler:
             (item["value"] if isinstance(item, dict) else item)
             for item in operand_items
         ]
-        predicate_expression, is_template_negated = self.facet_registry.predicate(
-            datatype_name, operator_token, "value", literal_values
+        predicate_expression, is_template_negated = self._predicate_for(
+            datatype_name, operator_token, literal_values
         )
+
         matching_rows = (
             correlated_rows.filter(predicate_expression)
             if isinstance(predicate_expression, Q)
@@ -115,8 +122,8 @@ class ClauseCompiler:
             operator_token, datatype_name
         )
         if positive_facet is not None:
-            positive_expression, _ = self.facet_registry.predicate(
-                datatype_name, positive_facet.operator, "value", literal_values
+            positive_expression, _ = self._predicate_for(
+                datatype_name, positive_facet.operator, literal_values
             )
             positive_rows = (
                 correlated_rows.filter(positive_expression)
@@ -287,8 +294,8 @@ class ClauseCompiler:
                 (item["value"] if isinstance(item, dict) else item)
                 for item in operand_items
             ]
-            predicate_expression, is_template_negated = self.facet_registry.predicate(
-                datatype_name, operator_token, "value", literal_values
+            predicate_expression, is_template_negated = self._predicate_for(
+                datatype_name, operator_token, literal_values
             )
 
             matching_rows_resource = (
@@ -337,11 +344,8 @@ class ClauseCompiler:
                         operator_token, datatype_name
                     )
                     if positive_facet is not None:
-                        positive_expression, _ = self.facet_registry.predicate(
-                            datatype_name,
-                            positive_facet.operator,
-                            "value",
-                            literal_values,
+                        positive_expression, _ = self._predicate_for(
+                            datatype_name, positive_facet.operator, literal_values
                         )
                         positive_matches_resource = (
                             rows_correlated_to_resource.filter(positive_expression)
@@ -441,8 +445,8 @@ class ClauseCompiler:
             (item["value"] if isinstance(item, dict) else item)
             for item in operand_items
         ]
-        predicate_expression, is_template_negated = self.facet_registry.predicate(
-            datatype_name, operator_token, "value", literal_values
+        predicate_expression, is_template_negated = self._predicate_for(
+            datatype_name, operator_token, literal_values
         )
         filtered_rows = (
             correlated_rows.filter(predicate_expression)
@@ -457,8 +461,8 @@ class ClauseCompiler:
             operator_token, datatype_name
         )
         if positive_facet is not None:
-            positive_expression, _ = self.facet_registry.predicate(
-                datatype_name, positive_facet.operator, "value", literal_values
+            positive_expression, _ = self._predicate_for(
+                datatype_name, positive_facet.operator, literal_values
             )
             positive_rows = (
                 correlated_rows.filter(positive_expression)
@@ -529,8 +533,8 @@ class ClauseCompiler:
                 for item in operand_items
             ]
 
-        predicate_expression, _ = self.facet_registry.predicate(
-            datatype_name, clause_payload["operator"], "value", predicate_parameters
+        predicate_expression, _ = self._predicate_for(
+            datatype_name, clause_payload["operator"], predicate_parameters
         )
         return (
             correlated_subject_rows.filter(predicate_expression)
@@ -606,10 +610,8 @@ class ClauseCompiler:
                     (item["value"] if isinstance(item, dict) else item)
                     for item in operand_items
                 ]
-                predicate_expression, is_template_negated = (
-                    self.facet_registry.predicate(
-                        datatype_name, operator_token, "value", literal_values
-                    )
+                predicate_expression, is_template_negated = self._predicate_for(
+                    datatype_name, operator_token, literal_values
                 )
                 filtered = (
                     correlated_rows.filter(predicate_expression)
@@ -623,11 +625,8 @@ class ClauseCompiler:
                         operator_token, datatype_name
                     )
                     if positive_facet is not None:
-                        positive_expression, _ = self.facet_registry.predicate(
-                            datatype_name,
-                            positive_facet.operator,
-                            "value",
-                            literal_values,
+                        positive_expression, _ = self._predicate_for(
+                            datatype_name, positive_facet.operator, literal_values
                         )
                         positive_filtered = (
                             correlated_rows.filter(positive_expression)
