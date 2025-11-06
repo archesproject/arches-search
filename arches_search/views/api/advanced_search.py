@@ -355,7 +355,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": True,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,
@@ -373,7 +373,10 @@ class AdvancedSearchAPI(APIBase):
                                 "subject": [["dog", "tail_length"]],
                                 "operator": "GREATER_THAN_OR_EQUALS",
                                 "operands": [
-                                    {"path": [["person", "fingernail_length"]]}
+                                    {
+                                        "type": "PATH",
+                                        "value": [["person", "fingernail_length"]],
+                                    }
                                 ],
                             }
                         ],
@@ -392,7 +395,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": True,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,
@@ -410,7 +413,10 @@ class AdvancedSearchAPI(APIBase):
                                 "subject": [["dog", "tail_length"]],
                                 "operator": "EQUALS",
                                 "operands": [
-                                    {"path": [["person", "fingernail_length"]]}
+                                    {
+                                        "type": "PATH",
+                                        "value": [["person", "fingernail_length"]],
+                                    }
                                 ],
                             }
                         ],
@@ -429,7 +435,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": True,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 1,
@@ -447,7 +453,10 @@ class AdvancedSearchAPI(APIBase):
                                 "subject": [["dog", "tail_length"]],
                                 "operator": "LESS_THAN",
                                 "operands": [
-                                    {"path": [["person", "fingernail_length"]]}
+                                    {
+                                        "type": "PATH",
+                                        "value": [["person", "fingernail_length"]],
+                                    }
                                 ],
                             }
                         ],
@@ -466,7 +475,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": True,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 0,
@@ -509,7 +518,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 0,
@@ -552,7 +561,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 2,
@@ -595,7 +604,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 1,
@@ -646,7 +655,7 @@ class AdvancedSearchAPI(APIBase):
                                 "relationship": {
                                     "path": [["person", "pets"]],
                                     "is_inverse": False,
-                                    "hop_modes": ["ANY"],
+                                    "traversal_quantifiers": ["ANY"],
                                 },
                             }
                         ],
@@ -654,7 +663,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 1,
@@ -705,7 +714,7 @@ class AdvancedSearchAPI(APIBase):
                                 "relationship": {
                                     "path": [["person", "pets"]],
                                     "is_inverse": False,
-                                    "hop_modes": ["ANY"],
+                                    "traversal_quantifiers": ["ANY"],
                                 },
                             }
                         ],
@@ -713,7 +722,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 0,
@@ -764,7 +773,7 @@ class AdvancedSearchAPI(APIBase):
                                 "relationship": {
                                     "path": [["person", "pets"]],
                                     "is_inverse": False,
-                                    "hop_modes": ["ANY"],
+                                    "traversal_quantifiers": ["ANY"],
                                 },
                             }
                         ],
@@ -772,7 +781,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,
@@ -823,7 +832,7 @@ class AdvancedSearchAPI(APIBase):
                                 "relationship": {
                                     "path": [["person", "pets"]],
                                     "is_inverse": False,
-                                    "hop_modes": ["NONE"],
+                                    "traversal_quantifiers": ["NONE"],
                                 },
                             }
                         ],
@@ -831,7 +840,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 0,
@@ -882,7 +891,7 @@ class AdvancedSearchAPI(APIBase):
                                 "relationship": {
                                     "path": [["person", "pets"]],
                                     "is_inverse": False,
-                                    "hop_modes": ["NONE"],
+                                    "traversal_quantifiers": ["NONE"],
                                 },
                             }
                         ],
@@ -890,7 +899,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,
@@ -917,7 +926,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,
@@ -944,7 +953,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["NONE"],
+                            "traversal_quantifiers": ["NONE"],
                         },
                     },
                     "expected_count": 1,
@@ -971,7 +980,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 2,
@@ -1006,7 +1015,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"], ["person", "pets"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,
@@ -1033,7 +1042,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": True,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,
@@ -1060,7 +1069,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": True,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,
@@ -1087,7 +1096,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": True,
-                            "hop_modes": ["NONE"],
+                            "traversal_quantifiers": ["NONE"],
                         },
                     },
                     "expected_count": 1,  # assuming only 2 of 3 people are some dog's favorite_person
@@ -1241,7 +1250,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 2,
@@ -1397,7 +1406,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,  # A (friend C=24), B (friend C=24)
@@ -1440,7 +1449,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 0,
@@ -1475,7 +1484,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["NONE"],
+                            "traversal_quantifiers": ["NONE"],
                         },
                     },
                     "expected_count": 2,  # A, B (C has 0 friends ⇒ non-vacuous NONE = false)
@@ -1510,7 +1519,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 1,  # A (friend C=24); B fails; C has 0 friends ⇒ ALL requires ≥1
@@ -1545,7 +1554,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 1,  # Only A (C has pets); B fails; C has 0 friends
@@ -1580,7 +1589,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 0,  # A's friend C has pets; B has friend C with pets; C has 0 friends
@@ -1615,7 +1624,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 1,  # B (friend A has no pets)
@@ -1638,7 +1647,7 @@ class AdvancedSearchAPI(APIBase):
                                 "relationship": {
                                     "path": [["dog", "favorite_person"]],
                                     "is_inverse": True,
-                                    "hop_modes": ["ANY"],
+                                    "traversal_quantifiers": ["ANY"],
                                 },
                             }
                         ],
@@ -1646,7 +1655,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,  # A (friend C favored by Dog B), B (friend A favored by Dog A)
@@ -1685,7 +1694,7 @@ class AdvancedSearchAPI(APIBase):
                                 "relationship": {
                                     "path": [["dog", "favorite_person"]],
                                     "is_inverse": True,
-                                    "hop_modes": ["ANY"],
+                                    "traversal_quantifiers": ["ANY"],
                                 },
                             }
                         ],
@@ -1732,7 +1741,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": True,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 1,  # A
@@ -1750,7 +1759,10 @@ class AdvancedSearchAPI(APIBase):
                                 "subject": [["dog", "tail_length"]],
                                 "operator": "GREATER_THAN_OR_EQUALS",
                                 "operands": [
-                                    {"path": [["person", "fingernail_length"]]}
+                                    {
+                                        "type": "PATH",
+                                        "value": [["person", "fingernail_length"]],
+                                    }
                                 ],
                             }
                         ],
@@ -1769,7 +1781,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": True,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 2,  # A(25>=25), C(999>=55); B has no liking dogs ⇒ fails ALL
@@ -1825,7 +1837,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 1,  # Dog B (C=24)
@@ -1860,7 +1872,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["dog", "favorite_person"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 1,  # Dog B (favorite C has no friends)
@@ -1887,7 +1899,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "pets"]],
                             "is_inverse": True,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 2,  # Both dogs are someone's pet
@@ -1914,7 +1926,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "pets"]],
                             "is_inverse": True,
-                            "hop_modes": ["NONE"],
+                            "traversal_quantifiers": ["NONE"],
                         },
                     },
                     "expected_count": 0,
@@ -1949,7 +1961,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "pets"]],
                             "is_inverse": True,
-                            "hop_modes": ["ALL"],
+                            "traversal_quantifiers": ["ALL"],
                         },
                     },
                     "expected_count": 1,  # Dog B (owner C=24). Dog A owner B age=null ⇒ fails.
@@ -1992,7 +2004,7 @@ class AdvancedSearchAPI(APIBase):
                                 "relationship": {
                                     "path": [["person", "friends"]],
                                     "is_inverse": False,
-                                    "hop_modes": ["ANY"],
+                                    "traversal_quantifiers": ["ANY"],
                                 },
                             }
                         ],
@@ -2000,7 +2012,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "pets"]],
                             "is_inverse": True,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 1,  # Dog A via owner B → friend A(22)
@@ -2112,7 +2124,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["ANY"],
+                            "traversal_quantifiers": ["ANY"],
                         },
                     },
                     "expected_count": 0,  # A's friend C has age; B's friends A/C have age; C has no friends
@@ -2147,7 +2159,7 @@ class AdvancedSearchAPI(APIBase):
                         "relationship": {
                             "path": [["person", "friends"]],
                             "is_inverse": False,
-                            "hop_modes": ["NONE"],
+                            "traversal_quantifiers": ["NONE"],
                         },
                     },
                     "expected_count": 2,  # A, B (C has 0 friends ⇒ non-vacuous NONE = false)

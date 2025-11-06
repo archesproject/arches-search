@@ -57,47 +57,36 @@ class ClauseCompiler:
 
         if not operands:
             if operator_upper == "HAS_ANY_VALUE":
-                if quantifier == "ANY" or quantifier == "ALL":
+                if quantifier in ("ANY", "ALL"):
                     return Exists(correlated_rows)
-                return ~Exists(correlated_rows)  # NONE
+                return ~Exists(correlated_rows)
             if operator_upper == "HAS_NO_VALUE":
-                if quantifier == "NONE" or quantifier == "ALL":
+                if quantifier in ("NONE", "ALL"):
                     return ~Exists(correlated_rows)
-                return Exists(correlated_rows)  # ANY
-
-            # Fallback presence semantics for no-operand, non-presence operators:
-            # treat as positive/negative presence depending on facet polarity.
+                return Exists(correlated_rows)
             if not is_orm_template_negated:
-                # positive presence
-                if quantifier == "ANY" or quantifier == "ALL":
+                if quantifier in ("ANY", "ALL"):
                     return Exists(correlated_rows)
                 return ~Exists(correlated_rows)
             else:
-                # negative presence
-                if quantifier == "ANY" or quantifier == "ALL":
+                if quantifier in ("ANY", "ALL"):
                     return ~Exists(correlated_rows)
                 return Exists(correlated_rows)
 
-        # Build predicate and compute matches/violators under the correlation
         params = self._literal_params(operands)
         raw_predicate = self._predicate_from_facet(
             facet=facet, column_name="value", params=params
         )
 
-        # matches: rows that satisfy the clause predicate
         matches = (
             correlated_rows.filter(raw_predicate)
             if isinstance(raw_predicate, Q)
             else correlated_rows.filter(**raw_predicate)
         )
 
-        # violators: rows that FAIL the clause predicate
         if not is_orm_template_negated:
-            # Positive template → violators are correlated_rows \ matches
             violators = correlated_rows.exclude(pk__in=matches.values("pk"))
         else:
-            # Negated template → violators are the positive counterpart if we can get it,
-            # otherwise the complement of matches.
             positive_facet = (
                 self.facet_registry.get_positive_facet_for(
                     clause_payload.get("operator"), datatype_name
@@ -126,7 +115,6 @@ class ClauseCompiler:
             return Exists(matches)
         if quantifier == "NONE":
             return ~Exists(matches)
-        # ALL: require at least one row exists and no violators
         return Exists(correlated_rows) & ~Exists(violators)
 
     def related_child_exists_qs(
@@ -159,12 +147,14 @@ class ClauseCompiler:
             (
                 operand
                 for operand in operands
-                if isinstance(operand, dict) and operand.get("path")
+                if isinstance(operand, dict)
+                and (operand.get("type") or "").upper() == "PATH"
+                and "value" in operand
             ),
             None,
         )
         if rhs_operand:
-            rhs_path: Sequence[Tuple[str, str]] = rhs_operand["path"]
+            rhs_path: Sequence[Tuple[str, str]] = rhs_operand["value"]
             _rhs_dtype, _rhs_graph, rhs_rows = self.path_navigator.build_path_queryset(
                 rhs_path
             )
@@ -254,15 +244,19 @@ class ClauseCompiler:
         return self.facet_registry.get_facet(datatype_name, (operator_token or ""))
 
     def _literal_params(self, operands: List[Any]) -> List[Any]:
-        return [
-            (
-                operand["value"]
-                if isinstance(operand, dict) and "value" in operand
-                else operand
-            )
-            for operand in operands
-            if operand is not None
-        ]
+        out: List[Any] = []
+        for operand in operands:
+            if operand is None:
+                continue
+            if isinstance(operand, dict):
+                t = (operand.get("type") or "").upper()
+                if t == "LITERAL" and "value" in operand:
+                    out.append(operand["value"])
+                elif "value" in operand and t == "":
+                    out.append(operand["value"])
+            else:
+                out.append(operand)
+        return out
 
     def _predicate_from_facet(
         self, *, facet, column_name: str, params: Sequence[Any]

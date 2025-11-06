@@ -75,7 +75,8 @@ class GroupCompiler:
             _dbg_qs("[ADV][DBG] matches_per_child", matches_per_child)
 
             hop_mode = (
-                (relationship_context.get("hop_modes") or ["ANY"])[0] or "ANY"
+                (relationship_context.get("traversal_quantifiers") or ["ANY"])[0]
+                or "ANY"
             ).upper()
 
             # ---------- NORMALIZE: inverse single-hop + RELATED present -> ALL behaves like ANY ----------
@@ -900,7 +901,7 @@ class GroupCompiler:
             nested_path = nested_rel.get("path") or []
             if len(nested_path) == 1:
                 nested_mode = (
-                    (nested_rel.get("hop_modes") or ["ANY"])[0] or "ANY"
+                    (nested_rel.get("traversal_quantifiers") or ["ANY"])[0] or "ANY"
                 ).upper()
                 _dt, nested_term_graph, nested_pairs, nested_child_field = (
                     self.path_navigator.build_scoped_pairs_for_path(
