@@ -1,3 +1,4 @@
+# clause_compiler.py
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -61,11 +62,9 @@ class ClauseCompiler:
             subject_rows.filter(
                 resourceinstanceid=OuterRef("resourceinstance_id"),
                 tileid=OuterRef("tileid"),
-            ).order_by()
+            )
             if correlate_to_tile
-            else subject_rows.filter(
-                resourceinstanceid=OuterRef("resourceinstanceid")
-            ).order_by()
+            else subject_rows.filter(resourceinstanceid=OuterRef("resourceinstanceid"))
         )
 
         operator_token = clause_payload["operator"].upper()
@@ -154,7 +153,7 @@ class ClauseCompiler:
         )
         correlated_pairs = pairs_queryset.filter(
             **{anchor_id_field: OuterRef("resourceinstanceid")}
-        ).order_by()
+        )
 
         terminal_graph_slug, terminal_node_alias = subject_path_sequence[-1]
         terminal_datatype_name = (
@@ -204,7 +203,7 @@ class ClauseCompiler:
 
         tiles_for_anchor_resource = arches_models.Tile.objects.filter(
             resourceinstance_id=OuterRef("resourceinstanceid")
-        ).order_by()
+        )
 
         tileid_subqueries_for_any: List[Subquery] = []
         resource_level_conditions: List[Q] = []
@@ -221,10 +220,10 @@ class ClauseCompiler:
 
             rows_correlated_to_resource = subject_rows.filter(
                 resourceinstanceid=OuterRef("resourceinstanceid")
-            ).order_by()
+            )
             rows_correlated_to_tile_resource = subject_rows.filter(
                 resourceinstanceid=OuterRef("resourceinstance_id")
-            ).order_by()
+            )
 
             datatype_name = (
                 self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
@@ -416,7 +415,7 @@ class ClauseCompiler:
         subject_rows = self.fetch_subject_rows(subject_graph_slug, subject_node_alias)
         correlated_rows = subject_rows.filter(
             resourceinstanceid=OuterRef(correlate_field)
-        ).order_by()
+        )
 
         operator_token = clause_payload["operator"].upper()
         operand_items = clause_payload.get("operands") or []
@@ -489,15 +488,9 @@ class ClauseCompiler:
         subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
         subject_rows = self.fetch_subject_rows(subject_graph_slug, subject_node_alias)
 
-        correlated_subject_rows = (
-            subject_rows.filter(
-                resourceinstanceid=OuterRef(compiled_pair_info["child_id_field"])
-            )
-            .annotate(
-                _anchor_resource_id=OuterRef(compiled_pair_info["anchor_id_field"])
-            )
-            .order_by()
-        )
+        correlated_subject_rows = subject_rows.filter(
+            resourceinstanceid=OuterRef(compiled_pair_info["child_id_field"])
+        ).annotate(_anchor_resource_id=OuterRef(compiled_pair_info["anchor_id_field"]))
 
         operand_items = clause_payload.get("operands") or []
         if not operand_items:
@@ -587,7 +580,7 @@ class ClauseCompiler:
             )
             correlated_rows = subject_rows.filter(
                 resourceinstanceid=OuterRef(child_id_field)
-            ).order_by()
+            )
 
             operator_token = clause_payload["operator"].upper()
             operand_items = clause_payload.get("operands") or []
@@ -666,6 +659,4 @@ class ClauseCompiler:
             )
         )
         model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
-        return model_class.objects.filter(
-            graph_slug=graph_slug, node_alias=node_alias
-        ).order_by()
+        return model_class.objects.filter(graph_slug=graph_slug, node_alias=node_alias)

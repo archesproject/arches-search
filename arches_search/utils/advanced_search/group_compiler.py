@@ -1,3 +1,4 @@
+# group_compiler.py
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -155,8 +156,8 @@ class GroupCompiler:
 
         if group_logic == LOGIC_OR:
             combined_q = children_q if children_q is not None else Q()
-            for exists_expr in all_existence_predicates:
-                combined_q = combined_q | Q(exists_expr)
+            for exists_expression in all_existence_predicates:
+                combined_q = combined_q | Q(exists_expression)
             return combined_q, []
 
         combined_q = children_q if children_q is not None else Q()
@@ -322,7 +323,7 @@ class GroupCompiler:
                         )
                         correlated_rows = subject_rows.filter(
                             resourceinstanceid=OuterRef(child_id_field_name)
-                        ).order_by()
+                        )
 
                         operator_token = clause_payload["operator"].upper()
                         operand_items = clause_payload.get("operands") or []
