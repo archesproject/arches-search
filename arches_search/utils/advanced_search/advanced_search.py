@@ -1,80 +1,170 @@
-from functools import lru_cache
-from typing import Any, Dict, Tuple, Union
-
-from django.db.models import Exists, Q, QuerySet, F
-
+from typing import Any, Dict, List, Optional, Tuple, Sequence
+from django.db.models import Q, Exists, OuterRef
 from arches.app.models import models as arches_models
 
+from arches_search.utils.advanced_search.node_alias_datatype_registry import (
+    NodeAliasDatatypeRegistry,
+)
 from arches_search.utils.advanced_search.search_model_registry import (
     SearchModelRegistry,
 )
 from arches_search.utils.advanced_search.facet_registry import FacetRegistry
-from arches_search.utils.advanced_search.node_alias_datatype_registry import (
-    NodeAliasDatatypeRegistry,
-)
 from arches_search.utils.advanced_search.path_navigator import PathNavigator
 from arches_search.utils.advanced_search.clause_compiler import ClauseCompiler
 from arches_search.utils.advanced_search.group_compiler import GroupCompiler
 
-from django.utils.translation import gettext as _
-
 
 class AdvancedSearchQueryCompiler:
-    @lru_cache(maxsize=128)
-    def get_graph_id_for_slug(self, graph_slug: str):
-        return (
-            arches_models.GraphModel.objects.only("graphid")
-            .get(slug=graph_slug)
-            .graphid
-        )
-
     def __init__(self, payload_query: Dict[str, Any]) -> None:
-        self.graph_slug = payload_query.get("graph_slug")
         self.payload_query = payload_query
-
-        self.search_model_registry = SearchModelRegistry()
-        self.facet_registry = FacetRegistry()
         self.node_alias_datatype_registry = NodeAliasDatatypeRegistry(
             payload_query=self.payload_query
         )
-
+        self.search_model_registry = SearchModelRegistry()
+        self.facet_registry = FacetRegistry()
         self.path_navigator = PathNavigator(
-            self.search_model_registry, self.node_alias_datatype_registry
+            search_model_registry=self.search_model_registry,
+            node_alias_datatype_registry=self.node_alias_datatype_registry,
         )
         self.clause_compiler = ClauseCompiler(
-            self.search_model_registry,
-            self.facet_registry,
-            self.path_navigator,
+            search_model_registry=self.search_model_registry,
+            facet_registry=self.facet_registry,
+            path_navigator=self.path_navigator,
         )
         self.group_compiler = GroupCompiler(
-            self.clause_compiler, get_graph_id_for_slug=self.get_graph_id_for_slug
+            clause_compiler=self.clause_compiler,
+            path_navigator=self.path_navigator,
         )
 
-    def compile(self) -> Tuple[str, Union[Q, Exists]]:
-        if not arches_models.GraphModel.objects.filter(slug=self.graph_slug).exists():
-            raise ValueError(_("Invalid graph slug."))
+    def compile(self) -> Tuple[Q, List[Exists]]:
+        graph_slug = self.payload_query.get("graph_slug")
+        print("[ADV][TOP] compile() graph_slug=%s", graph_slug)
 
-        return self.group_compiler.compile(self.payload_query, parent_graph_slug=None)
+        if not self._graph_slug_exists(graph_slug):
+            raise ValueError("Graph slug does not exist")
 
-    def build_resources_queryset(self) -> QuerySet:
-        compiled_advanced_search_query = self.compile()
-        graph_id = self.get_graph_id_for_slug(self.graph_slug)
+        compiled_q, compiled_exists_list = self.group_compiler.compile(
+            group_payload=self.payload_query,
+            anchor_graph_slug=graph_slug,
+        )
 
-        base_queryset = (
-            arches_models.ResourceInstance.objects.filter(graph_id=graph_id)
-            .only("resourceinstanceid")
-            .annotate(
-                anchor_resourceinstanceid=F("resourceinstanceid"),
-                parent_resourceinstanceid=F("resourceinstanceid"),
+        if not compiled_exists_list:
+            relationship_context = (self.payload_query or {}).get("relationship")
+            if self._looks_like_zero_arity_related_leg_shape(
+                self.payload_query, relationship_context
+            ):
+                try:
+                    leg_path = relationship_context.get("path")
+                    is_inverse_relationship = bool(
+                        relationship_context.get("is_inverse")
+                    )
+                    compiled_exists_list.append(
+                        self._leg_exists_for_path(leg_path, is_inverse_relationship)
+                    )
+                    print("[ADV][TOP] patched leg EXISTS via zero-arity RELATED shape")
+                except Exception as exc:
+                    print("[ADV][TOP] failed to patch leg EXISTS:", exc)
+
+        print("[ADV][TOP] compiled Q: %r", compiled_q)
+        print("[ADV][TOP] compiled exists filters count=%s", len(compiled_exists_list))
+        return compiled_q, compiled_exists_list
+
+    def build_resources_queryset(self):
+        graph_slug = self.payload_query.get("graph_slug")
+        print("[ADV][TOP] build_resources_queryset() graph_slug=%s", graph_slug)
+
+        compiled_q, exists_filters = self.compile()
+
+        graph_id = self._get_graph_id_for_slug(graph_slug)
+        print("[ADV][TOP] graph_id=%s", graph_id)
+
+        base = arches_models.ResourceInstance.objects.only("resourceinstanceid").filter(
+            graph=graph_id
+        )
+        try:
+            print("[ADV][TOP] base queryset SQL:", str(base.query))
+        except Exception as exc:
+            print("[ADV][TOP] base queryset SQL <unavailable>:", exc)
+
+        for index, exists_expr in enumerate(exists_filters):
+            try:
+                print(
+                    f"[ADV][TOP] applying EXISTS[{index}] SQL:",
+                    str(base.filter(exists_expr).query),
+                )
+            except Exception as exc:
+                print(f"[ADV][TOP] applying EXISTS[{index}] SQL <unavailable>:", exc)
+            base = base.filter(exists_expr)
+
+        if compiled_q:
+            try:
+                print("[ADV][TOP] applying Q SQL:", str(base.filter(compiled_q).query))
+            except Exception as exc:
+                print("[ADV][TOP] applying Q SQL <unavailable>:", exc)
+            base = base.filter(compiled_q)
+
+        print("[ADV][TOP] payload_query:", self.payload_query)
+
+        try:
+            print("[ADV][TOP] FINAL SQL:", str(base.query))
+        except Exception as exc:
+            print("[ADV][TOP] FINAL SQL <unavailable>:", exc)
+
+        return base.values("resourceinstanceid")
+
+    def _graph_slug_exists(self, graph_slug: Optional[str]) -> bool:
+        if not graph_slug:
+            return False
+        return arches_models.GraphModel.objects.filter(slug=graph_slug).exists()
+
+    def _get_graph_id_for_slug(self, graph_slug: str):
+        row = (
+            arches_models.GraphModel.objects.filter(slug=graph_slug)
+            .only("graphid")
+            .values_list("graphid", flat=True)
+            .first()
+        )
+        if not row:
+            raise ValueError(f"Graph id for slug '{graph_slug}' not found.")
+        return row
+
+    def _looks_like_zero_arity_related_leg_shape(
+        self,
+        group_payload: Dict[str, Any],
+        relationship_context: Optional[Dict[str, Any]],
+    ) -> bool:
+        if not relationship_context:
+            return False
+        leg_path = relationship_context.get("path")
+        if not leg_path:
+            return False
+
+        for clause_payload in group_payload.get("clauses") or []:
+            if clause_payload.get("type") != "RELATED":
+                continue
+            subject_path = clause_payload.get("subject")
+            operands_empty = not (clause_payload.get("operands") or [])
+            if operands_empty and subject_path == leg_path:
+                return True
+        return False
+
+    def _leg_exists_for_path(
+        self,
+        path_segments: Sequence[Tuple[str, str]],
+        is_inverse_relationship: bool,
+    ) -> Exists:
+        datatype_name, _terminal_graph_slug, pair_raw = (
+            self.path_navigator.build_path_queryset(path_segments)
+        )
+        if (datatype_name or "").lower() not in [
+            "resource-instance",
+            "resource-instance-list",
+        ]:
+            raise ValueError("Relationship leg must end on a resource-instance node")
+        if is_inverse_relationship:
+            correlated = pair_raw.filter(value=OuterRef("resourceinstanceid"))
+        else:
+            correlated = pair_raw.filter(
+                resourceinstanceid=OuterRef("resourceinstanceid")
             )
-        )
-
-        if (
-            isinstance(compiled_advanced_search_query, Q)
-            and not compiled_advanced_search_query.children
-        ):
-            return base_queryset
-
-        return base_queryset.filter(compiled_advanced_search_query).only(
-            "resourceinstanceid"
-        )
+        return Exists(correlated)

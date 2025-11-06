@@ -1,17 +1,13 @@
-from typing import Any, Sequence, Tuple
+from __future__ import annotations
+from typing import Tuple, Sequence, Dict, Any
 
-from django.db.models import OuterRef, QuerySet, Subquery
-
-from arches.app.models import models as arches_models
-
+from django.db.models import QuerySet, OuterRef
 from arches_search.utils.advanced_search.search_model_registry import (
     SearchModelRegistry,
 )
 from arches_search.utils.advanced_search.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
-
-from django.utils.translation import gettext as _
 
 
 class PathNavigator:
@@ -23,216 +19,108 @@ class PathNavigator:
         self.search_model_registry = search_model_registry
         self.node_alias_datatype_registry = node_alias_datatype_registry
 
-    def _build_resource_instance_ids_subquery(
-        self,
-        outer_resource_instance_id_reference: str,
-        starting_graph_slug: str,
-        path_segments: Sequence[Tuple[str, str]],
-    ) -> Subquery:
-        if not path_segments:
-            base_queryset = (
-                arches_models.ResourceInstance.objects.only("resourceinstanceid")
-                .filter(
-                    resourceinstanceid=OuterRef(outer_resource_instance_id_reference)
-                )
-                .values_list("resourceinstanceid", flat=True)[:1]
-            )
-            return Subquery(base_queryset)
-
-        first_graph_slug, first_node_alias = path_segments[0]
-        first_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
-            first_graph_slug, first_node_alias
-        )
-        first_model = self.search_model_registry.get_model_for_datatype(
-            first_datatype_name
-        )
-
-        if self.search_model_registry.is_relationship_datatype(first_datatype_name):
-            if first_graph_slug == starting_graph_slug:
-                first_owner_ids_queryset = (
-                    first_model.objects.only(
-                        "graph_slug", "node_alias", "resourceinstanceid", "value"
-                    )
-                    .filter(
-                        graph_slug=first_graph_slug,
-                        node_alias=first_node_alias,
-                        resourceinstanceid=OuterRef(
-                            outer_resource_instance_id_reference
-                        ),
-                    )
-                    .values_list("value", flat=True)
-                )
-            else:
-                first_owner_ids_queryset = (
-                    first_model.objects.only(
-                        "graph_slug", "node_alias", "resourceinstanceid", "value"
-                    )
-                    .filter(
-                        graph_slug=first_graph_slug,
-                        node_alias=first_node_alias,
-                        value=OuterRef(outer_resource_instance_id_reference),
-                    )
-                    .values_list("resourceinstanceid", flat=True)
-                )
-        else:
-            first_owner_ids_queryset = (
-                arches_models.ResourceInstance.objects.only("resourceinstanceid")
-                .filter(
-                    resourceinstanceid=OuterRef(outer_resource_instance_id_reference)
-                )
-                .values_list("resourceinstanceid", flat=True)[:1]
-            )
-
-        accumulated_owner_ids: Subquery = Subquery(first_owner_ids_queryset)
-
-        for hop_segment in path_segments[1:-1]:
-            hop_graph_slug, hop_node_alias = hop_segment
-            hop_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
-                hop_graph_slug, hop_node_alias
-            )
-
-            if not self.search_model_registry.is_relationship_datatype(
-                hop_datatype_name
-            ):
-                raise ValueError(
-                    _("Intermediate path segments must be of relationship datatype.")
-                )
-
-            hop_model = self.search_model_registry.get_model_for_datatype(
-                hop_datatype_name
-            )
-            hop_queryset = (
-                hop_model.objects.only(
-                    "graph_slug", "node_alias", "resourceinstanceid", "value"
-                )
-                .filter(
-                    graph_slug=hop_graph_slug,
-                    node_alias=hop_node_alias,
-                    resourceinstanceid__in=accumulated_owner_ids,
-                )
-                .values_list("value", flat=True)
-            )
-            accumulated_owner_ids = Subquery(hop_queryset)
-
-        return accumulated_owner_ids
-
-    def build_values_subquery(
-        self,
-        outer_resource_instance_id_reference: str,
-        starting_graph_slug: str,
-        path_segments: Sequence[Tuple[str, str]],
-    ) -> Subquery:
-        if not path_segments:
-            base_queryset = (
-                arches_models.ResourceInstance.objects.only("resourceinstanceid")
-                .filter(
-                    resourceinstanceid=OuterRef(outer_resource_instance_id_reference)
-                )
-                .values_list("resourceinstanceid", flat=True)
-            )
-            return Subquery(base_queryset)
-
-        last_graph_slug, last_node_alias = path_segments[-1]
-        last_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
-            last_graph_slug, last_node_alias
-        )
-        last_model = self.search_model_registry.get_model_for_datatype(
-            last_datatype_name
-        )
-
-        if len(path_segments) == 1:
-            single_segment_queryset = (
-                last_model.objects.only(
-                    "graph_slug", "node_alias", "resourceinstanceid", "value"
-                )
-                .filter(
-                    graph_slug=last_graph_slug,
-                    node_alias=last_node_alias,
-                    resourceinstanceid=OuterRef(outer_resource_instance_id_reference),
-                )
-                .values_list("value", flat=True)
-            )
-            return Subquery(single_segment_queryset)
-
-        accumulated_owner_ids = self._build_resource_instance_ids_subquery(
-            outer_resource_instance_id_reference, starting_graph_slug, path_segments
-        )
-
-        final_values_queryset = (
-            last_model.objects.only(
-                "graph_slug", "node_alias", "resourceinstanceid", "value"
-            )
-            .annotate(
-                **{
-                    outer_resource_instance_id_reference: OuterRef(
-                        outer_resource_instance_id_reference
-                    )
-                }
-            )
-            .filter(
-                graph_slug=last_graph_slug,
-                node_alias=last_node_alias,
-                resourceinstanceid__in=accumulated_owner_ids,
-            )
-            .values_list("value", flat=True)
-        )
-        return Subquery(final_values_queryset)
-
     def build_path_queryset(
         self,
-        path_segments: Sequence[Tuple[str, str]],
-        context_graph_slug: str,
-    ) -> Tuple[str, Any, QuerySet]:
+        path_segments: Sequence[Tuple[str, str]] | None = None,
+    ) -> Tuple[str, str, QuerySet]:
         if not path_segments:
-            raise ValueError(_("Path must not be empty."))
+            raise ValueError("path must contain at least one segment")
 
-        last_graph_slug, last_node_alias = path_segments[-1]
-        last_datatype_name = self.node_alias_datatype_registry.lookup_node_datatype(
-            last_graph_slug, last_node_alias
-        )
-        last_model = self.search_model_registry.get_model_for_datatype(
-            last_datatype_name
-        )
-
-        if len(path_segments) == 1:
-            base_qs = last_model.objects.only(
-                "graph_slug", "node_alias", "resourceinstanceid", "value"
-            ).filter(
-                graph_slug=last_graph_slug,
-                node_alias=last_node_alias,
-            )
-
-            base_qs = base_qs.annotate(
-                anchor_resourceinstanceid=OuterRef("resourceinstanceid"),
-                parent_resourceinstanceid=OuterRef("parent_resourceinstanceid"),
-            )
-
-            if last_graph_slug == context_graph_slug:
-                queryset = base_qs.filter(
-                    resourceinstanceid=OuterRef("resourceinstanceid"),
-                )
-            else:
-                queryset = base_qs.filter(
-                    value=OuterRef("resourceinstanceid"),
-                )
-
-            return last_datatype_name, last_model, queryset
-
-        accumulated_owner_ids = self._build_resource_instance_ids_subquery(
-            outer_resource_instance_id_reference="anchor_resourceinstanceid",
-            starting_graph_slug=context_graph_slug,
-            path_segments=path_segments,
-        )
-        queryset = (
-            last_model.objects.only("value")
-            .annotate(
-                anchor_resourceinstanceid=OuterRef("resourceinstanceid"),
-                parent_resourceinstanceid=OuterRef("parent_resourceinstanceid"),
-            )
-            .filter(
-                graph_slug=last_graph_slug,
-                node_alias=last_node_alias,
-                resourceinstanceid__in=accumulated_owner_ids,
+        terminal_graph_slug, terminal_node_alias = path_segments[-1]
+        terminal_datatype_name = (
+            self.node_alias_datatype_registry.get_datatype_for_alias(
+                terminal_graph_slug, terminal_node_alias
             )
         )
-        return last_datatype_name, last_model, queryset
+        terminal_search_model = self.search_model_registry.get_model_for_datatype(
+            terminal_datatype_name
+        )
+
+        terminal_queryset = terminal_search_model.objects.filter(
+            graph_slug=terminal_graph_slug,
+            node_alias=terminal_node_alias,
+        ).order_by()
+
+        return terminal_datatype_name, terminal_graph_slug, terminal_queryset
+
+    def build_relationship_pairs(
+        self,
+        relationship_context: Dict[str, Any],
+    ) -> Tuple[Dict[str, Any], QuerySet]:
+        relationship_path = relationship_context["path"]
+        is_inverse_relationship = bool(relationship_context.get("is_inverse"))
+
+        terminal_datatype_name, terminal_graph_slug, pair_raw = (
+            self.build_path_queryset(relationship_path)
+        )
+        if (terminal_datatype_name or "").lower() not in [
+            "resource-instance",
+            "resource-instance-list",
+        ]:
+            raise ValueError("Relationship must end on a resource-instance node")
+
+        if is_inverse_relationship:
+            pairs_scoped_to_anchor = pair_raw.filter(
+                value=OuterRef("resourceinstanceid")
+            )
+            anchor_id_field = "value"
+            child_id_field = "resourceinstanceid"
+        else:
+            pairs_scoped_to_anchor = pair_raw.filter(
+                resourceinstanceid=OuterRef("resourceinstanceid")
+            )
+            anchor_id_field = "resourceinstanceid"
+            child_id_field = "value"
+
+        compiled_pair_info = {
+            "pair_queryset": pair_raw,
+            "anchor_id_field": anchor_id_field,
+            "child_id_field": child_id_field,
+            "terminal_graph_slug": terminal_graph_slug,
+            "terminal_node_alias": relationship_path[-1][1],
+            "is_inverse": is_inverse_relationship,
+        }
+        return compiled_pair_info, pairs_scoped_to_anchor
+
+    def build_scoped_pairs_for_path(
+        self,
+        path_segments: Sequence[Tuple[str, str]],
+        is_inverse_relationship: bool,
+        correlate_on_field: str,
+    ) -> Tuple[str, str, QuerySet, str]:
+        terminal_datatype_name, terminal_graph_slug, pair_raw = (
+            self.build_path_queryset(path_segments)
+        )
+        if (terminal_datatype_name or "").lower() not in [
+            "resource-instance",
+            "resource-instance-list",
+        ]:
+            raise ValueError("Nested relationship must end on a resource-instance node")
+
+        if is_inverse_relationship:
+            scoped_pairs = pair_raw.filter(value=OuterRef(correlate_on_field))
+            nested_child_id_field = "resourceinstanceid"
+        else:
+            scoped_pairs = pair_raw.filter(
+                resourceinstanceid=OuterRef(correlate_on_field)
+            )
+            nested_child_id_field = "value"
+
+        return (
+            terminal_datatype_name,
+            terminal_graph_slug,
+            scoped_pairs,
+            nested_child_id_field,
+        )
+
+    def datatype_for(self, graph_slug: str, node_alias: str) -> str:
+        return self.node_alias_datatype_registry.get_datatype_for_alias(
+            graph_slug, node_alias
+        )
+
+    def terminal_graph_slug(self, path, is_inverse: bool = False) -> str:
+        # your paths already specify the terminal segment explicitly
+        # inverse doesn’t change which graph the terminal segment names
+        if not path:
+            raise ValueError("path must contain at least one segment")
+        return path[-1][0]

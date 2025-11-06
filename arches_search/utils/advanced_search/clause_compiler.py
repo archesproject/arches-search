@@ -1,25 +1,13 @@
-from typing import Any, Dict, Optional, Union
-import uuid
+# clause_compiler.py
+from __future__ import annotations
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from django.db.models import Exists, OuterRef, Q, QuerySet, Subquery
 from arches.app.models import models as arches_models
 
-from arches_search.utils.advanced_search.search_model_registry import (
-    SearchModelRegistry,
-)
-from arches_search.utils.advanced_search.facet_registry import FacetRegistry
-from arches_search.utils.advanced_search.path_navigator import PathNavigator
-
-from django.utils.translation import gettext as _
-
 
 class ClauseCompiler:
-    def __init__(
-        self,
-        search_model_registry: SearchModelRegistry,
-        facet_registry: FacetRegistry,
-        path_navigator: PathNavigator,
-    ) -> None:
+    def __init__(self, search_model_registry, facet_registry, path_navigator) -> None:
         self.search_model_registry = search_model_registry
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
@@ -28,202 +16,295 @@ class ClauseCompiler:
         self,
         clause_payload: Dict[str, Any],
         anchor_graph_slug: str,
-        parent_graph_slug: Optional[str],
-        unioned_subgroup_ids_queryset: Optional[QuerySet],
+        *,
+        correlate_to_tile: bool = False,
     ) -> Exists:
-        if not clause_payload["subject"]:
+        if not clause_payload or not clause_payload.get("subject"):
+            return Exists(arches_models.ResourceInstance.objects.none())
+        if (clause_payload.get("type") or "").upper() == "RELATED":
             return Exists(arches_models.ResourceInstance.objects.none())
 
-        terminal_subject_node_datatype_name, _subject_model, subject_queryset = (
-            self.path_navigator.build_path_queryset(
-                path_segments=clause_payload["subject"],
-                context_graph_slug=anchor_graph_slug,
-            )
+        quantifier = (clause_payload.get("quantifier") or "ANY").upper()
+        if quantifier not in ("ANY", "ALL", "NONE"):
+            quantifier = "ANY"
+
+        subject_graph_slug, subject_alias = self._unpack_single_path(
+            clause_payload["subject"]
+        )
+        if subject_graph_slug != anchor_graph_slug:
+            return Exists(arches_models.ResourceInstance.objects.none())
+
+        subject_rows = self._search_rows(subject_graph_slug, subject_alias)
+        if subject_rows is None:
+            return Exists(arches_models.ResourceInstance.objects.none())
+
+        datatype_name = self._datatype_for_alias(subject_graph_slug, subject_alias)
+        facet = self._facet(datatype_name, clause_payload.get("operator"))
+        operands = clause_payload.get("operands") or []
+
+        if correlate_to_tile:
+            correlation_filters = {
+                "resourceinstanceid": OuterRef("resourceinstance_id"),
+                "tileid": OuterRef("tileid"),
+            }
+        else:
+            correlation_filters = {"resourceinstanceid": OuterRef("resourceinstanceid")}
+
+        correlated_rows = subject_rows.filter(**correlation_filters).order_by()
+
+        operator_upper = (clause_payload.get("operator") or "").upper()
+        is_orm_template_negated = bool(getattr(facet, "is_orm_template_negated", False))
+
+        if not operands:
+            if operator_upper == "HAS_ANY_VALUE":
+                if quantifier == "ANY" or quantifier == "ALL":
+                    return Exists(correlated_rows)
+                return ~Exists(correlated_rows)  # NONE
+            if operator_upper == "HAS_NO_VALUE":
+                if quantifier == "NONE" or quantifier == "ALL":
+                    return ~Exists(correlated_rows)
+                return Exists(correlated_rows)  # ANY
+
+            # Fallback presence semantics for no-operand, non-presence operators:
+            # treat as positive/negative presence depending on facet polarity.
+            if not is_orm_template_negated:
+                # positive presence
+                if quantifier == "ANY" or quantifier == "ALL":
+                    return Exists(correlated_rows)
+                return ~Exists(correlated_rows)
+            else:
+                # negative presence
+                if quantifier == "ANY" or quantifier == "ALL":
+                    return ~Exists(correlated_rows)
+                return Exists(correlated_rows)
+
+        # Build predicate and compute matches/violators under the correlation
+        params = self._literal_params(operands)
+        raw_predicate = self._predicate_from_facet(
+            facet=facet, column_name="value", params=params
         )
 
-        facet = self.facet_registry.get_facet(
-            subject_datatype_name=terminal_subject_node_datatype_name,
-            operator_token=clause_payload["operator"],
+        # matches: rows that satisfy the clause predicate
+        matches = (
+            correlated_rows.filter(raw_predicate)
+            if isinstance(raw_predicate, Q)
+            else correlated_rows.filter(**raw_predicate)
         )
 
-        if facet.arity == 0:
-            return self._apply_exists(
-                subject_queryset.order_by()[:1], facet.is_orm_template_negated
-            )
-
-        operand = clause_payload["operands"][0]
-
-        right_hand_side_value = self._compile_right_hand_side_expression(
-            operand_type=operand["type"],
-            operand_value=operand["value"],
-            terminal_subject_node_datatype_name=terminal_subject_node_datatype_name,
-            anchor_graph_slug=anchor_graph_slug,
-            parent_graph_slug=parent_graph_slug,
-            unioned_subgroup_ids_queryset=unioned_subgroup_ids_queryset,
-        )
-
-        condition_expression = self._build_condition_from_facet(
-            facet=facet,
-            field_name="value",
-            right_hand_side_value=right_hand_side_value,
-        )
-
-        filtered_subject = subject_queryset.filter(condition_expression).order_by()
-        return self._apply_exists(filtered_subject, facet.is_orm_template_negated)
-
-    def _build_condition_from_facet(
-        self, facet: Any, field_name: str, right_hand_side_value: Any
-    ) -> Union[Q, Exists]:
-        if (
-            isinstance(right_hand_side_value, dict)
-            and right_hand_side_value.get("__adv_kind") == "RESULTSET_IDS"
-        ):
-            return Exists(
-                right_hand_side_value["unioned_ids_qs"].filter(
-                    resourceinstanceid=OuterRef(field_name)
+        # violators: rows that FAIL the clause predicate
+        if not is_orm_template_negated:
+            # Positive template → violators are correlated_rows \ matches
+            violators = correlated_rows.exclude(pk__in=matches.values("pk"))
+        else:
+            # Negated template → violators are the positive counterpart if we can get it,
+            # otherwise the complement of matches.
+            positive_facet = (
+                self.facet_registry.get_positive_facet_for(
+                    clause_payload.get("operator"), datatype_name
                 )
+                if hasattr(self.facet_registry, "get_positive_facet_for")
+                else getattr(facet, "positive_counterpart", None)
             )
+            if positive_facet is not None:
+                pos_pred = self._predicate_from_facet(
+                    facet=positive_facet, column_name="value", params=params
+                )
+                pos_filtered = (
+                    correlated_rows.filter(pos_pred)
+                    if isinstance(pos_pred, Q)
+                    else correlated_rows.filter(**pos_pred)
+                )
+                violators = pos_filtered
+            elif isinstance(raw_predicate, Q) and getattr(
+                raw_predicate, "negated", False
+            ):
+                violators = correlated_rows.filter(~raw_predicate)
+            else:
+                violators = correlated_rows.exclude(pk__in=matches.values("pk"))
 
-        if isinstance(right_hand_side_value, Subquery) and field_name == "value":
-            right_hand_side_queryset = getattr(right_hand_side_value, "queryset", None)
+        if quantifier == "ANY":
+            return Exists(matches)
+        if quantifier == "NONE":
+            return ~Exists(matches)
+        # ALL: require at least one row exists and no violators
+        return Exists(correlated_rows) & ~Exists(violators)
+
+    def related_child_exists_qs(
+        self, clause_payload: Dict[str, Any], compiled_pair_info: Dict[str, Any]
+    ) -> Optional[QuerySet]:
+        subject_graph_slug, subject_alias = self._unpack_single_path(
+            clause_payload.get("subject") or []
+        )
+        if subject_graph_slug != compiled_pair_info["terminal_graph_slug"]:
+            return None
+
+        correlated_subject_rows = self._correlated_subject_rows(
+            graph_slug=subject_graph_slug,
+            node_alias=subject_alias,
+            correlate_on_field=compiled_pair_info["child_id_field"],
+            anchor_id_field=compiled_pair_info["anchor_id_field"],
+        )
+        if correlated_subject_rows is None:
+            return None
+
+        operator_token = clause_payload.get("operator") or ""
+        operands = clause_payload.get("operands") or []
+        datatype_name = self._datatype_for_alias(subject_graph_slug, subject_alias)
+        facet = self._facet(datatype_name, operator_token)
+
+        if not operands:
+            return correlated_subject_rows
+
+        rhs_operand = next(
+            (
+                operand
+                for operand in operands
+                if isinstance(operand, dict) and operand.get("path")
+            ),
+            None,
+        )
+        if rhs_operand:
+            rhs_path: Sequence[Tuple[str, str]] = rhs_operand["path"]
+            _rhs_dtype, _rhs_graph, rhs_rows = self.path_navigator.build_path_queryset(
+                rhs_path
+            )
+            rhs_scalar = Subquery(
+                rhs_rows.filter(
+                    resourceinstanceid=OuterRef("_anchor_resource_id")
+                ).values("value")[:1]
+            )
+            params = [rhs_scalar]
+        else:
+            params = self._literal_params(operands)
+
+        predicate = self._predicate_from_facet(
+            facet=facet, column_name="value", params=params
+        )
+        return (
+            correlated_subject_rows.filter(predicate)
+            if isinstance(predicate, Q)
+            else correlated_subject_rows.filter(**predicate)
+        )
+
+    def _compile_in_graph(
+        self,
+        clause_payload: Dict[str, Any],
+        anchor_graph_slug: str,
+        *,
+        correlate_to_tile: bool,
+    ) -> Exists:
+        subject_graph_slug, subject_alias = self._unpack_single_path(
+            clause_payload["subject"]
+        )
+        if subject_graph_slug != anchor_graph_slug:
+            return Exists(arches_models.ResourceInstance.objects.none())
+
+        subject_rows = self._search_rows(subject_graph_slug, subject_alias)
+        if subject_rows is None:
+            return Exists(arches_models.ResourceInstance.objects.none())
+
+        datatype_name = self._datatype_for_alias(subject_graph_slug, subject_alias)
+        facet = self._facet(datatype_name, clause_payload.get("operator"))
+        operands = clause_payload.get("operands") or []
+
+        if correlate_to_tile:
+            correlation_filters: Dict[str, Any] = {
+                "resourceinstanceid": OuterRef("resourceinstance_id"),
+                "tileid": OuterRef("tileid"),
+            }
+        else:
+            correlation_filters = {"resourceinstanceid": OuterRef("resourceinstanceid")}
+
+        correlated = subject_rows.filter(**correlation_filters)
+
+        if not operands:
+            operator_upper = (clause_payload.get("operator") or "").upper()
+            if operator_upper == "HAS_NO_VALUE":
+                return ~Exists(correlated)
+            if operator_upper == "HAS_ANY_VALUE":
+                return Exists(correlated)
+            is_negated = bool(getattr(facet, "is_orm_template_negated", False))
+            return ~Exists(correlated) if is_negated else Exists(correlated)
+
+        predicate = self._predicate_from_facet(
+            facet=facet, column_name="value", params=self._literal_params(operands)
+        )
+        filtered = (
+            correlated.filter(predicate)
+            if isinstance(predicate, Q)
+            else correlated.filter(**predicate)
+        )
+        return Exists(filtered)
+
+    def _correlated_subject_rows(
+        self,
+        graph_slug: str,
+        node_alias: str,
+        correlate_on_field: str,
+        anchor_id_field: str,
+    ) -> Optional[QuerySet]:
+        subject_rows = self._search_rows(graph_slug, node_alias)
+        if subject_rows is None:
+            return None
+        return subject_rows.filter(
+            resourceinstanceid=OuterRef(correlate_on_field)
+        ).annotate(_anchor_resource_id=OuterRef(anchor_id_field))
+
+    def _facet(self, datatype_name: str, operator_token: Optional[str]):
+        return self.facet_registry.get_facet(datatype_name, (operator_token or ""))
+
+    def _literal_params(self, operands: List[Any]) -> List[Any]:
+        return [
+            (
+                operand["value"]
+                if isinstance(operand, dict) and "value" in operand
+                else operand
+            )
+            for operand in operands
+            if operand is not None
+        ]
+
+    def _predicate_from_facet(
+        self, *, facet, column_name: str, params: Sequence[Any]
+    ) -> Q | Dict[str, Any]:
+        lookup_key = (getattr(facet, "orm_template", "") or "").replace(
+            "{col}", column_name
+        )
+        is_orm_template_negated = bool(getattr(facet, "is_orm_template_negated", False))
+        value: Any = params[0] if params else True
+        kwargs = {lookup_key: value}
+        return ~Q(**kwargs) if is_orm_template_negated else kwargs
+
+    def _datatype_for_alias(self, graph_slug: str, node_alias: str) -> str:
+        return self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+            graph_slug, node_alias
+        )
+
+    def _unpack_single_path(
+        self, path_value: Iterable[Iterable[str]]
+    ) -> Tuple[str, str]:
+        try:
+            [(graph_slug, node_alias)] = list(path_value)
+            return graph_slug, node_alias
+        except Exception:
+            return "", ""
+
+    def _search_rows(self, graph_slug: str, node_alias: str) -> Optional[QuerySet]:
+        model = None
+        try:
+            model = self.search_model_registry.get_model_for_alias(
+                graph_slug, node_alias
+            )
+        except Exception:
+            pass
+        if model is None:
             try:
-                if right_hand_side_queryset is not None and hasattr(
-                    right_hand_side_queryset.model, "_meta"
-                ):
-                    value_field_names = {
-                        field.name
-                        for field in right_hand_side_queryset.model._meta.concrete_fields
-                    }
-
-                    if "value" in value_field_names:
-                        return Exists(
-                            right_hand_side_queryset.filter(
-                                value=OuterRef(field_name)
-                            ).values("value")
-                        )
+                datatype_name = self._datatype_for_alias(graph_slug, node_alias)
+                model = self.search_model_registry.get_model_for_datatype(datatype_name)
             except Exception:
                 pass
-
-        is_collection = isinstance(
-            right_hand_side_value, (list, tuple, Subquery)
-        ) and not isinstance(right_hand_side_value, OuterRef)
-
-        base_key = f"{field_name}__in" if is_collection else field_name
-
-        if facet.orm_template is None:
-            return Q(**{base_key: right_hand_side_value})
-
-        if (
-            facet.orm_template.startswith(("AGG_", "HAVING_"))
-            or ":" in facet.orm_template
-        ):
-            return Q(**{base_key: right_hand_side_value})
-
-        if "{col}" in facet.orm_template:
-            lookup_key = facet.orm_template.replace("{col}", field_name)
-            if is_collection and (
-                lookup_key == field_name or lookup_key.endswith("__exact")
-            ):
-                lookup_key = f"{field_name}__in"
-            return Q(**{lookup_key: right_hand_side_value})
-
-        return Q(**{base_key: right_hand_side_value})
-
-    def _compile_right_hand_side_expression(
-        self,
-        operand_type: str,
-        operand_value: Any,
-        terminal_subject_node_datatype_name: str,
-        anchor_graph_slug: str,
-        parent_graph_slug: Optional[str],
-        unioned_subgroup_ids_queryset: Optional[QuerySet] = None,
-    ) -> Union[Any, Subquery, OuterRef, Dict[str, Any]]:
-        if operand_type == "LITERAL":
-            try:
-                uuid.UUID(operand_value)
-                return [operand_value]
-            except (ValueError, TypeError):
-                pass
-
-            if terminal_subject_node_datatype_name == "date":
-                return int(operand_value.replace("-", ""))
-
-            return operand_value
-
-        if operand_type == "RESULTSET":
-            if unioned_subgroup_ids_queryset is None:
-                raise ValueError(
-                    _(
-                        "RESULTSET operand used but current group has no direct subgroups."
-                    )
-                )
-
-            path_segments = operand_value or []
-            if not path_segments:
-                return {
-                    "__adv_kind": "RESULTSET_IDS",
-                    "unioned_ids_qs": unioned_subgroup_ids_queryset,
-                }
-
-            last_graph_slug, last_node_alias = path_segments[-1]
-            last_datatype_name = (
-                self.path_navigator.node_alias_datatype_registry.lookup_node_datatype(
-                    last_graph_slug,
-                    last_node_alias,
-                )
-            )
-            last_model = self.search_model_registry.get_model_for_datatype(
-                last_datatype_name
-            )
-
-            node_values = (
-                last_model.objects.only(
-                    "graph_slug", "node_alias", "resourceinstanceid", "value"
-                )
-                .filter(
-                    graph_slug=last_graph_slug,
-                    node_alias=last_node_alias,
-                    resourceinstanceid__in=unioned_subgroup_ids_queryset,
-                )
-                .values_list("value", flat=True)
-            )
-
-            return Subquery(node_values)
-
-        if operand_type == "SELF":
-            path_segments = operand_value or []
-            if not path_segments:
-                return OuterRef("anchor_resourceinstanceid")
-
-            return self.path_navigator.build_values_subquery(
-                outer_resource_instance_id_reference="anchor_resourceinstanceid",
-                starting_graph_slug=anchor_graph_slug,
-                path_segments=path_segments,
-            )
-
-        if operand_type == "PARENT":
-            path_segments = operand_value or []
-            starting_graph = parent_graph_slug or anchor_graph_slug
-
-            if not path_segments:
-                if parent_graph_slug is None:
-                    raise ValueError(
-                        _("PARENT operand cannot be empty at the top level.")
-                    )
-                return OuterRef("parent_resourceinstanceid")
-
-            return self.path_navigator.build_values_subquery(
-                outer_resource_instance_id_reference="parent_resourceinstanceid",
-                starting_graph_slug=starting_graph,
-                path_segments=path_segments,
-            )
-
-        raise ValueError("Unsupported operand form")
-
-    def _apply_exists(
-        self, candidate: Union[QuerySet, Exists], is_negated: bool
-    ) -> Exists:
-        exists_expression = (
-            candidate if isinstance(candidate, Exists) else Exists(candidate)
-        )
-        return ~exists_expression if is_negated else exists_expression
+        if model is None:
+            return None
+        return model.objects.filter(
+            graph_slug=graph_slug, node_alias=node_alias
+        ).order_by()
