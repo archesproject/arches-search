@@ -12,11 +12,15 @@ from arches_search.utils.advanced_search.facet_registry import FacetRegistry
 from arches_search.utils.advanced_search.path_navigator import PathNavigator
 from arches_search.utils.advanced_search.clause_compiler import ClauseCompiler
 from arches_search.utils.advanced_search.group_compiler import GroupCompiler
+from arches_search.utils.advanced_search.payload_validator import PayloadValidator
 
 
 class AdvancedSearchQueryCompiler:
     def __init__(self, payload_query: Dict[str, Any]) -> None:
+        PayloadValidator().validate(payload_query)
+
         self.payload_query = payload_query
+
         self.facet_registry = FacetRegistry()
         self.search_model_registry = SearchModelRegistry()
         self.node_alias_registry = NodeAliasDatatypeRegistry(payload_query)
@@ -29,7 +33,7 @@ class AdvancedSearchQueryCompiler:
         self.group_compiler = GroupCompiler(self.clause_compiler, self.path_navigator)
 
     def compile(self) -> QuerySet:
-        anchor_graph_slug = self.payload_query.get("graph_slug")
+        anchor_graph_slug = self.payload_query["graph_slug"]
         filter_predicate, existence_predicates = self.group_compiler.compile(
             group_payload=self.payload_query,
             anchor_graph_slug=anchor_graph_slug,
