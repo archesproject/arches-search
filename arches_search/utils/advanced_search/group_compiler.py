@@ -79,7 +79,6 @@ class GroupCompiler:
                 or "ANY"
             ).upper()
 
-            # ---------- NORMALIZE: inverse single-hop + RELATED present -> ALL behaves like ANY ----------
             if (
                 relationship_context.get("is_inverse")
                 and len((relationship_context.get("path") or [])) == 1
@@ -93,7 +92,6 @@ class GroupCompiler:
                         "[ADV][DBG] normalize: ALL -> ANY on inverse single-hop with RELATED"
                     )
                     hop_mode = "ANY"
-            # ---------------------------------------------------------------------------------------------
 
             if hop_mode == "ANY":
                 _dbg_exists(
@@ -116,30 +114,19 @@ class GroupCompiler:
                     exists_filters.append(none_q_expression)
 
             else:
-                # -------------------------- ALL --------------------------
-                # Fast-path: inverse single-hop + child LITERALs only.
-                # Build "ok child" directly from the child's search rows so violators
-                # don’t re-walk the UUID leg.
                 is_inverse = bool(relationship_context.get("is_inverse"))
                 path_segments = relationship_context.get("path") or []
                 inverse_single_hop = is_inverse and len(path_segments) == 1
 
                 def _child_ok_rows_from_literals() -> Optional[QuerySet]:
-                    """
-                    If the immediate relationship-less AND child groups constrain ONLY the child graph
-                    via LITERALs, build a correlated child-rows queryset:
-                        rows.filter(resourceinstanceid=OuterRef(child_id_field)).filter(<AND of predicates>)
-                    Return None if we can’t safely build it.
-                    """
                     term_graph = compiled_pair_info["terminal_graph_slug"]
 
-                    # Gather LITERALs from immediate relationship-less AND child groups, gated by their graph_slug
                     literals: List[Dict[str, Any]] = []
                     for child in group_payload.get("groups") or []:
                         if (child.get("relationship") or {}).get("path"):
                             continue
                         if (child.get("logic") or "AND").upper() != "AND":
-                            return None  # not safe to AND-fold
+                            return None
                         child_graph_slug = (child.get("graph_slug") or "").strip()
 
                         stack = [child]
@@ -158,7 +145,7 @@ class GroupCompiler:
                                 ):
                                     continue
                                 if sg != term_graph:
-                                    return None  # contains non-child-graph literals → bail out
+                                    return None
                                 literals.append(clause)
                             for g in node.get("groups") or []:
                                 stack.append(g)
@@ -166,7 +153,6 @@ class GroupCompiler:
                     if not literals:
                         return None
 
-                    # Build the child rows with all predicates AND-ed
                     child_rows: Optional[QuerySet] = None
                     for clause in literals:
                         sg, sa = self.clause_compiler._unpack_single_path(
@@ -174,7 +160,6 @@ class GroupCompiler:
                         )
                         rows = self.clause_compiler._search_rows(sg, sa)
                         if rows is None:
-                            # skip rather than fail; if we skip everything, return None
                             continue
                         dtype = self.clause_compiler._datatype_for_alias(sg, sa)
                         facet = self.clause_compiler._facet(
@@ -214,9 +199,18 @@ class GroupCompiler:
                             if not is_neg:
                                 pred_qs = filt
                             else:
-                                pos_facet = self._positive_facet_for(
-                                    dtype, clause.get("operator")
-                                )
+                                # inline positive-facet resolution here
+                                pos_facet = None
+                                try:
+                                    reg = getattr(
+                                        self.clause_compiler, "facet_registry", None
+                                    )
+                                    if reg and hasattr(reg, "get_positive_facet_for"):
+                                        pos_facet = reg.get_positive_facet_for(
+                                            clause.get("operator"), dtype
+                                        )
+                                except Exception:
+                                    pos_facet = None
                                 if pos_facet is not None:
                                     pos_pred = (
                                         self.clause_compiler._predicate_from_facet(
@@ -246,7 +240,6 @@ class GroupCompiler:
                                         pk__in=filt.values("pk")
                                     )
 
-                        # AND-fold by successive filters on the same base rows
                         child_rows = (
                             pred_qs
                             if child_rows is None
@@ -261,7 +254,6 @@ class GroupCompiler:
                     child_ok_rows = None
 
                 if inverse_single_hop and child_ok_rows is not None:
-                    # ALL = has any child AND no violator child (child that fails predicates)
                     violators = original_pairs_no_self.filter(~Exists(child_ok_rows))
                     _dbg_exists(
                         "[ADV][DBG] ALL (fast inverse single-hop) -> violators",
@@ -272,7 +264,6 @@ class GroupCompiler:
                     )
                     exists_filters.append(all_q_expression)
                 else:
-                    # General ALL (multi-child universal) using matches_per_child
                     same_child_ok = matches_per_child.filter(
                         **{child_id_field: OuterRef(child_id_field)}
                     )
@@ -282,7 +273,6 @@ class GroupCompiler:
                         violators
                     )
                     exists_filters.append(all_q_expression)
-                # ------------------------ /ALL --------------------------
 
         group_scope = (group_payload.get("scope") or "RESOURCE").upper()
         correlate_to_tile = group_scope == "TILE"
@@ -435,8 +425,6 @@ class GroupCompiler:
 
         print(f"[ADV][GRP][TILE] begin logic={logic} clauses={len(clauses)}")
 
-        from django.db.models import Subquery, Exists
-
         tileid_subqueries_for_any: List[Subquery] = []
         resource_level_conditions: List[Q] = []
 
@@ -558,7 +546,6 @@ class GroupCompiler:
                 )
 
             else:
-                # ALL
                 if not is_negated_template:
                     tiles_without_match = tiles_base.filter(
                         ~Exists(matches_on_tile)
@@ -575,12 +562,18 @@ class GroupCompiler:
                         f"[ADV][GRP][TILE][{index}] ALL + POS -> resource-level no tile without match (and has tiles)"
                     )
                 else:
-                    # FIX: for ALL + NEG, assert there are NO POSITIVE matches anywhere (and has tiles).
-                    # Prefer the facet registry's positive counterpart; otherwise derive by complement.
                     params = self.clause_compiler._literal_params(operands)
-                    positive_facet = self._positive_facet_for(
-                        datatype_name, clause_payload.get("operator")
-                    )
+                    # inline positive-facet resolution here
+                    positive_facet = None
+                    try:
+                        reg = getattr(self.clause_compiler, "facet_registry", None)
+                        if reg and hasattr(reg, "get_positive_facet_for"):
+                            positive_facet = reg.get_positive_facet_for(
+                                clause_payload.get("operator"), datatype_name
+                            )
+                    except Exception:
+                        positive_facet = None
+
                     if positive_facet is not None:
                         pos_predicate = self.clause_compiler._predicate_from_facet(
                             facet=positive_facet, column_name="value", params=params
@@ -680,31 +673,19 @@ class GroupCompiler:
 
         if not operands:
             if operator_upper == "HAS_NO_VALUE":
-                if quantifier in (
-                    "ANY",
-                    "ALL",
-                ):
+                if quantifier in ("ANY", "ALL"):
                     return Q(~Exists(correlated_rows))
                 return Q(Exists(correlated_rows))
             if operator_upper == "HAS_ANY_VALUE":
-                if quantifier in (
-                    "ANY",
-                    "ALL",
-                ):
+                if quantifier in ("ANY", "ALL"):
                     return Q(Exists(correlated_rows))
                 return Q(~Exists(correlated_rows))
             if not is_negated_template:
-                if quantifier in (
-                    "ANY",
-                    "ALL",
-                ):
+                if quantifier in ("ANY", "ALL"):
                     return Q(Exists(correlated_rows))
                 return Q(~Exists(correlated_rows))
             else:
-                if quantifier in (
-                    "ANY",
-                    "ALL",
-                ):
+                if quantifier in ("ANY", "ALL"):
                     return Q(~Exists(correlated_rows))
                 return Q(Exists(correlated_rows))
 
@@ -722,9 +703,17 @@ class GroupCompiler:
         if not is_negated_template:
             violators = correlated_rows.exclude(pk__in=matches.values("pk"))
         else:
-            positive_facet = self._positive_facet_for(
-                datatype_name, clause_payload.get("operator")
-            )
+            # inline positive-facet here
+            positive_facet = None
+            try:
+                reg = getattr(self.clause_compiler, "facet_registry", None)
+                if reg and hasattr(reg, "get_positive_facet_for"):
+                    positive_facet = reg.get_positive_facet_for(
+                        clause_payload.get("operator"), datatype_name
+                    )
+            except Exception:
+                positive_facet = None
+
             if positive_facet is not None:
                 pos_pred = self.clause_compiler._predicate_from_facet(
                     facet=positive_facet, column_name="value", params=params
@@ -753,18 +742,6 @@ class GroupCompiler:
         compiled_pair_info: Dict[str, Any],
         base_pairs: QuerySet,
     ) -> Tuple[QuerySet, bool]:
-        """
-        Push constraints that live inside the relationship-bearing group's immediate children
-        down onto the leg's pairs queryset.
-
-        Key rules:
-        - Only push down from relationship-less child groups whose logic is AND.
-        - Correlate literals to the CHILD side using compiled_pair_info['child_id_field'].
-        - Gate pushdown by the child group's graph_slug to avoid cross-graph leakage.
-        - If a subject lacks a search table, SKIP (do not empty pairs).
-        - RELATED clauses aimed at the terminal CHILD node are also pushed.
-        - One nested leg (single hop) supported with the same pushdown rules.
-        """
         matches_per_child = base_pairs
         touched = False
 
@@ -783,10 +760,7 @@ class GroupCompiler:
                 print(
                     f"[ADV][DBG] pushdown skip (no rows model) -> {subj_graph}.{subj_alias}"
                 )
-                return (
-                    pairs_queryset,
-                    False,
-                )  # IMPORTANT: don't annihilate pairs; just skip
+                return pairs_queryset, False
 
             dtype = self.clause_compiler._datatype_for_alias(subj_graph, subj_alias)
             facet = self.clause_compiler._facet(dtype, clause_payload.get("operator"))
@@ -795,7 +769,6 @@ class GroupCompiler:
                 resourceinstanceid=OuterRef(correlate_field)
             ).order_by()
 
-            # No-operand operators / presence checks
             if not operands:
                 op_upper = (clause_payload.get("operator") or "").upper()
                 if op_upper == "HAS_NO_VALUE":
@@ -809,7 +782,6 @@ class GroupCompiler:
                     else pairs_queryset.filter(Exists(correlated))
                 ), True
 
-            # Value-bearing predicates
             pred = self.clause_compiler._predicate_from_facet(
                 facet=facet,
                 column_name="value",
@@ -825,8 +797,17 @@ class GroupCompiler:
             if not is_neg:
                 return pairs_queryset.filter(Exists(filt)), True
 
-            # Negated: prefer positive-counterpart if available
-            pos_facet = self._positive_facet_for(dtype, clause_payload.get("operator"))
+            # inline positive-facet here
+            pos_facet = None
+            try:
+                reg = getattr(self.clause_compiler, "facet_registry", None)
+                if reg and hasattr(reg, "get_positive_facet_for"):
+                    pos_facet = reg.get_positive_facet_for(
+                        clause_payload.get("operator"), dtype
+                    )
+            except Exception:
+                pos_facet = None
+
             if pos_facet is not None:
                 pos_pred = self.clause_compiler._predicate_from_facet(
                     facet=pos_facet,
@@ -845,9 +826,8 @@ class GroupCompiler:
 
             return pairs_queryset.filter(~Exists(filt)), True
 
-        # ---------- 1) Relationship-less AND child groups (push down by child group graph) ----------
+        # 1) Relationship-less AND child groups
         for child_group in group_payload.get("groups") or []:
-            # Only immediate children with no relationship and AND logic
             if (child_group.get("relationship") or {}).get("path"):
                 continue
             if (child_group.get("logic") or "AND").upper() != "AND":
@@ -857,7 +837,6 @@ class GroupCompiler:
                 continue
 
             child_group_graph = (child_group.get("graph_slug") or "").strip()
-            # Collect literals from this child group and its relationship-less descendants
             stack = [child_group]
             while stack:
                 node = stack.pop()
@@ -869,7 +848,6 @@ class GroupCompiler:
                     subj_graph, _ = self.clause_compiler._unpack_single_path(
                         clause.get("subject") or []
                     )
-                    # Gate by the child group's graph to avoid cross-graph bleed
                     if (
                         child_group_graph
                         and subj_graph
@@ -887,7 +865,7 @@ class GroupCompiler:
                 for g in node.get("groups") or []:
                     stack.append(g)
 
-        # ---------- 2) One nested leg (single hop) under this relationship group ----------
+        # 2) One nested leg (single hop)
         nested_group = next(
             (
                 g
@@ -911,12 +889,10 @@ class GroupCompiler:
                     )
                 )
 
-                # Collect literals under the nested subtree, but prefer those matching the nested terminal graph
                 literals_all: List[Dict[str, Any]] = []
                 stack = [nested_group]
                 while stack:
                     node = stack.pop()
-                    # Traverse through relationship groups; only collect LITERALs from relationship-less nodes
                     if not (node.get("relationship") or {}).get("path"):
                         for clause in node.get("clauses") or []:
                             if (clause.get("type") or "").upper() == "LITERAL":
@@ -924,26 +900,16 @@ class GroupCompiler:
                     for g in node.get("groups") or []:
                         stack.append(g)
 
-                def _by_graph(
-                    lits: List[Dict[str, Any]], gslug: str
-                ) -> List[Dict[str, Any]]:
-                    out = []
-                    for c in lits:
-                        sg, _ = self.clause_compiler._unpack_single_path(
-                            c.get("subject") or []
-                        )
-                        if sg == gslug:
-                            out.append(c)
-                    return out
-
-                nested_literals = (
-                    _by_graph(literals_all, nested_term_graph)
-                    if nested_term_graph
-                    else []
-                )
+                nested_literals = [
+                    c
+                    for c in literals_all
+                    if self.clause_compiler._unpack_single_path(c.get("subject") or [])[
+                        0
+                    ]
+                    == nested_term_graph
+                ]
                 if not nested_literals:
-                    # Fallback: keep literals whose subject rows exist and are not the parent terminal
-                    filtered = []
+                    nested_literals = []
                     for c in literals_all:
                         sg, sa = self.clause_compiler._unpack_single_path(
                             c.get("subject") or []
@@ -952,8 +918,7 @@ class GroupCompiler:
                             continue
                         rows = self.clause_compiler._search_rows(sg, sa)
                         if rows is not None:
-                            filtered.append(c)
-                    nested_literals = filtered
+                            nested_literals.append(c)
 
                 print(
                     f"[ADV][DBG] nested pushdown literals={len(nested_literals)} target_field={nested_child_field}"
@@ -976,7 +941,6 @@ class GroupCompiler:
                     )
                     touched = True
                 else:
-                    # ALL for nested hop
                     same_child_ok = nested_ok.filter(
                         **{nested_child_field: OuterRef(nested_child_field)}
                     )
@@ -986,7 +950,7 @@ class GroupCompiler:
                     )
                     touched = True
 
-        # ---------- 3) RELATED clauses aimed at the child terminal node ----------
+        # 3) RELATED clauses aimed at the child terminal node
         term_graph = compiled_pair_info["terminal_graph_slug"]
         term_alias = compiled_pair_info["terminal_node_alias"]
         for rel_clause in group_payload.get("clauses") or []:
@@ -998,7 +962,6 @@ class GroupCompiler:
             op_upper = (rel_clause.get("operator") or "").upper()
             has_ops = bool(rel_clause.get("operands"))
 
-            # Skip the trivial HAS_ANY_VALUE on the terminal node (leg existence already enforces it)
             if (
                 subj_graph == term_graph
                 and subj_alias == term_alias
@@ -1032,128 +995,6 @@ class GroupCompiler:
             touched = True
 
         return matches_per_child, touched
-
-    def _filter_pairs_by_and_block(
-        self,
-        pairs_scoped_to_anchor: QuerySet,
-        group_payload_and_block: Dict[str, Any],
-        target_graph_slug: str,
-        correlate_on_field: str,
-    ) -> QuerySet:
-        if (group_payload_and_block.get("logic") or "AND").upper() != "AND":
-            return pairs_scoped_to_anchor
-
-        filtered_pairs = pairs_scoped_to_anchor
-
-        for clause_payload in group_payload_and_block.get("clauses") or []:
-            if (clause_payload.get("type") or "").upper() != "LITERAL":
-                continue
-            subject_graph_slug, subject_alias = (
-                self.clause_compiler._unpack_single_path(
-                    clause_payload.get("subject") or []
-                )
-            )
-            if subject_graph_slug != target_graph_slug:
-                continue
-
-            subject_rows = self.clause_compiler._search_rows(
-                subject_graph_slug, subject_alias
-            )
-            if subject_rows is None:
-                continue
-
-            datatype_name = self.clause_compiler._datatype_for_alias(
-                subject_graph_slug, subject_alias
-            )
-            facet = self._facet_for(datatype_name, clause_payload.get("operator"))
-            operands = clause_payload.get("operands") or []
-            correlated_subject_rows = subject_rows.filter(
-                resourceinstanceid=OuterRef(correlate_on_field)
-            )
-
-            if not operands:
-                operator_upper = (clause_payload.get("operator") or "").upper()
-                if operator_upper == "HAS_NO_VALUE":
-                    filtered_pairs = filtered_pairs.filter(
-                        ~Exists(correlated_subject_rows)
-                    )
-                elif operator_upper == "HAS_ANY_VALUE":
-                    filtered_pairs = filtered_pairs.filter(
-                        Exists(correlated_subject_rows)
-                    )
-                else:
-                    is_negated = bool(getattr(facet, "is_orm_template_negated", False))
-                    filtered_pairs = filtered_pairs.filter(
-                        ~Exists(correlated_subject_rows)
-                        if is_negated
-                        else Exists(correlated_subject_rows)
-                    )
-            else:
-                predicate = self.clause_compiler._predicate_from_facet(
-                    facet=facet,
-                    column_name="value",
-                    params=self.clause_compiler._literal_params(operands),
-                )
-                filtered = (
-                    correlated_subject_rows.filter(predicate)
-                    if isinstance(predicate, Q)
-                    else correlated_subject_rows.filter(**predicate)
-                )
-                is_negated = bool(getattr(facet, "is_orm_template_negated", False))
-                if is_negated:
-                    pos_facet = self._positive_facet_for(
-                        datatype_name, clause_payload.get("operator")
-                    )
-                    if pos_facet is not None:
-                        pos_pred = self.clause_compiler._predicate_from_facet(
-                            facet=pos_facet,
-                            column_name="value",
-                            params=self.clause_compiler._literal_params(operands),
-                        )
-                        pos_filt = (
-                            correlated_subject_rows.filter(pos_pred)
-                            if isinstance(pos_pred, Q)
-                            else correlated_subject_rows.filter(**pos_pred)
-                        )
-                        filtered_pairs = filtered_pairs.filter(~Exists(pos_filt))
-                    elif isinstance(predicate, Q) and getattr(
-                        predicate, "negated", False
-                    ):
-                        filtered_pairs = filtered_pairs.filter(
-                            ~Exists(correlated_subject_rows.filter(~predicate))
-                        )
-                    else:
-                        filtered_pairs = filtered_pairs.filter(~Exists(filtered))
-                else:
-                    filtered_pairs = filtered_pairs.filter(Exists(filtered))
-
-        for child_payload in group_payload_and_block.get("groups") or []:
-            if (child_payload.get("relationship") or {}).get("path"):
-                continue
-            filtered_pairs = self._filter_pairs_by_and_block(
-                pairs_scoped_to_anchor=filtered_pairs,
-                group_payload_and_block=child_payload,
-                target_graph_slug=target_graph_slug,
-                correlate_on_field=correlate_on_field,
-            )
-
-        return filtered_pairs
-
-    def _positive_facet_for(self, datatype_name: str, operator_token: Optional[str]):
-        try:
-            reg = getattr(self.clause_compiler, "facet_registry", None)
-            if reg and hasattr(reg, "get_positive_facet_for"):
-                return reg.get_positive_facet_for(operator_token, datatype_name)
-        except Exception:
-            pass
-        try:
-            facet = self.clause_compiler._facet(datatype_name, operator_token)
-            return getattr(facet, "positive_counterpart", None)
-        except Exception:
-            return None
-
-    def _facet_for(self, datatype_name: str, operator_token: Optional[str]):
-        return self.clause_compiler._facet(datatype_name, operator_token)
 
     def _require_path_navigator(self, path_navigator: PathNavigator) -> PathNavigator:
         if not hasattr(path_navigator, "search_model_registry") or not hasattr(

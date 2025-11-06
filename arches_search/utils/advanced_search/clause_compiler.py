@@ -42,13 +42,14 @@ class ClauseCompiler:
         facet = self._facet(datatype_name, clause_payload.get("operator"))
         operands = clause_payload.get("operands") or []
 
-        if correlate_to_tile:
-            correlation_filters = {
+        correlation_filters = (
+            {
                 "resourceinstanceid": OuterRef("resourceinstance_id"),
                 "tileid": OuterRef("tileid"),
             }
-        else:
-            correlation_filters = {"resourceinstanceid": OuterRef("resourceinstanceid")}
+            if correlate_to_tile
+            else {"resourceinstanceid": OuterRef("resourceinstanceid")}
+        )
 
         correlated_rows = subject_rows.filter(**correlation_filters).order_by()
 
@@ -57,43 +58,52 @@ class ClauseCompiler:
 
         if not operands:
             if operator_upper == "HAS_ANY_VALUE":
-                if quantifier in ("ANY", "ALL"):
-                    return Exists(correlated_rows)
-                return ~Exists(correlated_rows)
+                return (
+                    Exists(correlated_rows)
+                    if quantifier in ("ANY", "ALL")
+                    else ~Exists(correlated_rows)
+                )
             if operator_upper == "HAS_NO_VALUE":
-                if quantifier in ("NONE", "ALL"):
-                    return ~Exists(correlated_rows)
-                return Exists(correlated_rows)
+                return (
+                    ~Exists(correlated_rows)
+                    if quantifier in ("NONE", "ALL")
+                    else Exists(correlated_rows)
+                )
             if not is_orm_template_negated:
-                if quantifier in ("ANY", "ALL"):
-                    return Exists(correlated_rows)
-                return ~Exists(correlated_rows)
-            else:
-                if quantifier in ("ANY", "ALL"):
-                    return ~Exists(correlated_rows)
-                return Exists(correlated_rows)
+                return (
+                    Exists(correlated_rows)
+                    if quantifier in ("ANY", "ALL")
+                    else ~Exists(correlated_rows)
+                )
+            return (
+                ~Exists(correlated_rows)
+                if quantifier in ("ANY", "ALL")
+                else Exists(correlated_rows)
+            )
 
         params = self._literal_params(operands)
         raw_predicate = self._predicate_from_facet(
             facet=facet, column_name="value", params=params
         )
 
-        matches = (
+        matching_rows = (
             correlated_rows.filter(raw_predicate)
             if isinstance(raw_predicate, Q)
             else correlated_rows.filter(**raw_predicate)
         )
 
         if not is_orm_template_negated:
-            violators = correlated_rows.exclude(pk__in=matches.values("pk"))
+            violating_rows = correlated_rows.exclude(pk__in=matching_rows.values("pk"))
         else:
-            positive_facet = (
-                self.facet_registry.get_positive_facet_for(
-                    clause_payload.get("operator"), datatype_name
-                )
-                if hasattr(self.facet_registry, "get_positive_facet_for")
-                else getattr(facet, "positive_counterpart", None)
-            )
+            positive_facet = None
+            try:
+                if hasattr(self.facet_registry, "get_positive_facet_for"):
+                    positive_facet = self.facet_registry.get_positive_facet_for(
+                        clause_payload.get("operator"), datatype_name
+                    )
+            except Exception:
+                positive_facet = None
+
             if positive_facet is not None:
                 pos_pred = self._predicate_from_facet(
                     facet=positive_facet, column_name="value", params=params
@@ -103,19 +113,21 @@ class ClauseCompiler:
                     if isinstance(pos_pred, Q)
                     else correlated_rows.filter(**pos_pred)
                 )
-                violators = pos_filtered
+                violating_rows = pos_filtered
             elif isinstance(raw_predicate, Q) and getattr(
                 raw_predicate, "negated", False
             ):
-                violators = correlated_rows.filter(~raw_predicate)
+                violating_rows = correlated_rows.filter(~raw_predicate)
             else:
-                violators = correlated_rows.exclude(pk__in=matches.values("pk"))
+                violating_rows = correlated_rows.exclude(
+                    pk__in=matching_rows.values("pk")
+                )
 
         if quantifier == "ANY":
-            return Exists(matches)
+            return Exists(matching_rows)
         if quantifier == "NONE":
-            return ~Exists(matches)
-        return Exists(correlated_rows) & ~Exists(violators)
+            return ~Exists(matching_rows)
+        return Exists(correlated_rows) & ~Exists(violating_rows)
 
     def related_child_exists_qs(
         self, clause_payload: Dict[str, Any], compiled_pair_info: Dict[str, Any]
@@ -197,13 +209,14 @@ class ClauseCompiler:
         facet = self._facet(datatype_name, clause_payload.get("operator"))
         operands = clause_payload.get("operands") or []
 
-        if correlate_to_tile:
-            correlation_filters: Dict[str, Any] = {
+        correlation_filters: Dict[str, Any] = (
+            {
                 "resourceinstanceid": OuterRef("resourceinstance_id"),
                 "tileid": OuterRef("tileid"),
             }
-        else:
-            correlation_filters = {"resourceinstanceid": OuterRef("resourceinstanceid")}
+            if correlate_to_tile
+            else {"resourceinstanceid": OuterRef("resourceinstanceid")}
+        )
 
         correlated = subject_rows.filter(**correlation_filters)
 
