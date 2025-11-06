@@ -66,9 +66,8 @@ class GroupCompiler:
                 group_payload=group_payload,
                 compiled_pair_info=relationship_pairs_info,
                 base_pairs=pairs_excluding_self,
-                use_or_logic=(
-                    (group_payload.get("logic") or LOGIC_AND).upper() == LOGIC_OR
-                ),
+                use_or_logic=(group_payload.get("logic") or LOGIC_AND).upper()
+                == LOGIC_OR,
             )
 
             normalized_relationship = (
@@ -83,8 +82,8 @@ class GroupCompiler:
 
             if is_single_inverse_hop:
                 has_related_clause = any(
-                    clause_item.get("type", "").upper() == CLAUSE_TYPE_RELATED
-                    for clause_item in group_payload.get("clauses") or []
+                    (item.get("type") or "").upper() == CLAUSE_TYPE_RELATED
+                    for item in (group_payload.get("clauses") or [])
                 )
                 if has_related_clause and traversal_quantifier == QUANTIFIER_ALL:
                     traversal_quantifier = QUANTIFIER_ANY
@@ -328,10 +327,11 @@ class GroupCompiler:
                         operator_token = clause_payload["operator"].upper()
                         operand_items = clause_payload.get("operands") or []
 
+                        datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+                            subject_graph_slug, subject_node_alias
+                        )
+
                         if not operand_items:
-                            datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                                subject_graph_slug, subject_node_alias
-                            )
                             presence_means_match = self.clause_compiler._presence_means_match_for_zero_operands(
                                 datatype_name, operator_token
                             )
@@ -341,9 +341,6 @@ class GroupCompiler:
                                 else Q(~Exists(correlated_rows))
                             )
                         else:
-                            datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                                subject_graph_slug, subject_node_alias
-                            )
                             literal_values = [
                                 (item["value"] if isinstance(item, dict) else item)
                                 for item in operand_items

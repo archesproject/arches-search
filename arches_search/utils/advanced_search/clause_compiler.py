@@ -205,7 +205,7 @@ class ClauseCompiler:
             resourceinstance_id=OuterRef("resourceinstanceid")
         )
 
-        tileid_subqueries_for_any: List[Subquery] = []
+        per_tile_exists_conditions: List[Q] = []
         resource_level_conditions: List[Q] = []
 
         for clause_payload in clause_payloads:
@@ -237,22 +237,21 @@ class ClauseCompiler:
                 )
 
                 if quantifier_token == QUANTIFIER_ANY:
-                    subquery_tile_if_match = rows_correlated_to_tile_resource.filter(
-                        tileid=OuterRef("tileid")
-                    ).values("tileid")[:1]
-                    tileid_subqueries_for_any.append(
-                        Subquery(subquery_tile_if_match)
-                        if presence_means_match
-                        else Subquery(
-                            arches_models.Tile.objects.filter(tileid=OuterRef("tileid"))
-                            .filter(
-                                ~Exists(
-                                    rows_correlated_to_tile_resource.filter(
-                                        tileid=OuterRef("tileid")
-                                    )
+                    per_tile_exists_conditions.append(
+                        Q(
+                            Exists(
+                                rows_correlated_to_tile_resource.filter(
+                                    tileid=OuterRef("tileid")
                                 )
                             )
-                            .values("tileid")[:1]
+                        )
+                        if presence_means_match
+                        else Q(
+                            ~Exists(
+                                rows_correlated_to_tile_resource.filter(
+                                    tileid=OuterRef("tileid")
+                                )
+                            )
                         )
                     )
                 elif quantifier_token == QUANTIFIER_NONE:
@@ -269,23 +268,15 @@ class ClauseCompiler:
                                     tileid=OuterRef("tileid")
                                 )
                             )
-                        ).values("tileid")
-                        requires_all_tiles_match = Q(
-                            ~Exists(
-                                tiles_for_anchor_resource.filter(
-                                    tileid__in=Subquery(tiles_missing_match)
-                                ).values("tileid")[:1]
-                            )
                         )
-                        has_at_least_one_tile = Q(
-                            Exists(tiles_for_anchor_resource.values("tileid")[:1])
-                        )
+                        requires_all_tiles_match = Q(~Exists(tiles_missing_match))
+                        has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
                         resource_level_conditions.append(
                             requires_all_tiles_match & has_at_least_one_tile
                         )
                     else:
                         resource_level_conditions.append(
-                            Q(Exists(tiles_for_anchor_resource.values("tileid")[:1]))
+                            Q(Exists(tiles_for_anchor_resource))
                         )
                 continue
 
@@ -309,14 +300,10 @@ class ClauseCompiler:
             ).filter(tileid=OuterRef("tileid"))
 
             if quantifier_token == QUANTIFIER_ANY:
-                tileid_subqueries_for_any.append(
-                    Subquery(matches_in_this_tile.values("tileid")[:1])
+                per_tile_exists_conditions.append(
+                    Q(Exists(matches_in_this_tile))
                     if not is_template_negated
-                    else Subquery(
-                        arches_models.Tile.objects.filter(tileid=OuterRef("tileid"))
-                        .filter(~Exists(matches_in_this_tile))
-                        .values("tileid")[:1]
-                    )
+                    else Q(~Exists(matches_in_this_tile))
                 )
             elif quantifier_token == QUANTIFIER_NONE:
                 resource_level_conditions.append(Q(~Exists(matching_rows_resource)))
@@ -324,17 +311,9 @@ class ClauseCompiler:
                 if not is_template_negated:
                     tiles_missing_match = tiles_for_anchor_resource.filter(
                         ~Exists(matches_in_this_tile)
-                    ).values("tileid")
-                    requires_all_tiles_match = Q(
-                        ~Exists(
-                            tiles_for_anchor_resource.filter(
-                                tileid__in=Subquery(tiles_missing_match)
-                            ).values("tileid")[:1]
-                        )
                     )
-                    has_at_least_one_tile = Q(
-                        Exists(tiles_for_anchor_resource.values("tileid")[:1])
-                    )
+                    requires_all_tiles_match = Q(~Exists(tiles_missing_match))
+                    has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
                     resource_level_conditions.append(
                         requires_all_tiles_match & has_at_least_one_tile
                     )
@@ -365,31 +344,23 @@ class ClauseCompiler:
                         )
 
                     has_no_positive_matches = Q(~Exists(positive_matches_resource)) & Q(
-                        Exists(tiles_for_anchor_resource.values("tileid")[:1])
+                        Exists(tiles_for_anchor_resource)
                     )
                     resource_level_conditions.append(has_no_positive_matches)
 
-        if not tileid_subqueries_for_any:
+        if not per_tile_exists_conditions:
             any_expression = Q()
         else:
             if use_and_logic:
                 tiles_requiring_all = tiles_for_anchor_resource
-                for tileid_subquery in tileid_subqueries_for_any:
-                    tiles_requiring_all = tiles_requiring_all.filter(
-                        tileid__in=tileid_subquery
-                    )
-                any_expression = Q(Exists(tiles_requiring_all.values("tileid")[:1]))
+                for condition in per_tile_exists_conditions:
+                    tiles_requiring_all = tiles_requiring_all.filter(condition)
+                any_expression = Q(Exists(tiles_requiring_all))
             else:
-                or_condition = Q(pk__in=[])
-                for tileid_subquery in tileid_subqueries_for_any:
-                    or_condition = or_condition | Q(tileid__in=tileid_subquery)
-                any_expression = Q(
-                    Exists(
-                        tiles_for_anchor_resource.filter(or_condition).values("tileid")[
-                            :1
-                        ]
-                    )
+                tiles_with_any = tiles_for_anchor_resource.filter(
+                    self._or_reduce(per_tile_exists_conditions)
                 )
+                any_expression = Q(Exists(tiles_with_any))
 
         if not resource_level_conditions:
             return any_expression
@@ -514,12 +485,10 @@ class ClauseCompiler:
         if rhs_path_operand:
             rhs_path_sequence = rhs_path_operand["value"]
             _, _, rhs_rows = self.path_navigator.build_path_queryset(rhs_path_sequence)
-            rhs_scalar_value = Subquery(
-                rhs_rows.filter(
-                    resourceinstanceid=OuterRef("_anchor_resource_id")
-                ).values("value")[:1]
-            )
-            predicate_parameters = [rhs_scalar_value]
+            rhs_scalar_value = rhs_rows.filter(
+                resourceinstanceid=OuterRef("_anchor_resource_id")
+            ).values("value")
+            predicate_parameters = [Subquery(rhs_scalar_value[:1])]
         else:
             predicate_parameters = [
                 (item["value"] if isinstance(item, dict) else item)
@@ -660,3 +629,11 @@ class ClauseCompiler:
         )
         model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
         return model_class.objects.filter(graph_slug=graph_slug, node_alias=node_alias)
+
+    def _or_reduce(self, conditions: List[Q]) -> Q:
+        if not conditions:
+            return Q()
+        combined = Q(pk__in=[])
+        for condition in conditions:
+            combined |= condition
+        return combined
