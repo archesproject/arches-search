@@ -1,5 +1,6 @@
 from typing import Dict, Tuple
 
+from django.utils.translation import gettext as _
 from arches_search.models.models import AdvancedSearchFacet
 
 
@@ -30,6 +31,14 @@ class FacetRegistry:
         )
 
         if facet is None:
-            raise AdvancedSearchFacet.DoesNotExist
+            raise AdvancedSearchFacet.DoesNotExist(
+                _(
+                    "No facet found for datatype '%(datatype)s' with operator '%(operator)s'"
+                )
+                % {
+                    "datatype": subject_datatype_name,
+                    "operator": operator_token,
+                }
+            )
 
         return facet
