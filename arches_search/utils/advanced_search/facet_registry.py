@@ -65,3 +65,12 @@ class FacetRegistry:
         single_value: Any = params[0] if params else True
         kwargs = {lookup_key: single_value}
         return (~Q(**kwargs), True) if is_template_negated else (kwargs, False)
+
+    def zero_arity_presence_is_match(
+        self, subject_datatype_name: str, operator_token: str
+    ) -> bool:
+        facet = self.get_facet(subject_datatype_name, operator_token)
+        accepts_no_operands = facet.arity == 0
+        if not accepts_no_operands:
+            return False
+        return bool(facet.is_orm_template_negated)

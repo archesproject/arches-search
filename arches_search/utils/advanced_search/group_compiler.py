@@ -2,9 +2,13 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
+from arches.app.models import models as arches_models
 
 from arches_search.utils.advanced_search.clause_compiler import ClauseCompiler
 from arches_search.utils.advanced_search.path_navigator import PathNavigator
+from arches_search.utils.advanced_search.relationship_compiler import (
+    RelationshipCompiler,
+)
 
 
 LOGIC_AND = "AND"
@@ -26,10 +30,14 @@ CONTEXT_CHILD = "CHILD"
 
 class GroupCompiler:
     def __init__(
-        self, clause_compiler: ClauseCompiler, path_navigator: PathNavigator
+        self,
+        clause_compiler: ClauseCompiler,
+        path_navigator: PathNavigator,
+        relationship_compiler: RelationshipCompiler,
     ) -> None:
         self.clause_compiler = clause_compiler
         self.path_navigator = path_navigator
+        self.relationship_compiler = relationship_compiler
 
     def compile(
         self,
@@ -97,8 +105,10 @@ class GroupCompiler:
                 )
             else:
                 if is_single_inverse_hop:
-                    literal_ok_rows = self.clause_compiler.child_ok_rows_from_literals(
-                        group_payload, relationship_pairs_info
+                    literal_ok_rows = (
+                        self.relationship_compiler.child_ok_rows_from_literals(
+                            group_payload, relationship_pairs_info
+                        )
                     )
                 else:
                     literal_ok_rows = None
@@ -210,7 +220,7 @@ class GroupCompiler:
         scope_token = (group_payload.get("scope") or SCOPE_RESOURCE).upper()
 
         if scope_token == SCOPE_TILE:
-            return self.clause_compiler.compile_relationshipless_tile_group_to_q(
+            return self._compile_relationshipless_tile_group_to_q(
                 group_payload=group_payload,
                 use_and_logic=(logic_token == LOGIC_AND),
             )
@@ -219,11 +229,11 @@ class GroupCompiler:
         combined_q = Q()
 
         for clause_payload in group_payload.get("clauses") or []:
-            clause_q = self.clause_compiler.compile_literal_to_q(
-                clause_payload=clause_payload,
-                scope=SCOPE_RESOURCE,
+            clause_q = Q(
+                self.clause_compiler.compile(
+                    clause_payload=clause_payload, correlate_to_tile=False
+                )
             )
-            # accumulate
             combined_q = (
                 clause_q
                 if not has_any_piece
@@ -254,6 +264,216 @@ class GroupCompiler:
             return Q() if logic_token == LOGIC_AND else Q(pk__in=[])
         return combined_q
 
+    # ---------- TILE-scope relationshipless logic (unchanged SQL shape)
+
+    def _compile_relationshipless_tile_group_to_q(
+        self, group_payload: Dict[str, Any], use_and_logic: bool
+    ) -> Q:
+        clause_payloads = group_payload.get("clauses") or []
+        if not clause_payloads:
+            return Q()
+
+        tiles_for_anchor_resource = arches_models.Tile.objects.filter(
+            resourceinstance_id=OuterRef("resourceinstanceid")
+        )
+
+        per_tile_exists_conditions: List[Q] = []
+        resource_level_conditions: List[Q] = []
+
+        for clause_payload in clause_payloads:
+            subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+            operator_token = (clause_payload["operator"] or "").upper()
+            quantifier_token = (clause_payload["quantifier"] or "").upper()
+            operand_items = clause_payload.get("operands") or []
+
+            datatype_name = (
+                self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+                    subject_graph_slug, subject_node_alias
+                )
+            )
+            model_class = (
+                self.clause_compiler.search_model_registry.get_model_for_datatype(
+                    datatype_name
+                )
+            )
+            subject_rows = model_class.objects.filter(
+                graph_slug=subject_graph_slug, node_alias=subject_node_alias
+            )
+
+            rows_correlated_to_resource = subject_rows.filter(
+                resourceinstanceid=OuterRef("resourceinstanceid")
+            )
+            rows_correlated_to_tile_resource = subject_rows.filter(
+                resourceinstanceid=OuterRef("resourceinstance_id")
+            )
+
+            if not operand_items:
+                presence_implies_match = (
+                    self.clause_compiler.facet_registry.zero_arity_presence_is_match(
+                        datatype_name, operator_token
+                    )
+                )
+
+                if quantifier_token == QUANTIFIER_ANY:
+                    condition = Q(
+                        Exists(
+                            rows_correlated_to_tile_resource.filter(
+                                tileid=OuterRef("tileid")
+                            )
+                        )
+                    )
+                    per_tile_exists_conditions.append(
+                        condition if presence_implies_match else ~condition
+                    )
+                    continue
+
+                if quantifier_token == QUANTIFIER_NONE:
+                    resource_level_conditions.append(
+                        Q(~Exists(rows_correlated_to_resource))
+                        if presence_implies_match
+                        else Q(Exists(rows_correlated_to_resource))
+                    )
+                    continue
+
+                tiles_missing_match = tiles_for_anchor_resource.filter(
+                    ~Exists(
+                        rows_correlated_to_tile_resource.filter(
+                            tileid=OuterRef("tileid")
+                        )
+                    )
+                )
+                requires_all_tiles_match = Q(~Exists(tiles_missing_match))
+                has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
+                resource_level_conditions.append(
+                    (requires_all_tiles_match & has_at_least_one_tile)
+                    if presence_implies_match
+                    else Q(~Exists(tiles_for_anchor_resource))
+                )
+                continue
+
+            predicate_expression, is_template_negated = (
+                self.clause_compiler.operand_compiler.build_predicate(
+                    datatype_name=datatype_name,
+                    operator_token=operator_token,
+                    operands=operand_items,
+                    anchor_resource_id_annotation=None,
+                )
+            )
+
+            if isinstance(predicate_expression, Q):
+                matching_rows_resource = rows_correlated_to_resource.filter(
+                    predicate_expression
+                )
+                matches_in_this_tile = rows_correlated_to_tile_resource.filter(
+                    predicate_expression
+                ).filter(tileid=OuterRef("tileid"))
+            else:
+                matching_rows_resource = rows_correlated_to_resource.filter(
+                    **predicate_expression
+                )
+                matches_in_this_tile = rows_correlated_to_tile_resource.filter(
+                    **predicate_expression
+                ).filter(tileid=OuterRef("tileid"))
+
+            if quantifier_token == QUANTIFIER_ANY:
+                per_tile_exists_conditions.append(Q(Exists(matches_in_this_tile)))
+                continue
+
+            if quantifier_token == QUANTIFIER_NONE:
+                resource_level_conditions.append(Q(~Exists(matching_rows_resource)))
+                continue
+
+            has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
+
+            if not is_template_negated:
+                tiles_missing_match = tiles_for_anchor_resource.filter(
+                    ~Exists(matches_in_this_tile)
+                )
+                resource_level_conditions.append(
+                    Q(~Exists(tiles_missing_match)) & has_at_least_one_tile
+                )
+                continue
+
+            positive_facet = self.clause_compiler.facet_registry.get_positive_facet_for(
+                operator_token, datatype_name
+            )
+            if positive_facet is not None:
+                positive_expression, _ = self.clause_compiler.facet_registry.predicate(
+                    datatype_name,
+                    positive_facet.operator,
+                    "value",
+                    self.clause_compiler.operand_compiler.literal_values_only(
+                        operand_items
+                    ),
+                )
+                if isinstance(positive_expression, Q):
+                    positive_matches_in_this_tile = (
+                        rows_correlated_to_tile_resource.filter(
+                            positive_expression
+                        ).filter(tileid=OuterRef("tileid"))
+                    )
+                else:
+                    positive_matches_in_this_tile = (
+                        rows_correlated_to_tile_resource.filter(
+                            **positive_expression
+                        ).filter(tileid=OuterRef("tileid"))
+                    )
+            elif isinstance(predicate_expression, Q) and getattr(
+                predicate_expression, "negated", False
+            ):
+                positive_matches_in_this_tile = rows_correlated_to_tile_resource.filter(
+                    ~predicate_expression
+                ).filter(tileid=OuterRef("tileid"))
+            else:
+                if isinstance(predicate_expression, Q):
+                    positive_matches_in_this_tile = (
+                        rows_correlated_to_tile_resource.exclude(
+                            predicate_expression
+                        ).filter(tileid=OuterRef("tileid"))
+                    )
+                else:
+                    positive_matches_in_this_tile = (
+                        rows_correlated_to_tile_resource.exclude(
+                            **predicate_expression
+                        ).filter(tileid=OuterRef("tileid"))
+                    )
+
+            tiles_with_violations = tiles_for_anchor_resource.filter(
+                Exists(positive_matches_in_this_tile)
+            )
+            resource_level_conditions.append(
+                Q(~Exists(tiles_with_violations)) & has_at_least_one_tile
+            )
+
+        if not per_tile_exists_conditions:
+            any_expression = Q()
+        else:
+            if use_and_logic:
+                tiles_requiring_all = tiles_for_anchor_resource
+                for condition in per_tile_exists_conditions:
+                    tiles_requiring_all = tiles_requiring_all.filter(condition)
+                any_expression = Q(Exists(tiles_requiring_all))
+            else:
+                combined_any = Q(pk__in=[])
+                for condition in per_tile_exists_conditions:
+                    combined_any |= condition
+                tiles_with_any = tiles_for_anchor_resource.filter(combined_any)
+                any_expression = Q(Exists(tiles_with_any))
+
+        if not resource_level_conditions:
+            return any_expression
+
+        if use_and_logic:
+            combined_all = Q()
+            for condition in resource_level_conditions:
+                combined_all &= condition
+            return any_expression & combined_all
+
+        combined_or = Q()
+        for condition in resource_level_conditions:
+            combined_or |= condition
+        return any_expression | combined_or
+
     def _apply_group_constraints(
         self,
         group_payload: Dict[str, Any],
@@ -281,7 +501,7 @@ class GroupCompiler:
                         ).upper() != CLAUSE_TYPE_LITERAL:
                             continue
                         working_pairs, applied_here = (
-                            self.clause_compiler.filter_pairs_by_clause(
+                            self.relationship_compiler.filter_pairs_by_clause(
                                 pairs_queryset=working_pairs,
                                 clause_payload=clause_payload,
                                 correlate_field=child_id_field_name,
@@ -293,22 +513,17 @@ class GroupCompiler:
                 constrained_child_pairs = working_pairs
 
         else:
-            # STRICT OR semantics for inverse-hop child groups:
-            # Build OR of EXISTS(ok_rows) where ok_rows comes from child_ok_rows_from_literals.
-            # We intentionally **do not** fall back to UUID-pair subqueries that would
-            # re-bind OuterRef to the wrong frame.
-            or_q = Q(pk__in=[])  # false starter
+            or_q = Q(pk__in=[])
             saw_any_ok_rows = False
 
             for child_group_payload in group_payload.get("groups") or []:
                 if ((child_group_payload.get("relationship")) or {}).get("path"):
                     continue
 
-                ok_rows = self.clause_compiler.child_ok_rows_from_literals(
+                ok_rows = self.relationship_compiler.child_ok_rows_from_literals(
                     child_group_payload, compiled_pair_info
                 )
                 if ok_rows is None:
-                    # Skip groups we cannot compile to direct subject-rows.
                     continue
 
                 or_q |= Q(Exists(ok_rows))
@@ -361,7 +576,7 @@ class GroupCompiler:
                 nested_ok_pairs = nested_pairs_for_child
                 for clause_payload in literal_clauses_all:
                     nested_ok_pairs, applied_here = (
-                        self.clause_compiler.filter_pairs_by_clause(
+                        self.relationship_compiler.filter_pairs_by_clause(
                             pairs_queryset=nested_ok_pairs,
                             clause_payload=clause_payload,
                             correlate_field=nested_child_id_field_name,
@@ -418,15 +633,15 @@ class GroupCompiler:
                 datatype_name_skip = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
                     subject_graph_slug, subject_node_alias
                 )
-                presence_means_match_skip = (
-                    self.clause_compiler._presence_means_match_for_zero_operands(
+                presence_implies_match_skip = (
+                    self.clause_compiler.facet_registry.zero_arity_presence_is_match(
                         datatype_name_skip, operator_token
                     )
                 )
-                if presence_means_match_skip:
+                if presence_implies_match_skip:
                     continue
 
-            related_exists_qs = self.clause_compiler.related_child_exists_qs(
+            related_exists_qs = self.relationship_compiler.related_child_exists_qs(
                 related_clause_payload, compiled_pair_info
             )
             if related_exists_qs is None:
@@ -436,14 +651,14 @@ class GroupCompiler:
                 datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
                     subject_graph_slug, subject_node_alias
                 )
-                presence_means_match = (
-                    self.clause_compiler._presence_means_match_for_zero_operands(
+                presence_implies_match = (
+                    self.clause_compiler.facet_registry.zero_arity_presence_is_match(
                         datatype_name, operator_token
                     )
                 )
                 constrained_child_pairs = (
                     constrained_child_pairs.filter(Exists(related_exists_qs))
-                    if presence_means_match
+                    if presence_implies_match
                     else constrained_child_pairs.filter(~Exists(related_exists_qs))
                 )
                 had_any_inner_filters = True

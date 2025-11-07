@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
 
+
 CLAUSE_TYPE_LITERAL = "LITERAL"
 
 QUANTIFIER_ANY = "ANY"
@@ -19,6 +20,8 @@ class RelationshipCompiler:
         self.path_navigator = path_navigator
         self.operand_compiler = operand_compiler
 
+    # ---------- relationship-clause presence
+
     def related_presence_exists(self, clause_payload: Dict[str, Any]) -> Exists:
         operator_token = (clause_payload["operator"] or "").upper()
         quantifier_token = (clause_payload["quantifier"] or "").upper()
@@ -29,7 +32,6 @@ class RelationshipCompiler:
                 {"path": subject_path_sequence, "is_inverse": False}
             )
         )
-        correlated_pairs = pairs_scoped_to_anchor_resource
 
         terminal_graph_slug = compiled_pair_info["terminal_graph_slug"]
         terminal_node_alias = compiled_pair_info["terminal_node_alias"]
@@ -39,27 +41,29 @@ class RelationshipCompiler:
             )
         )
 
-        presence_means_match = self._presence_means_match_for_zero_operands(
+        presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
             terminal_datatype_name, operator_token
         )
 
         if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
             return (
-                Exists(correlated_pairs)
-                if presence_means_match
-                else ~Exists(correlated_pairs)
+                Exists(pairs_scoped_to_anchor_resource)
+                if presence_implies_match
+                else ~Exists(pairs_scoped_to_anchor_resource)
             )
         if quantifier_token == QUANTIFIER_NONE:
             return (
-                ~Exists(correlated_pairs)
-                if presence_means_match
-                else Exists(correlated_pairs)
+                ~Exists(pairs_scoped_to_anchor_resource)
+                if presence_implies_match
+                else Exists(pairs_scoped_to_anchor_resource)
             )
         return Exists(
             self.search_model_registry.get_model_for_datatype(
                 terminal_datatype_name
             ).objects.none()
         )
+
+    # ---------- helpers used by GroupCompiler inside relationship context
 
     def filter_pairs_by_clause(
         self,
@@ -85,12 +89,12 @@ class RelationshipCompiler:
         )
 
         if not operand_items:
-            presence_means_match = self._presence_means_match_for_zero_operands(
+            presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
                 datatype_name, operator_token
             )
             return (
                 (pairs_queryset.filter(Exists(correlated_rows)), True)
-                if presence_means_match
+                if presence_implies_match
                 else (pairs_queryset.filter(~Exists(correlated_rows)), True)
             )
 
@@ -259,11 +263,15 @@ class RelationshipCompiler:
             )
 
             if not operand_items:
-                presence_means_match = self._presence_means_match_for_zero_operands(
-                    datatype_name, operator_token
+                presence_implies_match = (
+                    self.facet_registry.zero_arity_presence_is_match(
+                        datatype_name, operator_token
+                    )
                 )
                 predicate_rows = (
-                    correlated_rows if presence_means_match else correlated_rows.none()
+                    correlated_rows
+                    if presence_implies_match
+                    else correlated_rows.none()
                 )
             else:
                 predicate_expression, is_template_negated = (
@@ -316,12 +324,3 @@ class RelationshipCompiler:
                 )
 
         return accumulated_rows
-
-    def _presence_means_match_for_zero_operands(
-        self, datatype_name: str, operator_token: str
-    ) -> bool:
-        facet = self.facet_registry.get_facet(datatype_name, operator_token)
-        accepts_no_operands = not bool(getattr(facet, "operand_types", None))
-        if not accepts_no_operands:
-            return False
-        return bool(getattr(facet, "is_orm_template_negated", False))

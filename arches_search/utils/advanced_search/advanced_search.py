@@ -48,7 +48,9 @@ class AdvancedSearchQueryCompiler:
             self.operand_compiler,
             self.relationship_compiler,
         )
-        self.group_compiler = GroupCompiler(self.clause_compiler, self.path_navigator)
+        self.group_compiler = GroupCompiler(
+            self.clause_compiler, self.path_navigator, self.relationship_compiler
+        )
 
     def compile(self) -> QuerySet:
         filter_predicate, existence_predicates = self.group_compiler.compile(
