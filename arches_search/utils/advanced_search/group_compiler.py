@@ -223,6 +223,7 @@ class GroupCompiler:
                 clause_payload=clause_payload,
                 scope=SCOPE_RESOURCE,
             )
+            # accumulate
             combined_q = (
                 clause_q
                 if not has_any_piece
@@ -290,119 +291,32 @@ class GroupCompiler:
                     for nested_group_payload in node_payload.get("groups") or []:
                         pending_nodes.append(nested_group_payload)
                 constrained_child_pairs = working_pairs
+
         else:
-            or_predicate_for_children = Q(pk__in=[])
-            saw_any_literal_group = False
+            # STRICT OR semantics for inverse-hop child groups:
+            # Build OR of EXISTS(ok_rows) where ok_rows comes from child_ok_rows_from_literals.
+            # We intentionally **do not** fall back to UUID-pair subqueries that would
+            # re-bind OuterRef to the wrong frame.
+            or_q = Q(pk__in=[])  # false starter
+            saw_any_ok_rows = False
 
             for child_group_payload in group_payload.get("groups") or []:
                 if ((child_group_payload.get("relationship")) or {}).get("path"):
                     continue
 
-                and_predicate_for_group = Q()
-                saw_literal_in_this_group = False
+                ok_rows = self.clause_compiler.child_ok_rows_from_literals(
+                    child_group_payload, compiled_pair_info
+                )
+                if ok_rows is None:
+                    # Skip groups we cannot compile to direct subject-rows.
+                    continue
 
-                pending_nodes: List[Dict[str, Any]] = [child_group_payload]
-                while pending_nodes:
-                    node_payload = pending_nodes.pop()
-                    if ((node_payload.get("relationship")) or {}).get("path"):
-                        continue
+                or_q |= Q(Exists(ok_rows))
+                saw_any_ok_rows = True
+                had_any_inner_filters = True
 
-                    for clause_payload in node_payload.get("clauses") or []:
-                        if (
-                            clause_payload.get("type") or ""
-                        ).upper() != CLAUSE_TYPE_LITERAL:
-                            continue
-
-                        subject_graph_slug, subject_node_alias = clause_payload[
-                            "subject"
-                        ][0]
-                        subject_rows = self.clause_compiler.fetch_subject_rows(
-                            subject_graph_slug, subject_node_alias
-                        )
-                        correlated_rows = subject_rows.filter(
-                            resourceinstanceid=OuterRef(child_id_field_name)
-                        )
-
-                        operator_token = clause_payload["operator"].upper()
-                        operand_items = clause_payload.get("operands") or []
-
-                        datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                            subject_graph_slug, subject_node_alias
-                        )
-
-                        if not operand_items:
-                            presence_means_match = self.clause_compiler._presence_means_match_for_zero_operands(
-                                datatype_name, operator_token
-                            )
-                            clause_q = (
-                                Q(Exists(correlated_rows))
-                                if presence_means_match
-                                else Q(~Exists(correlated_rows))
-                            )
-                        else:
-                            literal_values = [
-                                (item["value"] if isinstance(item, dict) else item)
-                                for item in operand_items
-                            ]
-                            predicate_expression, is_template_negated = (
-                                self.clause_compiler._predicate_for(
-                                    datatype_name, operator_token, literal_values
-                                )
-                            )
-                            filtered_rows = (
-                                correlated_rows.filter(predicate_expression)
-                                if isinstance(predicate_expression, Q)
-                                else correlated_rows.filter(**predicate_expression)
-                            )
-
-                            if not is_template_negated:
-                                clause_q = Q(Exists(filtered_rows))
-                            else:
-                                positive_facet = self.clause_compiler.facet_registry.get_positive_facet_for(
-                                    operator_token, datatype_name
-                                )
-                                if positive_facet is not None:
-                                    positive_expression, _ = (
-                                        self.clause_compiler._predicate_for(
-                                            datatype_name,
-                                            positive_facet.operator,
-                                            literal_values,
-                                        )
-                                    )
-                                    positive_rows = (
-                                        correlated_rows.filter(positive_expression)
-                                        if isinstance(positive_expression, Q)
-                                        else correlated_rows.filter(
-                                            **positive_expression
-                                        )
-                                    )
-                                    clause_q = Q(~Exists(positive_rows))
-                                elif isinstance(predicate_expression, Q) and getattr(
-                                    predicate_expression, "negated", False
-                                ):
-                                    clause_q = Q(
-                                        ~Exists(
-                                            correlated_rows.filter(
-                                                ~predicate_expression
-                                            )
-                                        )
-                                    )
-                                else:
-                                    clause_q = Q(~Exists(filtered_rows))
-
-                        and_predicate_for_group &= clause_q
-                        saw_literal_in_this_group = True
-                        had_any_inner_filters = True
-
-                    for nested_group_payload in node_payload.get("groups") or []:
-                        pending_nodes.append(nested_group_payload)
-
-                if saw_literal_in_this_group:
-                    or_predicate_for_children |= and_predicate_for_group
-                    saw_any_literal_group = True
-
-            if saw_any_literal_group:
-                constrained_child_pairs = base_pairs.filter(or_predicate_for_children)
+            if saw_any_ok_rows:
+                constrained_child_pairs = base_pairs.filter(or_q)
 
         nested_group_payload = next(
             (

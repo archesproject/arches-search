@@ -10,6 +10,10 @@ from arches_search.utils.advanced_search.search_model_registry import (
 )
 from arches_search.utils.advanced_search.facet_registry import FacetRegistry
 from arches_search.utils.advanced_search.path_navigator import PathNavigator
+from arches_search.utils.advanced_search.operand_compiler import OperandCompiler
+from arches_search.utils.advanced_search.relationship_compiler import (
+    RelationshipCompiler,
+)
 from arches_search.utils.advanced_search.clause_compiler import ClauseCompiler
 from arches_search.utils.advanced_search.group_compiler import GroupCompiler
 from arches_search.utils.advanced_search.payload_validator import PayloadValidator
@@ -27,8 +31,22 @@ class AdvancedSearchQueryCompiler:
         self.path_navigator = PathNavigator(
             self.search_model_registry, self.node_alias_registry
         )
+
+        self.operand_compiler = OperandCompiler(
+            self.facet_registry, self.path_navigator
+        )
+        self.relationship_compiler = RelationshipCompiler(
+            self.search_model_registry,
+            self.facet_registry,
+            self.path_navigator,
+            self.operand_compiler,
+        )
         self.clause_compiler = ClauseCompiler(
-            self.search_model_registry, self.facet_registry, self.path_navigator
+            self.search_model_registry,
+            self.facet_registry,
+            self.path_navigator,
+            self.operand_compiler,
+            self.relationship_compiler,
         )
         self.group_compiler = GroupCompiler(self.clause_compiler, self.path_navigator)
 
@@ -57,4 +75,6 @@ class AdvancedSearchQueryCompiler:
         if filter_predicate:
             queryset = queryset.filter(filter_predicate)
 
+        print("[ADV][TOP] QUERY_PAYLOAD:", self.payload_query)
+        print("[ADV][TOP] FINAL SQL:", str(queryset.query))
         return queryset

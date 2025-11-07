@@ -68,6 +68,34 @@ class AdvancedSearchAPI(APIBase):
                     "expected_count": 2,
                 },
                 {
+                    "name": "PERSON — age = 22 OR age = 24",
+                    "payload": {
+                        "graph_slug": "person",
+                        "scope": "RESOURCE",
+                        "logic": "OR",
+                        "clauses": [
+                            {
+                                "type": "LITERAL",
+                                "quantifier": "ANY",
+                                "subject": [["person", "age"]],
+                                "operator": "EQUALS",
+                                "operands": [{"type": "LITERAL", "value": 22}],
+                            },
+                            {
+                                "type": "LITERAL",
+                                "quantifier": "ANY",
+                                "subject": [["person", "age"]],
+                                "operator": "EQUALS",
+                                "operands": [{"type": "LITERAL", "value": 24}],
+                            },
+                        ],
+                        "groups": [],
+                        "aggregations": [],
+                        "relationship": None,
+                    },
+                    "expected_count": 2,
+                },
+                {
                     "name": "PERSON — RESOURCE constraint failure multiple tiles",
                     "payload": {
                         "graph_slug": "person",
