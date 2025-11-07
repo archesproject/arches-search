@@ -25,7 +25,7 @@ requires-python = ">=3.11"
 dependencies = [
     "arches>=8.1.0a0,<8.2.0",
     "arches-component-lab @ git+https://github.com/archesproject/arches-component-lab@main",
-    "arches-controlled-lists @ git+https://github.com/archesproject/arches-controlled-lists@main",
+    "arches-controlled-lists @ git+https://github.com/archesproject/arches-controlled-lists@dev/1.0.x",
     "arches-querysets @ git+https://github.com/archesproject/arches-querysets@main",
 ]
 version = "0.0.1"
