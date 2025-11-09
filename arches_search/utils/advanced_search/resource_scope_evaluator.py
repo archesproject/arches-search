@@ -13,46 +13,31 @@ class ResourceScopeEvaluator:
         self.literal_evaluator = literal_evaluator
         self.related_evaluator = related_evaluator
 
-    def q_for_group(self, group_payload: Dict[str, Any]) -> Optional[Q]:
-        use_and_logic = (group_payload.get("logic") or LOGIC_AND).upper() == LOGIC_AND
-        has_any_piece = False
-        combined_q = Q()
+    def compose_group_predicate(self, group_payload: Dict[str, Any]) -> Optional[Q]:
+        use_and_logic = group_payload["logic"].upper() == LOGIC_AND
 
-        for clause_payload in group_payload.get("clauses") or []:
-            clause_type = (clause_payload.get("type") or "").upper()
-            if clause_type == CLAUSE_TYPE_LITERAL:
-                exists_expression = self.literal_evaluator.exists_for_anchor(
-                    clause_payload
-                )
-            elif clause_type == CLAUSE_TYPE_RELATED:
-                exists_expression = self.related_evaluator.presence_for_anchor(
-                    clause_payload
-                )
-            else:
-                continue
-            clause_q = Q(exists_expression)
-            if not has_any_piece:
-                combined_q = clause_q
-                has_any_piece = True
-            else:
-                combined_q = (
-                    combined_q & clause_q if use_and_logic else combined_q | clause_q
-                )
+        evaluator_for_clause_type = {
+            CLAUSE_TYPE_LITERAL: self.literal_evaluator.exists_for_anchor,
+            CLAUSE_TYPE_RELATED: self.related_evaluator.presence_for_anchor,
+        }
 
-        for child_group_payload in group_payload.get("groups") or []:
-            if (child_group_payload.get("relationship") or {}).get("path"):
-                return None
-            child_q = self.q_for_group(child_group_payload)
-            if child_q is None:
-                return None
-            if not has_any_piece:
-                combined_q = child_q
-                has_any_piece = True
-            else:
-                combined_q = (
-                    combined_q & child_q if use_and_logic else combined_q | child_q
-                )
+        predicate_fragments = [
+            Q(evaluator_for_clause_type[clause_payload["type"].upper()](clause_payload))
+            for clause_payload in group_payload["clauses"]
+        ]
 
-        if not has_any_piece:
-            return Q() if use_and_logic else Q(pk__in=[])
-        return combined_q
+        predicate_fragments.extend(
+            self.compose_group_predicate(child_group_payload)
+            for child_group_payload in group_payload["groups"]
+        )
+
+        combined_predicate = Q() if use_and_logic else Q(pk__in=[])
+
+        for predicate_fragment in predicate_fragments:
+            combined_predicate = (
+                combined_predicate & predicate_fragment
+                if use_and_logic
+                else combined_predicate | predicate_fragment
+            )
+
+        return combined_predicate

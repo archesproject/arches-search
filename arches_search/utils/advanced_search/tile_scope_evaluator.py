@@ -14,7 +14,7 @@ class TileScopeEvaluator:
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
 
-    def q_for_group(
+    def compose_group_predicate(
         self,
         *,
         group_payload: Dict[str, Any],

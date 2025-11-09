@@ -111,7 +111,7 @@ class ClauseReducer:
             tiles_for_anchor_resource = arches_models.Tile.objects.filter(
                 resourceinstance_id=OuterRef("resourceinstanceid")
             )
-            relationshipless_q = self.tile_scope_evaluator.q_for_group(
+            relationshipless_q = self.tile_scope_evaluator.compose_group_predicate(
                 group_payload=group_payload,
                 tiles_for_anchor_resource=tiles_for_anchor_resource,
             )
@@ -124,7 +124,9 @@ class ClauseReducer:
                 literal_ok_rows=None,
             )
 
-        relationshipless_q = self.resource_scope_evaluator.q_for_group(group_payload)
+        relationshipless_q = self.resource_scope_evaluator.compose_group_predicate(
+            group_payload
+        )
 
         anchor_exists: List[Exists] = []
         for clause_payload in group_payload["clauses"]:
