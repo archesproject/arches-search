@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import Any, Dict, Tuple
 from django.db.models import QuerySet
 
@@ -7,13 +6,13 @@ class RelationshipCompiler:
     def __init__(self, path_navigator) -> None:
         self.path_navigator = path_navigator
 
-    def build_relationship_pairs(
+    def build_relationship_context(
         self, relationship_block: Dict[str, Any]
     ) -> Tuple[Dict[str, Any], QuerySet]:
-        compiled_pair_info, pairs_scoped_to_anchor_resource = (
-            self.path_navigator.build_relationship_pairs(relationship_block)
+        traversal_context, child_row_set = self.path_navigator.build_relationship_pairs(
+            relationship_block
         )
-        return compiled_pair_info, pairs_scoped_to_anchor_resource
+        return traversal_context, child_row_set
 
     def normalize_relationship_context(
         self, relationship_block: Dict[str, Any]
