@@ -38,78 +38,106 @@ class GroupCompiler:
         current_context_side: str = CONTEXT_ANCHOR,
         traversal_context_for_parent: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Q, List[Exists]]:
-        group_scope = (group_payload.get("scope") or SCOPE_RESOURCE).upper()
-        relationship_block = group_payload.get("relationship")
-        path_segments = (relationship_block or {}).get("path")
-        has_relationship = bool(path_segments)
-        has_relationship_child = any(
-            ((child_group_payload.get("relationship") or {}).get("path"))
-            for child_group_payload in (group_payload.get("groups") or [])
-        )
-        group_logic = (group_payload.get("logic") or LOGIC_AND).upper()
+        scope = group_payload["scope"].upper()
+        group_logic = group_payload["logic"].upper()
+        relationship = group_payload["relationship"]
 
-        if (
-            group_scope == SCOPE_TILE
-            and not has_relationship
-            and not has_relationship_child
-        ):
-            reduce_result = self.clause_reducer.reduce(
+        path_segments = (relationship or {}).get("path")
+        has_relationship = bool(path_segments)
+
+        if scope == SCOPE_TILE and not has_relationship:
+            return self._compile_tile_scope_without_relationship(
                 group_payload=group_payload,
-                traversal_context=None,
-                child_rows=None,
-                use_or_logic=(group_logic == LOGIC_OR),
+                group_logic=group_logic,
             )
-            return reduce_result.relationshipless_q or Q(), []
 
         if not has_relationship:
-            reduce_result = self.clause_reducer.reduce(
+            return self._compile_resource_scope_without_relationship(
                 group_payload=group_payload,
-                traversal_context=None,
-                child_rows=None,
-                use_or_logic=(group_logic == LOGIC_OR),
-            )
-            parent_q = reduce_result.relationshipless_q or Q()
-
-            children_q, children_existence_predicates = self._compile_children(
-                subgroups=group_payload.get("groups") or [],
-                parent_has_relationship=False,
+                group_logic=group_logic,
                 current_context_side=current_context_side,
                 traversal_context_for_parent=traversal_context_for_parent,
             )
 
-            if group_logic == LOGIC_OR:
-                combined_q = Q(pk__in=[])
-                if parent_q:
-                    combined_q |= parent_q
-                if children_q:
-                    combined_q |= children_q
-                for existence_expression in children_existence_predicates:
-                    combined_q |= Q(existence_expression)
-                return combined_q, []
+        return self._compile_with_relationship(
+            group_payload=group_payload,
+            group_logic=group_logic,
+        )
 
-            combined_q = parent_q & (children_q or Q())
-            return combined_q, children_existence_predicates
+    def _compile_tile_scope_without_relationship(
+        self,
+        group_payload: Dict[str, Any],
+        group_logic: str,
+    ) -> Tuple[Q, List[Exists]]:
+        reduce_result = self.clause_reducer.reduce(
+            group_payload=group_payload,
+            traversal_context=None,
+            child_rows=None,
+            logic=group_logic,
+        )
+        return reduce_result.relationshipless_q or Q(), []
 
-        existence_predicates: List[Exists] = []
+    def _compile_resource_scope_without_relationship(
+        self,
+        group_payload: Dict[str, Any],
+        group_logic: str,
+        current_context_side: str,
+        traversal_context_for_parent: Optional[Dict[str, Any]],
+    ) -> Tuple[Q, List[Exists]]:
+        reduce_result = self.clause_reducer.reduce(
+            group_payload=group_payload,
+            traversal_context=None,
+            child_rows=None,
+            logic=group_logic,
+        )
+        parent_q = reduce_result.relationshipless_q or Q()
+
+        children_q, children_existence_predicates = self._compile_children(
+            subgroups=group_payload["groups"],
+            parent_has_relationship=False,
+            current_context_side=current_context_side,
+            traversal_context_for_parent=traversal_context_for_parent,
+        )
+
+        if group_logic == LOGIC_OR:
+            combined_q = Q(pk__in=[])
+            combined_q |= parent_q
+            combined_q |= children_q or Q()
+
+            for existence_expression in children_existence_predicates:
+                combined_q |= Q(existence_expression)
+
+            return combined_q, []
+
+        combined_q = parent_q & (children_q or Q())
+        return combined_q, children_existence_predicates
+
+    def _compile_with_relationship(
+        self,
+        group_payload: Dict[str, Any],
+        group_logic: str,
+    ) -> Tuple[Q, List[Exists]]:
+        relationship = group_payload["relationship"]
 
         traversal_context, child_row_set = (
-            self.relationship_compiler.build_relationship_context(relationship_block)
+            self.relationship_compiler.build_relationship_context(relationship)
         )
         child_id_field_name = traversal_context["child_id_field"]
         is_inverse_relationship = traversal_context.get("is_inverse", False)
 
-        if is_inverse_relationship:
-            child_row_set_excluding_anchor = child_row_set
-        else:
-            child_row_set_excluding_anchor = child_row_set.exclude(
+        child_row_set_excluding_anchor = (
+            child_row_set
+            if is_inverse_relationship
+            else child_row_set.exclude(
                 **{child_id_field_name: OuterRef("resourceinstanceid")}
             )
+        )
 
         reduce_result = self.clause_reducer.reduce(
             group_payload=group_payload,
             traversal_context=traversal_context,
             child_rows=child_row_set_excluding_anchor,
-            use_or_logic=(group_logic == LOGIC_OR),
+            logic=group_logic,
         )
 
         qualifying_child_rows = (
@@ -119,11 +147,9 @@ class GroupCompiler:
         )
 
         normalized_relationship = (
-            self.relationship_compiler.normalize_relationship_context(
-                relationship_block
-            )
+            self.relationship_compiler.normalize_relationship_context(relationship)
         )
-        traversal_quantifier = normalized_relationship["hop_quantifier"]
+        traversal_quantifier = normalized_relationship["traversal_quantifier"]
         is_single_inverse_hop = (
             normalized_relationship["is_inverse"]
             and len(normalized_relationship["path_segments"]) == 1
@@ -132,27 +158,16 @@ class GroupCompiler:
         if is_single_inverse_hop and traversal_quantifier == QUANTIFIER_ALL:
             traversal_quantifier = QUANTIFIER_ANY
 
-        if traversal_quantifier == QUANTIFIER_ANY:
-            existence_predicates.append(Exists(qualifying_child_rows))
-        elif traversal_quantifier == QUANTIFIER_NONE:
-            if reduce_result.had_inner_filters:
-                none_predicate = Exists(child_row_set_excluding_anchor) & ~Exists(
-                    qualifying_child_rows
-                )
-            else:
-                none_predicate = ~Exists(child_row_set_excluding_anchor)
-            existence_predicates.append(none_predicate)
-        else:
-            same_child_ok = qualifying_child_rows.filter(
-                **{child_id_field_name: OuterRef(child_id_field_name)}
-            )
-            violators = child_row_set_excluding_anchor.filter(~Exists(same_child_ok))
-            existence_predicates.append(
-                Exists(child_row_set_excluding_anchor) & ~Exists(violators)
-            )
+        existence_predicates = self._build_existence_predicates_for_quantifier(
+            traversal_quantifier=traversal_quantifier,
+            had_inner_filters=reduce_result.had_inner_filters,
+            child_row_set_excluding_anchor=child_row_set_excluding_anchor,
+            qualifying_child_rows=qualifying_child_rows,
+            child_id_field_name=child_id_field_name,
+        )
 
         children_q, children_existence_predicates = self._compile_children(
-            subgroups=group_payload.get("groups") or [],
+            subgroups=group_payload["groups"],
             parent_has_relationship=True,
             current_context_side=CONTEXT_CHILD,
             traversal_context_for_parent=traversal_context,
@@ -165,12 +180,42 @@ class GroupCompiler:
 
         if group_logic == LOGIC_OR:
             combined_q = children_q if children_q is not None else Q(pk__in=[])
+
             for existence_expression in all_existence_predicates:
                 combined_q = combined_q | Q(existence_expression)
             return combined_q, []
 
         combined_q = children_q if children_q is not None else Q()
         return combined_q, all_existence_predicates
+
+    def _build_existence_predicates_for_quantifier(
+        self,
+        traversal_quantifier: str,
+        had_inner_filters: bool,
+        child_row_set_excluding_anchor,
+        qualifying_child_rows,
+        child_id_field_name: str,
+    ) -> List[Exists]:
+        if traversal_quantifier == QUANTIFIER_ANY:
+            return [Exists(qualifying_child_rows)]
+
+        if traversal_quantifier == QUANTIFIER_NONE:
+            if had_inner_filters:
+                none_predicate = Exists(child_row_set_excluding_anchor) & ~Exists(
+                    qualifying_child_rows
+                )
+            else:
+                none_predicate = ~Exists(child_row_set_excluding_anchor)
+            return [none_predicate]
+
+        same_child_ok = qualifying_child_rows.filter(
+            **{child_id_field_name: OuterRef(child_id_field_name)}
+        )
+
+        violating_child_rows = child_row_set_excluding_anchor.filter(
+            ~Exists(same_child_ok)
+        )
+        return [Exists(child_row_set_excluding_anchor) & ~Exists(violating_child_rows)]
 
     def _compile_children(
         self,
@@ -184,19 +229,21 @@ class GroupCompiler:
 
         for subgroup_payload in subgroups:
             subgroup_has_relationship = bool(
-                ((subgroup_payload.get("relationship")) or {}).get("path")
+                (subgroup_payload["relationship"] or {}).get("path")
             )
 
             if parent_has_relationship and subgroup_has_relationship:
                 continue
 
+            next_context_side = (
+                CONTEXT_CHILD
+                if parent_has_relationship and not subgroup_has_relationship
+                else current_context_side
+            )
+
             subgroup_q, subgroup_existence_predicates = self.compile(
                 group_payload=subgroup_payload,
-                current_context_side=(
-                    CONTEXT_CHILD
-                    if parent_has_relationship and not subgroup_has_relationship
-                    else current_context_side
-                ),
+                current_context_side=next_context_side,
                 traversal_context_for_parent=traversal_context_for_parent,
             )
 

@@ -125,9 +125,9 @@ class PathNavigator:
         is_inverse = bool(relationship_context.get("is_inverse"))
         path_segments = relationship_context.get("path") or []
         raw_quantifiers = relationship_context.get("traversal_quantifiers") or ["ANY"]
-        hop_quantifier = (raw_quantifiers[0] or "ANY").upper()
+        traversal_quantifier = (raw_quantifiers[0] or "ANY").upper()
         return {
             "is_inverse": is_inverse,
             "path_segments": path_segments,
-            "hop_quantifier": hop_quantifier,
+            "traversal_quantifier": traversal_quantifier,
         }

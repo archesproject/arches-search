@@ -66,7 +66,7 @@ class ClauseReducer:
         group_payload: Dict[str, Any],
         traversal_context: Optional[Dict[str, Any]] = None,
         child_rows: Optional[QuerySet] = None,
-        use_or_logic: bool = False,
+        logic: str = LOGIC_AND,
     ) -> ReduceResult:
         relationship_block = group_payload.get("relationship") or {}
         path_for_group = relationship_block.get("path")
@@ -102,7 +102,7 @@ class ClauseReducer:
         if child_rows is not None and traversal_context is not None:
             constrained_child_rows = child_rows
 
-            if not use_or_logic:
+            if logic == LOGIC_AND:
                 constrained_child_rows, applied_here = (
                     self._filter_children_by_group_literals(
                         constrained_child_rows, traversal_context, group_payload

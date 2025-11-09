@@ -1,5 +1,6 @@
 from typing import Any, Dict
 from django.db.models import QuerySet
+from django.utils.translation import gettext as _
 from arches.app.models import models as arches_models
 
 from arches_search.utils.advanced_search.node_alias_datatype_registry import (
@@ -82,7 +83,10 @@ class AdvancedSearchQueryCompiler:
             .first()
         )
         if anchor_graph_id is None:
-            raise ValueError(f"Unknown graph slug: {self.payload_query['graph_slug']}")
+            raise ValueError(
+                _("Unknown graph slug: %(slug)s")
+                % {"slug": self.payload_query["graph_slug"]}
+            )
 
         queryset = (
             arches_models.ResourceInstance.objects.only("resourceinstanceid")
