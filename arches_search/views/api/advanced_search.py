@@ -2394,4 +2394,11 @@ class AdvancedSearchAPI(APIBase):
                 run_case(tc["name"], tc["payload"], tc.get("expected_count"))
                 for tc in test_cases
             ]
+            print(
+                [
+                    case_result
+                    for case_result in case_results
+                    if not case_result["matches_expected"]
+                ]
+            )
             return JSONResponse({"cases": case_results, "aggregations": {}})
