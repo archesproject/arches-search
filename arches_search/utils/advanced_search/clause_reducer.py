@@ -16,7 +16,6 @@ from arches_search.utils.advanced_search.tile_scope_evaluator import (
 )
 
 LOGIC_AND = "AND"
-LOGIC_OR = "OR"
 
 SCOPE_RESOURCE = "RESOURCE"
 SCOPE_TILE = "TILE"
@@ -40,7 +39,6 @@ class ReduceResult(NamedTuple):
 class ClauseReducer:
     def __init__(
         self,
-        *,
         literal_evaluator: LiteralClauseEvaluator,
         related_evaluator: RelatedClauseEvaluator,
         facet_registry,
@@ -62,184 +60,227 @@ class ClauseReducer:
 
     def reduce(
         self,
-        *,
         group_payload: Dict[str, Any],
         traversal_context: Optional[Dict[str, Any]] = None,
         child_rows: Optional[QuerySet] = None,
         logic: str = LOGIC_AND,
     ) -> ReduceResult:
-        relationship_block = group_payload.get("relationship") or {}
-        path_for_group = relationship_block.get("path")
-        is_relationshipless = not bool(path_for_group)
+        relationship_path = (group_payload.get("relationship") or {}).get("path")
 
-        relationshipless_q: Optional[Q] = None
-        anchor_exists: List[Exists] = []
-        constrained_child_rows: Optional[QuerySet] = None
-        had_inner_filters = False
-        has_child_targeting_clause = False
-        literal_ok_rows: Optional[QuerySet] = None
+        if (
+            not bool(relationship_path)
+            and child_rows is None
+            and traversal_context is None
+        ):
+            return self._reduce_top_level_no_relationship_clauses(group_payload)
 
-        if is_relationshipless and child_rows is None and traversal_context is None:
-            group_scope = (group_payload.get("scope") or SCOPE_RESOURCE).upper()
-            if group_scope == SCOPE_TILE:
-                relationshipless_q = self.relationshipless_tile_q(group_payload)
-            else:
-                relationshipless_q = self.resource_scope_evaluator.q_for_group(
-                    group_payload
-                )
-            if group_scope == SCOPE_RESOURCE:
-                anchor_exists = self._anchor_exists_for_group(group_payload)
+        if child_rows is not None and traversal_context is not None:
+            (
+                constrained_child_rows,
+                had_inner_filters,
+                has_child_targeting_clause,
+                literal_ok_rows,
+            ) = self._reduce_child_side(
+                group_payload, traversal_context, child_rows, logic
+            )
 
             return ReduceResult(
+                relationshipless_q=None,
+                anchor_exists=[],
+                constrained_child_rows=constrained_child_rows,
+                had_inner_filters=had_inner_filters,
+                has_child_targeting_clause=has_child_targeting_clause,
+                literal_ok_rows=literal_ok_rows,
+            )
+
+        return ReduceResult(
+            relationshipless_q=None,
+            anchor_exists=[],
+            constrained_child_rows=None,
+            had_inner_filters=False,
+            has_child_targeting_clause=False,
+            literal_ok_rows=None,
+        )
+
+    def _reduce_top_level_no_relationship_clauses(
+        self, group_payload: Dict[str, Any]
+    ) -> ReduceResult:
+        scope_for_group = group_payload["scope"].upper()
+
+        if scope_for_group == SCOPE_TILE:
+            tiles_for_anchor_resource = arches_models.Tile.objects.filter(
+                resourceinstance_id=OuterRef("resourceinstanceid")
+            )
+            relationshipless_q = self.tile_scope_evaluator.q_for_group(
+                group_payload=group_payload,
+                tiles_for_anchor_resource=tiles_for_anchor_resource,
+            )
+            return ReduceResult(
                 relationshipless_q=relationshipless_q,
-                anchor_exists=anchor_exists,
+                anchor_exists=[],
                 constrained_child_rows=None,
                 had_inner_filters=False,
                 has_child_targeting_clause=False,
                 literal_ok_rows=None,
             )
 
-        if child_rows is not None and traversal_context is not None:
-            constrained_child_rows = child_rows
+        relationshipless_q = self.resource_scope_evaluator.q_for_group(group_payload)
 
-            if logic == LOGIC_AND:
-                constrained_child_rows, applied_here = (
-                    self._filter_children_by_group_literals(
-                        constrained_child_rows, traversal_context, group_payload
-                    )
+        anchor_exists: List[Exists] = []
+        for clause_payload in group_payload["clauses"]:
+            clause_type = clause_payload["type"].upper()
+            if clause_type == CLAUSE_TYPE_LITERAL:
+                anchor_exists.append(
+                    self.literal_evaluator.exists_for_anchor(clause_payload)
                 )
-                had_inner_filters = had_inner_filters or applied_here
-            else:
-                or_q, saw_any_ok_rows = self._or_q_from_group_literals(
-                    group_payload, traversal_context
-                )
-                if saw_any_ok_rows and or_q is not None:
-                    constrained_child_rows = child_rows.filter(or_q)
-                    had_inner_filters = True
-
-            nested_group_payload = next(
-                (
-                    nested
-                    for nested in group_payload.get("groups") or []
-                    if ((nested.get("relationship")) or {}).get("path")
-                ),
-                None,
-            )
-            if nested_group_payload:
-                constrained_child_rows, applied_nested = (
-                    self._apply_nested_single_hop_literals(
-                        constrained_child_rows, traversal_context, nested_group_payload
-                    )
-                )
-                had_inner_filters = had_inner_filters or applied_nested
-
-            constrained_child_rows, applied_related = (
-                self._apply_related_clauses_to_children(
-                    constrained_child_rows, traversal_context, group_payload
-                )
-            )
-            had_inner_filters = had_inner_filters or applied_related
-
-            has_child_targeting_clause = any(
-                (clause.get("type") or "").upper() == CLAUSE_TYPE_RELATED
-                for clause in (group_payload.get("clauses") or [])
-            )
-
-            if (
-                traversal_context.get("is_inverse")
-                and len(traversal_context.get("path_segments") or []) == 1
-            ):
-                literal_ok_rows = self.literal_evaluator.ok_child_rows_from_literals(
-                    group_payload=group_payload,
-                    correlate_field=traversal_context["child_id_field"],
-                    terminal_graph_slug=traversal_context["terminal_graph_slug"],
+            elif clause_type == CLAUSE_TYPE_RELATED:
+                anchor_exists.append(
+                    self.related_evaluator.presence_for_anchor(clause_payload)
                 )
 
         return ReduceResult(
             relationshipless_q=relationshipless_q,
             anchor_exists=anchor_exists,
-            constrained_child_rows=constrained_child_rows,
-            had_inner_filters=had_inner_filters,
-            has_child_targeting_clause=has_child_targeting_clause,
-            literal_ok_rows=literal_ok_rows,
+            constrained_child_rows=None,
+            had_inner_filters=False,
+            has_child_targeting_clause=False,
+            literal_ok_rows=None,
         )
 
-    def relationshipless_tile_q(self, group_payload: Dict[str, Any]) -> Q:
-        tiles_for_anchor_resource = arches_models.Tile.objects.filter(
-            resourceinstance_id=OuterRef("resourceinstanceid")
-        )
-        return self.tile_scope_evaluator.q_for_group(
-            group_payload=group_payload,
-            tiles_for_anchor_resource=tiles_for_anchor_resource,
-        )
-
-    def _anchor_exists_for_group(self, group_payload: Dict[str, Any]) -> List[Exists]:
-        existence_predicates: List[Exists] = []
-        for clause_payload in group_payload.get("clauses") or []:
-            clause_type = (clause_payload.get("type") or "").upper()
-            if clause_type == CLAUSE_TYPE_LITERAL:
-                existence_predicates.append(
-                    self.literal_evaluator.exists_for_anchor(clause_payload)
-                )
-            elif clause_type == CLAUSE_TYPE_RELATED:
-                existence_predicates.append(
-                    self.related_evaluator.presence_for_anchor(clause_payload)
-                )
-        return existence_predicates
-
-    def _filter_children_by_group_literals(
+    def _reduce_child_side(
         self,
+        group_payload: Dict[str, Any],
+        traversal_context: Dict[str, Any],
         child_rows: QuerySet,
-        traversal_context: Dict[str, Any],
-        group_payload: Dict[str, Any],
-    ) -> Tuple[QuerySet, bool]:
-        working_rows = child_rows
-        applied_any = False
+        logic: str,
+    ) -> Tuple[QuerySet, bool, bool, Optional[QuerySet]]:
+        constrained_child_rows = child_rows
+        had_inner_filters = False
+        literal_ok_rows: Optional[QuerySet] = None
 
-        pending_nodes: List[Dict[str, Any]] = [
-            g
-            for g in (group_payload.get("groups") or [])
-            if not ((g.get("relationship") or {}).get("path"))
-        ]
-        while pending_nodes:
-            node_payload = pending_nodes.pop()
-            for clause_payload in node_payload.get("clauses") or []:
-                if (clause_payload.get("type") or "").upper() != CLAUSE_TYPE_LITERAL:
-                    continue
-                exists_expression = self.literal_evaluator.exists_for_child(
-                    clause_payload, correlate_field=traversal_context["child_id_field"]
+        if logic == LOGIC_AND:
+            constrained_child_rows, applied_and = self._apply_and_literals_to_children(
+                constrained_child_rows=constrained_child_rows,
+                traversal_context=traversal_context,
+                group_payload=group_payload,
+            )
+            if applied_and:
+                had_inner_filters = True
+        else:
+            or_exists_predicate = self._build_or_exists_from_literals(
+                group_payload=group_payload,
+                traversal_context=traversal_context,
+            )
+            if or_exists_predicate is not None:
+                constrained_child_rows = child_rows.filter(or_exists_predicate)
+                had_inner_filters = True
+
+        nested_relationship_group = next(
+            (
+                candidate_group
+                for candidate_group in group_payload["groups"]
+                if (candidate_group.get("relationship") or {}).get("path")
+            ),
+            None,
+        )
+        if nested_relationship_group:
+            constrained_child_rows, applied_nested = (
+                self._apply_nested_single_hop_literals(
+                    base_child_rows=constrained_child_rows,
+                    traversal_context=traversal_context,
+                    nested_group_payload=nested_relationship_group,
                 )
-                working_rows = working_rows.filter(exists_expression)
-                applied_any = True
-            for deeper_group_payload in node_payload.get("groups") or []:
-                if ((deeper_group_payload.get("relationship")) or {}).get("path"):
-                    continue
-                pending_nodes.append(deeper_group_payload)
+            )
+            if applied_nested:
+                had_inner_filters = True
 
-        return working_rows, applied_any
+        constrained_child_rows, applied_related = (
+            self._apply_related_clauses_to_children(
+                child_rows=constrained_child_rows,
+                traversal_context=traversal_context,
+                group_payload=group_payload,
+            )
+        )
+        if applied_related:
+            had_inner_filters = True
 
-    def _or_q_from_group_literals(
-        self,
-        group_payload: Dict[str, Any],
-        traversal_context: Dict[str, Any],
-    ) -> Tuple[Optional[Q], bool]:
-        or_q = Q(pk__in=[])
-        saw_any_ok_rows = False
+        has_child_targeting_clause = any(
+            clause_payload["type"].upper() == CLAUSE_TYPE_RELATED
+            for clause_payload in group_payload["clauses"]
+        )
 
-        for child_group_payload in group_payload.get("groups") or []:
-            if ((child_group_payload.get("relationship")) or {}).get("path"):
-                continue
-            ok_rows = self.literal_evaluator.ok_child_rows_from_literals(
-                child_group_payload,
+        if (
+            traversal_context["is_inverse"]
+            and len(traversal_context.get("path_segments") or []) == 1
+        ):
+            literal_ok_rows = self.literal_evaluator.ok_child_rows_from_literals(
+                group_payload=group_payload,
                 correlate_field=traversal_context["child_id_field"],
                 terminal_graph_slug=traversal_context["terminal_graph_slug"],
             )
-            if ok_rows is None:
-                continue
-            or_q |= Q(Exists(ok_rows))
-            saw_any_ok_rows = True
 
-        return (or_q if saw_any_ok_rows else None), saw_any_ok_rows
+        return (
+            constrained_child_rows,
+            had_inner_filters,
+            has_child_targeting_clause,
+            literal_ok_rows,
+        )
+
+    def _apply_and_literals_to_children(
+        self,
+        constrained_child_rows: QuerySet,
+        traversal_context: Dict[str, Any],
+        group_payload: Dict[str, Any],
+    ) -> Tuple[QuerySet, bool]:
+        working_child_rows = constrained_child_rows
+        applied_any_filter = False
+
+        pending_group_payloads: List[Dict[str, Any]] = list(group_payload["groups"])
+        while pending_group_payloads:
+            current_group_payload = pending_group_payloads.pop()
+            has_path = bool(
+                ((current_group_payload.get("relationship")) or {}).get("path")
+            )
+            if not has_path:
+                for clause_payload in current_group_payload["clauses"]:
+                    if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
+                        continue
+                    exists_expression = self.literal_evaluator.exists_for_child(
+                        clause_payload=clause_payload,
+                        correlate_field=traversal_context["child_id_field"],
+                    )
+                    working_child_rows = working_child_rows.filter(exists_expression)
+                    applied_any_filter = True
+                pending_group_payloads.extend(current_group_payload["groups"])
+
+        return working_child_rows, applied_any_filter
+
+    def _build_or_exists_from_literals(
+        self,
+        group_payload: Dict[str, Any],
+        traversal_context: Dict[str, Any],
+    ) -> Optional[Q]:
+        combined_or_exists = Q(pk__in=[])
+        saw_any_ok_rowset = False
+
+        pending_group_payloads: List[Dict[str, Any]] = list(group_payload["groups"])
+        while pending_group_payloads:
+            current_group_payload = pending_group_payloads.pop()
+            has_path = bool(
+                ((current_group_payload.get("relationship")) or {}).get("path")
+            )
+            if not has_path:
+                ok_rowset = self.literal_evaluator.ok_child_rows_from_literals(
+                    group_payload=current_group_payload,
+                    correlate_field=traversal_context["child_id_field"],
+                    terminal_graph_slug=traversal_context["terminal_graph_slug"],
+                )
+                if ok_rowset is not None:
+                    combined_or_exists |= Q(Exists(ok_rowset))
+                    saw_any_ok_rowset = True
+                pending_group_payloads.extend(current_group_payload["groups"])
+
+        return combined_or_exists if saw_any_ok_rowset else None
 
     def _apply_nested_single_hop_literals(
         self,
@@ -259,36 +300,35 @@ class ClauseReducer:
 
         (
             _ignored_anchor_slug,
-            nested_terminal_graph_slug,
+            _ignored_nested_terminal_graph_slug,
             nested_child_rows,
             nested_child_id_field_name,
         ) = self.path_navigator.build_scoped_pairs_for_path(
             path_segments=nested_path,
-            is_inverse_relationship=bool(nested_relationship.get("is_inverse")),
+            is_inverse_relationship=bool(nested_relationship["is_inverse"]),
             correlate_on_field=parent_child_id_field_name,
         )
 
-        literal_clauses_all: List[Dict[str, Any]] = []
-        stack_for_collection: List[Dict[str, Any]] = [nested_group_payload]
-        while stack_for_collection:
-            node_payload = stack_for_collection.pop()
-            if not ((node_payload.get("relationship") or {}).get("path")):
-                for clause_payload in node_payload.get("clauses") or []:
-                    if (
-                        clause_payload.get("type") or ""
-                    ).upper() == CLAUSE_TYPE_LITERAL:
-                        literal_clauses_all.append(clause_payload)
-            for deeper_group_payload in node_payload.get("groups") or []:
-                stack_for_collection.append(deeper_group_payload)
-
         nested_ok_rows = nested_child_rows
-        applied_any = False
-        for clause_payload in literal_clauses_all:
-            exists_expression = self.literal_evaluator.exists_for_child(
-                clause_payload, correlate_field=nested_child_id_field_name
+
+        pending_group_payloads: List[Dict[str, Any]] = list(
+            nested_group_payload["groups"]
+        )
+        while pending_group_payloads:
+            current_group_payload = pending_group_payloads.pop()
+            has_path = bool(
+                ((current_group_payload.get("relationship")) or {}).get("path")
             )
-            nested_ok_rows = nested_ok_rows.filter(exists_expression)
-            applied_any = True
+            if not has_path:
+                for clause_payload in current_group_payload["clauses"]:
+                    if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
+                        continue
+                    exists_expression = self.literal_evaluator.exists_for_child(
+                        clause_payload=clause_payload,
+                        correlate_field=nested_child_id_field_name,
+                    )
+                    nested_ok_rows = nested_ok_rows.filter(exists_expression)
+                pending_group_payloads.extend(current_group_payload["groups"])
 
         if nested_quantifier == QUANTIFIER_ANY:
             return base_child_rows.filter(Exists(nested_ok_rows)), True
@@ -307,7 +347,7 @@ class ClauseReducer:
         violating_rows = nested_child_rows.filter(~Exists(same_child_ok))
         return (
             base_child_rows.filter(Exists(nested_child_rows) & ~Exists(violating_rows)),
-            True or applied_any,
+            True,
         )
 
     def _apply_related_clauses_to_children(
@@ -316,22 +356,25 @@ class ClauseReducer:
         traversal_context: Dict[str, Any],
         group_payload: Dict[str, Any],
     ) -> Tuple[QuerySet, bool]:
-        constrained = child_rows
-        applied_any = False
+        constrained_rows = child_rows
+        applied_any_related = False
+        terminal_graph_slug = traversal_context["terminal_graph_slug"]
+        terminal_node_alias = traversal_context["terminal_node_alias"]
 
-        for clause_payload in group_payload.get("clauses") or []:
-            if (clause_payload.get("type") or "").upper() != CLAUSE_TYPE_RELATED:
+        for clause_payload in group_payload["clauses"]:
+            if clause_payload["type"].upper() != CLAUSE_TYPE_RELATED:
                 continue
 
             subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
-            operator_token = (clause_payload.get("operator") or "").upper()
-            has_operands = bool(clause_payload.get("operands"))
+            operator_token = clause_payload["operator"].upper()
+            has_operands = bool(clause_payload["operands"])
 
-            if (
-                not has_operands
-                and subject_graph_slug == traversal_context["terminal_graph_slug"]
-                and subject_node_alias == traversal_context["terminal_node_alias"]
-            ):
+            targets_current_terminal = (
+                subject_graph_slug == terminal_graph_slug
+                and subject_node_alias == terminal_node_alias
+            )
+
+            if not has_operands and targets_current_terminal:
                 datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
                     subject_graph_slug, subject_node_alias
                 )
@@ -341,9 +384,10 @@ class ClauseReducer:
                     continue
 
             presence_expression = self.related_evaluator.presence_for_child(
-                clause_payload, traversal_context
+                clause_payload=clause_payload,
+                traversal_context=traversal_context,
             )
-            constrained = constrained.filter(presence_expression)
-            applied_any = True
+            constrained_rows = constrained_rows.filter(presence_expression)
+            applied_any_related = True
 
-        return constrained, applied_any
+        return constrained_rows, applied_any_related
