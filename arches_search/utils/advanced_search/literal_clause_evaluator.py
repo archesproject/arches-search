@@ -22,6 +22,8 @@ class LiteralClauseEvaluator:
         self.path_navigator = path_navigator
         self.operand_compiler = operand_compiler
 
+    # ---------- Existing resource-scope helpers ----------
+
     def exists_for_anchor(self, clause_payload: Dict[str, Any]) -> Exists:
         subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
         operator_token = (clause_payload.get("operator") or "").upper()
@@ -298,3 +300,164 @@ class LiteralClauseEvaluator:
                 )
 
         return accumulated_rows
+
+    # ---------- New tile-scope helper (isolates all operand handling) ----------
+
+    def evaluate_literal_clause_for_tile_scope(
+        self,
+        *,
+        clause_payload: Dict[str, Any],
+        tiles_for_anchor_resource: QuerySet,
+        tile_id_outer_ref: Any,
+    ) -> Tuple[Optional[Q], Optional[Q]]:
+        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        operator_token = (clause_payload.get("operator") or "").upper()
+        quantifier_token = (clause_payload.get("quantifier") or "").upper()
+        operand_items = clause_payload.get("operands") or []
+
+        datatype_name = (
+            self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+                subject_graph_slug, subject_node_alias
+            )
+        )
+        model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
+
+        subject_rows = model_class.objects.filter(
+            graph_slug=subject_graph_slug,
+            node_alias=subject_node_alias,
+        )
+        resource_rows = subject_rows.filter(
+            resourceinstanceid=OuterRef("resourceinstanceid")
+        )
+        tile_rows = subject_rows.filter(
+            resourceinstanceid=OuterRef("resourceinstance_id")
+        )
+
+        resource_has_any_tile_q = Q(Exists(tiles_for_anchor_resource))
+
+        if not operand_items:
+            presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
+                datatype_name, operator_token
+            )
+            if quantifier_token == QUANTIFIER_ANY:
+                present_in_tile = Q(Exists(tile_rows.filter(tileid=tile_id_outer_ref)))
+                return (
+                    present_in_tile if presence_implies_match else ~present_in_tile,
+                    None,
+                )
+
+            if quantifier_token == QUANTIFIER_NONE:
+                return (
+                    None,
+                    (
+                        Q(~Exists(resource_rows))
+                        if presence_implies_match
+                        else Q(Exists(resource_rows))
+                    ),
+                )
+
+            tiles_missing_match = tiles_for_anchor_resource.filter(
+                ~Exists(tile_rows.filter(tileid=tile_id_outer_ref))
+            )
+            resource_level_q = (
+                (Q(~Exists(tiles_missing_match)) & resource_has_any_tile_q)
+                if presence_implies_match
+                else Q(~Exists(tiles_for_anchor_resource))
+            )
+            return (None, resource_level_q)
+
+        predicate_expression, is_template_negated = (
+            self.operand_compiler.build_predicate(
+                datatype_name=datatype_name,
+                operator_token=operator_token,
+                operands=operand_items,
+                anchor_resource_id_annotation=None,
+            )
+        )
+
+        if isinstance(predicate_expression, Q):
+            resource_matches = resource_rows.filter(predicate_expression)
+            tile_matches = tile_rows.filter(predicate_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+        else:
+            resource_matches = resource_rows.filter(**predicate_expression)
+            tile_matches = tile_rows.filter(**predicate_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+
+        if quantifier_token == QUANTIFIER_ANY:
+            return (Q(Exists(tile_matches)), None)
+
+        if quantifier_token == QUANTIFIER_NONE:
+            return (None, Q(~Exists(resource_matches)))
+
+        if not is_template_negated:
+            tiles_missing_match = tiles_for_anchor_resource.filter(
+                ~Exists(tile_matches)
+            )
+            return (
+                None,
+                Q(~Exists(tiles_missing_match)) & resource_has_any_tile_q,
+            )
+
+        positive_tile_matches = self._derive_positive_tile_matches_for_tile_scope(
+            tile_rows=tile_rows,
+            tile_id_outer_ref=tile_id_outer_ref,
+            predicate_expression=predicate_expression,
+            operator_token=operator_token,
+            datatype_name=datatype_name,
+            operand_items=operand_items,
+        )
+        tiles_with_violations = tiles_for_anchor_resource.filter(
+            Exists(positive_tile_matches)
+        )
+        return (
+            None,
+            Q(~Exists(tiles_with_violations)) & resource_has_any_tile_q,
+        )
+
+    def _derive_positive_tile_matches_for_tile_scope(
+        self,
+        *,
+        tile_rows: QuerySet,
+        tile_id_outer_ref: Any,
+        predicate_expression: Any,
+        operator_token: str,
+        datatype_name: str,
+        operand_items: List[Dict[str, Any]],
+    ) -> QuerySet:
+        positive_facet = self.facet_registry.get_positive_facet_for(
+            operator_token, datatype_name
+        )
+
+        if positive_facet is not None:
+            positive_expression, _ = self.facet_registry.predicate(
+                datatype_name,
+                positive_facet.operator,
+                "value",
+                self.operand_compiler.literal_values_only(operand_items),
+            )
+            if isinstance(positive_expression, Q):
+                return tile_rows.filter(positive_expression).filter(
+                    tileid=tile_id_outer_ref
+                )
+            return tile_rows.filter(**positive_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+
+        if isinstance(predicate_expression, Q) and getattr(
+            predicate_expression, "negated", False
+        ):
+            return tile_rows.filter(~predicate_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+
+        if isinstance(predicate_expression, Q):
+            return tile_rows.exclude(predicate_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+
+        return tile_rows.exclude(**predicate_expression).filter(
+            tileid=tile_id_outer_ref
+        )
