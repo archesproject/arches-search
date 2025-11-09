@@ -12,9 +12,6 @@ from arches_search.utils.advanced_search.search_model_registry import (
 from arches_search.utils.advanced_search.facet_registry import FacetRegistry
 from arches_search.utils.advanced_search.path_navigator import PathNavigator
 from arches_search.utils.advanced_search.operand_compiler import OperandCompiler
-from arches_search.utils.advanced_search.relationship_compiler import (
-    RelationshipCompiler,
-)
 from arches_search.utils.advanced_search.literal_clause_evaluator import (
     LiteralClauseEvaluator,
 )
@@ -43,8 +40,6 @@ class AdvancedSearchQueryCompiler:
             self.facet_registry, self.path_navigator
         )
 
-        self.relationship_compiler = RelationshipCompiler(self.path_navigator)
-
         self.literal_clause_evaluator = LiteralClauseEvaluator(
             self.search_model_registry,
             self.facet_registry,
@@ -56,7 +51,6 @@ class AdvancedSearchQueryCompiler:
             self.facet_registry,
             self.path_navigator,
             self.operand_compiler,
-            self.relationship_compiler,
         )
 
         self.clause_reducer = ClauseReducer(
@@ -64,12 +58,12 @@ class AdvancedSearchQueryCompiler:
             related_clause_evaluator=self.related_clause_evaluator,
             facet_registry=self.facet_registry,
             path_navigator=self.path_navigator,
+            node_alias_datatype_registry=self.node_alias_registry,
         )
 
         self.group_compiler = GroupCompiler(
             clause_reducer=self.clause_reducer,
             path_navigator=self.path_navigator,
-            relationship_compiler=self.relationship_compiler,
         )
 
     def compile(self) -> QuerySet:

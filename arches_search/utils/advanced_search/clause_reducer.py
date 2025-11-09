@@ -14,6 +14,9 @@ from arches_search.utils.advanced_search.resource_scope_evaluator import (
 from arches_search.utils.advanced_search.tile_scope_evaluator import (
     TileScopeEvaluator,
 )
+from arches_search.utils.advanced_search.node_alias_datatype_registry import (
+    NodeAliasDatatypeRegistry,
+)
 
 LOGIC_AND = "AND"
 
@@ -43,11 +46,13 @@ class ClauseReducer:
         related_clause_evaluator: RelatedClauseEvaluator,
         facet_registry,
         path_navigator,
+        node_alias_datatype_registry: NodeAliasDatatypeRegistry,
     ) -> None:
         self.literal_clause_evaluator = literal_clause_evaluator
         self.related_clause_evaluator = related_clause_evaluator
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
+        self.node_alias_datatype_registry = node_alias_datatype_registry
         self.resource_scope_evaluator = ResourceScopeEvaluator(
             literal_clause_evaluator=self.literal_clause_evaluator,
             related_clause_evaluator=self.related_clause_evaluator,
@@ -269,7 +274,7 @@ class ClauseReducer:
         while pending_group_payloads:
             current_group_payload = pending_group_payloads.pop()
             has_path = bool(
-                ((current_group_payload.get("relationship")) or {}).get("path")
+                (current_group_payload.get("relationship") or {}).get("path")
             )
             if not has_path:
                 ok_rowset = self.literal_clause_evaluator.ok_child_rows_from_literals(
@@ -301,8 +306,8 @@ class ClauseReducer:
         ).upper()
 
         (
-            _ignored_anchor_slug,
-            _ignored_nested_terminal_graph_slug,
+            _anchor_slug,
+            _nested_terminal_graph_slug,
             nested_child_rows,
             nested_child_id_field_name,
         ) = self.path_navigator.build_scoped_pairs_for_path(
@@ -377,8 +382,10 @@ class ClauseReducer:
             )
 
             if not has_operands and targets_current_terminal:
-                datatype_name = self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                    subject_graph_slug, subject_node_alias
+                datatype_name = (
+                    self.node_alias_datatype_registry.get_datatype_for_alias(
+                        subject_graph_slug, subject_node_alias
+                    )
                 )
                 if self.facet_registry.zero_arity_presence_is_match(
                     datatype_name, operator_token

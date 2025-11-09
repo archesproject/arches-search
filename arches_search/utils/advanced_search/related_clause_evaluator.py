@@ -15,13 +15,11 @@ class RelatedClauseEvaluator:
         facet_registry,
         path_navigator,
         operand_compiler,
-        relationship_compiler,
     ) -> None:
         self.search_model_registry = search_model_registry
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
         self.operand_compiler = operand_compiler
-        self.relationship_compiler = relationship_compiler
 
     def presence_for_anchor(
         self,
@@ -33,10 +31,8 @@ class RelatedClauseEvaluator:
         quantifier_token = (clause_payload["quantifier"] or "").upper()
         subject_path_sequence = clause_payload["subject"]
 
-        traversal_context, child_row_set = (
-            self.relationship_compiler.build_relationship_context(
-                {"path": subject_path_sequence, "is_inverse": False}
-            )
+        traversal_context, child_row_set = self.path_navigator.build_relationship_pairs(
+            {"path": subject_path_sequence, "is_inverse": False}
         )
 
         if terminal_datatype_name is None:

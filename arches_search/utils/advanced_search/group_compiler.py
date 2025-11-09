@@ -1,11 +1,7 @@
 from typing import Any, Dict, List, Optional, Tuple
-
 from django.db.models import Exists, OuterRef, Q
-from arches_search.utils.advanced_search.relationship_compiler import (
-    RelationshipCompiler,
-)
-from arches_search.utils.advanced_search.clause_reducer import ClauseReducer
 
+from arches_search.utils.advanced_search.clause_reducer import ClauseReducer
 
 LOGIC_AND = "AND"
 LOGIC_OR = "OR"
@@ -26,11 +22,9 @@ class GroupCompiler:
         self,
         clause_reducer: ClauseReducer,
         path_navigator,
-        relationship_compiler: RelationshipCompiler,
     ) -> None:
         self.clause_reducer = clause_reducer
         self.path_navigator = path_navigator
-        self.relationship_compiler = relationship_compiler
 
     def compile(
         self,
@@ -119,8 +113,8 @@ class GroupCompiler:
     ) -> Tuple[Q, List[Exists]]:
         relationship = group_payload["relationship"]
 
-        traversal_context, child_row_set = (
-            self.relationship_compiler.build_relationship_context(relationship)
+        traversal_context, child_row_set = self.path_navigator.build_relationship_pairs(
+            relationship
         )
         child_id_field_name = traversal_context["child_id_field"]
         is_inverse_relationship = traversal_context.get("is_inverse", False)
@@ -146,8 +140,8 @@ class GroupCompiler:
             else child_row_set_excluding_anchor
         )
 
-        normalized_relationship = (
-            self.relationship_compiler.normalize_relationship_context(relationship)
+        normalized_relationship = self.path_navigator.normalize_relationship_context(
+            relationship
         )
         traversal_quantifier = normalized_relationship["traversal_quantifier"]
         is_single_inverse_hop = (
