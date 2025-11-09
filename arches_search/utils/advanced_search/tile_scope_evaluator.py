@@ -1,6 +1,10 @@
 from typing import Any, Dict, List
 from django.db.models import Exists, OuterRef, Q, QuerySet
 
+
+LOGIC_AND = "AND"
+LOGIC_OR = "OR"
+
 QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
 QUANTIFIER_NONE = "NONE"
@@ -10,7 +14,7 @@ CLAUSE_TYPE_LITERAL = "LITERAL"
 
 class TileScopeEvaluator:
     def __init__(
-        self, *, literal_clause_evaluator, facet_registry, path_navigator
+        self, literal_clause_evaluator, facet_registry, path_navigator
     ) -> None:
         self.literal_clause_evaluator = literal_clause_evaluator
         self.facet_registry = facet_registry
@@ -18,37 +22,24 @@ class TileScopeEvaluator:
 
     def compose_group_predicate(
         self,
-        *,
         group_payload: Dict[str, Any],
         tiles_for_anchor_resource: QuerySet,
     ) -> Q:
-        if not (group_payload.get("clauses") or []) and not (
-            group_payload.get("groups") or []
-        ):
-            return Q(~Exists(tiles_for_anchor_resource)) | Q(
-                Exists(tiles_for_anchor_resource)
-            )
+        logic_token = group_payload["logic"].upper()
+        tile_id_outer_ref = OuterRef("tileid")
+        resource_has_any_tile_q = Q(Exists(tiles_for_anchor_resource))
 
-        if any(
-            ((child.get("relationship") or {}).get("path"))
-            for child in (group_payload.get("groups") or [])
-        ):
-            return Q(pk__in=[])
+        per_tile_predicates: List[Q] = []
+        resource_level_predicates: List[Q] = []
 
-        use_and_logic = (group_payload.get("logic") or "AND").upper() == "AND"
-
-        per_tile_exists_conditions: List[Q] = []
-        resource_level_conditions: List[Q] = []
-
-        for clause_payload in group_payload.get("clauses") or []:
-            clause_type = (clause_payload.get("type") or "").upper()
-            if clause_type != CLAUSE_TYPE_LITERAL:
+        for clause_payload in group_payload["clauses"]:
+            if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
                 continue
 
             subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
-            operator_token = (clause_payload["operator"] or "").upper()
-            quantifier_token = (clause_payload["quantifier"] or "").upper()
-            operand_items = clause_payload.get("operands") or []
+            operator_token = clause_payload["operator"].upper()
+            quantifier_token = clause_payload["quantifier"].upper()
+            operand_items = clause_payload["operands"]
 
             datatype_name = (
                 self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
@@ -60,58 +51,31 @@ class TileScopeEvaluator:
                     datatype_name
                 )
             )
-            subject_rows = model_class.objects.filter(
-                graph_slug=subject_graph_slug, node_alias=subject_node_alias
-            )
 
-            rows_correlated_to_resource = subject_rows.filter(
+            subject_rows = model_class.objects.filter(
+                graph_slug=subject_graph_slug,
+                node_alias=subject_node_alias,
+            )
+            resource_rows = subject_rows.filter(
                 resourceinstanceid=OuterRef("resourceinstanceid")
             )
-            rows_correlated_to_tile_resource = subject_rows.filter(
+            tile_rows = subject_rows.filter(
                 resourceinstanceid=OuterRef("resourceinstance_id")
             )
 
             if not operand_items:
-                presence_implies_match = (
+                self._evaluate_zero_arity_clause(
+                    per_tile_predicates,
+                    resource_level_predicates,
+                    tiles_for_anchor_resource,
+                    tile_rows,
+                    resource_rows,
+                    tile_id_outer_ref,
+                    resource_has_any_tile_q,
+                    quantifier_token,
                     self.facet_registry.zero_arity_presence_is_match(
                         datatype_name, operator_token
-                    )
-                )
-
-                if quantifier_token == QUANTIFIER_ANY:
-                    condition = Q(
-                        Exists(
-                            rows_correlated_to_tile_resource.filter(
-                                tileid=OuterRef("tileid")
-                            )
-                        )
-                    )
-                    per_tile_exists_conditions.append(
-                        condition if presence_implies_match else ~condition
-                    )
-                    continue
-
-                if quantifier_token == QUANTIFIER_NONE:
-                    resource_level_conditions.append(
-                        Q(~Exists(rows_correlated_to_resource))
-                        if presence_implies_match
-                        else Q(Exists(rows_correlated_to_resource))
-                    )
-                    continue
-
-                tiles_missing_match = tiles_for_anchor_resource.filter(
-                    ~Exists(
-                        rows_correlated_to_tile_resource.filter(
-                            tileid=OuterRef("tileid")
-                        )
-                    )
-                )
-                requires_all_tiles_match = Q(~Exists(tiles_missing_match))
-                has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
-                resource_level_conditions.append(
-                    (requires_all_tiles_match & has_at_least_one_tile)
-                    if presence_implies_match
-                    else Q(~Exists(tiles_for_anchor_resource))
+                    ),
                 )
                 continue
 
@@ -124,116 +88,223 @@ class TileScopeEvaluator:
                 )
             )
 
-            if isinstance(predicate_expression, Q):
-                matching_rows_resource = rows_correlated_to_resource.filter(
-                    predicate_expression
-                )
-                matches_in_this_tile = rows_correlated_to_tile_resource.filter(
-                    predicate_expression
-                ).filter(tileid=OuterRef("tileid"))
-            else:
-                matching_rows_resource = rows_correlated_to_resource.filter(
-                    **predicate_expression
-                )
-                matches_in_this_tile = rows_correlated_to_tile_resource.filter(
-                    **predicate_expression
-                ).filter(tileid=OuterRef("tileid"))
-
-            if quantifier_token == QUANTIFIER_ANY:
-                per_tile_exists_conditions.append(Q(Exists(matches_in_this_tile)))
-                continue
-
-            if quantifier_token == QUANTIFIER_NONE:
-                resource_level_conditions.append(Q(~Exists(matching_rows_resource)))
-                continue
-
-            has_at_least_one_tile = Q(Exists(tiles_for_anchor_resource))
-
-            if not is_template_negated:
-                tiles_missing_match = tiles_for_anchor_resource.filter(
-                    ~Exists(matches_in_this_tile)
-                )
-                resource_level_conditions.append(
-                    Q(~Exists(tiles_missing_match)) & has_at_least_one_tile
-                )
-                continue
-
-            positive_facet = self.facet_registry.get_positive_facet_for(
-                operator_token, datatype_name
-            )
-            if positive_facet is not None:
-                positive_expression, _ = self.facet_registry.predicate(
-                    datatype_name,
-                    positive_facet.operator,
-                    "value",
-                    self.literal_clause_evaluator.operand_compiler.literal_values_only(
-                        operand_items
-                    ),
-                )
-                if isinstance(positive_expression, Q):
-                    positive_matches_in_this_tile = (
-                        rows_correlated_to_tile_resource.filter(
-                            positive_expression
-                        ).filter(tileid=OuterRef("tileid"))
-                    )
-                else:
-                    positive_matches_in_this_tile = (
-                        rows_correlated_to_tile_resource.filter(
-                            **positive_expression
-                        ).filter(tileid=OuterRef("tileid"))
-                    )
-            elif isinstance(predicate_expression, Q) and getattr(
-                predicate_expression, "negated", False
-            ):
-                positive_matches_in_this_tile = rows_correlated_to_tile_resource.filter(
-                    ~predicate_expression
-                ).filter(tileid=OuterRef("tileid"))
-            else:
-                if isinstance(predicate_expression, Q):
-                    positive_matches_in_this_tile = (
-                        rows_correlated_to_tile_resource.exclude(
-                            predicate_expression
-                        ).filter(tileid=OuterRef("tileid"))
-                    )
-                else:
-                    positive_matches_in_this_tile = (
-                        rows_correlated_to_tile_resource.exclude(
-                            **predicate_expression
-                        ).filter(tileid=OuterRef("tileid"))
-                    )
-
-            tiles_with_violations = tiles_for_anchor_resource.filter(
-                Exists(positive_matches_in_this_tile)
-            )
-            resource_level_conditions.append(
-                Q(~Exists(tiles_with_violations)) & has_at_least_one_tile
+            self._evaluate_operand_clause(
+                per_tile_predicates,
+                resource_level_predicates,
+                tiles_for_anchor_resource,
+                resource_has_any_tile_q,
+                tile_rows,
+                resource_rows,
+                tile_id_outer_ref,
+                quantifier_token,
+                predicate_expression,
+                is_template_negated,
+                operator_token,
+                datatype_name,
+                operand_items,
             )
 
-        if not per_tile_exists_conditions:
-            any_expression = Q()
+        per_tile_q = self._combine_per_tile_predicates(
+            logic_token,
+            tiles_for_anchor_resource,
+            per_tile_predicates,
+        )
+
+        if not resource_level_predicates:
+            return per_tile_q
+
+        resource_level_q = self._combine_resource_level_predicates(
+            logic_token,
+            resource_level_predicates,
+        )
+
+        if logic_token == "AND":
+            return per_tile_q & resource_level_q
         else:
-            if use_and_logic:
-                tiles_requiring_all = tiles_for_anchor_resource
-                for condition in per_tile_exists_conditions:
-                    tiles_requiring_all = tiles_requiring_all.filter(condition)
-                any_expression = Q(Exists(tiles_requiring_all))
-            else:
-                combined_any = Q(pk__in=[])
-                for condition in per_tile_exists_conditions:
-                    combined_any |= condition
-                tiles_with_any = tiles_for_anchor_resource.filter(combined_any)
-                any_expression = Q(Exists(tiles_with_any))
+            return per_tile_q | resource_level_q
 
-        if not resource_level_conditions:
-            return any_expression
+    def _evaluate_zero_arity_clause(
+        self,
+        per_tile_predicates: List[Q],
+        resource_level_predicates: List[Q],
+        tiles_for_anchor_resource: QuerySet,
+        tile_rows: QuerySet,
+        resource_rows: QuerySet,
+        tile_id_outer_ref,
+        resource_has_any_tile_q: Q,
+        quantifier_token: str,
+        presence_implies_match: bool,
+    ) -> None:
+        if quantifier_token == QUANTIFIER_ANY:
+            present_in_tile = Q(Exists(tile_rows.filter(tileid=tile_id_outer_ref)))
+            per_tile_predicates.append(
+                present_in_tile if presence_implies_match else ~present_in_tile
+            )
+            return
 
-        if use_and_logic:
-            combined_all = Q()
-            for condition in resource_level_conditions:
-                combined_all &= condition
-            return any_expression & combined_all
+        if quantifier_token == QUANTIFIER_NONE:
+            resource_level_predicates.append(
+                Q(~Exists(resource_rows))
+                if presence_implies_match
+                else Q(Exists(resource_rows))
+            )
+            return
 
-        combined_or = Q()
-        for condition in resource_level_conditions:
-            combined_or |= condition
-        return any_expression | combined_or
+        tiles_missing_match = tiles_for_anchor_resource.filter(
+            ~Exists(tile_rows.filter(tileid=tile_id_outer_ref))
+        )
+        resource_level_predicates.append(
+            (Q(~Exists(tiles_missing_match)) & resource_has_any_tile_q)
+            if presence_implies_match
+            else Q(~Exists(tiles_for_anchor_resource))
+        )
+
+    def _evaluate_operand_clause(
+        self,
+        per_tile_predicates: List[Q],
+        resource_level_predicates: List[Q],
+        tiles_for_anchor_resource: QuerySet,
+        resource_has_any_tile_q: Q,
+        tile_rows: QuerySet,
+        resource_rows: QuerySet,
+        tile_id_outer_ref,
+        quantifier_token: str,
+        predicate_expression: Any,
+        is_template_negated: bool,
+        operator_token: str,
+        datatype_name: str,
+        operand_items: List[Dict[str, Any]],
+    ) -> None:
+        if isinstance(predicate_expression, Q):
+            resource_matches = resource_rows.filter(predicate_expression)
+            tile_matches = tile_rows.filter(predicate_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+        else:
+            resource_matches = resource_rows.filter(**predicate_expression)
+            tile_matches = tile_rows.filter(**predicate_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+
+        if quantifier_token == QUANTIFIER_ANY:
+            per_tile_predicates.append(Q(Exists(tile_matches)))
+            return
+
+        if quantifier_token == QUANTIFIER_NONE:
+            resource_level_predicates.append(Q(~Exists(resource_matches)))
+            return
+
+        if not is_template_negated:
+            tiles_missing_match = tiles_for_anchor_resource.filter(
+                ~Exists(tile_matches)
+            )
+            resource_level_predicates.append(
+                Q(~Exists(tiles_missing_match)) & resource_has_any_tile_q
+            )
+            return
+
+        positive_tile_matches = self._derive_positive_tile_matches(
+            tile_rows,
+            tile_id_outer_ref,
+            predicate_expression,
+            operator_token,
+            datatype_name,
+            operand_items,
+        )
+        tiles_with_violations = tiles_for_anchor_resource.filter(
+            Exists(positive_tile_matches)
+        )
+        resource_level_predicates.append(
+            Q(~Exists(tiles_with_violations)) & resource_has_any_tile_q
+        )
+
+    def _derive_positive_tile_matches(
+        self,
+        tile_rows: QuerySet,
+        tile_id_outer_ref,
+        predicate_expression: Any,
+        operator_token: str,
+        datatype_name: str,
+        operand_items: List[Dict[str, Any]],
+    ) -> QuerySet:
+        positive_facet = self.facet_registry.get_positive_facet_for(
+            operator_token, datatype_name
+        )
+
+        if positive_facet is not None:
+            positive_expression, _ = self.facet_registry.predicate(
+                datatype_name,
+                positive_facet.operator,
+                "value",
+                self.literal_clause_evaluator.operand_compiler.literal_values_only(
+                    operand_items
+                ),
+            )
+            if isinstance(positive_expression, Q):
+                return tile_rows.filter(positive_expression).filter(
+                    tileid=tile_id_outer_ref
+                )
+            return tile_rows.filter(**positive_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+
+        if isinstance(predicate_expression, Q) and getattr(
+            predicate_expression, "negated", False
+        ):
+            return tile_rows.filter(~predicate_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+
+        if isinstance(predicate_expression, Q):
+            return tile_rows.exclude(predicate_expression).filter(
+                tileid=tile_id_outer_ref
+            )
+
+        return tile_rows.exclude(**predicate_expression).filter(
+            tileid=tile_id_outer_ref
+        )
+
+    def _combine_per_tile_predicates(
+        self,
+        logic_token: str,
+        tiles_for_anchor_resource: QuerySet,
+        per_tile_predicates: List[Q],
+    ) -> Q:
+        if not per_tile_predicates:
+            return Q()
+
+        if logic_token == LOGIC_AND:
+            tiles_satisfying_all = tiles_for_anchor_resource
+
+            for per_tile_q in per_tile_predicates:
+                tiles_satisfying_all = tiles_satisfying_all.filter(per_tile_q)
+
+            return Q(Exists(tiles_satisfying_all))
+
+        union_q = Q(pk__in=[])
+
+        for per_tile_q in per_tile_predicates:
+            union_q |= per_tile_q
+
+        return Q(Exists(tiles_for_anchor_resource.filter(union_q)))
+
+    def _combine_resource_level_predicates(
+        self,
+        logic_token: str,
+        resource_level_predicates: List[Q],
+    ) -> Q:
+        if logic_token == LOGIC_AND:
+            combined = Q()
+
+            for predicate in resource_level_predicates:
+                combined &= predicate
+
+            return combined
+
+        if logic_token == LOGIC_OR:
+            combined = Q()
+
+            for predicate in resource_level_predicates:
+                combined |= predicate
+
+            return combined
