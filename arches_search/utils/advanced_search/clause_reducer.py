@@ -39,21 +39,21 @@ class ReduceResult(NamedTuple):
 class ClauseReducer:
     def __init__(
         self,
-        literal_evaluator: LiteralClauseEvaluator,
-        related_evaluator: RelatedClauseEvaluator,
+        literal_clause_evaluator: LiteralClauseEvaluator,
+        related_clause_evaluator: RelatedClauseEvaluator,
         facet_registry,
         path_navigator,
     ) -> None:
-        self.literal_evaluator = literal_evaluator
-        self.related_evaluator = related_evaluator
+        self.literal_clause_evaluator = literal_clause_evaluator
+        self.related_clause_evaluator = related_clause_evaluator
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
         self.resource_scope_evaluator = ResourceScopeEvaluator(
-            literal_evaluator=self.literal_evaluator,
-            related_evaluator=self.related_evaluator,
+            literal_clause_evaluator=self.literal_clause_evaluator,
+            related_clause_evaluator=self.related_clause_evaluator,
         )
         self.tile_scope_evaluator = TileScopeEvaluator(
-            literal_evaluator=self.literal_evaluator,
+            literal_clause_evaluator=self.literal_clause_evaluator,
             facet_registry=self.facet_registry,
             path_navigator=self.path_navigator,
         )
@@ -133,11 +133,11 @@ class ClauseReducer:
             clause_type = clause_payload["type"].upper()
             if clause_type == CLAUSE_TYPE_LITERAL:
                 anchor_exists.append(
-                    self.literal_evaluator.exists_for_anchor(clause_payload)
+                    self.literal_clause_evaluator.exists_for_anchor(clause_payload)
                 )
             elif clause_type == CLAUSE_TYPE_RELATED:
                 anchor_exists.append(
-                    self.related_evaluator.presence_for_anchor(clause_payload)
+                    self.related_clause_evaluator.presence_for_anchor(clause_payload)
                 )
 
         return ReduceResult(
@@ -215,7 +215,7 @@ class ClauseReducer:
             traversal_context["is_inverse"]
             and len(traversal_context.get("path_segments") or []) == 1
         ):
-            literal_ok_rows = self.literal_evaluator.ok_child_rows_from_literals(
+            literal_ok_rows = self.literal_clause_evaluator.ok_child_rows_from_literals(
                 group_payload=group_payload,
                 correlate_field=traversal_context["child_id_field"],
                 terminal_graph_slug=traversal_context["terminal_graph_slug"],
@@ -247,7 +247,7 @@ class ClauseReducer:
                 for clause_payload in current_group_payload["clauses"]:
                     if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
                         continue
-                    exists_expression = self.literal_evaluator.exists_for_child(
+                    exists_expression = self.literal_clause_evaluator.exists_for_child(
                         clause_payload=clause_payload,
                         correlate_field=traversal_context["child_id_field"],
                     )
@@ -272,7 +272,7 @@ class ClauseReducer:
                 ((current_group_payload.get("relationship")) or {}).get("path")
             )
             if not has_path:
-                ok_rowset = self.literal_evaluator.ok_child_rows_from_literals(
+                ok_rowset = self.literal_clause_evaluator.ok_child_rows_from_literals(
                     group_payload=current_group_payload,
                     correlate_field=traversal_context["child_id_field"],
                     terminal_graph_slug=traversal_context["terminal_graph_slug"],
@@ -325,7 +325,7 @@ class ClauseReducer:
                 for clause_payload in current_group_payload["clauses"]:
                     if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
                         continue
-                    exists_expression = self.literal_evaluator.exists_for_child(
+                    exists_expression = self.literal_clause_evaluator.exists_for_child(
                         clause_payload=clause_payload,
                         correlate_field=nested_child_id_field_name,
                     )
@@ -385,7 +385,7 @@ class ClauseReducer:
                 ):
                     continue
 
-            presence_expression = self.related_evaluator.presence_for_child(
+            presence_expression = self.related_clause_evaluator.presence_for_child(
                 clause_payload=clause_payload,
                 traversal_context=traversal_context,
             )

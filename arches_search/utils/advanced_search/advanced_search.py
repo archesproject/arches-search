@@ -45,13 +45,13 @@ class AdvancedSearchQueryCompiler:
 
         self.relationship_compiler = RelationshipCompiler(self.path_navigator)
 
-        self.literal_evaluator = LiteralClauseEvaluator(
+        self.literal_clause_evaluator = LiteralClauseEvaluator(
             self.search_model_registry,
             self.facet_registry,
             self.path_navigator,
             self.operand_compiler,
         )
-        self.related_evaluator = RelatedClauseEvaluator(
+        self.related_clause_evaluator = RelatedClauseEvaluator(
             self.search_model_registry,
             self.facet_registry,
             self.path_navigator,
@@ -60,8 +60,8 @@ class AdvancedSearchQueryCompiler:
         )
 
         self.clause_reducer = ClauseReducer(
-            literal_evaluator=self.literal_evaluator,
-            related_evaluator=self.related_evaluator,
+            literal_clause_evaluator=self.literal_clause_evaluator,
+            related_clause_evaluator=self.related_clause_evaluator,
             facet_registry=self.facet_registry,
             path_navigator=self.path_navigator,
         )

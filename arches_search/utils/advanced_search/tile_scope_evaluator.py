@@ -9,8 +9,10 @@ CLAUSE_TYPE_LITERAL = "LITERAL"
 
 
 class TileScopeEvaluator:
-    def __init__(self, *, literal_evaluator, facet_registry, path_navigator) -> None:
-        self.literal_evaluator = literal_evaluator
+    def __init__(
+        self, *, literal_clause_evaluator, facet_registry, path_navigator
+    ) -> None:
+        self.literal_clause_evaluator = literal_clause_evaluator
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
 
@@ -114,7 +116,7 @@ class TileScopeEvaluator:
                 continue
 
             predicate_expression, is_template_negated = (
-                self.literal_evaluator.operand_compiler.build_predicate(
+                self.literal_clause_evaluator.operand_compiler.build_predicate(
                     datatype_name=datatype_name,
                     operator_token=operator_token,
                     operands=operand_items,
@@ -164,7 +166,7 @@ class TileScopeEvaluator:
                     datatype_name,
                     positive_facet.operator,
                     "value",
-                    self.literal_evaluator.operand_compiler.literal_values_only(
+                    self.literal_clause_evaluator.operand_compiler.literal_values_only(
                         operand_items
                     ),
                 )
