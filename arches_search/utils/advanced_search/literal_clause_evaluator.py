@@ -4,19 +4,27 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
 
-LOGIC_AND = "AND"
-LOGIC_OR = "OR"
+
+EVAL_MODE_ANCHOR = "anchor"
+EVAL_MODE_CHILD = "child"
+EVAL_MODE_TILE = "tile"
+EVAL_MODE_COMPUTE_CHILD_ROWS = "compute_child_rows"
 
 QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
 QUANTIFIER_NONE = "NONE"
 
 CLAUSE_TYPE_LITERAL = "LITERAL"
+CLAUSE_TYPE_RELATED = "RELATED"
 
 
 class LiteralClauseEvaluator:
     def __init__(
-        self, search_model_registry, facet_registry, path_navigator, predicate_builder
+        self,
+        search_model_registry,
+        facet_registry,
+        path_navigator,
+        predicate_builder,
     ) -> None:
         self.search_model_registry = search_model_registry
         self.facet_registry = facet_registry
@@ -33,18 +41,29 @@ class LiteralClauseEvaluator:
         group_payload: Optional[Dict[str, Any]] = None,
         terminal_graph_slug: Optional[str] = None,
     ):
-        if mode == "anchor":
-            return self._build_anchor_exists(clause_payload)
-        if mode == "child":
-            return self._build_child_exists(clause_payload, correlate_field)
-        if mode == "tile":
+        if mode == EVAL_MODE_ANCHOR:
+            return self._build_anchor_exists(clause_payload)  # type: ignore[arg-type]
+
+        if mode == EVAL_MODE_CHILD:
+            return self._build_child_exists(
+                clause_payload=clause_payload,  # type: ignore[arg-type]
+                correlate_field=correlate_field,  # type: ignore[arg-type]
+            )
+
+        if mode == EVAL_MODE_TILE:
             return self._build_tile_scope_predicates(
-                clause_payload, tiles_for_anchor_resource, tile_id_outer_ref
+                clause_payload=clause_payload,  # type: ignore[arg-type]
+                tiles_for_anchor_resource=tiles_for_anchor_resource,  # type: ignore[arg-type]
+                tile_id_outer_ref=tile_id_outer_ref,  # type: ignore[arg-type]
             )
-        if mode == "compute_child_rows":
+
+        if mode == EVAL_MODE_COMPUTE_CHILD_ROWS:
             return self._compute_child_rows(
-                group_payload, correlate_field, terminal_graph_slug
+                group_payload=group_payload,  # type: ignore[arg-type]
+                correlate_field=correlate_field,  # type: ignore[arg-type]
+                terminal_graph_slug=terminal_graph_slug,  # type: ignore[arg-type]
             )
+
         raise ValueError(f"Unsupported evaluation mode: {mode}")
 
     def _build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
@@ -61,7 +80,8 @@ class LiteralClauseEvaluator:
         model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
 
         subject_rows = model_class.objects.filter(
-            graph_slug=subject_graph_slug, node_alias=subject_node_alias
+            graph_slug=subject_graph_slug,
+            node_alias=subject_node_alias,
         )
         correlated_rows = subject_rows.filter(
             resourceinstanceid=OuterRef("resourceinstanceid")
@@ -101,36 +121,21 @@ class LiteralClauseEvaluator:
 
         if quantifier_token == QUANTIFIER_ANY:
             return Exists(matching_rows)
+
         if quantifier_token == QUANTIFIER_NONE:
             return ~Exists(matching_rows)
 
         if not is_template_negated:
             return Exists(correlated_rows) & ~Exists(violating_rows)
 
-        positive_facet = self.facet_registry.resolve_positive_facet(
-            operator_token, datatype_name
+        positive_per_row = self._positive_rows_for_negated_template(
+            operator_token=operator_token,
+            datatype_name=datatype_name,
+            operand_items=operand_items,
+            correlated_rows=correlated_rows,
+            predicate_expression=predicate_expression,
         )
-        if positive_facet is not None:
-            positive_expression, _ = self.facet_registry.predicate(
-                datatype_name,
-                positive_facet.operator,
-                "value",
-                self._literal_values_only(operand_items),
-            )
-            if isinstance(positive_expression, Q):
-                positive_rows = correlated_rows.filter(positive_expression)
-            else:
-                positive_rows = correlated_rows.filter(**positive_expression)
-            return Exists(correlated_rows) & ~Exists(positive_rows)
-
-        if isinstance(predicate_expression, Q) and getattr(
-            predicate_expression, "negated", False
-        ):
-            return Exists(correlated_rows) & ~Exists(
-                correlated_rows.filter(~predicate_expression)
-            )
-
-        return Exists(correlated_rows) & ~Exists(matching_rows)
+        return Exists(correlated_rows) & ~Exists(positive_per_row)
 
     def _build_child_exists(
         self, clause_payload: Dict[str, Any], correlate_field: str
@@ -147,7 +152,8 @@ class LiteralClauseEvaluator:
         model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
 
         subject_rows = model_class.objects.filter(
-            graph_slug=subject_graph_slug, node_alias=subject_node_alias
+            graph_slug=subject_graph_slug,
+            node_alias=subject_node_alias,
         )
         correlated_rows = subject_rows.filter(
             resourceinstanceid=OuterRef(correlate_field)
@@ -177,28 +183,14 @@ class LiteralClauseEvaluator:
                 return Exists(correlated_rows.filter(predicate_expression))
             return Exists(correlated_rows.filter(**predicate_expression))
 
-        positive_facet = self.facet_registry.resolve_positive_facet(
-            operator_token, datatype_name
+        positive_rows = self._positive_rows_for_negated_template(
+            operator_token=operator_token,
+            datatype_name=datatype_name,
+            operand_items=operand_items,
+            correlated_rows=correlated_rows,
+            predicate_expression=predicate_expression,
         )
-        if positive_facet is not None:
-            positive_expression, _ = self.facet_registry.predicate(
-                datatype_name,
-                positive_facet.operator,
-                "value",
-                self._literal_values_only(operand_items),
-            )
-            if isinstance(positive_expression, Q):
-                return ~Exists(correlated_rows.filter(positive_expression))
-            return ~Exists(correlated_rows.filter(**positive_expression))
-
-        if isinstance(predicate_expression, Q) and getattr(
-            predicate_expression, "negated", False
-        ):
-            return ~Exists(correlated_rows.filter(~predicate_expression))
-
-        if isinstance(predicate_expression, Q):
-            return ~Exists(correlated_rows.filter(predicate_expression))
-        return ~Exists(correlated_rows.filter(**predicate_expression))
+        return ~Exists(positive_rows)
 
     def _compute_child_rows(
         self,
@@ -211,8 +203,6 @@ class LiteralClauseEvaluator:
         for direct_child_group in group_payload["groups"]:
             if direct_child_group["relationship"]["path"]:
                 continue
-            if direct_child_group["logic"] != LOGIC_AND:
-                return None
 
             pending_groups: List[Dict[str, Any]] = [direct_child_group]
             while pending_groups:
@@ -221,12 +211,16 @@ class LiteralClauseEvaluator:
                     continue
 
                 for clause_payload in current_group["clauses"]:
-                    if clause_payload["type"] != CLAUSE_TYPE_LITERAL:
+                    clause_type = clause_payload["type"]
+                    if clause_type == CLAUSE_TYPE_LITERAL:
+                        clause_graph_slug, _ = clause_payload["subject"][0]
+                        if clause_graph_slug != terminal_graph_slug:
+                            return None
+                        literal_clauses.append(clause_payload)
+                    elif clause_type == CLAUSE_TYPE_RELATED:
                         continue
-                    clause_graph_slug, _ = clause_payload["subject"][0]
-                    if clause_graph_slug != terminal_graph_slug:
-                        return None
-                    literal_clauses.append(clause_payload)
+                    else:
+                        continue
 
                 pending_groups.extend(current_group["groups"])
 
@@ -250,7 +244,8 @@ class LiteralClauseEvaluator:
             )
 
             base_rows = model_class.objects.filter(
-                graph_slug=subject_graph_slug, node_alias=subject_node_alias
+                graph_slug=subject_graph_slug,
+                node_alias=subject_node_alias,
             )
             correlated_rows = base_rows.filter(
                 resourceinstanceid=OuterRef(correlate_field)
@@ -275,40 +270,22 @@ class LiteralClauseEvaluator:
                     )
                 )
 
-                if isinstance(predicate_expression, Q):
-                    filtered_rows = correlated_rows.filter(predicate_expression)
-                    excluded_rows = correlated_rows.exclude(predicate_expression)
-                else:
-                    filtered_rows = correlated_rows.filter(**predicate_expression)
-                    excluded_rows = correlated_rows.exclude(**predicate_expression)
-
                 if not is_template_negated:
-                    predicate_rows = filtered_rows
-                else:
-                    positive_facet = self.facet_registry.resolve_positive_facet(
-                        operator_token, datatype_name
-                    )
-                    if positive_facet is not None:
-                        positive_expression, _ = self.facet_registry.predicate(
-                            datatype_name,
-                            positive_facet.operator,
-                            "value",
-                            self._literal_values_only(operand_items),
-                        )
-                        if isinstance(positive_expression, Q):
-                            predicate_rows = correlated_rows.exclude(
-                                positive_expression
-                            )
-                        else:
-                            predicate_rows = correlated_rows.exclude(
-                                **positive_expression
-                            )
-                    elif isinstance(predicate_expression, Q) and getattr(
-                        predicate_expression, "negated", False
-                    ):
-                        predicate_rows = correlated_rows.exclude(~predicate_expression)
+                    if isinstance(predicate_expression, Q):
+                        predicate_rows = correlated_rows.filter(predicate_expression)
                     else:
-                        predicate_rows = excluded_rows
+                        predicate_rows = correlated_rows.filter(**predicate_expression)
+                else:
+                    positive_rows = self._positive_rows_for_negated_template(
+                        operator_token=operator_token,
+                        datatype_name=datatype_name,
+                        operand_items=operand_items,
+                        correlated_rows=correlated_rows,
+                        predicate_expression=predicate_expression,
+                    )
+                    predicate_rows = correlated_rows.exclude(
+                        pk__in=positive_rows.values("pk")
+                    )
 
             intersected_rows = (
                 predicate_rows
@@ -337,8 +314,10 @@ class LiteralClauseEvaluator:
         model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
 
         subject_rows = model_class.objects.filter(
-            graph_slug=subject_graph_slug, node_alias=subject_node_alias
+            graph_slug=subject_graph_slug,
+            node_alias=subject_node_alias,
         )
+
         resource_rows = subject_rows.filter(
             resourceinstanceid=OuterRef("resourceinstanceid")
         )
@@ -346,7 +325,7 @@ class LiteralClauseEvaluator:
             resourceinstanceid=OuterRef("resourceinstance_id")
         )
 
-        resource_has_any_tile_q = Q(Exists(tiles_for_anchor_resource))
+        any_tile_for_resource_q = Q(Exists(tiles_for_anchor_resource))
 
         if not operand_items:
             presence_implies_match = self.facet_registry.presence_implies_match(
@@ -354,9 +333,13 @@ class LiteralClauseEvaluator:
             )
 
             if quantifier_token == QUANTIFIER_ANY:
-                present_in_tile = Q(Exists(tile_rows.filter(tileid=tile_id_outer_ref)))
+                per_tile_presence = tile_rows.filter(tileid=tile_id_outer_ref)
                 return (
-                    present_in_tile if presence_implies_match else ~present_in_tile,
+                    (
+                        Q(Exists(per_tile_presence))
+                        if presence_implies_match
+                        else ~Q(Exists(per_tile_presence))
+                    ),
                     None,
                 )
 
@@ -370,11 +353,11 @@ class LiteralClauseEvaluator:
                     ),
                 )
 
-            tiles_missing_match = tiles_for_anchor_resource.filter(
+            tiles_missing_presence = tiles_for_anchor_resource.filter(
                 ~Exists(tile_rows.filter(tileid=tile_id_outer_ref))
             )
             resource_level_q = (
-                Q(~Exists(tiles_missing_match)) & resource_has_any_tile_q
+                Q(~Exists(tiles_missing_presence)) & any_tile_for_resource_q
                 if presence_implies_match
                 else Q(~Exists(tiles_for_anchor_resource))
             )
@@ -390,74 +373,76 @@ class LiteralClauseEvaluator:
         )
 
         if isinstance(predicate_expression, Q):
-            resource_matches = resource_rows.filter(predicate_expression)
-            tile_matches = tile_rows.filter(predicate_expression).filter(
+            resource_level_matches = resource_rows.filter(predicate_expression)
+            per_tile_matches = tile_rows.filter(predicate_expression).filter(
                 tileid=tile_id_outer_ref
             )
         else:
-            resource_matches = resource_rows.filter(**predicate_expression)
-            tile_matches = tile_rows.filter(**predicate_expression).filter(
+            resource_level_matches = resource_rows.filter(**predicate_expression)
+            per_tile_matches = tile_rows.filter(**predicate_expression).filter(
                 tileid=tile_id_outer_ref
             )
 
         if quantifier_token == QUANTIFIER_ANY:
-            return (Q(Exists(tile_matches)), None)
+            return (Q(Exists(per_tile_matches)), None)
 
         if quantifier_token == QUANTIFIER_NONE:
-            return (None, Q(~Exists(resource_matches)))
+            return (None, Q(~Exists(resource_level_matches)))
 
         if not is_template_negated:
             tiles_missing_match = tiles_for_anchor_resource.filter(
-                ~Exists(tile_matches)
+                ~Exists(per_tile_matches)
             )
-            return (None, Q(~Exists(tiles_missing_match)) & resource_has_any_tile_q)
+            return (None, Q(~Exists(tiles_missing_match)) & any_tile_for_resource_q)
 
+        positive_per_tile_rows = self._positive_rows_for_negated_template(
+            operator_token=operator_token,
+            datatype_name=datatype_name,
+            operand_items=operand_items,
+            correlated_rows=tile_rows.filter(tileid=tile_id_outer_ref),
+            predicate_expression=predicate_expression,
+        )
+        tiles_with_violations = tiles_for_anchor_resource.filter(
+            Exists(positive_per_tile_rows)
+        )
+        return (None, Q(~Exists(tiles_with_violations)) & any_tile_for_resource_q)
+
+    def _positive_rows_for_negated_template(
+        self,
+        operator_token: str,
+        datatype_name: str,
+        operand_items: List[Dict[str, Any]],
+        correlated_rows: QuerySet,
+        predicate_expression: Q | Dict[str, Any],
+    ) -> QuerySet:
+        """
+        For negated templates, derive the "violating" positive rows so we can assert NOT EXISTS(violations).
+        Preference order:
+          1) facet_registry.resolve_positive_facet(...)
+          2) if Q is already negated, use its inverse (~Q)
+          3) else use .exclude(predicate) as the positive set
+        """
         positive_facet = self.facet_registry.resolve_positive_facet(
             operator_token, datatype_name
         )
+
         if positive_facet is not None:
             positive_expression, _ = self.facet_registry.predicate(
                 datatype_name,
                 positive_facet.operator,
                 "value",
-                self._literal_values_only(operand_items),
+                [operand_item["value"] for operand_item in operand_items],
             )
             if isinstance(positive_expression, Q):
-                positive_tile_matches = tile_rows.filter(positive_expression).filter(
-                    tileid=tile_id_outer_ref
-                )
-            else:
-                positive_tile_matches = tile_rows.filter(**positive_expression).filter(
-                    tileid=tile_id_outer_ref
-                )
-        elif isinstance(predicate_expression, Q) and getattr(
+                return correlated_rows.filter(positive_expression)
+            return correlated_rows.filter(**positive_expression)
+
+        if isinstance(predicate_expression, Q) and getattr(
             predicate_expression, "negated", False
         ):
-            positive_tile_matches = tile_rows.filter(~predicate_expression).filter(
-                tileid=tile_id_outer_ref
-            )
-        elif isinstance(predicate_expression, Q):
-            positive_tile_matches = tile_rows.exclude(predicate_expression).filter(
-                tileid=tile_id_outer_ref
-            )
-        else:
-            positive_tile_matches = tile_rows.exclude(**predicate_expression).filter(
-                tileid=tile_id_outer_ref
-            )
+            return correlated_rows.filter(~predicate_expression)
 
-        tiles_with_violations = tiles_for_anchor_resource.filter(
-            Exists(positive_tile_matches)
-        )
-        return (None, Q(~Exists(tiles_with_violations)) & resource_has_any_tile_q)
+        if isinstance(predicate_expression, Q):
+            return correlated_rows.exclude(predicate_expression)
 
-    def _literal_values_only(self, operands: List[Any]) -> List[Any]:
-        literal_values: List[Any] = []
-        for operand_item in operands:
-            if isinstance(operand_item, dict):
-                operand_type = operand_item["type"].upper()
-                if operand_type == "PATH":
-                    continue
-                literal_values.append(operand_item["value"])
-            else:
-                literal_values.append(operand_item)
-        return literal_values
+        return correlated_rows.exclude(**predicate_expression)
