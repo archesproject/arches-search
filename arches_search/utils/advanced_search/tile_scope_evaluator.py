@@ -1,6 +1,5 @@
 from typing import Any, Dict, List
-from django.db.models import Exists, OuterRef, Q, QuerySet
-
+from django.db.models import Exists, Q, QuerySet, OuterRef
 
 LOGIC_AND = "AND"
 LOGIC_OR = "OR"
@@ -33,7 +32,8 @@ class TileScopeEvaluator:
                 continue
 
             per_tile_predicate, resource_scoped_predicate = (
-                self.literal_clause_evaluator.evaluate_literal_clause_for_tile_scope(
+                self.literal_clause_evaluator.evaluate(
+                    mode="tile",
                     clause_payload=clause_payload,
                     tiles_for_anchor_resource=tiles_for_anchor_resource,
                     tile_id_outer_ref=tile_identifier_outer_ref,
@@ -63,8 +63,10 @@ class TileScopeEvaluator:
         if logic_connector_token == LOGIC_AND:
             return combined_per_tile_predicate & combined_resource_scoped_predicate
 
-        elif logic_connector_token == LOGIC_OR:
+        if logic_connector_token == LOGIC_OR:
             return combined_per_tile_predicate | combined_resource_scoped_predicate
+
+        return combined_per_tile_predicate
 
     def _combine_tile_scoped_predicates(
         self,
@@ -85,7 +87,7 @@ class TileScopeEvaluator:
 
             return Q(Exists(tiles_satisfying_all_predicates))
 
-        elif logic_connector_token == LOGIC_OR:
+        if logic_connector_token == LOGIC_OR:
             union_predicate_across_tiles = Q(pk__in=[])
 
             for per_tile_predicate in tile_scoped_predicates:
@@ -94,6 +96,8 @@ class TileScopeEvaluator:
             return Q(
                 Exists(tiles_for_anchor_resource.filter(union_predicate_across_tiles))
             )
+
+        return Q()
 
     def _combine_resource_scoped_predicates(
         self,

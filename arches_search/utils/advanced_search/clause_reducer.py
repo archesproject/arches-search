@@ -138,7 +138,10 @@ class ClauseReducer:
             clause_type = clause_payload["type"].upper()
             if clause_type == CLAUSE_TYPE_LITERAL:
                 anchor_exists.append(
-                    self.literal_clause_evaluator.exists_for_anchor(clause_payload)
+                    self.literal_clause_evaluator.evaluate(
+                        mode="anchor",
+                        clause_payload=clause_payload,
+                    )
                 )
             elif clause_type == CLAUSE_TYPE_RELATED:
                 anchor_exists.append(
@@ -220,7 +223,8 @@ class ClauseReducer:
             traversal_context["is_inverse"]
             and len(traversal_context.get("path_segments") or []) == 1
         ):
-            literal_ok_rows = self.literal_clause_evaluator.ok_child_rows_from_literals(
+            literal_ok_rows = self.literal_clause_evaluator.evaluate(
+                mode="compute_child_rows",
                 group_payload=group_payload,
                 correlate_field=traversal_context["child_id_field"],
                 terminal_graph_slug=traversal_context["terminal_graph_slug"],
@@ -252,7 +256,8 @@ class ClauseReducer:
                 for clause_payload in current_group_payload["clauses"]:
                     if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
                         continue
-                    exists_expression = self.literal_clause_evaluator.exists_for_child(
+                    exists_expression = self.literal_clause_evaluator.evaluate(
+                        mode="child",
                         clause_payload=clause_payload,
                         correlate_field=traversal_context["child_id_field"],
                     )
@@ -277,7 +282,8 @@ class ClauseReducer:
                 (current_group_payload.get("relationship") or {}).get("path")
             )
             if not has_path:
-                ok_rowset = self.literal_clause_evaluator.ok_child_rows_from_literals(
+                ok_rowset = self.literal_clause_evaluator.evaluate(
+                    mode="compute_child_rows",
                     group_payload=current_group_payload,
                     correlate_field=traversal_context["child_id_field"],
                     terminal_graph_slug=traversal_context["terminal_graph_slug"],
@@ -330,7 +336,8 @@ class ClauseReducer:
                 for clause_payload in current_group_payload["clauses"]:
                     if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
                         continue
-                    exists_expression = self.literal_clause_evaluator.exists_for_child(
+                    exists_expression = self.literal_clause_evaluator.evaluate(
+                        mode="child",
                         clause_payload=clause_payload,
                         correlate_field=nested_child_id_field_name,
                     )
