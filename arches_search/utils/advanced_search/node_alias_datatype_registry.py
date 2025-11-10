@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Set
 from collections import defaultdict
 
 from django.utils.translation import gettext as _
@@ -32,15 +32,6 @@ class NodeAliasDatatypeRegistry:
 
         datatypes_by_alias[node_alias] = datatype_name
         return datatype_name
-
-    def subject_info(
-        self, subject_path: Optional[Tuple[str, str]] | list
-    ) -> Tuple[str, str, str]:
-        if not subject_path:
-            return "", "", ""
-        graph_slug, node_alias = subject_path[0]
-        datatype_name = self.get_datatype_for_alias(graph_slug, node_alias)
-        return graph_slug, node_alias, datatype_name
 
     def _preload_datatypes(
         self, required_aliases_by_graph: Dict[str, Set[str]]
