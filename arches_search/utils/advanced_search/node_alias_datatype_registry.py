@@ -1,23 +1,23 @@
 from typing import Any, Dict, Optional, Set
-from collections import defaultdict
 
 from django.utils.translation import gettext as _
 from arches.app.models import models as arches_models
 
+TYPE_PATH = "PATH"
+
 
 class NodeAliasDatatypeRegistry:
     def __init__(self, payload_query: Optional[Dict[str, Any]] = None) -> None:
-        self._datatype_cache: Dict[str, Dict[str, str]] = {}
+        self._datatype_cache_by_graph: Dict[str, Dict[str, str]] = {}
         if payload_query is not None:
-            self._preload_datatypes(
-                self._collect_required_aliases_from_group(payload_query)
-            )
+            required_aliases_by_graph = self._collect_required_aliases(payload_query)
+            self._preload_required_datatypes(required_aliases_by_graph)
 
-    def get_datatype_for_alias(self, graph_slug: str, node_alias: str) -> str:
-        datatypes_by_alias = self._datatype_cache.setdefault(graph_slug, {})
-        cached = datatypes_by_alias.get(node_alias)
-        if cached:
-            return cached
+    def fetch_datatype_for_alias(self, graph_slug: str, node_alias: str) -> str:
+        cache_for_graph = self._datatype_cache_by_graph.setdefault(graph_slug, {})
+        cached_datatype = cache_for_graph.get(node_alias)
+        if cached_datatype:
+            return cached_datatype
 
         datatype_name = (
             arches_models.Node.objects.filter(graph__slug=graph_slug, alias=node_alias)
@@ -30,23 +30,26 @@ class NodeAliasDatatypeRegistry:
                 % {"alias": node_alias, "graph": graph_slug}
             )
 
-        datatypes_by_alias[node_alias] = datatype_name
+        cache_for_graph[node_alias] = datatype_name
         return datatype_name
 
-    def _preload_datatypes(
+    def _preload_required_datatypes(
         self, required_aliases_by_graph: Dict[str, Set[str]]
     ) -> None:
         if not required_aliases_by_graph:
             return
 
-        graph_slugs = sorted(required_aliases_by_graph)
-        all_required_aliases = set().union(*required_aliases_by_graph.values())
+        graph_slugs = sorted(required_aliases_by_graph.keys())
+        all_required_aliases: Set[str] = set().union(
+            *required_aliases_by_graph.values()
+        )
         if not all_required_aliases:
             return
 
         node_rows = (
             arches_models.Node.objects.filter(
-                graph__slug__in=graph_slugs, alias__in=all_required_aliases
+                graph__slug__in=graph_slugs,
+                alias__in=all_required_aliases,
             )
             .exclude(datatype__isnull=True)
             .exclude(datatype="")
@@ -57,35 +60,36 @@ class NodeAliasDatatypeRegistry:
             graph_slug = row["graph__slug"]
             node_alias = row["alias"]
             if node_alias in required_aliases_by_graph[graph_slug]:
-                self._datatype_cache.setdefault(graph_slug, {})[node_alias] = row[
-                    "datatype"
-                ]
+                cache_for_graph = self._datatype_cache_by_graph.setdefault(
+                    graph_slug, {}
+                )
+                cache_for_graph[node_alias] = row["datatype"]
 
-    def _collect_required_aliases_from_group(
+    def _collect_required_aliases(
         self, group_payload: Dict[str, Any]
     ) -> Dict[str, Set[str]]:
-        required_aliases_by_graph = defaultdict(set)
+        required_aliases_by_graph: Dict[str, Set[str]] = {}
 
-        relationship_payload = group_payload.get("relationship")
+        relationship_payload = group_payload["relationship"]
         if relationship_payload is not None:
-            for graph_slug, node_alias in relationship_payload.get("path", []):
-                required_aliases_by_graph[graph_slug].add(node_alias)
+            for graph_slug, node_alias in relationship_payload["path"]:
+                required_aliases_by_graph.setdefault(graph_slug, set()).add(node_alias)
 
-        for clause_payload in group_payload.get("clauses", []):
-            for graph_slug, node_alias in clause_payload.get("subject", []):
-                required_aliases_by_graph[graph_slug].add(node_alias)
-            for operand_payload in clause_payload.get("operands", []):
-                for graph_slug, node_alias in operand_payload.get("path", []):
-                    required_aliases_by_graph[graph_slug].add(node_alias)
+        for clause_payload in group_payload["clauses"]:
+            for graph_slug, node_alias in clause_payload["subject"]:
+                required_aliases_by_graph.setdefault(graph_slug, set()).add(node_alias)
+            for operand_payload in clause_payload["operands"]:
+                if TYPE_PATH in operand_payload:
+                    for graph_slug, node_alias in operand_payload["path"]:
+                        required_aliases_by_graph.setdefault(graph_slug, set()).add(
+                            node_alias
+                        )
 
-        for child_group_payload in group_payload.get("groups", []):
-            child_required = self._collect_required_aliases_from_group(
-                child_group_payload
-            )
+        for child_group_payload in group_payload["groups"]:
+            child_required = self._collect_required_aliases(child_group_payload)
             for graph_slug, alias_set in child_required.items():
-                required_aliases_by_graph[graph_slug].update(alias_set)
+                required_aliases_by_graph.setdefault(graph_slug, set()).update(
+                    alias_set
+                )
 
-        return {
-            graph_slug: set(alias_set)
-            for graph_slug, alias_set in required_aliases_by_graph.items()
-        }
+        return required_aliases_by_graph
