@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Tuple, Sequence
+from typing import Any, List, Optional, Tuple
 from django.db.models import Subquery, OuterRef, Q
 from django.utils.translation import gettext as _
 
@@ -18,21 +18,28 @@ class PredicateBuilder:
         operands: List[Any],
         anchor_resource_id_annotation: Optional[str] = None,
     ) -> Tuple[Q | dict, bool]:
-        normalized_params = self._normalize_operands(
+        normalized_operands = self._normalize_operands(
             operands=operands,
             anchor_resource_id_annotation=anchor_resource_id_annotation,
         )
 
-        facet = self.facet_registry.get_facet(datatype_name, operator_token)
+        facet = self.facet_registry.fetch_facet(datatype_name, operator_token)
         lookup_key = facet.orm_template.replace("{col}", "value")
         is_template_negated = bool(facet.is_orm_template_negated)
 
-        value = self._select_value_for_arity(facet.arity, normalized_params)
-        kwargs = {lookup_key: value}
+        if facet.arity == 0:
+            value_for_lookup = True
+        elif facet.arity == 1:
+            value_for_lookup = normalized_operands[0]
+        else:
+            value_for_lookup = normalized_operands
+
+        predicate_kwargs = {lookup_key: value_for_lookup}
 
         if is_template_negated:
-            return ~Q(**kwargs), True
-        return kwargs, False
+            return ~Q(**predicate_kwargs), True
+
+        return predicate_kwargs, False
 
     def _normalize_operands(
         self,
@@ -75,12 +82,3 @@ class PredicateBuilder:
             )
 
         return normalized_values
-
-    def _select_value_for_arity(
-        self, arity: Optional[int], params: Sequence[Any]
-    ) -> Any:
-        if arity == 0:
-            return True
-        if arity == 1:
-            return params[0]
-        return params
