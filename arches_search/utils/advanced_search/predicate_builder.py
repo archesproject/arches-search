@@ -23,7 +23,7 @@ class PredicateBuilder:
             anchor_resource_id_annotation=anchor_resource_id_annotation,
         )
 
-        facet = self.facet_registry.fetch_facet(datatype_name, operator_token)
+        facet = self.facet_registry.get_facet(datatype_name, operator_token)
         lookup_key = facet.orm_template.replace("{col}", "value")
         is_template_negated = bool(facet.is_orm_template_negated)
 
