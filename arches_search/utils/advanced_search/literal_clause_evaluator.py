@@ -4,11 +4,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
 
-# Logic tokens (normalized upstream)
 LOGIC_AND = "AND"
 LOGIC_OR = "OR"
 
-# Quantifiers (normalized upstream)
 QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
 QUANTIFIER_NONE = "NONE"
@@ -18,12 +16,12 @@ CLAUSE_TYPE_LITERAL = "LITERAL"
 
 class LiteralClauseEvaluator:
     def __init__(
-        self, search_model_registry, facet_registry, path_navigator, operand_compiler
+        self, search_model_registry, facet_registry, path_navigator, predicate_builder
     ) -> None:
         self.search_model_registry = search_model_registry
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
-        self.operand_compiler = operand_compiler
+        self.predicate_builder = predicate_builder
 
     def evaluate(
         self,
@@ -49,7 +47,6 @@ class LiteralClauseEvaluator:
             )
         raise ValueError(f"Unsupported evaluation mode: {mode}")
 
-    # Anchor-level EXISTS for ANY/ALL/NONE on the current resource
     def _build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
         subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
         operator_token = clause_payload["operator"]
@@ -70,7 +67,6 @@ class LiteralClauseEvaluator:
             resourceinstanceid=OuterRef("resourceinstanceid")
         )
 
-        # No operands: only check presence/absence
         if not operand_items:
             presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
                 datatype_name, operator_token
@@ -88,7 +84,7 @@ class LiteralClauseEvaluator:
             )
 
         predicate_expression, is_template_negated = (
-            self.operand_compiler.build_predicate(
+            self.predicate_builder.build_predicate(
                 datatype_name=datatype_name,
                 operator_token=operator_token,
                 operands=operand_items,
@@ -96,7 +92,6 @@ class LiteralClauseEvaluator:
             )
         )
 
-        # Materialize matching vs violating rows once
         if isinstance(predicate_expression, Q):
             matching_rows = correlated_rows.filter(predicate_expression)
             violating_rows = correlated_rows.exclude(predicate_expression)
@@ -109,11 +104,9 @@ class LiteralClauseEvaluator:
         if quantifier_token == QUANTIFIER_NONE:
             return ~Exists(matching_rows)
 
-        # QUANTIFIER_ALL
         if not is_template_negated:
             return Exists(correlated_rows) & ~Exists(violating_rows)
 
-        # Negated template: try the positive facet; if not, flip the expression cleanly
         positive_facet = self.facet_registry.get_positive_facet_for(
             operator_token, datatype_name
         )
@@ -122,7 +115,7 @@ class LiteralClauseEvaluator:
                 datatype_name,
                 positive_facet.operator,
                 "value",
-                self.operand_compiler.literal_values_only(operand_items),
+                self._literal_values_only(operand_items),
             )
             if isinstance(positive_expression, Q):
                 positive_rows = correlated_rows.filter(positive_expression)
@@ -139,7 +132,6 @@ class LiteralClauseEvaluator:
 
         return Exists(correlated_rows) & ~Exists(matching_rows)
 
-    # Child-level EXISTS against a related rowset identified by correlate_field
     def _build_child_exists(
         self, clause_payload: Dict[str, Any], correlate_field: str
     ) -> Exists:
@@ -172,7 +164,7 @@ class LiteralClauseEvaluator:
             )
 
         predicate_expression, is_template_negated = (
-            self.operand_compiler.build_predicate(
+            self.predicate_builder.build_predicate(
                 datatype_name=datatype_name,
                 operator_token=operator_token,
                 operands=operand_items,
@@ -185,7 +177,6 @@ class LiteralClauseEvaluator:
                 return Exists(correlated_rows.filter(predicate_expression))
             return Exists(correlated_rows.filter(**predicate_expression))
 
-        # Negated template branch
         positive_facet = self.facet_registry.get_positive_facet_for(
             operator_token, datatype_name
         )
@@ -194,7 +185,7 @@ class LiteralClauseEvaluator:
                 datatype_name,
                 positive_facet.operator,
                 "value",
-                self.operand_compiler.literal_values_only(operand_items),
+                self._literal_values_only(operand_items),
             )
             if isinstance(positive_expression, Q):
                 return ~Exists(correlated_rows.filter(positive_expression))
@@ -209,7 +200,6 @@ class LiteralClauseEvaluator:
             return ~Exists(correlated_rows.filter(predicate_expression))
         return ~Exists(correlated_rows.filter(**predicate_expression))
 
-    # Return the set of child rows that satisfy all literal AND groups at terminal_graph_slug
     def _compute_child_rows(
         self,
         group_payload: Dict[str, Any],
@@ -218,7 +208,6 @@ class LiteralClauseEvaluator:
     ) -> Optional[QuerySet]:
         literal_clauses: List[Dict[str, Any]] = []
 
-        # Gather literal clauses only from non-relationship AND blocks
         for direct_child_group in group_payload["groups"]:
             if direct_child_group["relationship"]["path"]:
                 continue
@@ -244,7 +233,6 @@ class LiteralClauseEvaluator:
         if not literal_clauses:
             return None
 
-        # Intersect per-clause child rowsets (pk__in) to enforce AND across literals
         intersected_rows: Optional[QuerySet] = None
 
         for clause_payload in literal_clauses:
@@ -281,7 +269,7 @@ class LiteralClauseEvaluator:
                 )
             else:
                 predicate_expression, is_template_negated = (
-                    self.operand_compiler.build_predicate(
+                    self.predicate_builder.build_predicate(
                         datatype_name=datatype_name,
                         operator_token=operator_token,
                         operands=operand_items,
@@ -307,7 +295,7 @@ class LiteralClauseEvaluator:
                             datatype_name,
                             positive_facet.operator,
                             "value",
-                            self.operand_compiler.literal_values_only(operand_items),
+                            self._literal_values_only(operand_items),
                         )
                         if isinstance(positive_expression, Q):
                             predicate_rows = correlated_rows.exclude(
@@ -332,7 +320,6 @@ class LiteralClauseEvaluator:
 
         return intersected_rows
 
-    # Tile scope: return (per_tile_Q, resource_level_Q)
     def _build_tile_scope_predicates(
         self,
         clause_payload: Dict[str, Any],
@@ -363,7 +350,6 @@ class LiteralClauseEvaluator:
 
         resource_has_any_tile_q = Q(Exists(tiles_for_anchor_resource))
 
-        # No operands: treat presence/absence only
         if not operand_items:
             presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
                 datatype_name, operator_token
@@ -397,7 +383,7 @@ class LiteralClauseEvaluator:
             return (None, resource_level_q)
 
         predicate_expression, is_template_negated = (
-            self.operand_compiler.build_predicate(
+            self.predicate_builder.build_predicate(
                 datatype_name=datatype_name,
                 operator_token=operator_token,
                 operands=operand_items,
@@ -428,7 +414,6 @@ class LiteralClauseEvaluator:
             )
             return (None, Q(~Exists(tiles_missing_match)) & resource_has_any_tile_q)
 
-        # Negated template at tile scope: prefer positive facet; otherwise flip cleanly
         positive_facet = self.facet_registry.get_positive_facet_for(
             operator_token, datatype_name
         )
@@ -437,7 +422,7 @@ class LiteralClauseEvaluator:
                 datatype_name,
                 positive_facet.operator,
                 "value",
-                self.operand_compiler.literal_values_only(operand_items),
+                self._literal_values_only(operand_items),
             )
             if isinstance(positive_expression, Q):
                 positive_tile_matches = tile_rows.filter(positive_expression).filter(
@@ -466,3 +451,15 @@ class LiteralClauseEvaluator:
             Exists(positive_tile_matches)
         )
         return (None, Q(~Exists(tiles_with_violations)) & resource_has_any_tile_q)
+
+    def _literal_values_only(self, operands: List[Any]) -> List[Any]:
+        literal_values: List[Any] = []
+        for operand_item in operands:
+            if isinstance(operand_item, dict):
+                operand_type = operand_item["type"].upper()
+                if operand_type == "PATH":
+                    continue
+                literal_values.append(operand_item["value"])
+            else:
+                literal_values.append(operand_item)
+        return literal_values

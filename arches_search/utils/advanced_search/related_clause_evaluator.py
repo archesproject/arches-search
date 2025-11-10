@@ -10,12 +10,12 @@ CLAUSE_TYPE_RELATED = "RELATED"
 
 class RelatedClauseEvaluator:
     def __init__(
-        self, search_model_registry, facet_registry, path_navigator, operand_compiler
+        self, search_model_registry, facet_registry, path_navigator, predicate_builder
     ) -> None:
         self.search_model_registry = search_model_registry
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
-        self.operand_compiler = operand_compiler
+        self.predicate_builder = predicate_builder
 
     def evaluate(
         self,
@@ -106,7 +106,7 @@ class RelatedClauseEvaluator:
                 else ~Exists(correlated_subject_rows)
             )
 
-        predicate_expression, _ = self.operand_compiler.build_predicate(
+        predicate_expression, _ = self.predicate_builder.build_predicate(
             datatype_name=datatype_name,
             operator_token=operator_token,
             operands=operand_items,

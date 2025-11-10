@@ -11,7 +11,7 @@ from arches_search.utils.advanced_search.search_model_registry import (
 )
 from arches_search.utils.advanced_search.facet_registry import FacetRegistry
 from arches_search.utils.advanced_search.path_navigator import PathNavigator
-from arches_search.utils.advanced_search.operand_compiler import OperandCompiler
+from arches_search.utils.advanced_search.predicate_builder import PredicateBuilder
 from arches_search.utils.advanced_search.literal_clause_evaluator import (
     LiteralClauseEvaluator,
 )
@@ -36,7 +36,7 @@ class AdvancedSearchQueryCompiler:
             self.search_model_registry, self.node_alias_registry
         )
 
-        self.operand_compiler = OperandCompiler(
+        self.predicate_builder = PredicateBuilder(
             self.facet_registry, self.path_navigator
         )
 
@@ -44,13 +44,13 @@ class AdvancedSearchQueryCompiler:
             self.search_model_registry,
             self.facet_registry,
             self.path_navigator,
-            self.operand_compiler,
+            self.predicate_builder,
         )
         self.related_clause_evaluator = RelatedClauseEvaluator(
             self.search_model_registry,
             self.facet_registry,
             self.path_navigator,
-            self.operand_compiler,
+            self.predicate_builder,
         )
 
         self.clause_reducer = ClauseReducer(
