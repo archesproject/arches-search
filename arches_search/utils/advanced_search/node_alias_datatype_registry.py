@@ -13,7 +13,7 @@ class NodeAliasDatatypeRegistry:
             required_aliases_by_graph = self._collect_required_aliases(payload_query)
             self._preload_required_datatypes(required_aliases_by_graph)
 
-    def fetch_datatype_for_alias(self, graph_slug: str, node_alias: str) -> str:
+    def get_datatype_for_alias(self, graph_slug: str, node_alias: str) -> str:
         cache_for_graph = self._datatype_cache_by_graph.setdefault(graph_slug, {})
         cached_datatype = cache_for_graph.get(node_alias)
         if cached_datatype:
@@ -78,16 +78,19 @@ class NodeAliasDatatypeRegistry:
         for clause_payload in group_payload["clauses"]:
             for graph_slug, node_alias in clause_payload["subject"]:
                 required_aliases_by_graph.setdefault(graph_slug, set()).add(node_alias)
+
             for operand_payload in clause_payload["operands"]:
-                if TYPE_PATH in operand_payload:
-                    for graph_slug, node_alias in operand_payload["path"]:
+                if operand_payload["type"].upper() == TYPE_PATH:
+                    for graph_slug, node_alias in operand_payload["value"]:
                         required_aliases_by_graph.setdefault(graph_slug, set()).add(
                             node_alias
                         )
 
         for child_group_payload in group_payload["groups"]:
-            child_required = self._collect_required_aliases(child_group_payload)
-            for graph_slug, alias_set in child_required.items():
+            child_required_aliases_by_graph = self._collect_required_aliases(
+                child_group_payload
+            )
+            for graph_slug, alias_set in child_required_aliases_by_graph.items():
                 required_aliases_by_graph.setdefault(graph_slug, set()).update(
                     alias_set
                 )
