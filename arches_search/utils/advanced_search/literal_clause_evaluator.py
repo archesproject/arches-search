@@ -68,7 +68,7 @@ class LiteralClauseEvaluator:
         )
 
         if not operand_items:
-            presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
+            presence_implies_match = self.facet_registry.presence_implies_match(
                 datatype_name, operator_token
             )
             if quantifier_token == QUANTIFIER_NONE:
@@ -107,7 +107,7 @@ class LiteralClauseEvaluator:
         if not is_template_negated:
             return Exists(correlated_rows) & ~Exists(violating_rows)
 
-        positive_facet = self.facet_registry.get_positive_facet_for(
+        positive_facet = self.facet_registry.resolve_positive_facet(
             operator_token, datatype_name
         )
         if positive_facet is not None:
@@ -154,7 +154,7 @@ class LiteralClauseEvaluator:
         )
 
         if not operand_items:
-            presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
+            presence_implies_match = self.facet_registry.presence_implies_match(
                 datatype_name, operator_token
             )
             return (
@@ -177,7 +177,7 @@ class LiteralClauseEvaluator:
                 return Exists(correlated_rows.filter(predicate_expression))
             return Exists(correlated_rows.filter(**predicate_expression))
 
-        positive_facet = self.facet_registry.get_positive_facet_for(
+        positive_facet = self.facet_registry.resolve_positive_facet(
             operator_token, datatype_name
         )
         if positive_facet is not None:
@@ -257,10 +257,8 @@ class LiteralClauseEvaluator:
             )
 
             if not operand_items:
-                presence_implies_match = (
-                    self.facet_registry.zero_arity_presence_is_match(
-                        datatype_name, operator_token
-                    )
+                presence_implies_match = self.facet_registry.presence_implies_match(
+                    datatype_name, operator_token
                 )
                 predicate_rows = (
                     correlated_rows
@@ -287,7 +285,7 @@ class LiteralClauseEvaluator:
                 if not is_template_negated:
                     predicate_rows = filtered_rows
                 else:
-                    positive_facet = self.facet_registry.get_positive_facet_for(
+                    positive_facet = self.facet_registry.resolve_positive_facet(
                         operator_token, datatype_name
                     )
                     if positive_facet is not None:
@@ -351,7 +349,7 @@ class LiteralClauseEvaluator:
         resource_has_any_tile_q = Q(Exists(tiles_for_anchor_resource))
 
         if not operand_items:
-            presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
+            presence_implies_match = self.facet_registry.presence_implies_match(
                 datatype_name, operator_token
             )
 
@@ -414,7 +412,7 @@ class LiteralClauseEvaluator:
             )
             return (None, Q(~Exists(tiles_missing_match)) & resource_has_any_tile_q)
 
-        positive_facet = self.facet_registry.get_positive_facet_for(
+        positive_facet = self.facet_registry.resolve_positive_facet(
             operator_token, datatype_name
         )
         if positive_facet is not None:

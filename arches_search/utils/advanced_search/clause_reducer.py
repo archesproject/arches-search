@@ -397,7 +397,7 @@ class ClauseReducer:
                         subject_graph_slug, subject_node_alias
                     )
                 )
-                if self.facet_registry.zero_arity_presence_is_match(
+                if self.facet_registry.presence_implies_match(
                     datatype_name, operator_token
                 ):
                     continue

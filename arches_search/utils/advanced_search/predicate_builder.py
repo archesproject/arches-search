@@ -1,5 +1,5 @@
-from typing import Any, List, Optional, Tuple
-from django.db.models import Subquery, OuterRef
+from typing import Any, List, Optional, Tuple, Sequence
+from django.db.models import Subquery, OuterRef, Q
 from django.utils.translation import gettext as _
 
 TYPE_LITERAL = "LITERAL"
@@ -17,16 +17,22 @@ class PredicateBuilder:
         operator_token: str,
         operands: List[Any],
         anchor_resource_id_annotation: Optional[str] = None,
-    ) -> Tuple[Any, bool]:
-        normalized_operands = self._normalize_operands(
+    ) -> Tuple[Q | dict, bool]:
+        normalized_params = self._normalize_operands(
             operands=operands,
             anchor_resource_id_annotation=anchor_resource_id_annotation,
         )
-        predicate_expression, is_template_negated = self.facet_registry.predicate(
-            datatype_name, operator_token, "value", normalized_operands
-        )
 
-        return predicate_expression, is_template_negated
+        facet = self.facet_registry.get_facet(datatype_name, operator_token)
+        lookup_key = facet.orm_template.replace("{col}", "value")
+        is_template_negated = bool(facet.is_orm_template_negated)
+
+        value = self._select_value_for_arity(facet.arity, normalized_params)
+        kwargs = {lookup_key: value}
+
+        if is_template_negated:
+            return ~Q(**kwargs), True
+        return kwargs, False
 
     def _normalize_operands(
         self,
@@ -39,7 +45,6 @@ class PredicateBuilder:
         has_path_operand = any(
             operand_item["type"].upper() == TYPE_PATH for operand_item in operands
         )
-
         if has_path_operand and anchor_resource_id_annotation is None:
             raise ValueError(
                 _("anchor_resource_id_annotation is required for PATH operands")
@@ -70,3 +75,12 @@ class PredicateBuilder:
             )
 
         return normalized_values
+
+    def _select_value_for_arity(
+        self, arity: Optional[int], params: Sequence[Any]
+    ) -> Any:
+        if arity == 0:
+            return True
+        if arity == 1:
+            return params[0]
+        return params

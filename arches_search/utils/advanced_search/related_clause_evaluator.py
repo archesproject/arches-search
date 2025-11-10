@@ -55,7 +55,7 @@ class RelatedClauseEvaluator:
                 )
             )
 
-        presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
+        presence_implies_match = self.facet_registry.presence_implies_match(
             terminal_datatype_name, operator_token
         )
 
@@ -97,7 +97,7 @@ class RelatedClauseEvaluator:
         ).annotate(_anchor_resource_id=OuterRef(traversal_context["anchor_id_field"]))
 
         if not operand_items:
-            presence_implies_match = self.facet_registry.zero_arity_presence_is_match(
+            presence_implies_match = self.facet_registry.presence_implies_match(
                 datatype_name, operator_token
             )
             return (

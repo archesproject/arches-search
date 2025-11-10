@@ -1,6 +1,5 @@
-from typing import Dict, Tuple, Optional, Sequence, Any
+from typing import Dict, Tuple, Optional
 
-from django.db.models import Q
 from django.utils.translation import gettext as _
 from arches_search.models.models import AdvancedSearchFacet
 
@@ -20,9 +19,8 @@ class FacetRegistry:
         )
 
         for facet in queryset:
-            self._facet_by_datatype_and_operator[
-                (facet.datatype.datatype, facet.operator)
-            ] = facet
+            facet_key = (facet.datatype.datatype, facet.operator)
+            self._facet_by_datatype_and_operator[facet_key] = facet
 
     def get_facet(
         self, subject_datatype_name: str, operator_token: str
@@ -30,6 +28,7 @@ class FacetRegistry:
         facet = self._facet_by_datatype_and_operator.get(
             (subject_datatype_name, operator_token)
         )
+
         if facet is None:
             raise AdvancedSearchFacet.DoesNotExist(
                 _(
@@ -39,38 +38,23 @@ class FacetRegistry:
             )
         return facet
 
-    def get_positive_facet_for(
+    def resolve_positive_facet(
         self, operator_token: str, datatype_name: str
     ) -> Optional[AdvancedSearchFacet]:
         candidate = self._facet_by_datatype_and_operator.get(
             (datatype_name, operator_token)
         )
+
         if candidate and candidate.is_orm_template_negated:
             reverse_operator = f"POSITIVE_OF::{operator_token}"
             return self._facet_by_datatype_and_operator.get(
                 (datatype_name, reverse_operator)
             )
+
         return None
 
-    def predicate(
-        self,
-        subject_datatype_name: str,
-        operator_token: str,
-        column_name: str,
-        params: Sequence[Any],
-    ) -> tuple[Q | Dict[str, Any], bool]:
-        facet = self.get_facet(subject_datatype_name, operator_token)
-        lookup_key = (facet.orm_template or "").replace("{col}", column_name)
-        is_template_negated = bool(facet.is_orm_template_negated)
-        single_value: Any = params[0] if params else True
-        kwargs = {lookup_key: single_value}
-        return (~Q(**kwargs), True) if is_template_negated else (kwargs, False)
-
-    def zero_arity_presence_is_match(
+    def presence_implies_match(
         self, subject_datatype_name: str, operator_token: str
     ) -> bool:
         facet = self.get_facet(subject_datatype_name, operator_token)
-        accepts_no_operands = facet.arity == 0
-        if not accepts_no_operands:
-            return False
-        return bool(facet.is_orm_template_negated)
+        return facet.arity == 0 and bool(facet.is_orm_template_negated)

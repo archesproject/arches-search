@@ -10,6 +10,8 @@ from arches_search.utils.advanced_search.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
 
+TERMINAL_RESOURCE_TYPES = {"resource-instance", "resource-instance-list"}
+
 
 class PathNavigator:
     def __init__(
@@ -22,10 +24,11 @@ class PathNavigator:
 
     def build_path_queryset(
         self,
-        path_segments: Sequence[Tuple[str, str]] | None = None,
+        path_segments: Sequence[Tuple[str, str]],
     ) -> Tuple[str, str, QuerySet]:
-        if not path_segments:
+        if len(path_segments) == 0:
             raise ValueError(_("Path must contain at least one segment."))
+
         terminal_graph_slug, terminal_node_alias = path_segments[-1]
         terminal_datatype_name = (
             self.node_alias_datatype_registry.get_datatype_for_alias(
@@ -45,16 +48,13 @@ class PathNavigator:
         self,
         relationship_context: Dict[str, Any],
     ) -> Tuple[Dict[str, Any], QuerySet]:
-        relationship_path = relationship_context["path"]
+        relationship_path: Sequence[Tuple[str, str]] = relationship_context["path"]
         is_inverse_relationship: bool = relationship_context["is_inverse"]
 
         terminal_datatype_name, terminal_graph_slug, base_pair_rows = (
             self.build_path_queryset(relationship_path)
         )
-        if terminal_datatype_name.lower() not in {
-            "resource-instance",
-            "resource-instance-list",
-        }:
+        if terminal_datatype_name.lower() not in TERMINAL_RESOURCE_TYPES:
             raise ValueError(
                 _(
                     "Relationship must end on a resource-instance or resource-instance-list node."
@@ -74,7 +74,7 @@ class PathNavigator:
             anchor_id_field = "resourceinstanceid"
             child_id_field = "value"
 
-        compiled_pair_info = {
+        compiled_pair_info: Dict[str, Any] = {
             "pair_queryset": base_pair_rows,
             "anchor_id_field": anchor_id_field,
             "child_id_field": child_id_field,
@@ -93,10 +93,7 @@ class PathNavigator:
         terminal_datatype_name, terminal_graph_slug, base_pair_rows = (
             self.build_path_queryset(path_segments)
         )
-        if terminal_datatype_name.lower() not in {
-            "resource-instance",
-            "resource-instance-list",
-        }:
+        if terminal_datatype_name.lower() not in TERMINAL_RESOURCE_TYPES:
             raise ValueError(
                 _(
                     "Nested relationship must end on a resource-instance or resource-instance-list node."
@@ -122,12 +119,10 @@ class PathNavigator:
     def normalize_relationship_context(
         self, relationship_context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        is_inverse = bool(relationship_context.get("is_inverse"))
-        path_segments = relationship_context.get("path") or []
-        raw_quantifiers = relationship_context.get("traversal_quantifiers") or ["ANY"]
-        traversal_quantifier = (raw_quantifiers[0] or "ANY").upper()
         return {
-            "is_inverse": is_inverse,
-            "path_segments": path_segments,
-            "traversal_quantifier": traversal_quantifier,
+            "is_inverse": relationship_context["is_inverse"],
+            "path_segments": relationship_context["path"],
+            "traversal_quantifier": relationship_context["traversal_quantifiers"][
+                0
+            ].upper(),
         }
