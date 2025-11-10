@@ -110,7 +110,7 @@ class ClauseReducer:
     def _reduce_top_level_no_relationship_clauses(
         self, group_payload: Dict[str, Any]
     ) -> ReduceResult:
-        scope_for_group = group_payload["scope"].upper()
+        scope_for_group = group_payload["scope"]
 
         if scope_for_group == SCOPE_TILE:
             tiles_for_anchor_resource = arches_models.Tile.objects.filter(
@@ -135,7 +135,7 @@ class ClauseReducer:
 
         anchor_exists: List[Exists] = []
         for clause_payload in group_payload["clauses"]:
-            clause_type = clause_payload["type"].upper()
+            clause_type = clause_payload["type"]
             if clause_type == CLAUSE_TYPE_LITERAL:
                 anchor_exists.append(
                     self.literal_clause_evaluator.evaluate(
@@ -145,7 +145,10 @@ class ClauseReducer:
                 )
             elif clause_type == CLAUSE_TYPE_RELATED:
                 anchor_exists.append(
-                    self.related_clause_evaluator.presence_for_anchor(clause_payload)
+                    self.related_clause_evaluator.evaluate(
+                        mode="anchor",
+                        clause_payload=clause_payload,
+                    )
                 )
 
         return ReduceResult(
@@ -215,7 +218,7 @@ class ClauseReducer:
             had_inner_filters = True
 
         has_child_targeting_clause = any(
-            clause_payload["type"].upper() == CLAUSE_TYPE_RELATED
+            clause_payload["type"] == CLAUSE_TYPE_RELATED
             for clause_payload in group_payload["clauses"]
         )
 
@@ -254,7 +257,7 @@ class ClauseReducer:
             )
             if not has_path:
                 for clause_payload in current_group_payload["clauses"]:
-                    if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
+                    if clause_payload["type"] != CLAUSE_TYPE_LITERAL:
                         continue
                     exists_expression = self.literal_clause_evaluator.evaluate(
                         mode="child",
@@ -308,8 +311,8 @@ class ClauseReducer:
 
         parent_child_id_field_name = traversal_context["child_id_field"]
         nested_quantifier = (
-            (nested_relationship.get("traversal_quantifiers") or [QUANTIFIER_ANY])[0]
-        ).upper()
+            nested_relationship.get("traversal_quantifiers") or [QUANTIFIER_ANY]
+        )[0]
 
         (
             _anchor_slug,
@@ -334,7 +337,7 @@ class ClauseReducer:
             )
             if not has_path:
                 for clause_payload in current_group_payload["clauses"]:
-                    if clause_payload["type"].upper() != CLAUSE_TYPE_LITERAL:
+                    if clause_payload["type"] != CLAUSE_TYPE_LITERAL:
                         continue
                     exists_expression = self.literal_clause_evaluator.evaluate(
                         mode="child",
@@ -376,11 +379,11 @@ class ClauseReducer:
         terminal_node_alias = traversal_context["terminal_node_alias"]
 
         for clause_payload in group_payload["clauses"]:
-            if clause_payload["type"].upper() != CLAUSE_TYPE_RELATED:
+            if clause_payload["type"] != CLAUSE_TYPE_RELATED:
                 continue
 
             subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
-            operator_token = clause_payload["operator"].upper()
+            operator_token = clause_payload["operator"]
             has_operands = bool(clause_payload["operands"])
 
             targets_current_terminal = (
@@ -399,7 +402,8 @@ class ClauseReducer:
                 ):
                     continue
 
-            presence_expression = self.related_clause_evaluator.presence_for_child(
+            presence_expression = self.related_clause_evaluator.evaluate(
+                mode="child",
                 clause_payload=clause_payload,
                 traversal_context=traversal_context,
             )

@@ -10,25 +10,37 @@ CLAUSE_TYPE_RELATED = "RELATED"
 
 class RelatedClauseEvaluator:
     def __init__(
-        self,
-        search_model_registry,
-        facet_registry,
-        path_navigator,
-        operand_compiler,
+        self, search_model_registry, facet_registry, path_navigator, operand_compiler
     ) -> None:
         self.search_model_registry = search_model_registry
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
         self.operand_compiler = operand_compiler
 
-    def presence_for_anchor(
+    def evaluate(
         self,
+        mode: str,
         clause_payload: Dict[str, Any],
-        *,
+        traversal_context: Optional[Dict[str, Any]] = None,
         terminal_datatype_name: Optional[str] = None,
     ):
-        operator_token = (clause_payload["operator"] or "").upper()
-        quantifier_token = (clause_payload["quantifier"] or "").upper()
+        if mode == "anchor":
+            return self._build_anchor_presence_exists(
+                clause_payload, terminal_datatype_name
+            )
+        if mode == "child":
+            if traversal_context is None:
+                raise ValueError("traversal_context is required for mode='child'")
+            return self._build_child_presence_exists(clause_payload, traversal_context)
+        raise ValueError(f"Unsupported evaluation mode: {mode}")
+
+    def _build_anchor_presence_exists(
+        self,
+        clause_payload: Dict[str, Any],
+        terminal_datatype_name: Optional[str],
+    ):
+        operator_token = clause_payload["operator"]
+        quantifier_token = clause_payload["quantifier"]
         subject_path_sequence = clause_payload["subject"]
 
         traversal_context, child_row_set = self.path_navigator.build_relationship_pairs(
@@ -63,12 +75,12 @@ class RelatedClauseEvaluator:
 
         return Exists(child_row_set.none())
 
-    def presence_for_child(
+    def _build_child_presence_exists(
         self, clause_payload: Dict[str, Any], traversal_context: Dict[str, Any]
     ):
         subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
-        operator_token = (clause_payload["operator"] or "").upper()
-        operand_items = clause_payload.get("operands") or []
+        operator_token = clause_payload["operator"]
+        operand_items = clause_payload["operands"]
 
         datatype_name = (
             self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
