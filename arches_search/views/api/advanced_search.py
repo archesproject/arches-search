@@ -15,7 +15,7 @@ class AdvancedSearchAPI(APIBase):
 
         aggregations = {}
 
-        results = AdvancedSearchQueryCompiler(body).build_resources_queryset()
+        results = AdvancedSearchQueryCompiler(body).compile()
         raw_aggregations = body.get("aggregations")
 
         if raw_aggregations:

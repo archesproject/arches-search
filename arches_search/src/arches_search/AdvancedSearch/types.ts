@@ -8,7 +8,6 @@ export interface AdvancedSearchFacet {
     orm_template: string;
     param_formats: string[];
     sortorder: number;
-    sql_template: string;
 }
 
 export interface GraphModel {

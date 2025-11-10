@@ -72,6 +72,33 @@ const pathSequenceSeedGraph = computed<Record<string, unknown>>(() => {
     }
 });
 
+function buildAliasedNodeDataFromOperandValue(
+    rawValue: unknown,
+    datatype: string,
+): Record<string, unknown> | undefined {
+    if (rawValue === null || rawValue === undefined) {
+        return undefined;
+    }
+
+    if (datatype === "resource-instance") {
+        return { node_value: { resourceId: rawValue } };
+    }
+
+    if (datatype === "resource-instance-list") {
+        const resourceIds = Array.isArray(rawValue) ? rawValue : [rawValue];
+        return {
+            node_value: resourceIds.map((resourceId) => ({ resourceId })),
+        };
+    }
+
+    if (datatype === "string") {
+        const stringValue = String(rawValue);
+        return { node_value: stringValue, display_value: stringValue };
+    }
+
+    return { node_value: rawValue };
+}
+
 watch(
     () => modelValue,
     (nextModel) => {
@@ -82,9 +109,17 @@ watch(
             return;
         }
 
-        literalAliasedNodeData.value = undefined;
         operandType.value = nextModel.type as OperandType;
         operandValue.value = nextModel.value;
+
+        if (operandType.value === LITERAL) {
+            literalAliasedNodeData.value = buildAliasedNodeDataFromOperandValue(
+                operandValue.value,
+                subjectTerminalNode.datatype,
+            );
+        } else {
+            literalAliasedNodeData.value = undefined;
+        }
     },
     { immediate: true },
 );
@@ -97,11 +132,9 @@ function coerceGenericWidgetValue(
         const genericWidgetNodeValue = genericWidgetValue.node_value as {
             [key: string]: unknown;
         };
-
         return genericWidgetNodeValue.resourceId;
     } else if (datatype === "resource-instance-list") {
         const nodeValue = genericWidgetValue.node_value as unknown[];
-
         return [
             ...nodeValue.map((listItem) => {
                 return (listItem as { [key: string]: unknown }).resourceId;
@@ -119,9 +152,20 @@ function onOperandTypeUpdate(updatedOperandType: OperandType) {
         return;
     }
 
-    literalAliasedNodeData.value = undefined;
     operandType.value = updatedOperandType;
-    operandValue.value = updatedOperandType === LITERAL ? null : [];
+
+    if (updatedOperandType === LITERAL) {
+        literalAliasedNodeData.value =
+            literalAliasedNodeData.value ??
+            buildAliasedNodeDataFromOperandValue(
+                operandValue.value,
+                subjectTerminalNode.datatype,
+            );
+        operandValue.value = operandValue.value ?? null;
+    } else {
+        literalAliasedNodeData.value = undefined;
+        operandValue.value = updatedOperandType === RESULTSET ? null : [];
+    }
 
     emit("update:modelValue", {
         type: operandType.value,

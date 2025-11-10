@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import F, Func
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.contrib.contenttypes.models import ContentType
@@ -60,7 +61,6 @@ class AdvancedSearchFacet(models.Model):
     sortorder = models.PositiveSmallIntegerField()
     orm_template = models.CharField(max_length=255, blank=True)
     is_orm_template_negated = models.BooleanField(default=False)
-    sql_template = models.TextField()
 
     class Meta:
         constraints = [
@@ -89,16 +89,25 @@ class TermSearch(models.Model):
         db_table = "arches_search_terms"
         constraints = []
         indexes = [
-            models.Index(fields=["tileid", "node_alias", "value"]),
-            models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
+            models.Index(fields=["tileid"]),
             models.Index(fields=["datatype"]),
-            models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
+            models.Index(fields=["language"]),
             models.Index(fields=["value"]),
-            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
             models.Index(fields=["graph_slug", "node_alias", "value"]),
+            models.Index(fields=["graph_slug", "node_alias", "language", "value"]),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
+            ),
+            models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
+            models.Index(
+                fields=["graph_slug", "node_alias", "tileid", "language", "value"]
+            ),
             GinIndex(fields=["search_vector"]),
+            GinIndex(
+                name="term_value_trgm", fields=["value"], opclasses=["gin_trgm_ops"]
+            ),
         ]
 
 
@@ -116,15 +125,16 @@ class NumericSearch(models.Model):
         db_table = "arches_search_numeric"
         constraints = []
         indexes = [
-            models.Index(fields=["tileid", "node_alias", "value"]),
-            models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
+            models.Index(fields=["tileid"]),
             models.Index(fields=["datatype"]),
-            models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
-            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
             models.Index(fields=["graph_slug", "node_alias", "value"]),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
+            ),
+            models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
         ]
 
 
@@ -142,15 +152,16 @@ class UUIDSearch(models.Model):
         db_table = "arches_search_uuid"
         constraints = []
         indexes = [
-            models.Index(fields=["tileid", "node_alias", "value"]),
-            models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
+            models.Index(fields=["tileid"]),
             models.Index(fields=["datatype"]),
-            models.Index(fields=["graph_slug"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
-            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
             models.Index(fields=["graph_slug", "node_alias", "value"]),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
+            ),
+            models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
         ]
 
 
@@ -168,15 +179,16 @@ class DateSearch(models.Model):
         db_table = "arches_search_date"
         constraints = []
         indexes = [
-            models.Index(fields=["tileid", "node_alias", "value"]),
-            models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
-            models.Index(fields=["graph_slug"]),
-            models.Index(fields=["node_alias"]),
+            models.Index(fields=["tileid"]),
             models.Index(fields=["datatype"]),
+            models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
-            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
             models.Index(fields=["graph_slug", "node_alias", "value"]),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
+            ),
+            models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
         ]
 
 
@@ -195,16 +207,24 @@ class DateRangeSearch(models.Model):
         db_table = "arches_search_date_range"
         constraints = []
         indexes = [
-            models.Index(fields=["tileid", "node_alias", "start_value", "end_value"]),
-            models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
-            models.Index(fields=["graph_slug"]),
-            models.Index(fields=["node_alias"]),
+            models.Index(fields=["tileid"]),
             models.Index(fields=["datatype"]),
-            models.Index(fields=["start_value", "end_value"]),
-            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
+            models.Index(fields=["node_alias"]),
             models.Index(
                 fields=["graph_slug", "node_alias", "start_value", "end_value"]
+            ),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
+            ),
+            models.Index(
+                fields=[
+                    "graph_slug",
+                    "node_alias",
+                    "tileid",
+                    "start_value",
+                    "end_value",
+                ]
             ),
         ]
 
@@ -223,13 +243,14 @@ class BooleanSearch(models.Model):
         db_table = "arches_search_boolean"
         constraints = []
         indexes = [
-            models.Index(fields=["tileid", "node_alias", "value"]),
-            models.Index(fields=["tileid"]),
             models.Index(fields=["resourceinstanceid"]),
-            models.Index(fields=["graph_slug"]),
-            models.Index(fields=["node_alias"]),
+            models.Index(fields=["tileid"]),
             models.Index(fields=["datatype"]),
+            models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
-            models.Index(fields=["graph_slug", "node_alias", "resourceinstanceid"]),
             models.Index(fields=["graph_slug", "node_alias", "value"]),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
+            ),
+            models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
         ]
