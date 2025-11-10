@@ -42,26 +42,26 @@ class LiteralClauseEvaluator:
         terminal_graph_slug: Optional[str] = None,
     ):
         if mode == EVAL_MODE_ANCHOR:
-            return self._build_anchor_exists(clause_payload)  # type: ignore[arg-type]
+            return self._build_anchor_exists(clause_payload)
 
         if mode == EVAL_MODE_CHILD:
             return self._build_child_exists(
-                clause_payload=clause_payload,  # type: ignore[arg-type]
-                correlate_field=correlate_field,  # type: ignore[arg-type]
+                clause_payload=clause_payload,
+                correlate_field=correlate_field,
             )
 
         if mode == EVAL_MODE_TILE:
             return self._build_tile_scope_predicates(
-                clause_payload=clause_payload,  # type: ignore[arg-type]
-                tiles_for_anchor_resource=tiles_for_anchor_resource,  # type: ignore[arg-type]
-                tile_id_outer_ref=tile_id_outer_ref,  # type: ignore[arg-type]
+                clause_payload=clause_payload,
+                tiles_for_anchor_resource=tiles_for_anchor_resource,
+                tile_id_outer_ref=tile_id_outer_ref,
             )
 
         if mode == EVAL_MODE_COMPUTE_CHILD_ROWS:
             return self._compute_child_rows(
-                group_payload=group_payload,  # type: ignore[arg-type]
-                correlate_field=correlate_field,  # type: ignore[arg-type]
-                terminal_graph_slug=terminal_graph_slug,  # type: ignore[arg-type]
+                group_payload=group_payload,
+                correlate_field=correlate_field,
+                terminal_graph_slug=terminal_graph_slug,
             )
 
         raise ValueError(f"Unsupported evaluation mode: {mode}")
@@ -93,7 +93,7 @@ class LiteralClauseEvaluator:
             )
             if quantifier_token == QUANTIFIER_NONE:
                 return (
-                    ~Exists(correlated_rows)
+                    (~Exists(correlated_rows))
                     if presence_implies_match
                     else Exists(correlated_rows)
                 )
@@ -111,31 +111,31 @@ class LiteralClauseEvaluator:
                 anchor_resource_id_annotation=None,
             )
         )
-
-        if isinstance(predicate_expression, Q):
-            matching_rows = correlated_rows.filter(predicate_expression)
-            violating_rows = correlated_rows.exclude(predicate_expression)
-        else:
-            matching_rows = correlated_rows.filter(**predicate_expression)
-            violating_rows = correlated_rows.exclude(**predicate_expression)
+        predicate_q = (
+            predicate_expression
+            if isinstance(predicate_expression, Q)
+            else Q(**predicate_expression)
+        )
 
         if quantifier_token == QUANTIFIER_ANY:
-            return Exists(matching_rows)
+            return Exists(correlated_rows.filter(predicate_q))
 
         if quantifier_token == QUANTIFIER_NONE:
-            return ~Exists(matching_rows)
+            return ~Exists(correlated_rows.filter(predicate_q))
 
-        if not is_template_negated:
-            return Exists(correlated_rows) & ~Exists(violating_rows)
+        if quantifier_token == QUANTIFIER_ALL:
+            if not is_template_negated:
+                violating_rows = correlated_rows.exclude(predicate_q)
+                return Exists(correlated_rows) & ~Exists(violating_rows)
 
-        positive_per_row = self._positive_rows_for_negated_template(
-            operator_token=operator_token,
-            datatype_name=datatype_name,
-            operand_items=operand_items,
-            correlated_rows=correlated_rows,
-            predicate_expression=predicate_expression,
-        )
-        return Exists(correlated_rows) & ~Exists(positive_per_row)
+            positive_per_row = self._positive_rows_for_negated_template(
+                operator_token=operator_token,
+                datatype_name=datatype_name,
+                operand_items=operand_items,
+                correlated_rows=correlated_rows,
+                predicate_expression=predicate_q,
+            )
+            return Exists(correlated_rows) & ~Exists(positive_per_row)
 
     def _build_child_exists(
         self, clause_payload: Dict[str, Any], correlate_field: str
@@ -177,18 +177,21 @@ class LiteralClauseEvaluator:
                 anchor_resource_id_annotation=None,
             )
         )
+        predicate_q = (
+            predicate_expression
+            if isinstance(predicate_expression, Q)
+            else Q(**predicate_expression)
+        )
 
         if not is_template_negated:
-            if isinstance(predicate_expression, Q):
-                return Exists(correlated_rows.filter(predicate_expression))
-            return Exists(correlated_rows.filter(**predicate_expression))
+            return Exists(correlated_rows.filter(predicate_q))
 
         positive_rows = self._positive_rows_for_negated_template(
             operator_token=operator_token,
             datatype_name=datatype_name,
             operand_items=operand_items,
             correlated_rows=correlated_rows,
-            predicate_expression=predicate_expression,
+            predicate_expression=predicate_q,
         )
         return ~Exists(positive_rows)
 
@@ -211,13 +214,13 @@ class LiteralClauseEvaluator:
                     continue
 
                 for clause_payload in current_group["clauses"]:
-                    clause_type = clause_payload["type"]
-                    if clause_type == CLAUSE_TYPE_LITERAL:
+                    clause_type_token = clause_payload["type"]
+                    if clause_type_token == CLAUSE_TYPE_LITERAL:
                         clause_graph_slug, _ = clause_payload["subject"][0]
                         if clause_graph_slug != terminal_graph_slug:
                             return None
                         literal_clauses.append(clause_payload)
-                    elif clause_type == CLAUSE_TYPE_RELATED:
+                    elif clause_type_token == CLAUSE_TYPE_RELATED:
                         continue
                     else:
                         continue
@@ -269,19 +272,21 @@ class LiteralClauseEvaluator:
                         anchor_resource_id_annotation=None,
                     )
                 )
+                predicate_q = (
+                    predicate_expression
+                    if isinstance(predicate_expression, Q)
+                    else Q(**predicate_expression)
+                )
 
                 if not is_template_negated:
-                    if isinstance(predicate_expression, Q):
-                        predicate_rows = correlated_rows.filter(predicate_expression)
-                    else:
-                        predicate_rows = correlated_rows.filter(**predicate_expression)
+                    predicate_rows = correlated_rows.filter(predicate_q)
                 else:
                     positive_rows = self._positive_rows_for_negated_template(
                         operator_token=operator_token,
                         datatype_name=datatype_name,
                         operand_items=operand_items,
                         correlated_rows=correlated_rows,
-                        predicate_expression=predicate_expression,
+                        predicate_expression=predicate_q,
                     )
                     predicate_rows = correlated_rows.exclude(
                         pk__in=positive_rows.values("pk")
@@ -357,7 +362,7 @@ class LiteralClauseEvaluator:
                 ~Exists(tile_rows.filter(tileid=tile_id_outer_ref))
             )
             resource_level_q = (
-                Q(~Exists(tiles_missing_presence)) & any_tile_for_resource_q
+                (Q(~Exists(tiles_missing_presence)) & any_tile_for_resource_q)
                 if presence_implies_match
                 else Q(~Exists(tiles_for_anchor_resource))
             )
@@ -371,41 +376,43 @@ class LiteralClauseEvaluator:
                 anchor_resource_id_annotation=None,
             )
         )
-
-        if isinstance(predicate_expression, Q):
-            resource_level_matches = resource_rows.filter(predicate_expression)
-            per_tile_matches = tile_rows.filter(predicate_expression).filter(
-                tileid=tile_id_outer_ref
-            )
-        else:
-            resource_level_matches = resource_rows.filter(**predicate_expression)
-            per_tile_matches = tile_rows.filter(**predicate_expression).filter(
-                tileid=tile_id_outer_ref
-            )
+        predicate_q = (
+            predicate_expression
+            if isinstance(predicate_expression, Q)
+            else Q(**predicate_expression)
+        )
 
         if quantifier_token == QUANTIFIER_ANY:
+            per_tile_matches = tile_rows.filter(predicate_q).filter(
+                tileid=tile_id_outer_ref
+            )
             return (Q(Exists(per_tile_matches)), None)
 
         if quantifier_token == QUANTIFIER_NONE:
+            resource_level_matches = resource_rows.filter(predicate_q)
             return (None, Q(~Exists(resource_level_matches)))
 
-        if not is_template_negated:
-            tiles_missing_match = tiles_for_anchor_resource.filter(
-                ~Exists(per_tile_matches)
-            )
-            return (None, Q(~Exists(tiles_missing_match)) & any_tile_for_resource_q)
+        if quantifier_token == QUANTIFIER_ALL:
+            if not is_template_negated:
+                per_tile_matches = tile_rows.filter(predicate_q).filter(
+                    tileid=tile_id_outer_ref
+                )
+                tiles_missing_match = tiles_for_anchor_resource.filter(
+                    ~Exists(per_tile_matches)
+                )
+                return (None, Q(~Exists(tiles_missing_match)) & any_tile_for_resource_q)
 
-        positive_per_tile_rows = self._positive_rows_for_negated_template(
-            operator_token=operator_token,
-            datatype_name=datatype_name,
-            operand_items=operand_items,
-            correlated_rows=tile_rows.filter(tileid=tile_id_outer_ref),
-            predicate_expression=predicate_expression,
-        )
-        tiles_with_violations = tiles_for_anchor_resource.filter(
-            Exists(positive_per_tile_rows)
-        )
-        return (None, Q(~Exists(tiles_with_violations)) & any_tile_for_resource_q)
+            positive_per_tile_rows = self._positive_rows_for_negated_template(
+                operator_token=operator_token,
+                datatype_name=datatype_name,
+                operand_items=operand_items,
+                correlated_rows=tile_rows.filter(tileid=tile_id_outer_ref),
+                predicate_expression=predicate_q,
+            )
+            tiles_with_violations = tiles_for_anchor_resource.filter(
+                Exists(positive_per_tile_rows)
+            )
+            return (None, Q(~Exists(tiles_with_violations)) & any_tile_for_resource_q)
 
     def _positive_rows_for_negated_template(
         self,
@@ -415,13 +422,6 @@ class LiteralClauseEvaluator:
         correlated_rows: QuerySet,
         predicate_expression: Q | Dict[str, Any],
     ) -> QuerySet:
-        """
-        For negated templates, derive the "violating" positive rows so we can assert NOT EXISTS(violations).
-        Preference order:
-          1) facet_registry.resolve_positive_facet(...)
-          2) if Q is already negated, use its inverse (~Q)
-          3) else use .exclude(predicate) as the positive set
-        """
         positive_facet = self.facet_registry.resolve_positive_facet(
             operator_token, datatype_name
         )
@@ -433,16 +433,21 @@ class LiteralClauseEvaluator:
                 "value",
                 [operand_item["value"] for operand_item in operand_items],
             )
-            if isinstance(positive_expression, Q):
-                return correlated_rows.filter(positive_expression)
-            return correlated_rows.filter(**positive_expression)
+            positive_q = (
+                positive_expression
+                if isinstance(positive_expression, Q)
+                else Q(**positive_expression)
+            )
+            return correlated_rows.filter(positive_q)
 
         if isinstance(predicate_expression, Q) and getattr(
             predicate_expression, "negated", False
         ):
             return correlated_rows.filter(~predicate_expression)
 
-        if isinstance(predicate_expression, Q):
-            return correlated_rows.exclude(predicate_expression)
-
-        return correlated_rows.exclude(**predicate_expression)
+        predicate_q = (
+            predicate_expression
+            if isinstance(predicate_expression, Q)
+            else Q(**predicate_expression)
+        )
+        return correlated_rows.exclude(predicate_q)

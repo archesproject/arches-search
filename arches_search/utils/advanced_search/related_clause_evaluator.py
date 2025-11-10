@@ -1,10 +1,6 @@
 from typing import Any, Dict, Optional
 from django.db.models import Exists, OuterRef, Q
 
-
-EVAL_MODE_ANCHOR = "anchor"
-EVAL_MODE_CHILD = "child"
-
 QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
 QUANTIFIER_NONE = "NONE"
@@ -28,11 +24,11 @@ class RelatedClauseEvaluator:
         traversal_context: Optional[Dict[str, Any]] = None,
         terminal_datatype_name: Optional[str] = None,
     ):
-        if mode == EVAL_MODE_ANCHOR:
+        if mode == "anchor":
             return self._build_anchor_presence_exists(
                 clause_payload, terminal_datatype_name
             )
-        if mode == EVAL_MODE_CHILD:
+        if mode == "child":
             if traversal_context is None:
                 raise ValueError("traversal_context is required for mode='child'")
             return self._build_child_presence_exists(clause_payload, traversal_context)

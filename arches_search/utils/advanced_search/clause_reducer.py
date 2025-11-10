@@ -135,15 +135,15 @@ class ClauseReducer:
 
         anchor_exists: List[Exists] = []
         for clause_payload in group_payload["clauses"]:
-            clause_type = clause_payload["type"]
-            if clause_type == CLAUSE_TYPE_LITERAL:
+            clause_type_token = clause_payload["type"]
+            if clause_type_token == CLAUSE_TYPE_LITERAL:
                 anchor_exists.append(
                     self.literal_clause_evaluator.evaluate(
                         mode="anchor",
                         clause_payload=clause_payload,
                     )
                 )
-            elif clause_type == CLAUSE_TYPE_RELATED:
+            elif clause_type_token == CLAUSE_TYPE_RELATED:
                 anchor_exists.append(
                     self.related_clause_evaluator.evaluate(
                         mode="anchor",
@@ -275,10 +275,9 @@ class ClauseReducer:
         group_payload: Dict[str, Any],
         traversal_context: Dict[str, Any],
     ) -> Optional[Q]:
-        combined_or_exists = Q(pk__in=[])
-        saw_any_ok_rowset = False
-
+        combined_or_exists: Optional[Q] = None
         pending_group_payloads: List[Dict[str, Any]] = list(group_payload["groups"])
+
         while pending_group_payloads:
             current_group_payload = pending_group_payloads.pop()
             has_path = bool(
@@ -292,11 +291,15 @@ class ClauseReducer:
                     terminal_graph_slug=traversal_context["terminal_graph_slug"],
                 )
                 if ok_rowset is not None:
-                    combined_or_exists |= Q(Exists(ok_rowset))
-                    saw_any_ok_rowset = True
+                    exists_q = Q(Exists(ok_rowset))
+                    combined_or_exists = (
+                        exists_q
+                        if combined_or_exists is None
+                        else (combined_or_exists | exists_q)
+                    )
                 pending_group_payloads.extend(current_group_payload["groups"])
 
-        return combined_or_exists if saw_any_ok_rowset else None
+        return combined_or_exists
 
     def _apply_nested_single_hop_literals(
         self,
