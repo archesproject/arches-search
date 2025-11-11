@@ -20,19 +20,19 @@
         "vitest": "vitest --run --coverage"
     },
     "dependencies": {
-        "arches": "archesproject/arches#dev/8.1.x"
+        "arches": "archesproject/arches#dev/8.1.x",
+        "es-toolkit": "^1.41.0"
     },
     "devDependencies": {
-        "arches-dev-dependencies": "archesproject/arches-dev-dependencies#dev/8.1.x", 
         "arches-component-lab": "archesproject/arches-component-lab#main",
-        "arches-controlled-lists": "archesproject/arches-controlled-lists#dev/1.1.x"
+        "arches-controlled-lists": "archesproject/arches-controlled-lists#dev/1.1.x",
+        "arches-dev-dependencies": "archesproject/arches-dev-dependencies#dev/8.1.x"
     },
-    "nodeModulesPaths": {
-    },
+    "nodeModulesPaths": {},
     "overrides": {
         "moment-timezone": "^0.5.45",
         "nomnom": "npm:@gerhobbelt/nomnom",
-        "rimraf": "^5.0.7", 
+        "rimraf": "^5.0.7",
         "underscore": "^1.13.6"
     }
 }
