@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineProps, provide, ref, onMounted } from "vue";
+import { defineProps, provide, shallowRef, ref, onMounted } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
@@ -11,7 +11,7 @@ import {
     getAdvancedSearchFacets,
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
-    getSearchResults,
+    // getSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
 
 import GroupPayloadBuilder from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/GroupPayloadBuilder.vue";
@@ -32,7 +32,8 @@ const props = defineProps<{ query?: GroupPayload }>();
 const isLoading = ref(true);
 const fetchError = ref<Error | null>(null);
 
-const rootGroupPayload = ref<GroupPayload>(makeEmptyGroupPayload());
+/* Shallow at the root: we don't need deep dependency tracking here */
+const rootGroupPayload = shallowRef<GroupPayload>(makeEmptyGroupPayload());
 
 const datatypesToAdvancedSearchFacets = ref<
     Record<string, AdvancedSearchFacet[]>
@@ -112,15 +113,19 @@ async function fetchGraphs(): Promise<void> {
 }
 
 function seedRootGroup(): void {
-    rootGroupPayload.value = props.query
-        ? structuredClone(props.query)
-        : makeEmptyGroupPayload();
+    rootGroupPayload.value = props.query ?? makeEmptyGroupPayload();
+}
+
+/* Take a plain JSON-safe snapshot only when needed (click time) */
+function snapshotPayload(): GroupPayload {
+    return JSON.parse(JSON.stringify(rootGroupPayload.value)) as GroupPayload;
 }
 
 async function search(): Promise<void> {
-    const results = await getSearchResults(rootGroupPayload.value);
-
-    console.log("Search results:", results);
+    const payload = snapshotPayload();
+    // const results = await getSearchResults(payload);
+    // console.log("Search results:", results);
+    console.log("Search payload:", payload);
 }
 </script>
 

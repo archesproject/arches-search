@@ -9,9 +9,8 @@ import {
     nextTick,
     defineOptions,
 } from "vue";
-import { cloneDeep } from "es-toolkit";
 import { useGettext } from "vue3-gettext";
-import Dropdown from "primevue/dropdown";
+import Select from "primevue/select";
 import Button from "primevue/button";
 import Card from "primevue/card";
 import Divider from "primevue/divider";
@@ -25,7 +24,6 @@ import {
     type GroupPayload,
 } from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
 
-/* Self-recursive component by name (no self-import) */
 defineOptions({ name: "GroupPayloadBuilder" });
 
 const { $gettext } = useGettext();
@@ -49,24 +47,45 @@ const props = defineProps<{
 const localGroup = ref<GroupPayload>(makeEmptyGroupPayload());
 const isSyncingFromProp = ref(false);
 
+/* Stable keys for dynamic lists */
+const childGroupKeys = ref<string[]>([]);
+const clauseKeys = ref<string[]>([]);
+
+function createId(): string {
+    return globalThis.crypto.randomUUID();
+}
+
+/* Only watch identity changes from parent; no deep traversal here */
 watch(
     () => props.modelValue,
     async (incoming) => {
         isSyncingFromProp.value = true;
-        localGroup.value = incoming
-            ? cloneDeep(incoming)
-            : makeEmptyGroupPayload();
+
+        /* Assign incoming directly (no deep clone); the parent owns v-model */
+        localGroup.value = incoming ?? makeEmptyGroupPayload();
+
+        /* Rebuild keys to match incoming lengths once per identity change */
+        childGroupKeys.value = Array.from(
+            { length: localGroup.value.groups.length },
+            () => createId(),
+        );
+        clauseKeys.value = Array.from(
+            { length: localGroup.value.clauses.length },
+            () => createId(),
+        );
+
         await nextTick();
         isSyncingFromProp.value = false;
     },
-    { immediate: true, deep: true },
+    { immediate: true },
 );
 
+/* Deep watch to propagate edits, but emit the same object (no clone) */
 watch(
     localGroup,
     (nextValue) => {
         if (isSyncingFromProp.value) return;
-        emit("update:modelValue", cloneDeep(nextValue));
+        emit("update:modelValue", nextValue);
     },
     { deep: true },
 );
@@ -107,24 +126,35 @@ function addGroup(): void {
         ...localGroup.value,
         groups: [...localGroup.value.groups, childGroup],
     };
+    childGroupKeys.value = [...childGroupKeys.value, createId()];
 }
 
 function removeGroupAtIndex(childIndex: number): void {
     const nextGroups = localGroup.value.groups.slice();
     nextGroups.splice(childIndex, 1);
     localGroup.value = { ...localGroup.value, groups: nextGroups };
+
+    const nextKeys = childGroupKeys.value.slice();
+    nextKeys.splice(childIndex, 1);
+    childGroupKeys.value = nextKeys;
 }
 
 function addClause(): void {
     const nextClauses = localGroup.value.clauses.slice();
     nextClauses.push(makeEmptyLiteralClause());
     localGroup.value = { ...localGroup.value, clauses: nextClauses };
+
+    clauseKeys.value = [...clauseKeys.value, createId()];
 }
 
 function removeClauseAtIndex(clauseIndex: number): void {
     const nextClauses = localGroup.value.clauses.slice();
     nextClauses.splice(clauseIndex, 1);
     localGroup.value = { ...localGroup.value, clauses: nextClauses };
+
+    const nextKeys = clauseKeys.value.slice();
+    nextKeys.splice(clauseIndex, 1);
+    clauseKeys.value = nextKeys;
 }
 
 function addRelationship(): void {
@@ -139,12 +169,6 @@ function removeRelationship(): void {
     if (localGroup.value.relationship === null) return;
     localGroup.value = { ...localGroup.value, relationship: null };
 }
-
-const relationshipPreviewText = computed(() =>
-    localGroup.value.relationship
-        ? JSON.stringify(localGroup.value.relationship, null, 2)
-        : "",
-);
 </script>
 
 <template>
@@ -152,7 +176,7 @@ const relationshipPreviewText = computed(() =>
         <template #title>
             <div class="group-header">
                 <div class="row">
-                    <Dropdown
+                    <Select
                         v-model="localGroup.graph_slug"
                         :options="graphOptions"
                         option-label="label"
@@ -160,14 +184,14 @@ const relationshipPreviewText = computed(() =>
                         :placeholder="$gettext('Select graph')"
                         class="field"
                     />
-                    <Dropdown
+                    <Select
                         v-model="localGroup.scope"
                         :options="scopeOptions"
                         option-label="label"
                         option-value="value"
                         class="field"
                     />
-                    <Dropdown
+                    <Select
                         v-model="localGroup.logic"
                         :options="logicOptions"
                         option-label="label"
@@ -216,25 +240,21 @@ const relationshipPreviewText = computed(() =>
 
         <template #content>
             <div class="body">
-                <div v-if="localGroup.relationship !== null">
-                    <pre class="mono">{{ relationshipPreviewText }}</pre>
-                    <Divider />
-                </div>
-
                 <div
                     v-if="localGroup.clauses.length > 0"
                     class="clauses"
                 >
                     <div
                         v-for="(
-                            clausePayload, clauseIndex
+                            _clausePayload, clauseIndex
                         ) in localGroup.clauses"
-                        :key="clauseIndex"
+                        :key="clauseKeys[clauseIndex]"
                         class="clause-row"
                     >
-                        <pre class="mono">{{
-                            JSON.stringify(clausePayload, null, 2)
-                        }}</pre>
+                        <span
+                            >{{ $gettext("Clause") }}
+                            {{ clauseIndex + 1 }}</span
+                        >
                         <Button
                             severity="danger"
                             icon="pi pi-trash"
@@ -253,7 +273,7 @@ const relationshipPreviewText = computed(() =>
                         v-for="(
                             childGroupPayload, childIndex
                         ) in localGroup.groups"
-                        :key="childIndex"
+                        :key="childGroupKeys[childIndex]"
                         v-model="localGroup.groups[childIndex]"
                         @remove="removeGroupAtIndex(childIndex)"
                     />
@@ -292,28 +312,6 @@ const relationshipPreviewText = computed(() =>
 .field {
     min-width: 12rem;
 }
-.mono {
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-    background: var(--p-content-background);
-    border: 1px solid var(--p-content-border-color);
-    border-radius: var(--p-content-border-radius);
-    padding: 0.75rem;
-    font-family: var(
-        --p-code-font-family,
-        ui-monospace,
-        SFMono-Regular,
-        Menlo,
-        Monaco,
-        Consolas,
-        "Liberation Mono",
-        "Courier New",
-        monospace
-    );
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-}
 .clauses {
     display: flex;
     flex-direction: column;
@@ -323,7 +321,7 @@ const relationshipPreviewText = computed(() =>
     display: grid;
     grid-template-columns: 1fr auto;
     gap: 0.5rem;
-    align-items: start;
+    align-items: center;
 }
 .children {
     display: flex;
