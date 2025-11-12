@@ -7,6 +7,7 @@ import Message from "primevue/message";
 import Skeleton from "primevue/skeleton";
 
 import QueryGroup from "@/arches_search/AdvancedSearch/components/QueryGroup.vue";
+import SearchResultsView from "@/arches_search/AdvancedSearch/components/SearchResults/SearchResultsView.vue";
 
 import {
     getAdvancedSearchFacets,
@@ -16,7 +17,10 @@ import {
 } from "@/arches_search/AdvancedSearch/api.ts";
 
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/utils/query-tree";
-import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types";
+import type {
+    AdvancedSearchFacet,
+    SearchResults,
+} from "@/arches_search/AdvancedSearch/types";
 
 const { $gettext } = useGettext();
 
@@ -34,7 +38,10 @@ const graphs = ref([]);
 
 const graphIdsToNodes = ref<{ [graphId: string]: unknown[] }>({});
 const inflightLoads: Map<string, Promise<unknown[]>> = new Map();
-
+const searchResults = ref<SearchResults>({
+    aggregations: {},
+    resources: [],
+});
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
 provide("getNodesForGraphId", getNodesForGraphId);
@@ -160,6 +167,7 @@ async function search() {
                 style="margin-top: 1rem; align-self: flex-start"
                 @click="search"
             />
+            <SearchResultsView :results="searchResults"></SearchResultsView>
         </div>
     </div>
 </template>
@@ -170,6 +178,11 @@ async function search() {
     height: 100%;
     background: var(--p-content-background);
     color: var(--p-text-color);
+    display: flex;
+    flex-direction: column;
+}
+.advanced-search > div {
+    height: 100%;
     display: flex;
     flex-direction: column;
 }
