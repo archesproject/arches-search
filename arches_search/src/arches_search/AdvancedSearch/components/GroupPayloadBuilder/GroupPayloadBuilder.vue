@@ -16,6 +16,7 @@ import Divider from "primevue/divider";
 
 import {
     GraphScopeToken,
+    LogicToken,
     type GroupPayload,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
@@ -24,16 +25,16 @@ import {
     setGraphSlug,
     setScope,
     toggleLogic,
-    addChildGroupLikeParent,
     replaceChildGroupAtIndex,
     removeChildGroupAtIndex,
     addEmptyLiteralClauseToGroup,
     removeClauseAtIndex as removeClauseAtIndexFromPayload,
     addRelationshipIfMissing,
     clearRelationshipIfPresent,
-    computeIsAnd,
     reconcileStableKeys,
 } from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
+
+import GroupBracket from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/GroupBracket.vue";
 
 defineOptions({ name: "GroupPayloadBuilder" });
 
@@ -62,12 +63,6 @@ const currentGroup = computed<GroupPayload>(function getCurrentGroup() {
 const childGroupKeys = ref<string[]>([]);
 const clauseKeys = ref<string[]>([]);
 
-const isAnd = computed<boolean>(function getIsAnd() {
-    return computeIsAnd(currentGroup.value);
-});
-const logicLabel = computed<string>(function getLogicLabel() {
-    return isAnd.value ? $gettext("AND") : $gettext("OR");
-});
 const hasBracket = computed<boolean>(function getHasBracket() {
     return (
         currentGroup.value.groups.length + currentGroup.value.clauses.length >=
@@ -75,28 +70,34 @@ const hasBracket = computed<boolean>(function getHasBracket() {
     );
 });
 
-const scopeOptions = computed(() => [
-    { label: $gettext("Resource"), value: GraphScopeToken.RESOURCE },
-    { label: $gettext("Tile"), value: GraphScopeToken.TILE },
-]);
+const scopeOptions = computed<{ label: string; value: GraphScopeToken }[]>(
+    function getScopeOptions() {
+        return [
+            { label: $gettext("Resource"), value: GraphScopeToken.RESOURCE },
+            { label: $gettext("Tile"), value: GraphScopeToken.TILE },
+        ];
+    },
+);
 
-const graphOptions = computed(() => {
-    const list = graphs?.value ?? [];
-    return list
-        .map(function toOption(entry: GraphSummary) {
-            const slug = (entry as { slug?: string }).slug ?? "";
-            const displayName =
-                (entry as { name?: string }).name ??
-                (entry as { label?: string }).label ??
-                slug;
-            return { label: String(displayName), value: String(slug) };
-        })
-        .filter(function nonEmpty(option) {
-            return option.value.length > 0;
-        });
-});
+const graphOptions = computed<{ label: string; value: string }[]>(
+    function getGraphOptions() {
+        const availableGraphs = graphs?.value ?? [];
+        return availableGraphs
+            .map(function toOption(entry: GraphSummary) {
+                const slug = (entry as { slug?: string }).slug ?? "";
+                const displayName =
+                    (entry as { name?: string }).name ??
+                    (entry as { label?: string }).label ??
+                    slug;
+                return { label: String(displayName), value: String(slug) };
+            })
+            .filter(function nonEmpty(option) {
+                return option.value.length > 0;
+            });
+    },
+);
 
-watchEffect(function () {
+watchEffect(function reconcileKeys() {
     childGroupKeys.value = reconcileStableKeys(
         childGroupKeys.value,
         currentGroup.value.groups.length,
@@ -111,7 +112,14 @@ watchEffect(function () {
 });
 
 function createId(): string {
-    return crypto.randomUUID();
+    if (
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
+    ) {
+        return crypto.randomUUID();
+    }
+    const randomSuffix = Math.floor(Math.random() * 1e9).toString(36);
+    return `k_${Date.now().toString(36)}_${randomSuffix}`;
 }
 
 function commit(nextGroup: GroupPayload): void {
@@ -121,185 +129,193 @@ function commit(nextGroup: GroupPayload): void {
 function onSetGraphSlug(graphSlug: string): void {
     commit(setGraphSlug(currentGroup.value, graphSlug));
 }
+
 function onSetScope(scopeToken: GraphScopeToken): void {
     commit(setScope(currentGroup.value, scopeToken));
 }
-function onToggleLogic(): void {
+
+function onSetLogicFromBracket(_nextLogicToken: LogicToken): void {
     commit(toggleLogic(currentGroup.value));
 }
+
 function onAddGroup(): void {
-    commit(addChildGroupLikeParent(currentGroup.value));
+    const newChildGroup: GroupPayload = {
+        ...makeEmptyGroupPayload(),
+        graph_slug: currentGroup.value.graph_slug,
+        scope: currentGroup.value.scope,
+        logic: LogicToken.AND,
+    };
+
+    const updatedParent: GroupPayload = {
+        ...currentGroup.value,
+        groups: [...currentGroup.value.groups, newChildGroup],
+    };
+
+    commit(updatedParent);
 }
+
 function onReplaceChildGroup(
     childIndex: number,
     replacement: GroupPayload,
 ): void {
-    commit(
-        replaceChildGroupAtIndex(currentGroup.value, childIndex, replacement),
+    const updatedParent = replaceChildGroupAtIndex(
+        currentGroup.value,
+        childIndex,
+        replacement,
     );
+    commit(updatedParent);
 }
+
 function onRemoveChildGroup(childIndex: number): void {
-    commit(removeChildGroupAtIndex(currentGroup.value, childIndex));
+    const updatedParent = removeChildGroupAtIndex(
+        currentGroup.value,
+        childIndex,
+    );
+    commit(updatedParent);
 }
+
 function onAddClause(): void {
     commit(addEmptyLiteralClauseToGroup(currentGroup.value));
 }
+
 function onRemoveClause(clauseIndex: number): void {
     commit(removeClauseAtIndexFromPayload(currentGroup.value, clauseIndex));
 }
+
 function onAddRelationship(): void {
     commit(addRelationshipIfMissing(currentGroup.value));
 }
+
 function onRemoveRelationship(): void {
     commit(clearRelationshipIfPresent(currentGroup.value));
 }
 </script>
 
 <template>
-    <div class="group">
-        <Card class="group-card">
-            <template #title>
-                <div class="group-header">
-                    <div class="group-selectors">
-                        <Select
-                            :model-value="currentGroup.graph_slug"
-                            :options="graphOptions"
-                            option-label="label"
-                            option-value="value"
-                            :placeholder="$gettext('Select graph')"
-                            class="group-field"
-                            @update:model-value="onSetGraphSlug"
-                        />
-                        <Select
-                            :model-value="currentGroup.scope"
-                            :options="scopeOptions"
-                            option-label="label"
-                            option-value="value"
-                            class="group-field"
-                            @update:model-value="onSetScope"
-                        />
-                    </div>
-
-                    <div class="group-actions">
-                        <Button
-                            severity="secondary"
-                            icon="pi pi-plus"
-                            :label="$gettext('Add group')"
-                            @click="onAddGroup"
-                        />
-                        <Button
-                            severity="secondary"
-                            icon="pi pi-plus"
-                            :label="$gettext('Add clause')"
-                            @click="onAddClause"
-                        />
-                        <Button
-                            v-if="currentGroup.relationship === null"
-                            severity="secondary"
-                            icon="pi pi-link"
-                            :label="$gettext('Add relationship')"
-                            @click="onAddRelationship"
-                        />
-                        <Button
-                            v-else
-                            severity="danger"
-                            icon="pi pi-unlink"
-                            :label="$gettext('Remove relationship')"
-                            @click="onRemoveRelationship"
-                        />
-                        <Button
-                            v-if="!isRoot"
-                            severity="danger"
-                            icon="pi pi-times"
-                            :label="$gettext('Remove group')"
-                            @click="$emit('remove')"
-                        />
-                    </div>
+    <Card class="group-card">
+        <template #title>
+            <div class="group-header">
+                <div class="group-selectors">
+                    <Select
+                        :model-value="currentGroup.graph_slug"
+                        :options="graphOptions"
+                        option-label="label"
+                        option-value="value"
+                        :placeholder="$gettext('Select graph')"
+                        class="group-field"
+                        @update:model-value="onSetGraphSlug"
+                    />
+                    <Select
+                        :model-value="currentGroup.scope"
+                        :options="scopeOptions"
+                        option-label="label"
+                        option-value="value"
+                        class="group-field"
+                        @update:model-value="onSetScope"
+                    />
                 </div>
-            </template>
 
-            <template #content>
-                <div
-                    :class="[
-                        'group-grid',
-                        hasBracket ? 'group-grid-with-bracket' : '',
-                    ]"
-                >
+                <div class="group-actions">
+                    <Button
+                        severity="secondary"
+                        icon="pi pi-plus"
+                        :label="$gettext('Add group')"
+                        @click.stop="onAddGroup"
+                    />
+                    <Button
+                        severity="secondary"
+                        icon="pi pi-plus"
+                        :label="$gettext('Add clause')"
+                        @click.stop="onAddClause"
+                    />
+                    <Button
+                        v-if="currentGroup.relationship === null"
+                        severity="secondary"
+                        icon="pi pi-link"
+                        :label="$gettext('Add relationship')"
+                        @click.stop="onAddRelationship"
+                    />
+                    <Button
+                        v-else
+                        severity="danger"
+                        icon="pi pi-unlink"
+                        :label="$gettext('Remove relationship')"
+                        @click.stop="onRemoveRelationship"
+                    />
+                    <Button
+                        v-if="!props.isRoot"
+                        severity="danger"
+                        icon="pi pi-times"
+                        :label="$gettext('Remove group')"
+                        @click.stop="$emit('remove')"
+                    />
+                </div>
+            </div>
+        </template>
+
+        <template #content>
+            <div
+                :class="[
+                    'group-grid',
+                    hasBracket ? 'group-grid-with-bracket' : '',
+                ]"
+            >
+                <GroupBracket
+                    :show="hasBracket"
+                    :logic="currentGroup.logic"
+                    @update:logic="onSetLogicFromBracket"
+                />
+
+                <div class="group-body">
                     <div
-                        v-if="hasBracket"
-                        :class="[
-                            'bracket',
-                            isAnd ? 'bracket-and' : 'bracket-or',
-                        ]"
+                        v-if="currentGroup.clauses.length > 0"
+                        class="clauses"
                     >
-                        <div class="bracket-arm bracket-arm-top"></div>
-                        <div class="bracket-spine bracket-spine-top"></div>
-                        <div class="bracket-lane">
+                        <div
+                            v-for="(
+                                unusedClause, clauseIndex
+                            ) in currentGroup.clauses"
+                            :key="clauseKeys[clauseIndex]"
+                            class="clause-row"
+                        >
+                            <span class="clause-label">
+                                {{ $gettext("Clause") }}
+                                {{ clauseIndex + 1 }}
+                            </span>
                             <Button
-                                :label="logicLabel"
-                                class="bracket-logic"
-                                size="small"
-                                @click="onToggleLogic"
+                                severity="danger"
+                                icon="pi pi-trash"
+                                :label="$gettext('Remove clause')"
+                                @click.stop="onRemoveClause(clauseIndex)"
                             />
                         </div>
-                        <div class="bracket-spine bracket-spine-bottom"></div>
-                        <div class="bracket-arm bracket-arm-bottom"></div>
+                        <Divider />
                     </div>
 
-                    <div class="group-body">
-                        <div
-                            v-if="currentGroup.clauses.length > 0"
-                            class="clauses"
-                        >
-                            <div
-                                v-for="(_, clauseIndex) in currentGroup.clauses"
-                                :key="clauseKeys[clauseIndex]"
-                                class="clause-row"
-                            >
-                                <span class="clause-label">
-                                    {{ $gettext("Clause") }}
-                                    {{ clauseIndex + 1 }}
-                                </span>
-                                <Button
-                                    severity="danger"
-                                    icon="pi pi-trash"
-                                    :label="$gettext('Remove clause')"
-                                    @click="onRemoveClause(clauseIndex)"
-                                />
-                            </div>
-                            <Divider />
-                        </div>
-
-                        <div
-                            v-if="currentGroup.groups.length > 0"
-                            class="children"
-                        >
-                            <GroupPayloadBuilder
-                                v-for="(_, childIndex) in currentGroup.groups"
-                                :key="childGroupKeys[childIndex]"
-                                :model-value="currentGroup.groups[childIndex]"
-                                @update:model-value="
-                                    function onChildUpdate(
-                                        updatedGroupPayload,
-                                    ) {
-                                        onReplaceChildGroup(
-                                            childIndex,
-                                            updatedGroupPayload,
-                                        );
-                                    }
-                                "
-                                @remove="
-                                    function onChildRemove() {
-                                        onRemoveChildGroup(childIndex);
-                                    }
-                                "
-                            />
-                        </div>
+                    <div
+                        v-if="currentGroup.groups.length > 0"
+                        class="children"
+                    >
+                        <GroupPayloadBuilder
+                            v-for="(
+                                unusedChildGroup, childIndex
+                            ) in currentGroup.groups"
+                            :key="childGroupKeys[childIndex]"
+                            :model-value="currentGroup.groups[childIndex]"
+                            @update:model-value="
+                                (updatedChildGroupPayload) =>
+                                    onReplaceChildGroup(
+                                        childIndex,
+                                        updatedChildGroupPayload,
+                                    )
+                            "
+                            @remove="() => onRemoveChildGroup(childIndex)"
+                        />
                     </div>
                 </div>
-            </template>
-        </Card>
-    </div>
+            </div>
+        </template>
+    </Card>
 </template>
 
 <style scoped>
@@ -357,84 +373,6 @@ function onRemoveRelationship(): void {
 
 .group-grid-with-bracket .group-body {
     grid-column: 2;
-}
-
-.bracket {
-    display: grid;
-    grid-template-columns: 0.3rem 1.75rem;
-    grid-template-rows: 1fr auto 1fr;
-    align-items: center;
-    justify-items: start;
-    padding-inline-start: 0.5rem;
-    row-gap: 0.75rem;
-}
-
-.bracket-and {
-    --logic-color: var(--p-blue-600);
-    --logic-hover-color: var(--p-blue-700);
-}
-
-.bracket-or {
-    --logic-color: var(--p-orange-600);
-    --logic-hover-color: var(--p-orange-700);
-}
-
-.bracket-spine {
-    width: 0.3rem;
-    background: var(--logic-color);
-    grid-column: 1;
-    margin-inline-start: 0.75rem;
-}
-
-.bracket-spine-top {
-    grid-row: 1;
-    align-self: stretch;
-}
-
-.bracket-spine-bottom {
-    grid-row: 3;
-    align-self: stretch;
-}
-
-.bracket-lane {
-    grid-column: 1;
-    grid-row: 2;
-    display: grid;
-    place-items: center;
-    width: 0.3rem;
-}
-
-.bracket-arm {
-    background: var(--logic-color);
-    height: 0.3rem;
-    grid-column: 2;
-    width: 100%;
-    margin-inline-start: 0.75rem;
-}
-
-.bracket-arm-top {
-    grid-row: 1;
-    align-self: start;
-}
-
-.bracket-arm-bottom {
-    grid-row: 3;
-    align-self: end;
-}
-
-.bracket-logic.p-button {
-    background: var(--logic-color);
-    border-color: var(--logic-color);
-    color: var(--p-surface-0);
-    padding-block: 0.25rem;
-    padding-inline: 0.75rem;
-    box-shadow: none;
-}
-
-.bracket-logic.p-button:enabled:hover {
-    background: var(--logic-hover-color);
-    border-color: var(--logic-hover-color);
-    color: var(--p-surface-0);
 }
 
 .clauses {
