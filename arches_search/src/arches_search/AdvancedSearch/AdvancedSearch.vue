@@ -15,12 +15,12 @@ import {
 
 import GroupPayloadBuilder from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/GroupPayloadBuilder.vue";
 
-import {
-    makeEmptyGroupPayload,
-    type GroupPayload,
-} from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
-
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types";
+
+type NodeCacheEntry =
+    | { status: typeof PENDING; pending: Promise<Record<string, unknown>[]> }
+    | { status: typeof READY; nodes: Record<string, unknown>[] };
 
 const PENDING = "pending";
 const READY = "ready";
@@ -31,18 +31,12 @@ const props = defineProps<{ query?: GroupPayload }>();
 const isLoading = ref(true);
 const fetchError = ref<Error | null>(null);
 
-const rootGroupPayload = ref<GroupPayload>(makeEmptyGroupPayload());
+const rootPayload = ref<GroupPayload | undefined>(props.query);
 
 const datatypesToAdvancedSearchFacets = ref<
     Record<string, AdvancedSearchFacet[]>
 >({});
-const graphs = ref<Record<string, unknown>[]>([]);
-
-type NodeSummary = Record<string, unknown>;
-type NodeCacheEntry =
-    | { status: typeof PENDING; pending: Promise<NodeSummary[]> }
-    | { status: typeof READY; nodes: NodeSummary[] };
-
+const graphs = ref([]);
 const graphIdToNodeCache = ref<Record<string, NodeCacheEntry>>({});
 
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
@@ -53,7 +47,7 @@ onMounted(async () => {
     try {
         isLoading.value = true;
         fetchError.value = null;
-        seedRootGroup();
+
         await Promise.all([fetchGraphs(), fetchFacets()]);
     } catch (possibleError) {
         fetchError.value = possibleError as Error;
@@ -62,49 +56,59 @@ onMounted(async () => {
     }
 });
 
-function onUpdateRoot(next: GroupPayload): void {
-    rootGroupPayload.value = next;
+function onUpdateRoot(updatedGroupPayload: GroupPayload): void {
+    rootPayload.value = updatedGroupPayload;
 }
 
-async function getNodesForGraphId(graphId: string): Promise<NodeSummary[]> {
+async function getNodesForGraphId(
+    graphId: string,
+): Promise<Record<string, unknown>[]> {
     const existingEntry = graphIdToNodeCache.value[graphId];
-    if (existingEntry?.status === PENDING) return await existingEntry.pending;
-    if (existingEntry?.status === READY) return existingEntry.nodes;
 
-    const pending = fetchNodesForGraphId(graphId)
-        .then((nodesMap: Record<string, NodeSummary>) => {
+    if (existingEntry?.status === PENDING) {
+        return await existingEntry.pending;
+    }
+
+    if (existingEntry?.status === READY) {
+        return existingEntry.nodes;
+    }
+
+    const pendingRequest = fetchNodesForGraphId(graphId)
+        .then((nodesMap: Record<string, Record<string, unknown>>) => {
             const nodesArray = Object.values(nodesMap);
+
             graphIdToNodeCache.value = {
                 ...graphIdToNodeCache.value,
                 [graphId]: { status: READY, nodes: nodesArray },
             };
+
             return nodesArray;
         })
         .catch((error) => {
-            const { [graphId]: _omit, ...rest } = graphIdToNodeCache.value;
-            graphIdToNodeCache.value = rest;
             fetchError.value = error as Error;
             throw error;
         });
 
     graphIdToNodeCache.value = {
         ...graphIdToNodeCache.value,
-        [graphId]: { status: PENDING, pending },
+        [graphId]: { status: PENDING, pending: pendingRequest },
     };
 
-    return await pending;
+    return await pendingRequest;
 }
 
 async function fetchFacets(): Promise<void> {
-    const facets = await getAdvancedSearchFacets();
-    datatypesToAdvancedSearchFacets.value = facets.reduce(
+    const advancedSearchFacets = await getAdvancedSearchFacets();
+
+    datatypesToAdvancedSearchFacets.value = advancedSearchFacets.reduce(
         (
-            byDatatype: Record<string, AdvancedSearchFacet[]>,
+            acc: Record<string, AdvancedSearchFacet[]>,
             facet: AdvancedSearchFacet,
         ) => {
-            const currentList = byDatatype[facet.datatype_id] ?? [];
-            byDatatype[facet.datatype_id] = [...currentList, facet];
-            return byDatatype;
+            const currentList = acc[facet.datatype_id] ?? [];
+
+            acc[facet.datatype_id] = [...currentList, facet];
+            return acc;
         },
         {},
     );
@@ -114,14 +118,10 @@ async function fetchGraphs(): Promise<void> {
     graphs.value = await getGraphs();
 }
 
-function seedRootGroup(): void {
-    rootGroupPayload.value = props.query ?? makeEmptyGroupPayload();
-}
-
 async function search(): Promise<void> {
     console.log(
         "Search payload:",
-        JSON.stringify(rootGroupPayload.value, null, 2),
+        JSON.stringify(rootPayload.value ?? {}, null, 2),
     );
 }
 </script>
@@ -145,18 +145,17 @@ async function search(): Promise<void> {
             class="content"
         >
             <Card>
-                <template #title>{{ $gettext("Advanced Search") }}</template>
                 <template #content>
                     <GroupPayloadBuilder
-                        :model-value="rootGroupPayload"
+                        :model-value="rootPayload"
                         :is-root="true"
                         @update:model-value="onUpdateRoot"
                     />
                     <Button
+                        class="search-btn"
                         icon="pi pi-search"
                         size="large"
                         :label="$gettext('Search')"
-                        class="search-btn"
                         @click="search"
                     />
                 </template>
@@ -174,13 +173,19 @@ async function search(): Promise<void> {
     display: flex;
     flex-direction: column;
 }
+
 .content {
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
+
 .search-btn {
     margin-top: 1rem;
     align-self: flex-start;
+}
+
+:deep(.p-card-body) {
+    gap: 0;
 }
 </style>

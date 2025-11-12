@@ -5,7 +5,7 @@ import {
     inject,
     ref,
     computed,
-    watch,
+    watchEffect,
     defineOptions,
 } from "vue";
 import { useGettext } from "vue3-gettext";
@@ -16,11 +16,23 @@ import Divider from "primevue/divider";
 
 import {
     GraphScopeToken,
-    LogicToken,
-    makeEmptyGroupPayload,
-    makeEmptyLiteralClause,
-    makeEmptyRelationshipBlock,
     type GroupPayload,
+} from "@/arches_search/AdvancedSearch/types.ts";
+
+import {
+    makeEmptyGroupPayload,
+    setGraphSlug,
+    setScope,
+    toggleLogic,
+    addChildGroupLikeParent,
+    replaceChildGroupAtIndex,
+    removeChildGroupAtIndex,
+    addEmptyLiteralClauseToGroup,
+    removeClauseAtIndex as removeClauseAtIndexFromPayload,
+    addRelationshipIfMissing,
+    clearRelationshipIfPresent,
+    computeIsAnd,
+    reconcileStableKeys,
 } from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
 
 defineOptions({ name: "GroupPayloadBuilder" });
@@ -43,129 +55,25 @@ const props = defineProps<{
     isRoot?: boolean;
 }>();
 
-const currentGroup = computed<GroupPayload>(
-    () => props.modelValue ?? makeEmptyGroupPayload(),
-);
+const currentGroup = computed<GroupPayload>(function getCurrentGroup() {
+    return props.modelValue ?? makeEmptyGroupPayload();
+});
 
 const childGroupKeys = ref<string[]>([]);
 const clauseKeys = ref<string[]>([]);
 
-function createId(): string {
-    return globalThis.crypto.randomUUID();
-}
-
-if (currentGroup.value) {
-    childGroupKeys.value = Array.from(
-        { length: currentGroup.value.groups.length },
-        () => createId(),
+const isAnd = computed<boolean>(function getIsAnd() {
+    return computeIsAnd(currentGroup.value);
+});
+const logicLabel = computed<string>(function getLogicLabel() {
+    return isAnd.value ? $gettext("AND") : $gettext("OR");
+});
+const hasBracket = computed<boolean>(function getHasBracket() {
+    return (
+        currentGroup.value.groups.length + currentGroup.value.clauses.length >=
+        2
     );
-    clauseKeys.value = Array.from(
-        { length: currentGroup.value.clauses.length },
-        () => createId(),
-    );
-}
-
-watch(
-    () => currentGroup.value?.groups.length ?? 0,
-    (newLength, oldLength) => {
-        if (newLength > oldLength) {
-            for (let index = 0; index < newLength - oldLength; index += 1) {
-                childGroupKeys.value.push(createId());
-            }
-        } else if (newLength < oldLength) {
-            childGroupKeys.value.splice(newLength);
-        }
-    },
-);
-
-watch(
-    () => currentGroup.value?.clauses.length ?? 0,
-    (newLength, oldLength) => {
-        if (newLength > oldLength) {
-            for (let index = 0; index < newLength - oldLength; index += 1) {
-                clauseKeys.value.push(createId());
-            }
-        } else if (newLength < oldLength) {
-            clauseKeys.value.splice(newLength);
-        }
-    },
-);
-
-function updateGroup(nextGroup: GroupPayload): void {
-    emit("update:modelValue", nextGroup);
-}
-
-function setGraphSlug(graphSlug: string): void {
-    updateGroup({ ...currentGroup.value, graph_slug: graphSlug });
-}
-
-function setScope(scopeToken: GraphScopeToken): void {
-    updateGroup({ ...currentGroup.value, scope: scopeToken });
-}
-
-const logicLabel = computed(() =>
-    currentGroup.value.logic === LogicToken.AND
-        ? $gettext("AND")
-        : $gettext("OR"),
-);
-const isAnd = computed(() => currentGroup.value.logic === LogicToken.AND);
-
-function toggleLogic(): void {
-    const nextLogic = isAnd.value ? LogicToken.OR : LogicToken.AND;
-    updateGroup({ ...currentGroup.value, logic: nextLogic });
-}
-
-function addGroup(): void {
-    const childGroup: GroupPayload = {
-        ...makeEmptyGroupPayload(),
-        graph_slug: currentGroup.value.graph_slug,
-        scope: currentGroup.value.scope,
-    };
-    updateGroup({
-        ...currentGroup.value,
-        groups: [...currentGroup.value.groups, childGroup],
-    });
-}
-
-function replaceChildGroup(
-    childIndex: number,
-    replacement: GroupPayload,
-): void {
-    const nextGroups = currentGroup.value.groups.slice();
-    nextGroups.splice(childIndex, 1, replacement);
-    updateGroup({ ...currentGroup.value, groups: nextGroups });
-}
-
-function removeGroupAtIndex(childIndex: number): void {
-    const nextGroups = currentGroup.value.groups.slice();
-    nextGroups.splice(childIndex, 1);
-    updateGroup({ ...currentGroup.value, groups: nextGroups });
-}
-
-function addClause(): void {
-    const nextClauses = currentGroup.value.clauses.slice();
-    nextClauses.push(makeEmptyLiteralClause());
-    updateGroup({ ...currentGroup.value, clauses: nextClauses });
-}
-
-function removeClauseAtIndex(clauseIndex: number): void {
-    const nextClauses = currentGroup.value.clauses.slice();
-    nextClauses.splice(clauseIndex, 1);
-    updateGroup({ ...currentGroup.value, clauses: nextClauses });
-}
-
-function addRelationship(): void {
-    if (currentGroup.value.relationship !== null) return;
-    updateGroup({
-        ...currentGroup.value,
-        relationship: makeEmptyRelationshipBlock(),
-    });
-}
-
-function removeRelationship(): void {
-    if (currentGroup.value.relationship === null) return;
-    updateGroup({ ...currentGroup.value, relationship: null });
-}
+});
 
 const scopeOptions = computed(() => [
     { label: $gettext("Resource"), value: GraphScopeToken.RESOURCE },
@@ -173,104 +81,131 @@ const scopeOptions = computed(() => [
 ]);
 
 const graphOptions = computed(() => {
-    const graphList = graphs?.value ?? [];
-    return graphList
-        .map((graphEntry: GraphSummary) => {
-            const slug = (graphEntry as { slug?: string }).slug ?? "";
+    const list = graphs?.value ?? [];
+    return list
+        .map(function toOption(entry: GraphSummary) {
+            const slug = (entry as { slug?: string }).slug ?? "";
             const displayName =
-                (graphEntry as { name?: string }).name ??
-                (graphEntry as { label?: string }).label ??
+                (entry as { name?: string }).name ??
+                (entry as { label?: string }).label ??
                 slug;
             return { label: String(displayName), value: String(slug) };
         })
-        .filter((option) => option.value.length > 0);
+        .filter(function nonEmpty(option) {
+            return option.value.length > 0;
+        });
 });
 
-const itemCount = computed(
-    () => currentGroup.value.groups.length + currentGroup.value.clauses.length,
-);
-const showBracket = computed(() => itemCount.value >= 2);
+watchEffect(function () {
+    childGroupKeys.value = reconcileStableKeys(
+        childGroupKeys.value,
+        currentGroup.value.groups.length,
+        createId,
+    );
+
+    clauseKeys.value = reconcileStableKeys(
+        clauseKeys.value,
+        currentGroup.value.clauses.length,
+        createId,
+    );
+});
+
+function createId(): string {
+    return crypto.randomUUID();
+}
+
+function commit(nextGroup: GroupPayload): void {
+    emit("update:modelValue", nextGroup);
+}
+
+function onSetGraphSlug(graphSlug: string): void {
+    commit(setGraphSlug(currentGroup.value, graphSlug));
+}
+function onSetScope(scopeToken: GraphScopeToken): void {
+    commit(setScope(currentGroup.value, scopeToken));
+}
+function onToggleLogic(): void {
+    commit(toggleLogic(currentGroup.value));
+}
+function onAddGroup(): void {
+    commit(addChildGroupLikeParent(currentGroup.value));
+}
+function onReplaceChildGroup(
+    childIndex: number,
+    replacement: GroupPayload,
+): void {
+    commit(
+        replaceChildGroupAtIndex(currentGroup.value, childIndex, replacement),
+    );
+}
+function onRemoveChildGroup(childIndex: number): void {
+    commit(removeChildGroupAtIndex(currentGroup.value, childIndex));
+}
+function onAddClause(): void {
+    commit(addEmptyLiteralClauseToGroup(currentGroup.value));
+}
+function onRemoveClause(clauseIndex: number): void {
+    commit(removeClauseAtIndexFromPayload(currentGroup.value, clauseIndex));
+}
+function onAddRelationship(): void {
+    commit(addRelationshipIfMissing(currentGroup.value));
+}
+function onRemoveRelationship(): void {
+    commit(clearRelationshipIfPresent(currentGroup.value));
+}
 </script>
 
 <template>
-    <div
-        class="group-wrap"
-        :class="{ 'is-root': isRoot }"
-        :style="isRoot ? { gridTemplateColumns: '1fr' } : undefined"
-    >
-        <template v-if="!isRoot">
-            <div
-                v-if="showBracket"
-                :class="['bracket-col', isAnd ? 'is-and' : 'is-or']"
-            >
-                <div class="spine spine--top"></div>
-                <div class="logic-lane">
-                    <Button
-                        :label="logicLabel"
-                        class="logic-button"
-                        size="small"
-                        @click="toggleLogic"
-                    />
-                </div>
-                <div class="spine spine--bottom"></div>
-                <div class="arm arm--top"></div>
-                <div class="arm arm--bottom"></div>
-            </div>
-            <div
-                v-else
-                class="bracket-spacer"
-            ></div>
-        </template>
-
+    <div class="group">
         <Card class="group-card">
             <template #title>
                 <div class="group-header">
-                    <div class="row">
+                    <div class="group-selectors">
                         <Select
                             :model-value="currentGroup.graph_slug"
                             :options="graphOptions"
                             option-label="label"
                             option-value="value"
                             :placeholder="$gettext('Select graph')"
-                            class="field"
-                            @update:model-value="setGraphSlug"
+                            class="group-field"
+                            @update:model-value="onSetGraphSlug"
                         />
                         <Select
                             :model-value="currentGroup.scope"
                             :options="scopeOptions"
                             option-label="label"
                             option-value="value"
-                            class="field"
-                            @update:model-value="setScope"
+                            class="group-field"
+                            @update:model-value="onSetScope"
                         />
                     </div>
 
-                    <div class="actions">
+                    <div class="group-actions">
                         <Button
                             severity="secondary"
                             icon="pi pi-plus"
                             :label="$gettext('Add group')"
-                            @click="addGroup"
+                            @click="onAddGroup"
                         />
                         <Button
                             severity="secondary"
                             icon="pi pi-plus"
                             :label="$gettext('Add clause')"
-                            @click="addClause"
+                            @click="onAddClause"
                         />
                         <Button
                             v-if="currentGroup.relationship === null"
                             severity="secondary"
                             icon="pi pi-link"
                             :label="$gettext('Add relationship')"
-                            @click="addRelationship"
+                            @click="onAddRelationship"
                         />
                         <Button
                             v-else
                             severity="danger"
                             icon="pi pi-unlink"
                             :label="$gettext('Remove relationship')"
-                            @click="removeRelationship"
+                            @click="onRemoveRelationship"
                         />
                         <Button
                             v-if="!isRoot"
@@ -285,55 +220,51 @@ const showBracket = computed(() => itemCount.value >= 2);
 
             <template #content>
                 <div
-                    class="content-grid"
-                    :class="{ 'with-root-bracket': isRoot && showBracket }"
+                    :class="[
+                        'group-grid',
+                        hasBracket ? 'group-grid-with-bracket' : '',
+                    ]"
                 >
                     <div
-                        v-if="isRoot && showBracket"
-                        :class="['bracket-col', isAnd ? 'is-and' : 'is-or']"
+                        v-if="hasBracket"
+                        :class="[
+                            'bracket',
+                            isAnd ? 'bracket-and' : 'bracket-or',
+                        ]"
                     >
-                        <div class="spine spine--top"></div>
-                        <div class="logic-lane">
+                        <div class="bracket-arm bracket-arm-top"></div>
+                        <div class="bracket-spine bracket-spine-top"></div>
+                        <div class="bracket-lane">
                             <Button
                                 :label="logicLabel"
-                                class="logic-button"
+                                class="bracket-logic"
                                 size="small"
-                                @click="toggleLogic"
+                                @click="onToggleLogic"
                             />
                         </div>
-                        <div class="spine spine--bottom"></div>
-                        <div class="arm arm--top"></div>
-                        <div class="arm arm--bottom"></div>
+                        <div class="bracket-spine bracket-spine-bottom"></div>
+                        <div class="bracket-arm bracket-arm-bottom"></div>
                     </div>
 
-                    <div
-                        class="body"
-                        :style="
-                            isRoot && showBracket
-                                ? { gridColumn: '2' }
-                                : { gridColumn: '1 / -1' }
-                        "
-                    >
+                    <div class="group-body">
                         <div
                             v-if="currentGroup.clauses.length > 0"
                             class="clauses"
                         >
                             <div
-                                v-for="(
-                                    _clausePayload, clauseIndex
-                                ) in currentGroup.clauses"
+                                v-for="(_, clauseIndex) in currentGroup.clauses"
                                 :key="clauseKeys[clauseIndex]"
                                 class="clause-row"
                             >
-                                <span
-                                    >{{ $gettext("Clause") }}
-                                    {{ clauseIndex + 1 }}</span
-                                >
+                                <span class="clause-label">
+                                    {{ $gettext("Clause") }}
+                                    {{ clauseIndex + 1 }}
+                                </span>
                                 <Button
                                     severity="danger"
                                     icon="pi pi-trash"
                                     :label="$gettext('Remove clause')"
-                                    @click="removeClauseAtIndex(clauseIndex)"
+                                    @click="onRemoveClause(clauseIndex)"
                                 />
                             </div>
                             <Divider />
@@ -344,16 +275,24 @@ const showBracket = computed(() => itemCount.value >= 2);
                             class="children"
                         >
                             <GroupPayloadBuilder
-                                v-for="(
-                                    childGroupPayload, childIndex
-                                ) in currentGroup.groups"
+                                v-for="(_, childIndex) in currentGroup.groups"
                                 :key="childGroupKeys[childIndex]"
                                 :model-value="currentGroup.groups[childIndex]"
                                 @update:model-value="
-                                    (value) =>
-                                        replaceChildGroup(childIndex, value)
+                                    function onChildUpdate(
+                                        updatedGroupPayload,
+                                    ) {
+                                        onReplaceChildGroup(
+                                            childIndex,
+                                            updatedGroupPayload,
+                                        );
+                                    }
                                 "
-                                @remove="removeGroupAtIndex(childIndex)"
+                                @remove="
+                                    function onChildRemove() {
+                                        onRemoveChildGroup(childIndex);
+                                    }
+                                "
                             />
                         </div>
                     </div>
@@ -364,91 +303,9 @@ const showBracket = computed(() => itemCount.value >= 2);
 </template>
 
 <style scoped>
-.group-wrap {
-    display: grid;
-    grid-template-columns: 4rem 1fr;
-    gap: 0;
-    align-items: stretch;
+.group {
+    display: block;
     margin-bottom: 1rem;
-}
-
-.bracket-col {
-    --spine-width: 0.3rem;
-    --arm-length: 1.75rem;
-    --arm-thickness: 0.3rem;
-    display: grid;
-    grid-template-columns: var(--spine-width) var(--arm-length);
-    grid-template-rows: 1fr auto 1fr;
-    align-items: center;
-    justify-items: start;
-    padding-inline-start: 0.5rem;
-    row-gap: 0.75rem;
-}
-
-.bracket-col.is-and {
-    --logic-color: var(--p-blue-600);
-    --logic-hover-color: var(--p-blue-700);
-}
-
-.bracket-col.is-or {
-    --logic-color: var(--p-orange-600);
-    --logic-hover-color: var(--p-orange-700);
-}
-
-.bracket-spacer {
-}
-
-.spine {
-    width: var(--spine-width);
-    background: var(--logic-color);
-    grid-column: 1;
-    margin-inline-start: 0.75rem;
-}
-.spine--top {
-    grid-row: 1;
-    align-self: stretch;
-}
-.spine--bottom {
-    grid-row: 3;
-    align-self: stretch;
-}
-
-.logic-lane {
-    grid-column: 1;
-    grid-row: 2;
-    display: grid;
-    place-items: center;
-    width: var(--spine-width);
-}
-
-.arm {
-    background: var(--logic-color);
-    height: var(--arm-thickness);
-    grid-column: 2;
-    width: 100%;
-    margin-inline-start: 0.75rem;
-}
-.arm--top {
-    grid-row: 1;
-    align-self: start;
-}
-.arm--bottom {
-    grid-row: 3;
-    align-self: end;
-}
-
-.logic-button.p-button {
-    background: var(--logic-color);
-    border-color: var(--logic-color);
-    color: var(--p-surface-0);
-    padding-block: 0.25rem;
-    padding-inline: 0.75rem;
-    box-shadow: none;
-}
-.logic-button.p-button:enabled:hover {
-    background: var(--logic-hover-color);
-    border-color: var(--logic-hover-color);
-    color: var(--p-surface-0);
 }
 
 .group-card {
@@ -464,37 +321,120 @@ const showBracket = computed(() => itemCount.value >= 2);
     align-items: center;
 }
 
-.row {
+.group-selectors {
     display: flex;
     gap: 0.5rem;
     align-items: center;
     flex-wrap: wrap;
 }
 
-.actions {
+.group-field {
+    min-width: 12rem;
+}
+
+.group-actions {
     display: flex;
     gap: 0.5rem;
     justify-content: flex-end;
 }
 
-.content-grid {
-    display: block;
-}
-.content-grid.with-root-bracket {
+.group-grid {
     display: grid;
-    grid-template-columns: 4rem 1fr;
-    gap: 0;
+    grid-template-columns: 1fr;
     align-items: stretch;
 }
 
-.body {
+.group-grid-with-bracket {
+    grid-template-columns: 4rem 1fr;
+}
+
+.group-body {
+    grid-column: 1 / -1;
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
 
-.field {
-    min-width: 12rem;
+.group-grid-with-bracket .group-body {
+    grid-column: 2;
+}
+
+.bracket {
+    display: grid;
+    grid-template-columns: 0.3rem 1.75rem;
+    grid-template-rows: 1fr auto 1fr;
+    align-items: center;
+    justify-items: start;
+    padding-inline-start: 0.5rem;
+    row-gap: 0.75rem;
+}
+
+.bracket-and {
+    --logic-color: var(--p-blue-600);
+    --logic-hover-color: var(--p-blue-700);
+}
+
+.bracket-or {
+    --logic-color: var(--p-orange-600);
+    --logic-hover-color: var(--p-orange-700);
+}
+
+.bracket-spine {
+    width: 0.3rem;
+    background: var(--logic-color);
+    grid-column: 1;
+    margin-inline-start: 0.75rem;
+}
+
+.bracket-spine-top {
+    grid-row: 1;
+    align-self: stretch;
+}
+
+.bracket-spine-bottom {
+    grid-row: 3;
+    align-self: stretch;
+}
+
+.bracket-lane {
+    grid-column: 1;
+    grid-row: 2;
+    display: grid;
+    place-items: center;
+    width: 0.3rem;
+}
+
+.bracket-arm {
+    background: var(--logic-color);
+    height: 0.3rem;
+    grid-column: 2;
+    width: 100%;
+    margin-inline-start: 0.75rem;
+}
+
+.bracket-arm-top {
+    grid-row: 1;
+    align-self: start;
+}
+
+.bracket-arm-bottom {
+    grid-row: 3;
+    align-self: end;
+}
+
+.bracket-logic.p-button {
+    background: var(--logic-color);
+    border-color: var(--logic-color);
+    color: var(--p-surface-0);
+    padding-block: 0.25rem;
+    padding-inline: 0.75rem;
+    box-shadow: none;
+}
+
+.bracket-logic.p-button:enabled:hover {
+    background: var(--logic-hover-color);
+    border-color: var(--logic-hover-color);
+    color: var(--p-surface-0);
 }
 
 .clauses {
@@ -508,6 +448,10 @@ const showBracket = computed(() => itemCount.value >= 2);
     grid-template-columns: 1fr auto;
     gap: 0.5rem;
     align-items: center;
+}
+
+.clause-label {
+    white-space: nowrap;
 }
 
 .children {
