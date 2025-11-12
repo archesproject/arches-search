@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineProps, provide, shallowRef, ref, onMounted } from "vue";
+import { defineProps, provide, ref, onMounted } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
@@ -11,7 +11,6 @@ import {
     getAdvancedSearchFacets,
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
-    // getSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
 
 import GroupPayloadBuilder from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/GroupPayloadBuilder.vue";
@@ -32,8 +31,7 @@ const props = defineProps<{ query?: GroupPayload }>();
 const isLoading = ref(true);
 const fetchError = ref<Error | null>(null);
 
-/* Shallow at the root: we don't need deep dependency tracking here */
-const rootGroupPayload = shallowRef<GroupPayload>(makeEmptyGroupPayload());
+const rootGroupPayload = ref<GroupPayload>(makeEmptyGroupPayload());
 
 const datatypesToAdvancedSearchFacets = ref<
     Record<string, AdvancedSearchFacet[]>
@@ -63,6 +61,10 @@ onMounted(async () => {
         isLoading.value = false;
     }
 });
+
+function onUpdateRoot(next: GroupPayload): void {
+    rootGroupPayload.value = next;
+}
 
 async function getNodesForGraphId(graphId: string): Promise<NodeSummary[]> {
     const existingEntry = graphIdToNodeCache.value[graphId];
@@ -116,16 +118,11 @@ function seedRootGroup(): void {
     rootGroupPayload.value = props.query ?? makeEmptyGroupPayload();
 }
 
-/* Take a plain JSON-safe snapshot only when needed (click time) */
-function snapshotPayload(): GroupPayload {
-    return JSON.parse(JSON.stringify(rootGroupPayload.value)) as GroupPayload;
-}
-
 async function search(): Promise<void> {
-    const payload = snapshotPayload();
-    // const results = await getSearchResults(payload);
-    // console.log("Search results:", results);
-    console.log("Search payload:", payload);
+    console.log(
+        "Search payload:",
+        JSON.stringify(rootGroupPayload.value, null, 2),
+    );
 }
 </script>
 
@@ -151,8 +148,9 @@ async function search(): Promise<void> {
                 <template #title>{{ $gettext("Advanced Search") }}</template>
                 <template #content>
                     <GroupPayloadBuilder
-                        v-model="rootGroupPayload"
+                        :model-value="rootGroupPayload"
                         :is-root="true"
+                        @update:model-value="onUpdateRoot"
                     />
                     <Button
                         icon="pi pi-search"
