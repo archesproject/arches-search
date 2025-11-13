@@ -84,14 +84,7 @@ watchEffect(function reconcileKeys() {
 });
 
 function createId(): string {
-    if (
-        typeof crypto !== "undefined" &&
-        typeof crypto.randomUUID === "function"
-    ) {
-        return crypto.randomUUID();
-    }
-    const randomSuffix = Math.floor(Math.random() * 1e9).toString(36);
-    return `k_${Date.now().toString(36)}_${randomSuffix}`;
+    return crypto.randomUUID();
 }
 
 function commit(nextGroup: GroupPayload): void {
@@ -161,6 +154,13 @@ function onAddRelationship(): void {
 function onRemoveRelationship(): void {
     commit(clearRelationshipIfPresent(currentGroup.value));
 }
+
+function onUpdateChildGroupModelValue(
+    updatedChildGroupPayload: GroupPayload,
+    childIndex: number,
+): void {
+    return onReplaceChildGroup(childIndex, updatedChildGroupPayload);
+}
 </script>
 
 <template>
@@ -198,9 +198,7 @@ function onRemoveRelationship(): void {
                         class="clauses"
                     >
                         <div
-                            v-for="(
-                                unusedClause, clauseIndex
-                            ) in currentGroup.clauses"
+                            v-for="(_, clauseIndex) in currentGroup.clauses"
                             :key="clauseKeys[clauseIndex]"
                             class="clause-row"
                         >
@@ -222,17 +220,11 @@ function onRemoveRelationship(): void {
                         class="children"
                     >
                         <GroupPayloadBuilder
-                            v-for="(
-                                unusedChildGroup, childIndex
-                            ) in currentGroup.groups"
+                            v-for="(_, childIndex) in currentGroup.groups"
                             :key="childGroupKeys[childIndex]"
                             :model-value="currentGroup.groups[childIndex]"
                             @update:model-value="
-                                (updatedChildGroupPayload) =>
-                                    onReplaceChildGroup(
-                                        childIndex,
-                                        updatedChildGroupPayload,
-                                    )
+                                onUpdateChildGroupModelValue($event, childIndex)
                             "
                             @remove="() => onRemoveChildGroup(childIndex)"
                         />
