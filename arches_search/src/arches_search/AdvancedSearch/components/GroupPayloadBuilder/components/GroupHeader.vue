@@ -28,6 +28,7 @@ const props = defineProps<{
     hasRelationship: boolean;
     relationship: RelationshipState | null;
     innerGraphSlug?: string;
+    hasNestedGroups: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -91,6 +92,10 @@ function onAddClauseClick(event: MouseEvent): void {
 }
 
 function onToggleRelationship(isChecked: boolean | undefined): void {
+    if (!props.hasNestedGroups) {
+        return;
+    }
+
     if (isChecked === true && !props.hasRelationship) {
         emit("add-relationship");
     } else if (isChecked === false && props.hasRelationship) {
@@ -140,13 +145,13 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
                     v-if="isTileScoped"
                     class="group-indicator-pill"
                     icon="pi pi-th-large"
-                    :value="$gettext('Constrained by tile')"
+                    :value="$gettext('Constrained')"
                 />
                 <Tag
                     v-if="props.hasRelationship"
                     class="group-indicator-pill"
                     icon="pi pi-link"
-                    :value="$gettext('Related to subgroups')"
+                    :value="$gettext('Related')"
                 />
             </div>
         </div>
@@ -200,14 +205,23 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
                         </span>
                     </label>
 
-                    <label class="relationship-checkbox-row">
+                    <label
+                        :class="[
+                            'relationship-checkbox-row',
+                            !props.hasNestedGroups &&
+                                'relationship-checkbox-row--disabled',
+                        ]"
+                    >
                         <Checkbox
                             :model-value="props.hasRelationship"
                             :binary="true"
+                            :disabled="!props.hasNestedGroups"
                             @update:model-value="onToggleRelationship"
                         />
                         <span class="relationship-checkbox-label">
-                            {{ $gettext("Define relationship to subgroups") }}
+                            {{
+                                $gettext("Define relationship to nested groups")
+                            }}
                         </span>
                     </label>
 
@@ -226,10 +240,20 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
 </template>
 
 <style scoped>
+:deep(.p-button-icon),
+:deep(.p-tag-icon) {
+    font-size: 1.4rem;
+}
+
+:deep(.p-tag-icon) {
+    margin-bottom: 0.5rem;
+    margin-inline-end: 1rem;
+}
+
 .group-header {
     display: grid;
     grid-template-columns: 1fr auto;
-    font-size: 1rem;
+    font-size: 1.2rem;
 }
 
 .group-header--spaced {
@@ -261,7 +285,8 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
 }
 
 .group-indicator-pill {
-    font-size: 1rem;
+    padding: 0.5rem 1rem;
+    font-size: 1.2rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -289,7 +314,7 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
     border-radius: 0.75rem;
     border: 0.0625rem solid var(--p-content-border-color);
     background: var(--p-content-background);
-    font-size: 1rem;
+    font-size: 1.2rem;
 }
 
 .group-advanced-header {
@@ -301,7 +326,7 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
 }
 
 .group-advanced-title {
-    font-size: 1.0625rem;
+    font-size: 1.2rem;
     font-weight: 600;
     color: var(--p-text-color-secondary);
     text-transform: uppercase;
@@ -318,7 +343,7 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1rem;
+    font-size: 1.2rem;
     cursor: pointer;
 }
 
@@ -331,8 +356,13 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1rem;
+    font-size: 1.2rem;
     cursor: pointer;
+}
+
+.relationship-checkbox-row--disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 
 .relationship-checkbox-label {

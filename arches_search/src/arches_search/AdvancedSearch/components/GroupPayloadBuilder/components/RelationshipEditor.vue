@@ -227,7 +227,7 @@ function onUpdatePathSequence(nextPathSequence: [string, string][]): void {
 
         <div class="relationship-row">
             <label class="relationship-inline-label">
-                {{ $gettext("Traversal quantifier") }}
+                {{ $gettext("Quantifier") }}
             </label>
 
             <SelectButton

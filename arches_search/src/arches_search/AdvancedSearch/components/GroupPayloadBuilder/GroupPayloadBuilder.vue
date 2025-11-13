@@ -177,6 +177,7 @@ function onUpdateRelationship(
                 :has-relationship="Boolean(currentGroup.relationship !== null)"
                 :relationship="currentGroup.relationship"
                 :inner-graph-slug="currentGroup.groups[0]?.graph_slug"
+                :has-nested-groups="currentGroup.groups.length > 0"
                 @change-graph="onSetGraphSlug"
                 @change-scope="onSetScope"
                 @add-group="onAddGroup"
@@ -263,7 +264,6 @@ function onUpdateRelationship(
     border: 0.0125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
-    font-size: 1rem;
 }
 
 .group-content {
@@ -273,24 +273,26 @@ function onUpdateRelationship(
 }
 
 .group-grid {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
     align-items: stretch;
+    width: 100%;
 }
 
 .group-grid-with-bracket {
-    grid-template-columns: 4rem 1fr;
+    display: flex;
+    align-items: stretch;
+}
+
+.group-grid-with-bracket :deep(.bracket) {
+    flex: 0 0 4rem;
 }
 
 .group-body {
-    grid-column: 1 / -1;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     gap: 1rem;
-}
-
-.group-grid-with-bracket .group-body {
-    grid-column: 2;
+    min-width: 0;
 }
 
 .clauses {

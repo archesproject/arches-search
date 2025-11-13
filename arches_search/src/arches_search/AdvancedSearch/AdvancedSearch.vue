@@ -172,6 +172,7 @@ async function search(): Promise<void> {
     color: var(--p-text-color);
     display: flex;
     flex-direction: column;
+    font-size: 1.2rem;
 }
 
 .content {
@@ -187,5 +188,21 @@ async function search(): Promise<void> {
 
 :deep(.p-card-body) {
     gap: 0;
+}
+
+:deep(.p-inputtext),
+:deep(.p-button),
+:deep(.p-select),
+:deep(.p-select-label),
+:deep(.p-select-option),
+:deep(.p-select-filter-input),
+:deep(.p-selectbutton .p-button),
+:deep(.p-tag),
+:deep(.p-message),
+:deep(.p-dropdown),
+:deep(.p-dropdown-label),
+:deep(.p-togglebutton-label),
+:deep(.p-dropdown-item) {
+    font-size: 1.2rem;
 }
 </style>
