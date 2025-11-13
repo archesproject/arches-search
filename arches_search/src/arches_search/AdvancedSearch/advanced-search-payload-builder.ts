@@ -116,7 +116,6 @@ export function clearRelationshipIfPresent(
     return { ...groupPayload, relationship: null };
 }
 
-/* Tiny helpers for the UI */
 export function computeIsAnd(groupPayload: GroupPayload): boolean {
     return groupPayload.logic === LogicToken.AND;
 }

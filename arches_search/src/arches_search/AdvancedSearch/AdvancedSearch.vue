@@ -11,9 +11,10 @@ import {
     getAdvancedSearchFacets,
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
+    getSearchResults as fetchSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
 
-import GroupPayloadBuilder from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/GroupPayloadBuilder.vue";
+import GroupBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/GroupBuilder.vue";
 
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types";
@@ -119,10 +120,21 @@ async function fetchGraphs(): Promise<void> {
 }
 
 async function search(): Promise<void> {
-    console.log(
-        "Search payload:",
-        JSON.stringify(rootPayload.value ?? {}, null, 2),
-    );
+    if (!rootPayload.value) {
+        fetchError.value = new Error(
+            $gettext("Cannot perform search: no search query defined."),
+        );
+        return;
+    }
+
+    try {
+        fetchError.value = null;
+
+        const results = await fetchSearchResults(rootPayload.value);
+        console.log("Search results:", results);
+    } catch (possibleError) {
+        fetchError.value = possibleError as Error;
+    }
 }
 </script>
 
@@ -140,27 +152,22 @@ async function search(): Promise<void> {
             {{ fetchError.message }}
         </Message>
 
-        <div
-            v-else
-            class="content"
-        >
-            <Card>
-                <template #content>
-                    <GroupPayloadBuilder
-                        :model-value="rootPayload"
-                        :is-root="true"
-                        @update:model-value="onUpdateRoot"
-                    />
-                    <Button
-                        class="search-btn"
-                        icon="pi pi-search"
-                        size="large"
-                        :label="$gettext('Search')"
-                        @click="search"
-                    />
-                </template>
-            </Card>
-        </div>
+        <Card v-else>
+            <template #content>
+                <GroupBuilder
+                    :model-value="rootPayload"
+                    :is-root="true"
+                    @update:model-value="onUpdateRoot"
+                />
+                <Button
+                    class="search-button"
+                    icon="pi pi-search"
+                    size="large"
+                    :label="$gettext('Search')"
+                    @click="search"
+                />
+            </template>
+        </Card>
     </div>
 </template>
 
@@ -172,7 +179,6 @@ async function search(): Promise<void> {
     color: var(--p-text-color);
     display: flex;
     flex-direction: column;
-    font-size: 1.2rem;
 }
 
 .content {
@@ -181,7 +187,7 @@ async function search(): Promise<void> {
     gap: 1rem;
 }
 
-.search-btn {
+.search-button {
     margin-top: 1rem;
     align-self: flex-start;
 }
@@ -202,6 +208,7 @@ async function search(): Promise<void> {
 :deep(.p-dropdown),
 :deep(.p-dropdown-label),
 :deep(.p-togglebutton-label),
+:deep(.p-button-icon),
 :deep(.p-dropdown-item) {
     font-size: 1.2rem;
 }

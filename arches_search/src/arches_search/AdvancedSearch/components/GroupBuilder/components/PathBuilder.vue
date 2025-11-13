@@ -25,6 +25,7 @@ const props = defineProps<{
     anchorGraph: GraphSummary;
     pathSequence?: readonly (readonly [string, string])[];
     maxPathSegments?: number;
+    showAnchorGraphDropdown?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -57,6 +58,27 @@ const anchorGraphIdentifier = computed<string | null>(
                 : "";
 
         return identifierString || null;
+    },
+);
+
+const anchorGraphOptionForDisplay = computed<GraphSummary>(
+    function getAnchorGraphOptionForDisplay() {
+        const fallbackLabel =
+            props.anchorGraph.label ??
+            props.anchorGraph.name ??
+            props.anchorGraph.slug ??
+            "";
+
+        return {
+            ...props.anchorGraph,
+            label: String(fallbackLabel),
+        };
+    },
+);
+
+const shouldShowAnchorGraphDropdown = computed<boolean>(
+    function getShouldShowAnchorGraphDropdown() {
+        return Boolean(props.showAnchorGraphDropdown);
     },
 );
 
@@ -135,6 +157,14 @@ watch(
         v-else
         class="path-builder"
     >
+        <Select
+            v-if="shouldShowAnchorGraphDropdown"
+            :model-value="anchorGraphOptionForDisplay"
+            :options="[anchorGraphOptionForDisplay]"
+            option-label="label"
+            disabled
+        />
+
         <Select
             v-model="selectedNodeAlias"
             option-label="name"

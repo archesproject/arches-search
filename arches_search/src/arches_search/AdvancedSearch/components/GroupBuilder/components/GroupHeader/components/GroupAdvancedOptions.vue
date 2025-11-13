@@ -5,7 +5,7 @@ import Checkbox from "primevue/checkbox";
 
 import { GraphScopeToken } from "@/arches_search/AdvancedSearch/types.ts";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
-import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/RelationshipEditor.vue";
+import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/RelationshipEditor.vue";
 
 const { $gettext } = useGettext();
 
@@ -24,7 +24,10 @@ const emit = defineEmits<{
     (event: "change-scope", scope: GraphScopeToken): void;
     (event: "add-relationship"): void;
     (event: "remove-relationship"): void;
-    (event: "update-relationship", relationship: RelationshipState): void;
+    (
+        event: "update-relationship",
+        relationship: RelationshipState | null,
+    ): void;
 }>();
 
 const isTileScoped = computed<boolean>(function computeIsTileScoped() {
@@ -49,7 +52,14 @@ function onToggleRelationship(isChecked: boolean | undefined): void {
     }
 }
 
-function onUpdateRelationship(nextRelationship: RelationshipState): void {
+function onUpdateRelationship(
+    nextRelationship: RelationshipState | null,
+): void {
+    if (nextRelationship === null) {
+        emit("remove-relationship");
+        emit("update-relationship", null);
+        return;
+    }
     emit("update-relationship", nextRelationship);
 }
 </script>

@@ -7,7 +7,7 @@ import Tag from "primevue/tag";
 
 import { GraphScopeToken } from "@/arches_search/AdvancedSearch/types.ts";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
-import GroupAdvancedOptions from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/GroupHeader/components/GroupAdvancedOptions.vue";
+import GroupAdvancedOptions from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader/components/GroupAdvancedOptions.vue";
 
 const { $gettext } = useGettext();
 
@@ -37,7 +37,10 @@ const emit = defineEmits<{
     (event: "add-clause"): void;
     (event: "add-relationship"): void;
     (event: "remove-relationship"): void;
-    (event: "update-relationship", relationship: RelationshipState): void;
+    (
+        event: "update-relationship",
+        relationship: RelationshipState | null,
+    ): void;
     (event: "remove-group"): void;
 }>();
 
@@ -101,7 +104,9 @@ function onRemoveRelationship(): void {
     emit("remove-relationship");
 }
 
-function onUpdateRelationship(nextRelationship: RelationshipState): void {
+function onUpdateRelationship(
+    nextRelationship: RelationshipState | null,
+): void {
     emit("update-relationship", nextRelationship);
 }
 </script>
@@ -192,7 +197,6 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
 </template>
 
 <style scoped>
-:deep(.p-button-icon),
 :deep(.p-tag-icon) {
     font-size: 1.4rem;
 }
@@ -210,7 +214,7 @@ function onUpdateRelationship(nextRelationship: RelationshipState): void {
 
 .group-header--spaced {
     margin-bottom: 1rem;
-    margin-inline-start: 0.25rem;
+    margin-inline-start: 1.25rem;
 }
 
 .group-selectors {

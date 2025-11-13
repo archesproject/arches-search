@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, inject } from "vue";
+import { computed, inject, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 import SelectButton from "primevue/selectbutton";
 
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
-import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/PathBuilder.vue";
+import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/PathBuilder.vue";
 
 type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 type TraversalQuantifier = RelationshipState["traversal_quantifiers"][number];
@@ -22,7 +22,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: "update:relationship", value: RelationshipState): void;
+    (event: "update:relationship", value: RelationshipState | null): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -179,6 +179,24 @@ function onUpdatePathSequence(nextPathSequence: [string, string][]): void {
     };
     emit("update:relationship", updatedRelationship);
 }
+
+watch(
+    () => props.innerGraphSlug,
+    function handleInnerGraphSlugChange(
+        nextInnerGraphSlug: string | undefined,
+        previousInnerGraphSlug: string | undefined,
+    ): void {
+        if (!previousInnerGraphSlug || !nextInnerGraphSlug) {
+            return;
+        }
+
+        if (nextInnerGraphSlug === previousInnerGraphSlug) {
+            return;
+        }
+
+        emit("update:relationship", null);
+    },
+);
 </script>
 
 <template>
