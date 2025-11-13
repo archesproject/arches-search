@@ -5,40 +5,47 @@ import AdvancedSearch from '@/arches_search/AdvancedSearch/AdvancedSearch.vue';
 import ArchesSearchTemplate from 'templates/views/components/plugins/arches-search.htm';
 
 
-const query = {
-    "graph_slug": "dog",
-    "scope": "TILE",
-    "logic": "AND",
-    "clauses": [],
-    "groups": [],
-    "aggregations": [],
-    "relationship": null
-}
-
 // const query = {
-//     "graph_slug": "person",
-//     "scope": "RESOURCE",
+//     "graph_slug": "dog",
+//     "scope": "TILE",
 //     "logic": "AND",
 //     "clauses": [],
-//     "groups": [
-//         {
-//             "graph_slug": "dog",
-//             "scope": "RESOURCE",
-//             "logic": "AND",
-//             "clauses": [],
-//             "groups": [],
-//             "aggregations": [],
-//             "relationship": null
-//         }
-//     ],
+//     "groups": [],
 //     "aggregations": [],
-//     "relationship": {
-//         "path": [["dog", "favorite_person"]],
-//         "quantifier": "AT_LEAST",
-//         "value": 1,
-//         "is_inverse_relationship": true
-//     }
+//     "relationship": null
 // }
+
+const query = {
+    "graph_slug": "person",
+    "scope": "RESOURCE",
+    "logic": "AND",
+    "clauses": [
+        {
+            "type": "RELATED",
+            "quantifier": "ANY",
+            "subject": [["dog", "favorite_person"]],
+            "operator": "HAS_ANY_VALUE",
+            "operands": [],
+        }
+    ],
+    "groups": [
+        {
+            "graph_slug": "dog",
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [],
+            "groups": [],
+            "aggregations": [],
+            "relationship": null,
+        }
+    ],
+    "aggregations": [],
+    "relationship": {
+        "path": [["dog", "favorite_person"]],
+        "is_inverse": true,
+        "traversal_quantifiers": ["ANY"],
+    },
+}
 
 // const query = {
 //     "graph_slug": "dog",

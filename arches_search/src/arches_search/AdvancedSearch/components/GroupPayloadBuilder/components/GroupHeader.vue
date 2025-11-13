@@ -7,12 +7,16 @@ import Checkbox from "primevue/checkbox";
 import Tag from "primevue/tag";
 
 import { GraphScopeToken } from "@/arches_search/AdvancedSearch/types.ts";
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
+import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/RelationshipEditor.vue";
 
 const { $gettext } = useGettext();
 
 type GraphSummary =
     | { id?: string; slug: string; name?: string; label?: string }
     | Record<string, unknown>;
+
+type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 
 const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
 
@@ -22,6 +26,8 @@ const props = defineProps<{
     scope: GraphScopeToken;
     isRoot?: boolean;
     hasRelationship: boolean;
+    relationship: RelationshipState | null;
+    innerGraphSlug?: string;
 }>();
 
 const emit = defineEmits<{
@@ -31,6 +37,7 @@ const emit = defineEmits<{
     (event: "add-clause"): void;
     (event: "add-relationship"): void;
     (event: "remove-relationship"): void;
+    (event: "update-relationship", relationship: RelationshipState): void;
     (event: "remove-group"): void;
 }>();
 
@@ -94,6 +101,10 @@ function onToggleRelationship(isChecked: boolean | undefined): void {
 function onRemoveGroupClick(event: MouseEvent): void {
     event.stopPropagation();
     emit("remove-group");
+}
+
+function onUpdateRelationship(nextRelationship: RelationshipState): void {
+    emit("update-relationship", nextRelationship);
 }
 </script>
 
@@ -166,27 +177,50 @@ function onRemoveGroupClick(event: MouseEvent): void {
             v-if="isOptionsOpen"
             class="group-advanced-row"
         >
-            <label class="scope-checkbox-row">
-                <Checkbox
-                    :model-value="isTileScoped"
-                    :binary="true"
-                    @update:model-value="onSetScopeFromCheckbox"
-                />
-                <span class="scope-checkbox-label">
-                    {{ $gettext("Constrain query clauses to a single tile") }}
-                </span>
-            </label>
+            <div class="group-advanced-card">
+                <div class="group-advanced-header">
+                    <span class="group-advanced-title">
+                        {{ $gettext("Advanced options") }}
+                    </span>
+                </div>
 
-            <label class="relationship-checkbox-row">
-                <Checkbox
-                    :model-value="props.hasRelationship"
-                    :binary="true"
-                    @update:model-value="onToggleRelationship"
-                />
-                <span class="relationship-checkbox-label">
-                    {{ $gettext("Define relationship to subgroups") }}
-                </span>
-            </label>
+                <div class="group-advanced-body">
+                    <label class="scope-checkbox-row">
+                        <Checkbox
+                            :model-value="isTileScoped"
+                            :binary="true"
+                            @update:model-value="onSetScopeFromCheckbox"
+                        />
+                        <span class="scope-checkbox-label">
+                            {{
+                                $gettext(
+                                    "Constrain query clauses to a single tile",
+                                )
+                            }}
+                        </span>
+                    </label>
+
+                    <label class="relationship-checkbox-row">
+                        <Checkbox
+                            :model-value="props.hasRelationship"
+                            :binary="true"
+                            @update:model-value="onToggleRelationship"
+                        />
+                        <span class="relationship-checkbox-label">
+                            {{ $gettext("Define relationship to subgroups") }}
+                        </span>
+                    </label>
+
+                    <RelationshipEditor
+                        v-if="props.hasRelationship && props.relationship"
+                        class="relationship-editor-inline"
+                        :anchor-graph-slug="props.graphSlug"
+                        :inner-graph-slug="props.innerGraphSlug"
+                        :relationship="props.relationship as RelationshipState"
+                        @update:relationship="onUpdateRelationship"
+                    />
+                </div>
+            </div>
         </div>
     </div>
 </template>
@@ -195,6 +229,7 @@ function onRemoveGroupClick(event: MouseEvent): void {
 .group-header {
     display: grid;
     grid-template-columns: 1fr auto;
+    font-size: 1rem;
 }
 
 .group-header--spaced {
@@ -242,19 +277,48 @@ function onRemoveGroupClick(event: MouseEvent): void {
 
 .group-advanced-row {
     grid-column: 1 / -1;
+    margin-top: 1rem;
+    margin-inline-start: 3rem;
+}
+
+.group-advanced-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    border: 0.0625rem solid var(--p-content-border-color);
+    background: var(--p-content-background);
+    font-size: 1rem;
+}
+
+.group-advanced-header {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    margin-inline-start: 3rem;
-    margin-top: 1rem;
-    flex-wrap: wrap;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 0.0625rem solid var(--p-content-border-color);
+}
+
+.group-advanced-title {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--p-text-color-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.group-advanced-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
 }
 
 .scope-checkbox-row {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 1rem;
     cursor: pointer;
 }
 
@@ -267,12 +331,16 @@ function onRemoveGroupClick(event: MouseEvent): void {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 1rem;
     cursor: pointer;
 }
 
 .relationship-checkbox-label {
     user-select: none;
     cursor: pointer;
+}
+
+.relationship-editor-inline {
+    width: 100%;
 }
 </style>

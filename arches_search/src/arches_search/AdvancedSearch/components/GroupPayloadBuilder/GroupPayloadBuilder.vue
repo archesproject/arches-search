@@ -104,16 +104,9 @@ function onSetLogicFromBracket(_: LogicToken): void {
 }
 
 function onAddGroup(): void {
-    const newChildGroup: GroupPayload = {
-        ...makeEmptyGroupPayload(),
-        graph_slug: currentGroup.value.graph_slug,
-        scope: currentGroup.value.scope,
-        logic: LogicToken.AND,
-    };
-
     const updatedParent: GroupPayload = {
         ...currentGroup.value,
-        groups: [...currentGroup.value.groups, newChildGroup],
+        groups: [...currentGroup.value.groups, makeEmptyGroupPayload()],
     };
 
     commit(updatedParent);
@@ -159,7 +152,17 @@ function onUpdateChildGroupModelValue(
     updatedChildGroupPayload: GroupPayload,
     childIndex: number,
 ): void {
-    return onReplaceChildGroup(childIndex, updatedChildGroupPayload);
+    onReplaceChildGroup(childIndex, updatedChildGroupPayload);
+}
+
+function onUpdateRelationship(
+    nextRelationship: NonNullable<GroupPayload["relationship"]>,
+): void {
+    const updatedGroup: GroupPayload = {
+        ...currentGroup.value,
+        relationship: nextRelationship,
+    };
+    commit(updatedGroup);
 }
 </script>
 
@@ -172,62 +175,77 @@ function onUpdateChildGroupModelValue(
                 :scope="currentGroup.scope"
                 :is-root="Boolean(props.isRoot)"
                 :has-relationship="Boolean(currentGroup.relationship !== null)"
+                :relationship="currentGroup.relationship"
+                :inner-graph-slug="currentGroup.groups[0]?.graph_slug"
                 @change-graph="onSetGraphSlug"
                 @change-scope="onSetScope"
                 @add-group="onAddGroup"
                 @add-clause="onAddClause"
                 @add-relationship="onAddRelationship"
                 @remove-relationship="onRemoveRelationship"
+                @update-relationship="onUpdateRelationship"
                 @remove-group="$emit('remove')"
             />
         </template>
 
         <template #content>
-            <div
-                :class="['group-grid', hasBracket && 'group-grid-with-bracket']"
-            >
-                <GroupBracket
-                    :show="hasBracket"
-                    :logic="currentGroup.logic"
-                    @update:logic="onSetLogicFromBracket"
-                />
+            <div class="group-content">
+                <div
+                    :class="[
+                        'group-grid',
+                        hasBracket && 'group-grid-with-bracket',
+                    ]"
+                >
+                    <GroupBracket
+                        :show="hasBracket"
+                        :logic="currentGroup.logic"
+                        @update:logic="onSetLogicFromBracket"
+                    />
 
-                <div class="group-body">
-                    <div
-                        v-if="currentGroup.clauses.length > 0"
-                        class="clauses"
-                    >
+                    <div class="group-body">
                         <div
-                            v-for="(_, clauseIndex) in currentGroup.clauses"
-                            :key="clauseKeys[clauseIndex]"
-                            class="clause-row"
+                            v-if="currentGroup.clauses.length > 0"
+                            class="clauses"
                         >
-                            <span class="clause-label">
-                                {{ $gettext("Clause") }}
-                                {{ clauseIndex + 1 }}
-                            </span>
-                            <Button
-                                severity="danger"
-                                icon="pi pi-trash"
-                                :label="$gettext('Remove clause')"
-                                @click.stop="onRemoveClause(clauseIndex)"
+                            <div
+                                v-for="(
+                                    clause, clauseIndex
+                                ) in currentGroup.clauses"
+                                :key="clauseKeys[clauseIndex]"
+                                class="clause-row"
+                            >
+                                <span class="clause-label">
+                                    {{ $gettext("Clause") }}
+                                    {{ clauseIndex + 1 }}
+                                </span>
+                                <Button
+                                    severity="danger"
+                                    icon="pi pi-trash"
+                                    :label="$gettext('Remove clause')"
+                                    @click.stop="onRemoveClause(clauseIndex)"
+                                />
+                            </div>
+                        </div>
+
+                        <div
+                            v-if="currentGroup.groups.length > 0"
+                            class="children"
+                        >
+                            <GroupPayloadBuilder
+                                v-for="(
+                                    childGroup, childIndex
+                                ) in currentGroup.groups"
+                                :key="childGroupKeys[childIndex]"
+                                :model-value="childGroup"
+                                @update:model-value="
+                                    onUpdateChildGroupModelValue(
+                                        $event,
+                                        childIndex,
+                                    )
+                                "
+                                @remove="() => onRemoveChildGroup(childIndex)"
                             />
                         </div>
-                    </div>
-
-                    <div
-                        v-if="currentGroup.groups.length > 0"
-                        class="children"
-                    >
-                        <GroupPayloadBuilder
-                            v-for="(_, childIndex) in currentGroup.groups"
-                            :key="childGroupKeys[childIndex]"
-                            :model-value="currentGroup.groups[childIndex]"
-                            @update:model-value="
-                                onUpdateChildGroupModelValue($event, childIndex)
-                            "
-                            @remove="() => onRemoveChildGroup(childIndex)"
-                        />
                     </div>
                 </div>
             </div>
@@ -245,6 +263,13 @@ function onUpdateChildGroupModelValue(
     border: 0.0125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
+    font-size: 1rem;
+}
+
+.group-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 .group-grid {
