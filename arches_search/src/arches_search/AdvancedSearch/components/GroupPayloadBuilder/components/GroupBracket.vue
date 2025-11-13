@@ -59,7 +59,6 @@ function onToggle(): void {
     display: grid;
     grid-template-columns: var(--lane-width) var(--button-col);
     grid-template-rows: 1fr auto 1fr;
-    align-items: center;
     row-gap: 0.5rem;
 }
 

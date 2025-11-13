@@ -2,17 +2,14 @@
 import {
     defineProps,
     defineEmits,
-    inject,
     ref,
     computed,
     watchEffect,
     defineOptions,
 } from "vue";
 import { useGettext } from "vue3-gettext";
-import Select from "primevue/select";
 import Button from "primevue/button";
 import Card from "primevue/card";
-import Divider from "primevue/divider";
 
 import {
     GraphScopeToken,
@@ -35,16 +32,11 @@ import {
 } from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
 
 import GroupBracket from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/GroupBracket.vue";
+import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/GroupHeader.vue";
 
 defineOptions({ name: "GroupPayloadBuilder" });
 
 const { $gettext } = useGettext();
-
-type GraphSummary =
-    | { id?: string; slug: string; name?: string; label?: string }
-    | Record<string, unknown>;
-
-const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
 
 const emit = defineEmits<{
     (event: "update:modelValue", value: GroupPayload): void;
@@ -70,32 +62,12 @@ const hasBracket = computed<boolean>(function getHasBracket() {
     );
 });
 
-const scopeOptions = computed<{ label: string; value: GraphScopeToken }[]>(
-    function getScopeOptions() {
-        return [
-            { label: $gettext("Resource"), value: GraphScopeToken.RESOURCE },
-            { label: $gettext("Tile"), value: GraphScopeToken.TILE },
-        ];
-    },
-);
-
-const graphOptions = computed<{ label: string; value: string }[]>(
-    function getGraphOptions() {
-        const availableGraphs = graphs?.value ?? [];
-        return availableGraphs
-            .map(function toOption(entry: GraphSummary) {
-                const slug = (entry as { slug?: string }).slug ?? "";
-                const displayName =
-                    (entry as { name?: string }).name ??
-                    (entry as { label?: string }).label ??
-                    slug;
-                return { label: String(displayName), value: String(slug) };
-            })
-            .filter(function nonEmpty(option) {
-                return option.value.length > 0;
-            });
-    },
-);
+const hasBodyContent = computed<boolean>(function getHasBodyContent() {
+    return (
+        currentGroup.value.clauses.length > 0 ||
+        currentGroup.value.groups.length > 0
+    );
+});
 
 watchEffect(function reconcileKeys() {
     childGroupKeys.value = reconcileStableKeys(
@@ -134,7 +106,7 @@ function onSetScope(scopeToken: GraphScopeToken): void {
     commit(setScope(currentGroup.value, scopeToken));
 }
 
-function onSetLogicFromBracket(_nextLogicToken: LogicToken): void {
+function onSetLogicFromBracket(_: LogicToken): void {
     commit(toggleLogic(currentGroup.value));
 }
 
@@ -194,71 +166,25 @@ function onRemoveRelationship(): void {
 <template>
     <Card class="group-card">
         <template #title>
-            <div class="group-header">
-                <div class="group-selectors">
-                    <Select
-                        :model-value="currentGroup.graph_slug"
-                        :options="graphOptions"
-                        option-label="label"
-                        option-value="value"
-                        :placeholder="$gettext('Select graph')"
-                        class="group-field"
-                        @update:model-value="onSetGraphSlug"
-                    />
-                    <Select
-                        :model-value="currentGroup.scope"
-                        :options="scopeOptions"
-                        option-label="label"
-                        option-value="value"
-                        class="group-field"
-                        @update:model-value="onSetScope"
-                    />
-                </div>
-
-                <div class="group-actions">
-                    <Button
-                        severity="secondary"
-                        icon="pi pi-plus"
-                        :label="$gettext('Add group')"
-                        @click.stop="onAddGroup"
-                    />
-                    <Button
-                        severity="secondary"
-                        icon="pi pi-plus"
-                        :label="$gettext('Add clause')"
-                        @click.stop="onAddClause"
-                    />
-                    <Button
-                        v-if="currentGroup.relationship === null"
-                        severity="secondary"
-                        icon="pi pi-link"
-                        :label="$gettext('Add relationship')"
-                        @click.stop="onAddRelationship"
-                    />
-                    <Button
-                        v-else
-                        severity="danger"
-                        icon="pi pi-unlink"
-                        :label="$gettext('Remove relationship')"
-                        @click.stop="onRemoveRelationship"
-                    />
-                    <Button
-                        v-if="!props.isRoot"
-                        severity="danger"
-                        icon="pi pi-times"
-                        :label="$gettext('Remove group')"
-                        @click.stop="$emit('remove')"
-                    />
-                </div>
-            </div>
+            <GroupHeader
+                :has-body-content="hasBodyContent"
+                :graph-slug="currentGroup.graph_slug"
+                :scope="currentGroup.scope"
+                :is-root="Boolean(props.isRoot)"
+                :has-relationship="Boolean(currentGroup.relationship !== null)"
+                @change-graph="onSetGraphSlug"
+                @change-scope="onSetScope"
+                @add-group="onAddGroup"
+                @add-clause="onAddClause"
+                @add-relationship="onAddRelationship"
+                @remove-relationship="onRemoveRelationship"
+                @remove-group="$emit('remove')"
+            />
         </template>
 
         <template #content>
             <div
-                :class="[
-                    'group-grid',
-                    hasBracket ? 'group-grid-with-bracket' : '',
-                ]"
+                :class="['group-grid', hasBracket && 'group-grid-with-bracket']"
             >
                 <GroupBracket
                     :show="hasBracket"
@@ -289,7 +215,6 @@ function onRemoveRelationship(): void {
                                 @click.stop="onRemoveClause(clauseIndex)"
                             />
                         </div>
-                        <Divider />
                     </div>
 
                     <div
@@ -325,33 +250,9 @@ function onRemoveRelationship(): void {
 }
 
 .group-card {
-    border: 0.0625rem solid var(--p-content-border-color);
+    border: 0.0125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
-}
-
-.group-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.75rem;
-    align-items: center;
-}
-
-.group-selectors {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-.group-field {
-    min-width: 12rem;
-}
-
-.group-actions {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: flex-end;
 }
 
 .group-grid {

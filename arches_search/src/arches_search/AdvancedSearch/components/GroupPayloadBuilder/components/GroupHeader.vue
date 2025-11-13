@@ -1,0 +1,278 @@
+<script setup lang="ts">
+import { defineProps, defineEmits, inject, computed, ref } from "vue";
+import { useGettext } from "vue3-gettext";
+import Select from "primevue/select";
+import Button from "primevue/button";
+import Checkbox from "primevue/checkbox";
+import Tag from "primevue/tag";
+
+import { GraphScopeToken } from "@/arches_search/AdvancedSearch/types.ts";
+
+const { $gettext } = useGettext();
+
+type GraphSummary =
+    | { id?: string; slug: string; name?: string; label?: string }
+    | Record<string, unknown>;
+
+const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
+
+const props = defineProps<{
+    hasBodyContent: boolean;
+    graphSlug: string;
+    scope: GraphScopeToken;
+    isRoot?: boolean;
+    hasRelationship: boolean;
+}>();
+
+const emit = defineEmits<{
+    (event: "change-graph", graphSlug: string): void;
+    (event: "change-scope", scope: GraphScopeToken): void;
+    (event: "add-group"): void;
+    (event: "add-clause"): void;
+    (event: "add-relationship"): void;
+    (event: "remove-relationship"): void;
+    (event: "remove-group"): void;
+}>();
+
+const isOptionsOpen = ref(false);
+
+const graphOptions = computed<{ label: string; value: string }[]>(
+    function getGraphOptions() {
+        const availableGraphs = graphs?.value ?? [];
+        return availableGraphs
+            .map(function toOption(entry: GraphSummary) {
+                const slug = (entry as { slug?: string }).slug ?? "";
+                const displayName =
+                    (entry as { name?: string }).name ??
+                    (entry as { label?: string }).label ??
+                    slug;
+                return { label: String(displayName), value: String(slug) };
+            })
+            .filter(function nonEmpty(option) {
+                return option.value.length > 0;
+            });
+    },
+);
+
+const isTileScoped = computed<boolean>(function computeIsTileScoped() {
+    return props.scope === GraphScopeToken.TILE;
+});
+
+function onSetGraphSlug(graphSlug: string): void {
+    emit("change-graph", graphSlug);
+}
+
+function onSetScopeFromCheckbox(isChecked: boolean | undefined): void {
+    const nextScopeToken =
+        isChecked === true ? GraphScopeToken.TILE : GraphScopeToken.RESOURCE;
+    emit("change-scope", nextScopeToken);
+}
+
+function onToggleOptions(event: MouseEvent): void {
+    event.stopPropagation();
+    isOptionsOpen.value = !isOptionsOpen.value;
+}
+
+function onAddGroupClick(event: MouseEvent): void {
+    event.stopPropagation();
+    emit("add-group");
+}
+
+function onAddClauseClick(event: MouseEvent): void {
+    event.stopPropagation();
+    emit("add-clause");
+}
+
+function onToggleRelationship(isChecked: boolean | undefined): void {
+    if (isChecked === true && !props.hasRelationship) {
+        emit("add-relationship");
+    } else if (isChecked === false && props.hasRelationship) {
+        emit("remove-relationship");
+    }
+}
+
+function onRemoveGroupClick(event: MouseEvent): void {
+    event.stopPropagation();
+    emit("remove-group");
+}
+</script>
+
+<template>
+    <div
+        :class="[
+            'group-header',
+            props.hasBodyContent && 'group-header--spaced',
+        ]"
+    >
+        <div class="group-selectors">
+            <Button
+                class="group-gear-toggle"
+                icon="pi pi-cog"
+                severity="secondary"
+                text
+                rounded
+                :aria-label="$gettext('Toggle advanced group options')"
+                :aria-pressed="isOptionsOpen"
+                @click="onToggleOptions"
+            />
+            <Select
+                :model-value="props.graphSlug"
+                :options="graphOptions"
+                option-label="label"
+                option-value="value"
+                :placeholder="$gettext('Select graph')"
+                class="group-field"
+                @update:model-value="onSetGraphSlug"
+            />
+            <div class="group-indicators">
+                <Tag
+                    v-if="isTileScoped"
+                    class="group-indicator-pill"
+                    icon="pi pi-th-large"
+                    :value="$gettext('Constrained by tile')"
+                />
+                <Tag
+                    v-if="props.hasRelationship"
+                    class="group-indicator-pill"
+                    icon="pi pi-link"
+                    :value="$gettext('Related to subgroups')"
+                />
+            </div>
+        </div>
+
+        <div class="group-actions">
+            <Button
+                severity="secondary"
+                icon="pi pi-plus"
+                :label="$gettext('Add group')"
+                @click="onAddGroupClick"
+            />
+            <Button
+                severity="secondary"
+                icon="pi pi-plus"
+                :label="$gettext('Add clause')"
+                @click="onAddClauseClick"
+            />
+            <Button
+                v-if="!props.isRoot"
+                severity="danger"
+                icon="pi pi-times"
+                :aria-label="$gettext('Remove group')"
+                @click="onRemoveGroupClick"
+            />
+        </div>
+
+        <div
+            v-if="isOptionsOpen"
+            class="group-advanced-row"
+        >
+            <label class="scope-checkbox-row">
+                <Checkbox
+                    :model-value="isTileScoped"
+                    :binary="true"
+                    @update:model-value="onSetScopeFromCheckbox"
+                />
+                <span class="scope-checkbox-label">
+                    {{ $gettext("Constrain query clauses to a single tile") }}
+                </span>
+            </label>
+
+            <label class="relationship-checkbox-row">
+                <Checkbox
+                    :model-value="props.hasRelationship"
+                    :binary="true"
+                    @update:model-value="onToggleRelationship"
+                />
+                <span class="relationship-checkbox-label">
+                    {{ $gettext("Define relationship to subgroups") }}
+                </span>
+            </label>
+        </div>
+    </div>
+</template>
+
+<style scoped>
+.group-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+}
+
+.group-header--spaced {
+    margin-bottom: 1rem;
+    margin-inline-start: 0.25rem;
+}
+
+.group-selectors {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.group-gear-toggle {
+    flex-shrink: 0;
+}
+
+.group-field {
+    min-width: 12rem;
+}
+
+.group-indicators {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-inline-start: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.group-indicator-pill {
+    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.group-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.group-advanced-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-inline-start: 3rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.scope-checkbox-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.scope-checkbox-label {
+    user-select: none;
+    cursor: pointer;
+}
+
+.relationship-checkbox-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.relationship-checkbox-label {
+    user-select: none;
+    cursor: pointer;
+}
+</style>

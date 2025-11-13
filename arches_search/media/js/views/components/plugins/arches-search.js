@@ -7,7 +7,7 @@ import ArchesSearchTemplate from 'templates/views/components/plugins/arches-sear
 
 const query = {
     "graph_slug": "dog",
-    "scope": "RESOURCE",
+    "scope": "TILE",
     "logic": "AND",
     "clauses": [],
     "groups": [],
