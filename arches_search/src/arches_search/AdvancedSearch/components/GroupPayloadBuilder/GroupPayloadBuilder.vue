@@ -32,7 +32,7 @@ import {
 } from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
 
 import GroupBracket from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/GroupBracket.vue";
-import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/GroupHeader.vue";
+import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupPayloadBuilder/components/GroupHeader/GroupHeader.vue";
 
 defineOptions({ name: "GroupPayloadBuilder" });
 
