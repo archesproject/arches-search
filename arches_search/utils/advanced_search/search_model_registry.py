@@ -24,8 +24,7 @@ class SearchModelRegistry:
 
         if model_class is None:
             raise ValueError(
-                _("No search model mapped for datatype '%(datatype)s'")
-                % {"datatype": datatype_name}
+                _("No search model mapped for datatype '{datatype}'").format(datatype=datatype_name)
             )
 
         return model_class
