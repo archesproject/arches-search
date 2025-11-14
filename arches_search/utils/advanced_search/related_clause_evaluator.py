@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional
 from django.db.models import Exists, OuterRef, Q
+from django.utils.translation import gettext as _
 
 QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
