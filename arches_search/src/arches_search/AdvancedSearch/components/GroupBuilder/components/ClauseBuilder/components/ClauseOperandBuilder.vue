@@ -164,7 +164,7 @@ function handlePathSequenceUpdate(
             :node-alias="subjectTerminalNode.alias"
             :should-show-label="false"
             :aliased-node-data="initialAliasedNodeData || undefined"
-            :compact="true"
+            :should-emit-simplified-value="true"
             @update:value="handleGenericWidgetUpdate"
         />
 
