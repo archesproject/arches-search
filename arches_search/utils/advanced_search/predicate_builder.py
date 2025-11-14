@@ -78,7 +78,7 @@ class PredicateBuilder:
                 continue
 
             raise ValueError(
-                _("Unsupported operand type: %(type)s") % {"type": operand_type}
+                _("Unsupported operand type: {type}").format(type=operand_type)
             )
 
         return normalized_values
