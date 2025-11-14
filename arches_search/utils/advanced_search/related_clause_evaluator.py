@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional
 from django.db.models import Exists, OuterRef, Q
+from django.utils.translation import gettext as _
 
 QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
@@ -31,8 +32,10 @@ class RelatedClauseEvaluator:
         if mode == "child":
             if traversal_context is None:
                 raise ValueError("traversal_context is required for mode='child'")
+                raise ValueError(_("traversal_context is required for mode='child'"))
             return self._build_child_presence_exists(clause_payload, traversal_context)
         raise ValueError(f"Unsupported evaluation mode: {mode}")
+        raise ValueError(_("Unsupported evaluation mode: {mode}").format(mode=mode))
 
     def _build_anchor_presence_exists(
         self,

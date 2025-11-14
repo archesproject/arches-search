@@ -1,5 +1,5 @@
-from typing import Any, Dict, Set, Optional
-from django.db.models import UUIDField, QuerySet
+from typing import Any, Dict, Set
+from django.db.models import UUIDField
 from django.utils.translation import gettext as _
 from arches_search.models.models import DDatatypeXAdvancedSearchModel
 
@@ -24,8 +24,7 @@ class SearchModelRegistry:
 
         if model_class is None:
             raise ValueError(
-                _("No search model mapped for datatype '%(datatype)s'")
-                % {"datatype": datatype_name}
+                _("No search model mapped for datatype '{datatype}'").format(datatype=datatype_name)
             )
 
         return model_class
