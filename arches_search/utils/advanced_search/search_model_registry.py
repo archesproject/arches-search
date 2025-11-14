@@ -1,5 +1,5 @@
-from typing import Any, Dict, Set, Optional
-from django.db.models import UUIDField, QuerySet
+from typing import Any, Dict, Set
+from django.db.models import UUIDField
 from django.utils.translation import gettext as _
 from arches_search.models.models import DDatatypeXAdvancedSearchModel
 
