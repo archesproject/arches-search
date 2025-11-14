@@ -121,6 +121,10 @@ async function fetchGraphs(): Promise<void> {
 }
 
 async function search(): Promise<void> {
+    console.log(
+        "Performing search...",
+        JSON.stringify(rootPayload.value, null, 4),
+    );
     if (!rootPayload.value) {
         fetchError.value = new Error(
             $gettext("Cannot perform search: no search query defined."),

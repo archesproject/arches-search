@@ -330,7 +330,39 @@ function handleOperatorChange(nextOperator: string | null): void {
     if (nextOperator === modelValue.operator) {
         return;
     }
-    patchClause({ operator: nextOperator, operands: [] });
+
+    if (nextOperator === null) {
+        patchClause({
+            operator: null,
+            operands: [],
+        });
+        return;
+    }
+
+    const previousFacet =
+        availableOperatorOptions.value.find((advancedSearchFacet) => {
+            return advancedSearchFacet.operator === modelValue.operator;
+        }) ?? null;
+
+    const nextFacet =
+        availableOperatorOptions.value.find((advancedSearchFacet) => {
+            return advancedSearchFacet.operator === nextOperator;
+        }) ?? null;
+
+    const previousArity = previousFacet ? previousFacet.arity : 0;
+    const nextArity = nextFacet ? nextFacet.arity : 0;
+
+    if (previousArity !== nextArity) {
+        patchClause({
+            operator: nextOperator,
+            operands: [],
+        });
+        return;
+    }
+
+    patchClause({
+        operator: nextOperator,
+    });
 }
 
 function handleRemoveSelf(): void {

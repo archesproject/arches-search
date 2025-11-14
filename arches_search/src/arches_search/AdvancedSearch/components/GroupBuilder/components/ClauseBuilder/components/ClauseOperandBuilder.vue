@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 
 import GenericWidget from "@/arches_component_lab/generics/GenericWidget/GenericWidget.vue";
 import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/PathBuilder.vue";
@@ -44,132 +44,92 @@ const {
 }>();
 
 const operandValue = ref<unknown>(null);
-const literalAliasedNodeData = ref<Record<string, unknown> | null>(null);
-
-const isLiteralOperandActive = computed<boolean>(() => {
-    return operandType === OPERAND_TYPE_LITERAL;
-});
-
-const isPathOperandActive = computed<boolean>(() => {
-    return operandType === OPERAND_TYPE_PATH;
-});
+const initialAliasedNodeData = ref<Record<string, unknown> | null>(null);
+const hasInitializedFromModel = ref(false);
 
 const coercedPathSequence = computed<[string, string][]>(() => {
     if (Array.isArray(operandValue.value)) {
         return operandValue.value as [string, string][];
     }
+
     return [];
 });
 
-watch(
-    () => modelValue,
-    (updatedOperand) => {
-        if (!updatedOperand) {
-            if (operandType === OPERAND_TYPE_PATH) {
-                operandValue.value = [];
-            } else {
-                operandValue.value = null;
-            }
-            literalAliasedNodeData.value = null;
-            emitUpdatedOperand();
-            return;
-        }
+watchEffect(() => {
+    if (hasInitializedFromModel.value) {
+        return;
+    }
 
-        operandValue.value = updatedOperand.value;
+    const hasInitialValue = hasInitialOperandValue();
 
-        if (operandType === OPERAND_TYPE_LITERAL) {
-            literalAliasedNodeData.value = buildAliasedNodeDataFromRawValue(
-                operandValue.value,
-                subjectTerminalNode.datatype,
-            );
+    if (hasInitialValue) {
+        operandValue.value = modelValue!.value;
+    } else {
+        if (operandType === OPERAND_TYPE_PATH) {
+            operandValue.value = [];
         } else {
-            literalAliasedNodeData.value = null;
+            operandValue.value = null;
         }
-    },
-    { immediate: true },
-);
+    }
+
+    if (operandType === OPERAND_TYPE_LITERAL && hasInitialValue) {
+        initialAliasedNodeData.value = modelValue!.value as Record<
+            string,
+            unknown
+        >;
+    } else {
+        initialAliasedNodeData.value = null;
+    }
+
+    hasInitializedFromModel.value = true;
+});
 
 watch(
     () => operandType,
     (updatedOperandType, previousOperandType) => {
-        if (updatedOperandType === previousOperandType) {
+        if (previousOperandType === undefined) {
             return;
         }
 
-        if (updatedOperandType === OPERAND_TYPE_LITERAL) {
-            operandValue.value = null;
-        } else {
-            operandValue.value = [];
-        }
-
-        literalAliasedNodeData.value = null;
+        handleOperandTypeChange(updatedOperandType);
         emitUpdatedOperand();
     },
 );
 
-function buildAliasedNodeDataFromRawValue(
-    rawValue: unknown,
-    datatype: string,
-): Record<string, unknown> | null {
-    if (rawValue === null || rawValue === undefined) {
-        return null;
+function hasInitialOperandValue(): boolean {
+    if (modelValue === null || modelValue === undefined) {
+        return false;
     }
 
-    if (datatype === "resource-instance") {
-        return {
-            node_value: {
-                resourceId: rawValue,
-            },
-        };
+    if (modelValue.value === undefined) {
+        return false;
     }
 
-    if (datatype === "resource-instance-list") {
-        const resourceIds = Array.isArray(rawValue) ? rawValue : [rawValue];
-        return {
-            node_value: resourceIds.map((resourceId) => {
-                return { resourceId };
-            }),
-        };
-    }
-
-    if (datatype === "string") {
-        const coercedString = String(rawValue);
-        return {
-            node_value: coercedString,
-            display_value: coercedString,
-        };
-    }
-
-    return {
-        node_value: rawValue,
-    };
+    return true;
 }
 
-function coerceGenericWidgetValueToOperandValue(
-    genericWidgetValue: Record<string, unknown>,
-    datatype: string,
-): unknown {
-    if (datatype === "resource-instance") {
-        const widgetNodeValue = genericWidgetValue.node_value as Record<
-            string,
-            unknown
-        >;
-        return widgetNodeValue.resourceId;
+function handleOperandTypeChange(
+    updatedOperandType: OperandPayloadTypeToken,
+): void {
+    const hasValueInModel = hasInitialOperandValue();
+
+    if (updatedOperandType === OPERAND_TYPE_LITERAL) {
+        operandValue.value = null;
+
+        if (hasValueInModel) {
+            initialAliasedNodeData.value = modelValue!.value as Record<
+                string,
+                unknown
+            >;
+        } else {
+            initialAliasedNodeData.value = null;
+        }
+
+        return;
     }
 
-    if (datatype === "resource-instance-list") {
-        const widgetNodeValue = genericWidgetValue.node_value as unknown[];
-        return widgetNodeValue.map((item) => {
-            const listItem = item as Record<string, unknown>;
-            return listItem.resourceId;
-        });
-    }
-
-    if (datatype === "string") {
-        return (genericWidgetValue as { display_value: unknown }).display_value;
-    }
-
-    return (genericWidgetValue as { node_value: unknown }).node_value;
+    operandValue.value = [];
+    initialAliasedNodeData.value = null;
 }
 
 function emitUpdatedOperand(): void {
@@ -182,11 +142,7 @@ function emitUpdatedOperand(): void {
 function handleGenericWidgetUpdate(
     updatedGenericWidgetValue: Record<string, unknown>,
 ): void {
-    literalAliasedNodeData.value = updatedGenericWidgetValue;
-    operandValue.value = coerceGenericWidgetValueToOperandValue(
-        updatedGenericWidgetValue,
-        subjectTerminalNode.datatype,
-    );
+    operandValue.value = updatedGenericWidgetValue;
     emitUpdatedOperand();
 }
 
@@ -201,18 +157,19 @@ function handlePathSequenceUpdate(
 <template>
     <div class="clause-operand-builder">
         <GenericWidget
-            v-if="isLiteralOperandActive"
+            v-if="operandType === OPERAND_TYPE_LITERAL"
             class="clause-operand-editor"
             mode="edit"
             :graph-slug="subjectTerminalGraph.slug"
             :node-alias="subjectTerminalNode.alias"
             :should-show-label="false"
-            :aliased-node-data="literalAliasedNodeData || undefined"
+            :aliased-node-data="initialAliasedNodeData || undefined"
+            :compact="true"
             @update:value="handleGenericWidgetUpdate"
         />
 
         <PathBuilder
-            v-else-if="isPathOperandActive"
+            v-else-if="operandType === OPERAND_TYPE_PATH"
             class="clause-operand-editor"
             :anchor-graph="anchorGraph"
             :path-sequence="coercedPathSequence"

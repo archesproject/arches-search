@@ -82,6 +82,10 @@ const currentGraphSlug = computed<string>(function getCurrentGraphSlug() {
     return groupPayload.graph_slug;
 });
 
+const isGraphSelected = computed<boolean>(function getIsGraphSelected() {
+    return currentGraphSlug.value.trim().length > 0;
+});
+
 const currentRelationship = computed<RelationshipState | null>(
     function getCurrentRelationship() {
         return groupPayload.relationship as RelationshipState | null;
@@ -189,12 +193,14 @@ function onUpdateRelationship(
                 severity="secondary"
                 icon="pi pi-plus"
                 :label="$gettext('Add group')"
+                :disabled="!isGraphSelected"
                 @click="onAddGroupClick"
             />
             <Button
                 severity="secondary"
                 icon="pi pi-plus"
                 :label="$gettext('Add clause')"
+                :disabled="!isGraphSelected"
                 @click="onAddClauseClick"
             />
             <Button
