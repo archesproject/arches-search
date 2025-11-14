@@ -180,6 +180,7 @@ async function search(): Promise<void> {
     color: var(--p-text-color);
     display: flex;
     flex-direction: column;
+    overflow: auto;
 }
 
 .content {
