@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineEmits, defineProps, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 import GenericWidget from "@/arches_component_lab/generics/GenericWidget/GenericWidget.vue";
 import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/PathBuilder.vue";
@@ -19,36 +19,39 @@ type OperandPayload = {
 } | null;
 
 type GraphSummary = {
-    slug?: string;
+    graphid: string;
+    slug: string;
+    name: string;
     [key: string]: unknown;
 };
-
-const props = defineProps<{
-    modelValue: OperandPayload;
-    anchorGraph: GraphSummary;
-    parentGroupAnchorGraph?: GraphSummary;
-    subjectTerminalNode: Node;
-    subjectTerminalGraph: GraphSummary;
-    operandType: OperandPayloadTypeToken;
-}>();
 
 const emit = defineEmits<{
     (event: "update:modelValue", updatedOperand: OperandPayload): void;
 }>();
 
+const {
+    modelValue,
+    anchorGraph,
+    subjectTerminalNode,
+    subjectTerminalGraph,
+    operandType,
+} = defineProps<{
+    modelValue: OperandPayload;
+    anchorGraph: GraphSummary;
+    subjectTerminalNode: Node;
+    subjectTerminalGraph: GraphSummary;
+    operandType: OperandPayloadTypeToken;
+}>();
+
 const operandValue = ref<unknown>(null);
 const literalAliasedNodeData = ref<Record<string, unknown> | null>(null);
 
-const pathSequenceSeedGraph = computed<GraphSummary>(() => {
-    return props.anchorGraph;
-});
-
 const isLiteralOperandActive = computed<boolean>(() => {
-    return props.operandType === OPERAND_TYPE_LITERAL;
+    return operandType === OPERAND_TYPE_LITERAL;
 });
 
 const isPathOperandActive = computed<boolean>(() => {
-    return props.operandType === OPERAND_TYPE_PATH;
+    return operandType === OPERAND_TYPE_PATH;
 });
 
 const coercedPathSequence = computed<[string, string][]>(() => {
@@ -59,27 +62,25 @@ const coercedPathSequence = computed<[string, string][]>(() => {
 });
 
 watch(
-    () => props.modelValue,
+    () => modelValue,
     (updatedOperand) => {
         if (!updatedOperand) {
-            if (props.operandType === OPERAND_TYPE_PATH) {
+            if (operandType === OPERAND_TYPE_PATH) {
                 operandValue.value = [];
-                literalAliasedNodeData.value = null;
-                emitUpdatedOperand();
             } else {
                 operandValue.value = null;
-                literalAliasedNodeData.value = null;
-                emitUpdatedOperand();
             }
+            literalAliasedNodeData.value = null;
+            emitUpdatedOperand();
             return;
         }
 
         operandValue.value = updatedOperand.value;
 
-        if (props.operandType === OPERAND_TYPE_LITERAL) {
+        if (operandType === OPERAND_TYPE_LITERAL) {
             literalAliasedNodeData.value = buildAliasedNodeDataFromRawValue(
                 operandValue.value,
-                props.subjectTerminalNode.datatype,
+                subjectTerminalNode.datatype,
             );
         } else {
             literalAliasedNodeData.value = null;
@@ -89,7 +90,7 @@ watch(
 );
 
 watch(
-    () => props.operandType,
+    () => operandType,
     (updatedOperandType, previousOperandType) => {
         if (updatedOperandType === previousOperandType) {
             return;
@@ -97,12 +98,11 @@ watch(
 
         if (updatedOperandType === OPERAND_TYPE_LITERAL) {
             operandValue.value = null;
-            literalAliasedNodeData.value = null;
         } else {
             operandValue.value = [];
-            literalAliasedNodeData.value = null;
         }
 
+        literalAliasedNodeData.value = null;
         emitUpdatedOperand();
     },
 );
@@ -174,7 +174,7 @@ function coerceGenericWidgetValueToOperandValue(
 
 function emitUpdatedOperand(): void {
     emit("update:modelValue", {
-        type: props.operandType,
+        type: operandType,
         value: operandValue.value,
     });
 }
@@ -185,7 +185,7 @@ function handleGenericWidgetUpdate(
     literalAliasedNodeData.value = updatedGenericWidgetValue;
     operandValue.value = coerceGenericWidgetValueToOperandValue(
         updatedGenericWidgetValue,
-        props.subjectTerminalNode.datatype,
+        subjectTerminalNode.datatype,
     );
     emitUpdatedOperand();
 }
@@ -204,7 +204,7 @@ function handlePathSequenceUpdate(
             v-if="isLiteralOperandActive"
             class="clause-operand-editor"
             mode="edit"
-            :graph-slug="subjectTerminalGraph.slug as string"
+            :graph-slug="subjectTerminalGraph.slug"
             :node-alias="subjectTerminalNode.alias"
             :should-show-label="false"
             :aliased-node-data="literalAliasedNodeData || undefined"
@@ -214,8 +214,9 @@ function handlePathSequenceUpdate(
         <PathBuilder
             v-else-if="isPathOperandActive"
             class="clause-operand-editor"
-            :anchor-graph="pathSequenceSeedGraph"
+            :anchor-graph="anchorGraph"
             :path-sequence="coercedPathSequence"
+            :show-anchor-graph-dropdown="true"
             @update:path-sequence="handlePathSequenceUpdate"
         />
     </div>
@@ -226,11 +227,9 @@ function handlePathSequenceUpdate(
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1rem;
 }
 
 .clause-operand-editor {
     flex: 1 1 auto;
-    min-width: 8rem;
 }
 </style>

@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import Button from "primevue/button";
+import { computed } from "vue";
+
 import { useGettext } from "vue3-gettext";
+
+import Button from "primevue/button";
+
 import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 
-const props = defineProps<{
+const { $gettext } = useGettext();
+
+const { show, logic } = defineProps<{
     show: boolean;
     logic: LogicToken;
 }>();
@@ -12,12 +18,16 @@ const emit = defineEmits<{
     (event: "update:logic", value: LogicToken): void;
 }>();
 
-const { $gettext } = useGettext();
+const currentLogicLabel = computed<string>(() => {
+    if (logic === LogicToken.AND) {
+        return $gettext("AND");
+    }
+    return $gettext("OR");
+});
 
 function onToggle(): void {
-    const updatedLogic =
-        props.logic === LogicToken.AND ? LogicToken.OR : LogicToken.AND;
-    emit("update:logic", updatedLogic);
+    const nextLogic = logic === LogicToken.AND ? LogicToken.OR : LogicToken.AND;
+    emit("update:logic", nextLogic);
 }
 </script>
 
@@ -25,18 +35,14 @@ function onToggle(): void {
     <div
         v-if="show"
         class="bracket"
-        :data-logic="props.logic"
+        :data-logic="logic"
     >
         <div class="bracket-arm bracket-arm-top"></div>
         <div class="bracket-spine bracket-spine-top"></div>
 
         <div class="bracket-lane">
             <Button
-                :label="
-                    props.logic === LogicToken.AND
-                        ? $gettext('AND')
-                        : $gettext('OR')
-                "
+                :label="currentLogicLabel"
                 class="bracket-logic"
                 size="small"
                 @click.stop="onToggle"
@@ -88,6 +94,7 @@ function onToggle(): void {
 .bracket-spine-top {
     grid-row: 1;
 }
+
 .bracket-spine-bottom {
     grid-row: 3;
 }
@@ -102,6 +109,7 @@ function onToggle(): void {
     grid-row: 1;
     align-self: start;
 }
+
 .bracket-arm-bottom {
     grid-row: 3;
     align-self: end;

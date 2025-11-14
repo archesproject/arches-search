@@ -1,48 +1,44 @@
 <script setup lang="ts">
-import {
-    defineProps,
-    defineEmits,
-    ref,
-    computed,
-    watchEffect,
-    defineOptions,
-    inject,
-} from "vue";
+import { ref, computed, watchEffect, inject } from "vue";
+
 import Card from "primevue/card";
-
-import {
-    GraphScopeToken,
-    LogicToken,
-    type GroupPayload,
-} from "@/arches_search/AdvancedSearch/types.ts";
-
-import {
-    makeEmptyGroupPayload,
-    setGraphSlug,
-    setScope,
-    toggleLogic,
-    removeChildGroupAtIndex,
-    addEmptyLiteralClauseToGroup,
-    removeClauseAtIndex as removeClauseAtIndexFromPayload,
-    addRelationshipIfMissing,
-    clearRelationshipIfPresent,
-    reconcileStableKeys,
-} from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
 
 import GroupBracket from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupBracket.vue";
 import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader/GroupHeader.vue";
 import ClauseBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/ClauseBuilder/ClauseBuilder.vue";
 
+import {
+    makeEmptyGroupPayload,
+    setScope,
+    toggleLogic,
+    addChildGroupLikeParent,
+    addEmptyLiteralClauseToGroup,
+    removeClauseAtIndex as removeClauseAtIndexFromPayload,
+    addRelationshipIfMissing,
+    setGraphSlugAndResetIfChanged,
+    removeChildGroupAtIndexAndReconcile,
+    setClauseAtIndex,
+    replaceChildGroupAtIndexAndReconcile,
+    setRelationshipAndReconcileClauses,
+} from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
+
+import {
+    GraphScopeToken,
+    LogicToken,
+} from "@/arches_search/AdvancedSearch/types.ts";
+
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
+
 defineOptions({ name: "GroupBuilder" });
 
 type GraphSummary = {
+    graphid: string;
+    name: string;
+    slug: string;
     id?: string;
-    graphid?: string;
-    slug?: string;
+    label?: string;
     [key: string]: unknown;
 };
-
-type ClausePayload = GroupPayload["clauses"][number];
 
 const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
 
@@ -51,28 +47,35 @@ const emit = defineEmits<{
     (event: "remove"): void;
 }>();
 
-const props = defineProps<{
+const { modelValue, isRoot, parentGroupAnchorGraph } = defineProps<{
     modelValue?: GroupPayload;
     isRoot?: boolean;
     parentGroupAnchorGraph?: GraphSummary;
 }>();
 
+const childGroupKeys = ref<string[]>([]);
+const clauseKeys = ref<string[]>([]);
+
 const currentGroup = computed<GroupPayload>(function getCurrentGroup() {
-    return props.modelValue ?? makeEmptyGroupPayload();
+    return modelValue ?? makeEmptyGroupPayload();
 });
 
 const currentGroupAnchorGraph = computed<GraphSummary | null>(
     function getCurrentGroupAnchorGraph() {
         const allGraphs = graphs?.value ?? [];
         const groupSlug = currentGroup.value.graph_slug;
+
         if (!groupSlug) {
             return null;
         }
-        return (
-            allGraphs.find(function findMatchingGraph(candidateGraph) {
+
+        const matchingGraph = allGraphs.find(
+            function findMatchingGraph(candidateGraph) {
                 return candidateGraph.slug === groupSlug;
-            }) ?? null
+            },
         );
+
+        return matchingGraph ?? null;
     },
 );
 
@@ -81,17 +84,22 @@ const effectiveAnchorGraph = computed<GraphSummary>(
         if (currentGroupAnchorGraph.value) {
             return currentGroupAnchorGraph.value;
         }
-        if (props.parentGroupAnchorGraph) {
-            return props.parentGroupAnchorGraph;
+
+        if (parentGroupAnchorGraph) {
+            return parentGroupAnchorGraph;
         }
-        return { slug: currentGroup.value.graph_slug };
+
+        const fallbackSlug = currentGroup.value.graph_slug;
+
+        return {
+            graphid: fallbackSlug,
+            name: fallbackSlug,
+            slug: fallbackSlug,
+        };
     },
 );
 
-const childGroupKeys = ref<string[]>([]);
-const clauseKeys = ref<string[]>([]);
-
-const hasBracket = computed<boolean>(function getHasBracket() {
+const shouldHaveBracket = computed<boolean>(function getShouldHaveBracket() {
     return (
         currentGroup.value.groups.length + currentGroup.value.clauses.length >=
         2
@@ -105,204 +113,130 @@ const hasBodyContent = computed<boolean>(function getHasBodyContent() {
     );
 });
 
-watchEffect(function reconcileKeys() {
-    childGroupKeys.value = reconcileStableKeys(
+watchEffect(function () {
+    childGroupKeys.value = buildStableKeys(
         childGroupKeys.value,
         currentGroup.value.groups.length,
-        createId,
     );
 
-    clauseKeys.value = reconcileStableKeys(
+    clauseKeys.value = buildStableKeys(
         clauseKeys.value,
         currentGroup.value.clauses.length,
-        createId,
     );
 });
 
-function createId(): string {
+function createStableKey(): string {
     return crypto.randomUUID();
 }
 
-function commit(nextGroup: GroupPayload): void {
-    emit("update:modelValue", nextGroup);
+function buildStableKeys(existingKeys: string[], nextCount: number): string[] {
+    const nextKeys = existingKeys.slice(0, nextCount);
+
+    while (nextKeys.length < nextCount) {
+        nextKeys.push(createStableKey());
+    }
+
+    return nextKeys;
+}
+
+function emitUpdatedGroupPayload(nextGroupPayload: GroupPayload): void {
+    emit("update:modelValue", nextGroupPayload);
 }
 
 function onSetGraphSlug(graphSlug: string): void {
-    const currentGraphSlug = currentGroup.value.graph_slug;
-
-    const didGraphChange =
-        Boolean(currentGraphSlug) && currentGraphSlug !== graphSlug;
-
-    const updatedWithSlug = setGraphSlug(currentGroup.value, graphSlug);
-
-    if (didGraphChange) {
-        const clearedGroup: GroupPayload = {
-            ...updatedWithSlug,
-            clauses: [],
-            groups: [],
-            relationship: null,
-        };
-        commit(clearedGroup);
-        return;
-    }
-
-    commit(updatedWithSlug);
+    const updatedGroup = setGraphSlugAndResetIfChanged(
+        currentGroup.value,
+        graphSlug,
+    );
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
 function onSetScope(scopeToken: GraphScopeToken): void {
-    commit(setScope(currentGroup.value, scopeToken));
+    const updatedGroup = setScope(currentGroup.value, scopeToken);
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
-function onSetLogicFromBracket(_: LogicToken): void {
-    commit(toggleLogic(currentGroup.value));
+function onSetLogicFromBracket(_logicToken: LogicToken): void {
+    const updatedGroup = toggleLogic(currentGroup.value);
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
 function onAddGroup(): void {
-    const updatedParent: GroupPayload = {
-        ...currentGroup.value,
-        groups: [...currentGroup.value.groups, makeEmptyGroupPayload()],
-    };
-    commit(updatedParent);
+    const updatedGroup = addChildGroupLikeParent(currentGroup.value);
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
 function onRemoveChildGroup(childIndex: number): void {
-    const groupWithoutChild = removeChildGroupAtIndex(
+    const updatedGroup = removeChildGroupAtIndexAndReconcile(
         currentGroup.value,
         childIndex,
     );
-
-    const hasAnyGroups = groupWithoutChild.groups.length > 0;
-    const hasRelationship = groupWithoutChild.relationship !== null;
-
-    let nextGroup: GroupPayload = groupWithoutChild;
-
-    if (!hasAnyGroups && hasRelationship) {
-        nextGroup = {
-            ...groupWithoutChild,
-            relationship: null,
-            clauses: groupWithoutChild.clauses.filter(
-                function keepLiteralClauses(clause) {
-                    return clause.type === "LITERAL";
-                },
-            ),
-        };
-    }
-
-    commit(nextGroup);
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
 function onAddClause(): void {
-    commit(addEmptyLiteralClauseToGroup(currentGroup.value));
+    const updatedGroup = addEmptyLiteralClauseToGroup(currentGroup.value);
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
 function onUpdateClauseAtIndex(
     updatedClause: unknown,
     clauseIndex: number,
 ): void {
-    const updatedClauses: ClausePayload[] = [...currentGroup.value.clauses];
-    updatedClauses[clauseIndex] = updatedClause as ClausePayload;
-    const updatedGroup: GroupPayload = {
-        ...currentGroup.value,
-        clauses: updatedClauses,
-    };
-    commit(updatedGroup);
+    const safeUpdatedClause = updatedClause as GroupPayload["clauses"][number];
+    const updatedGroup = setClauseAtIndex(
+        currentGroup.value,
+        clauseIndex,
+        safeUpdatedClause,
+    );
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
 function onRemoveClause(clauseIndex: number): void {
-    commit(removeClauseAtIndexFromPayload(currentGroup.value, clauseIndex));
+    const updatedGroup = removeClauseAtIndexFromPayload(
+        currentGroup.value,
+        clauseIndex,
+    );
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
 function onAddRelationship(): void {
-    commit(addRelationshipIfMissing(currentGroup.value));
+    const updatedGroup = addRelationshipIfMissing(currentGroup.value);
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
 function onRemoveRelationship(): void {
-    commit(clearRelationshipIfPresent(currentGroup.value));
+    const updatedGroup = setRelationshipAndReconcileClauses(
+        currentGroup.value,
+        null,
+    );
+    emitUpdatedGroupPayload(updatedGroup);
 }
 
 function onUpdateChildGroupModelValue(
     updatedChildGroupPayload: GroupPayload,
     childIndex: number,
 ): void {
-    const previousChildGroup = currentGroup.value.groups[childIndex];
-
-    const previousChildGraphSlug = previousChildGroup?.graph_slug;
-    const nextChildGraphSlug = updatedChildGroupPayload.graph_slug;
-
-    const didChildGraphChange =
-        Boolean(previousChildGraphSlug) &&
-        Boolean(nextChildGraphSlug) &&
-        previousChildGraphSlug !== nextChildGraphSlug;
-
-    const updatedGroups = [...currentGroup.value.groups];
-    updatedGroups[childIndex] = updatedChildGroupPayload;
-
-    let updatedClauses: ClausePayload[] = [...currentGroup.value.clauses];
-    let updatedRelationship = currentGroup.value.relationship;
-
-    if (didChildGraphChange) {
-        updatedClauses = updatedClauses.filter(
-            function keepLiteralClauses(clause) {
-                return clause.type === "LITERAL";
-            },
-        );
-
-        if (childIndex === 0 && updatedRelationship !== null) {
-            updatedRelationship = null;
-        }
-    }
-
-    const updatedParent: GroupPayload = {
-        ...currentGroup.value,
-        groups: updatedGroups,
-        clauses: updatedClauses,
-        relationship: updatedRelationship,
-    };
-
-    commit(updatedParent);
+    const updatedParentGroup = replaceChildGroupAtIndexAndReconcile(
+        currentGroup.value,
+        childIndex,
+        updatedChildGroupPayload,
+    );
+    emitUpdatedGroupPayload(updatedParentGroup);
 }
 
 function onUpdateRelationship(
     nextRelationship: GroupPayload["relationship"],
 ): void {
-    if (nextRelationship === null) {
-        const clearedRelationshipGroup: GroupPayload = {
-            ...currentGroup.value,
-            relationship: null,
-            clauses: currentGroup.value.clauses.filter(
-                function keepLiteralClauses(clause) {
-                    return clause.type === "LITERAL";
-                },
-            ),
-        };
-        commit(clearedRelationshipGroup);
-        return;
-    }
+    const updatedGroup = setRelationshipAndReconcileClauses(
+        currentGroup.value,
+        nextRelationship,
+    );
+    emitUpdatedGroupPayload(updatedGroup);
+}
 
-    const previousRelationship = currentGroup.value.relationship;
-
-    const didFlipDirection =
-        previousRelationship !== null &&
-        Boolean(previousRelationship.is_inverse) !==
-            Boolean(nextRelationship.is_inverse);
-
-    let updatedGroup: GroupPayload = {
-        ...currentGroup.value,
-        relationship: nextRelationship,
-    };
-
-    if (didFlipDirection) {
-        updatedGroup = {
-            ...updatedGroup,
-            clauses: updatedGroup.clauses.filter(
-                function keepLiteralClauses(clause) {
-                    return clause.type === "LITERAL";
-                },
-            ),
-        };
-    }
-
-    commit(updatedGroup);
+function onRequestRemoveGroup(): void {
+    emit("remove");
 }
 </script>
 
@@ -310,22 +244,18 @@ function onUpdateRelationship(
     <Card class="group-card">
         <template #title>
             <GroupHeader
+                :group-payload="currentGroup"
                 :has-body-content="hasBodyContent"
-                :graph-slug="currentGroup.graph_slug"
-                :scope="currentGroup.scope"
-                :is-root="Boolean(props.isRoot)"
-                :has-relationship="Boolean(currentGroup.relationship !== null)"
-                :relationship="currentGroup.relationship"
-                :inner-graph-slug="currentGroup.groups[0]?.graph_slug"
                 :has-nested-groups="currentGroup.groups.length > 0"
+                :is-root="Boolean(isRoot)"
+                @add-clause="onAddClause"
+                @add-group="onAddGroup"
+                @add-relationship="onAddRelationship"
                 @change-graph="onSetGraphSlug"
                 @change-scope="onSetScope"
-                @add-group="onAddGroup"
-                @add-clause="onAddClause"
-                @add-relationship="onAddRelationship"
+                @remove-group="onRequestRemoveGroup"
                 @remove-relationship="onRemoveRelationship"
                 @update-relationship="onUpdateRelationship"
-                @remove-group="$emit('remove')"
             />
         </template>
 
@@ -334,11 +264,11 @@ function onUpdateRelationship(
                 <div
                     :class="[
                         'group-grid',
-                        hasBracket && 'group-grid-with-bracket',
+                        shouldHaveBracket && 'group-grid-with-bracket',
                     ]"
                 >
                     <GroupBracket
-                        :show="hasBracket"
+                        :show="shouldHaveBracket"
                         :logic="currentGroup.logic"
                         @update:logic="onSetLogicFromBracket"
                     />
@@ -348,7 +278,7 @@ function onUpdateRelationship(
                             v-if="currentGroup.clauses.length > 0"
                             :class="[
                                 'clauses',
-                                !hasBracket && 'clauses-without-bracket',
+                                !shouldHaveBracket && 'clauses-without-bracket',
                             ]"
                         >
                             <Card
@@ -360,10 +290,10 @@ function onUpdateRelationship(
                             >
                                 <template #content>
                                     <ClauseBuilder
-                                        :model-value="clause as never"
+                                        :model-value="clause as any"
                                         :anchor-graph="effectiveAnchorGraph"
                                         :parent-group-anchor-graph="
-                                            props.parentGroupAnchorGraph
+                                            parentGroupAnchorGraph
                                         "
                                         :relationship="
                                             currentGroup.relationship
@@ -389,7 +319,8 @@ function onUpdateRelationship(
                             v-if="currentGroup.groups.length > 0"
                             :class="[
                                 'children',
-                                !hasBracket && 'children-without-bracket',
+                                !shouldHaveBracket &&
+                                    'children-without-bracket',
                             ]"
                         >
                             <GroupBuilder
@@ -407,7 +338,7 @@ function onUpdateRelationship(
                                         childIndex,
                                     )
                                 "
-                                @remove="() => onRemoveChildGroup(childIndex)"
+                                @remove="onRemoveChildGroup(childIndex)"
                             />
                         </div>
                     </div>

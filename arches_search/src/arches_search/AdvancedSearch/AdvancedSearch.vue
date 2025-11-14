@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { defineProps, provide, ref, onMounted } from "vue";
+
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
@@ -7,14 +8,14 @@ import Message from "primevue/message";
 import Skeleton from "primevue/skeleton";
 import Card from "primevue/card";
 
+import GroupBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/GroupBuilder.vue";
+
 import {
     getAdvancedSearchFacets,
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
     getSearchResults as fetchSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
-
-import GroupBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/GroupBuilder.vue";
 
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types";

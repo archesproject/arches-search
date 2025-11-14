@@ -1,17 +1,27 @@
 <script setup lang="ts">
-import { defineProps, defineEmits, computed } from "vue";
+import { computed } from "vue";
+
 import { useGettext } from "vue3-gettext";
+
 import Checkbox from "primevue/checkbox";
+
+import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/RelationshipEditor.vue";
 
 import { GraphScopeToken } from "@/arches_search/AdvancedSearch/types.ts";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
-import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/RelationshipEditor.vue";
 
 const { $gettext } = useGettext();
 
 type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 
-const props = defineProps<{
+const {
+    scope,
+    hasNestedGroups,
+    hasRelationship,
+    relationship,
+    anchorGraphSlug,
+    innerGraphSlug,
+} = defineProps<{
     scope: GraphScopeToken;
     hasNestedGroups: boolean;
     hasRelationship: boolean;
@@ -30,9 +40,31 @@ const emit = defineEmits<{
     ): void;
 }>();
 
-const isTileScoped = computed<boolean>(function computeIsTileScoped() {
-    return props.scope === GraphScopeToken.TILE;
+const isTileScoped = computed<boolean>(function getIsTileScoped() {
+    return scope === GraphScopeToken.TILE;
 });
+
+const isRelationshipCheckboxDisabled = computed<boolean>(
+    function getIsRelationshipCheckboxDisabled() {
+        return !hasNestedGroups;
+    },
+);
+
+const relationshipCheckboxRowClasses = computed<string[]>(
+    function getRelationshipCheckboxRowClasses() {
+        const classes = ["relationship-checkbox-row"];
+        if (isRelationshipCheckboxDisabled.value) {
+            classes.push("relationship-checkbox-row--disabled");
+        }
+        return classes;
+    },
+);
+
+const shouldShowRelationshipEditor = computed<boolean>(
+    function getShouldShowRelationshipEditor() {
+        return hasRelationship && relationship !== null;
+    },
+);
 
 function onSetScopeFromCheckbox(isChecked: boolean | undefined): void {
     const nextScopeToken =
@@ -41,13 +73,16 @@ function onSetScopeFromCheckbox(isChecked: boolean | undefined): void {
 }
 
 function onToggleRelationship(isChecked: boolean | undefined): void {
-    if (!props.hasNestedGroups) {
+    if (!hasNestedGroups) {
         return;
     }
 
-    if (isChecked === true && !props.hasRelationship) {
+    if (isChecked === true && !hasRelationship) {
         emit("add-relationship");
-    } else if (isChecked === false && props.hasRelationship) {
+        return;
+    }
+
+    if (isChecked === false && hasRelationship) {
         emit("remove-relationship");
     }
 }
@@ -60,6 +95,7 @@ function onUpdateRelationship(
         emit("update-relationship", null);
         return;
     }
+
     emit("update-relationship", nextRelationship);
 }
 </script>
@@ -84,17 +120,11 @@ function onUpdateRelationship(
                 </span>
             </label>
 
-            <label
-                :class="[
-                    'relationship-checkbox-row',
-                    !props.hasNestedGroups &&
-                        'relationship-checkbox-row--disabled',
-                ]"
-            >
+            <label :class="relationshipCheckboxRowClasses">
                 <Checkbox
-                    :model-value="props.hasRelationship"
+                    :model-value="hasRelationship"
                     :binary="true"
-                    :disabled="!props.hasNestedGroups"
+                    :disabled="isRelationshipCheckboxDisabled"
                     @update:model-value="onToggleRelationship"
                 />
                 <span class="relationship-checkbox-label">
@@ -103,11 +133,11 @@ function onUpdateRelationship(
             </label>
 
             <RelationshipEditor
-                v-if="props.hasRelationship && props.relationship"
+                v-if="shouldShowRelationshipEditor"
                 class="relationship-editor-inline"
-                :anchor-graph-slug="props.anchorGraphSlug"
-                :inner-graph-slug="props.innerGraphSlug"
-                :relationship="props.relationship as RelationshipState"
+                :anchor-graph-slug="anchorGraphSlug"
+                :inner-graph-slug="innerGraphSlug"
+                :relationship="relationship as RelationshipState"
                 @update:relationship="onUpdateRelationship"
             />
         </div>
@@ -121,9 +151,8 @@ function onUpdateRelationship(
     gap: 0.75rem;
     padding: 1rem;
     border-radius: 0.75rem;
-    border: 0.0625rem solid var(--p-content-border-color);
+    border: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
-    font-size: 1.2rem;
 }
 
 .group-advanced-header {
@@ -131,15 +160,12 @@ function onUpdateRelationship(
     align-items: center;
     padding-bottom: 0.5rem;
     margin-bottom: 0.5rem;
-    border-bottom: 0.0625rem solid var(--p-content-border-color);
+    border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .group-advanced-title {
-    font-size: 1.2rem;
-    font-weight: 600;
     color: var(--p-text-color-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
 }
 
 .group-advanced-body {
@@ -152,7 +178,6 @@ function onUpdateRelationship(
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1.2rem;
     cursor: pointer;
 }
 
@@ -165,12 +190,10 @@ function onUpdateRelationship(
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1.2rem;
     cursor: pointer;
 }
 
 .relationship-checkbox-row--disabled {
-    opacity: 0.6;
     cursor: default;
 }
 

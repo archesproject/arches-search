@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed, defineEmits, defineProps } from "vue";
 import { useGettext } from "vue3-gettext";
 import SelectButton from "primevue/selectbutton";
 
@@ -9,7 +8,14 @@ type OperandPayloadTypeToken = "LITERAL" | "PATH";
 
 const { $gettext } = useGettext();
 
-const props = defineProps<{
+const {
+    clauseType,
+    quantifier,
+    operandType,
+    clauseTypeOptions,
+    clauseQuantifierOptions,
+    operandTypeOptions,
+} = defineProps<{
     clauseType: ClauseTypeToken;
     quantifier: ClauseQuantifierToken;
     operandType: OperandPayloadTypeToken;
@@ -27,41 +33,26 @@ const emit = defineEmits<{
     ): void;
 }>();
 
-const selectedClauseType = computed<ClauseTypeToken>({
-    get(): ClauseTypeToken {
-        return props.clauseType;
-    },
-    set(nextClauseType: ClauseTypeToken): void {
-        if (nextClauseType === props.clauseType) {
-            return;
-        }
-        emit("update:clause-type", nextClauseType);
-    },
-});
+function onChangeClauseType(nextClauseType: ClauseTypeToken): void {
+    if (nextClauseType === clauseType) {
+        return;
+    }
+    emit("update:clause-type", nextClauseType);
+}
 
-const selectedQuantifier = computed<ClauseQuantifierToken>({
-    get(): ClauseQuantifierToken {
-        return props.quantifier;
-    },
-    set(nextQuantifier: ClauseQuantifierToken): void {
-        if (nextQuantifier === props.quantifier) {
-            return;
-        }
-        emit("update:quantifier", nextQuantifier);
-    },
-});
+function onChangeQuantifier(nextQuantifier: ClauseQuantifierToken): void {
+    if (nextQuantifier === quantifier) {
+        return;
+    }
+    emit("update:quantifier", nextQuantifier);
+}
 
-const selectedOperandType = computed<OperandPayloadTypeToken>({
-    get(): OperandPayloadTypeToken {
-        return props.operandType;
-    },
-    set(nextOperandType: OperandPayloadTypeToken): void {
-        if (nextOperandType === props.operandType) {
-            return;
-        }
-        emit("update:operand-type", nextOperandType);
-    },
-});
+function onChangeOperandType(nextOperandType: OperandPayloadTypeToken): void {
+    if (nextOperandType === operandType) {
+        return;
+    }
+    emit("update:operand-type", nextOperandType);
+}
 </script>
 
 <template>
@@ -79,12 +70,13 @@ const selectedOperandType = computed<OperandPayloadTypeToken>({
                 </div>
 
                 <SelectButton
-                    v-model="selectedClauseType"
+                    :model-value="clauseType"
                     :options="clauseTypeOptions"
                     option-label="label"
                     option-value="value"
                     :allow-empty="false"
                     class="clause-advanced-select"
+                    @update:model-value="onChangeClauseType"
                 />
             </div>
 
@@ -94,12 +86,13 @@ const selectedOperandType = computed<OperandPayloadTypeToken>({
                 </div>
 
                 <SelectButton
-                    v-model="selectedQuantifier"
+                    :model-value="quantifier"
                     :options="clauseQuantifierOptions"
                     option-label="label"
                     option-value="value"
                     :allow-empty="false"
                     class="clause-advanced-select"
+                    @update:model-value="onChangeQuantifier"
                 />
             </div>
 
@@ -109,12 +102,13 @@ const selectedOperandType = computed<OperandPayloadTypeToken>({
                 </div>
 
                 <SelectButton
-                    v-model="selectedOperandType"
+                    :model-value="operandType"
                     :options="operandTypeOptions"
                     option-label="label"
                     option-value="value"
                     :allow-empty="false"
                     class="clause-advanced-select"
+                    @update:model-value="onChangeOperandType"
                 />
             </div>
         </div>
@@ -126,11 +120,10 @@ const selectedOperandType = computed<OperandPayloadTypeToken>({
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    padding: 0.85rem 1rem;
+    padding: 1rem;
     border-radius: 0.75rem;
-    border: 0.0625rem solid var(--p-content-border-color);
+    border: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
-    font-size: 1.2rem;
 }
 
 .clause-advanced-header {
@@ -138,15 +131,12 @@ const selectedOperandType = computed<OperandPayloadTypeToken>({
     align-items: center;
     padding-bottom: 0.5rem;
     margin-bottom: 0.5rem;
-    border-bottom: 0.0625rem solid var(--p-content-border-color);
+    border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .clause-advanced-title {
-    font-size: 1.2rem;
-    font-weight: 600;
     color: var(--p-text-color-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
 }
 
 .clause-advanced-body {
@@ -159,15 +149,5 @@ const selectedOperandType = computed<OperandPayloadTypeToken>({
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    min-width: 14rem;
-}
-
-.clause-advanced-label {
-    font-size: 1.1rem;
-    font-weight: 500;
-}
-
-.clause-advanced-select {
-    min-width: 14rem;
 }
 </style>

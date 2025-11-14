@@ -7,7 +7,31 @@ import {
     GraphScopeToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-/* Factory: empty group (now lives here) */
+type ClausePayload = GroupPayload["clauses"][number];
+type RelationshipState = NonNullable<GroupPayload["relationship"]>;
+
+const CLAUSE_TYPE_LITERAL = "LITERAL";
+const QUANTIFIER_ANY = "ANY";
+const OPERATOR_HAS_ANY_VALUE = "HAS_ANY_VALUE";
+const RELATIONSHIP_TRAVERSAL_ANY = "ANY";
+
+function filterLiteralClauses(
+    clauses: ReadonlyArray<ClausePayload>,
+): ClausePayload[] {
+    return clauses.filter(function keepLiteralClauses(clause) {
+        return clause.type === CLAUSE_TYPE_LITERAL;
+    });
+}
+
+function stripRelatedClausesFromGroup(
+    groupPayload: GroupPayload,
+): GroupPayload {
+    return {
+        ...groupPayload,
+        clauses: filterLiteralClauses(groupPayload.clauses),
+    };
+}
+
 export function makeEmptyGroupPayload(): GroupPayload {
     return {
         graph_slug: "",
@@ -20,12 +44,33 @@ export function makeEmptyGroupPayload(): GroupPayload {
     };
 }
 
-/* UI updaters */
 export function setGraphSlug(
     groupPayload: GroupPayload,
     graphSlug: string,
 ): GroupPayload {
     return { ...groupPayload, graph_slug: graphSlug };
+}
+
+export function setGraphSlugAndResetIfChanged(
+    groupPayload: GroupPayload,
+    graphSlug: string,
+): GroupPayload {
+    const currentGraphSlug = groupPayload.graph_slug;
+    const didGraphChange =
+        Boolean(currentGraphSlug) && currentGraphSlug !== graphSlug;
+
+    if (!didGraphChange) {
+        return setGraphSlug(groupPayload, graphSlug);
+    }
+
+    const updatedWithSlug = setGraphSlug(groupPayload, graphSlug);
+
+    return {
+        ...updatedWithSlug,
+        clauses: [],
+        groups: [],
+        relationship: null,
+    };
 }
 
 export function setScope(
@@ -36,8 +81,12 @@ export function setScope(
 }
 
 export function toggleLogic(groupPayload: GroupPayload): GroupPayload {
-    const nextLogic =
-        groupPayload.logic === LogicToken.AND ? LogicToken.OR : LogicToken.AND;
+    let nextLogic = LogicToken.AND;
+    if (groupPayload.logic === LogicToken.AND) {
+        nextLogic = LogicToken.OR;
+    } else {
+        nextLogic = LogicToken.AND;
+    }
     return { ...groupPayload, logic: nextLogic };
 }
 
@@ -66,6 +115,46 @@ export function replaceChildGroupAtIndex(
     return { ...groupPayload, groups: nextGroups };
 }
 
+export function replaceChildGroupAtIndexAndReconcile(
+    groupPayload: GroupPayload,
+    childIndex: number,
+    replacementGroup: GroupPayload,
+): GroupPayload {
+    const previousChildGroup = groupPayload.groups[childIndex];
+    const previousChildGraphSlug = previousChildGroup
+        ? previousChildGroup.graph_slug
+        : "";
+    const nextChildGraphSlug = replacementGroup.graph_slug;
+
+    const didChildGraphChange =
+        Boolean(previousChildGraphSlug) &&
+        Boolean(nextChildGraphSlug) &&
+        previousChildGraphSlug !== nextChildGraphSlug;
+
+    const updatedWithChild = replaceChildGroupAtIndex(
+        groupPayload,
+        childIndex,
+        replacementGroup,
+    );
+
+    if (!didChildGraphChange) {
+        return updatedWithChild;
+    }
+
+    let nextRelationship = updatedWithChild.relationship;
+    if (childIndex === 0 && nextRelationship !== null) {
+        nextRelationship = null;
+    }
+
+    const updatedParent: GroupPayload = {
+        ...updatedWithChild,
+        relationship: nextRelationship,
+        clauses: filterLiteralClauses(updatedWithChild.clauses),
+    };
+
+    return updatedParent;
+}
+
 export function removeChildGroupAtIndex(
     groupPayload: GroupPayload,
     childIndex: number,
@@ -75,15 +164,35 @@ export function removeChildGroupAtIndex(
     return { ...groupPayload, groups: nextGroups };
 }
 
+export function removeChildGroupAtIndexAndReconcile(
+    groupPayload: GroupPayload,
+    childIndex: number,
+): GroupPayload {
+    const groupWithoutChild = removeChildGroupAtIndex(groupPayload, childIndex);
+
+    const hasAnyGroups = groupWithoutChild.groups.length > 0;
+    const hasRelationship = groupWithoutChild.relationship !== null;
+
+    if (!hasAnyGroups && hasRelationship) {
+        const clearedRelationshipGroup: GroupPayload = {
+            ...groupWithoutChild,
+            relationship: null,
+        };
+        return stripRelatedClausesFromGroup(clearedRelationshipGroup);
+    }
+
+    return groupWithoutChild;
+}
+
 export function addEmptyLiteralClauseToGroup(
     groupPayload: GroupPayload,
 ): GroupPayload {
-    const emptyClause = {
-        type: "LITERAL" as const,
-        quantifier: "ANY" as const,
+    const emptyClause: ClausePayload = {
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
         subject: [] as SubjectPath,
-        operator: "HAS_ANY_VALUE",
-        operands: [] as ReadonlyArray<LiteralOperand>,
+        operator: OPERATOR_HAS_ANY_VALUE,
+        operands: [] as LiteralOperand[],
     };
     return { ...groupPayload, clauses: [...groupPayload.clauses, emptyClause] };
 }
@@ -97,50 +206,74 @@ export function removeClauseAtIndex(
     return { ...groupPayload, clauses: nextClauses };
 }
 
+export function setClauseAtIndex(
+    groupPayload: GroupPayload,
+    clauseIndex: number,
+    replacementClause: ClausePayload,
+): GroupPayload {
+    const nextClauses = groupPayload.clauses.slice();
+    nextClauses.splice(clauseIndex, 1, replacementClause);
+    return { ...groupPayload, clauses: nextClauses };
+}
+
 export function addRelationshipIfMissing(
     groupPayload: GroupPayload,
 ): GroupPayload {
-    if (groupPayload.relationship !== null) return groupPayload;
-    const emptyRelationship = {
+    if (groupPayload.relationship !== null) {
+        return groupPayload;
+    }
+
+    const emptyRelationship: RelationshipState = {
         path: [] as RelationshipPath,
         is_inverse: false,
-        traversal_quantifiers: ["ANY"] as const,
+        traversal_quantifiers: [RELATIONSHIP_TRAVERSAL_ANY],
     };
+
     return { ...groupPayload, relationship: emptyRelationship };
 }
 
 export function clearRelationshipIfPresent(
     groupPayload: GroupPayload,
 ): GroupPayload {
-    if (groupPayload.relationship === null) return groupPayload;
+    if (groupPayload.relationship === null) {
+        return groupPayload;
+    }
     return { ...groupPayload, relationship: null };
+}
+
+export function setRelationshipAndReconcileClauses(
+    groupPayload: GroupPayload,
+    nextRelationship: GroupPayload["relationship"],
+): GroupPayload {
+    const previousRelationship = groupPayload.relationship;
+
+    if (nextRelationship === null) {
+        const withoutRelationship: GroupPayload = {
+            ...groupPayload,
+            relationship: null,
+        };
+        return stripRelatedClausesFromGroup(withoutRelationship);
+    }
+
+    let didFlipDirection = false;
+    if (previousRelationship !== null) {
+        const previousIsInverse = Boolean(previousRelationship.is_inverse);
+        const nextIsInverse = Boolean(nextRelationship.is_inverse);
+        didFlipDirection = previousIsInverse !== nextIsInverse;
+    }
+
+    let updatedGroup: GroupPayload = {
+        ...groupPayload,
+        relationship: nextRelationship,
+    };
+
+    if (didFlipDirection) {
+        updatedGroup = stripRelatedClausesFromGroup(updatedGroup);
+    }
+
+    return updatedGroup;
 }
 
 export function computeIsAnd(groupPayload: GroupPayload): boolean {
     return groupPayload.logic === LogicToken.AND;
-}
-
-export function createStableKeys(
-    itemCount: number,
-    createId: () => string,
-): string[] {
-    return Array.from({ length: itemCount }, () => createId());
-}
-
-export function reconcileStableKeys(
-    existingKeys: string[],
-    nextCount: number,
-    createId: () => string,
-): string[] {
-    if (nextCount > existingKeys.length) {
-        const additional = Array.from(
-            { length: nextCount - existingKeys.length },
-            () => createId(),
-        );
-        return [...existingKeys, ...additional];
-    }
-    if (nextCount < existingKeys.length) {
-        return existingKeys.slice(0, nextCount);
-    }
-    return existingKeys;
 }

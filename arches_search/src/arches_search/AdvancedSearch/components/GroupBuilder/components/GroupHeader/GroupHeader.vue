@@ -1,34 +1,30 @@
 <script setup lang="ts">
-import { defineProps, defineEmits, inject, computed, ref } from "vue";
+import { inject, computed, ref } from "vue";
+
 import { useGettext } from "vue3-gettext";
+
 import Select from "primevue/select";
 import Button from "primevue/button";
 import Tag from "primevue/tag";
 
+import GroupAdvancedOptions from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader/components/GroupAdvancedOptions.vue";
+
 import { GraphScopeToken } from "@/arches_search/AdvancedSearch/types.ts";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
-import GroupAdvancedOptions from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader/components/GroupAdvancedOptions.vue";
 
 const { $gettext } = useGettext();
 
-type GraphSummary =
-    | { id?: string; slug: string; name?: string; label?: string }
-    | Record<string, unknown>;
+type GraphSummary = {
+    id?: string;
+    slug?: string;
+    name?: string;
+    label?: string;
+    [key: string]: unknown;
+};
 
 type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 
 const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
-
-const props = defineProps<{
-    hasBodyContent: boolean;
-    graphSlug: string;
-    scope: GraphScopeToken;
-    isRoot?: boolean;
-    hasRelationship: boolean;
-    relationship: RelationshipState | null;
-    innerGraphSlug?: string;
-    hasNestedGroups: boolean;
-}>();
 
 const emit = defineEmits<{
     (event: "change-graph", graphSlug: string): void;
@@ -44,28 +40,67 @@ const emit = defineEmits<{
     (event: "remove-group"): void;
 }>();
 
+const { hasBodyContent, groupPayload, isRoot, hasNestedGroups } = defineProps<{
+    hasBodyContent: boolean;
+    groupPayload: GroupPayload;
+    isRoot?: boolean;
+    hasNestedGroups: boolean;
+}>();
+
 const isOptionsOpen = ref(false);
 
 const graphOptions = computed<{ label: string; value: string }[]>(
     function getGraphOptions() {
         const availableGraphs = graphs?.value ?? [];
-        return availableGraphs
-            .map(function toOption(entry: GraphSummary) {
-                const slug = (entry as { slug?: string }).slug ?? "";
-                const displayName =
-                    (entry as { name?: string }).name ??
-                    (entry as { label?: string }).label ??
-                    slug;
-                return { label: String(displayName), value: String(slug) };
-            })
-            .filter(function nonEmpty(option) {
-                return option.value.length > 0;
+        const options: { label: string; value: string }[] = [];
+
+        for (const graphSummary of availableGraphs) {
+            const graphSlug = graphSummary.slug ?? "";
+
+            if (graphSlug.length === 0) {
+                continue;
+            }
+
+            const displayName =
+                graphSummary.name ?? graphSummary.label ?? graphSlug;
+
+            options.push({
+                label: String(displayName),
+                value: String(graphSlug),
             });
+        }
+
+        return options;
     },
 );
 
-const isTileScoped = computed<boolean>(function computeIsTileScoped() {
-    return props.scope === GraphScopeToken.TILE;
+const currentScope = computed<GraphScopeToken>(function getCurrentScope() {
+    return groupPayload.scope;
+});
+
+const currentGraphSlug = computed<string>(function getCurrentGraphSlug() {
+    return groupPayload.graph_slug;
+});
+
+const currentRelationship = computed<RelationshipState | null>(
+    function getCurrentRelationship() {
+        return groupPayload.relationship as RelationshipState | null;
+    },
+);
+
+const hasRelationship = computed<boolean>(function getHasRelationship() {
+    return currentRelationship.value !== null;
+});
+
+const innerGraphSlug = computed<string | undefined>(
+    function getInnerGraphSlug() {
+        const firstChildGroup = groupPayload.groups[0];
+        return firstChildGroup?.graph_slug;
+    },
+);
+
+const isTileScoped = computed<boolean>(function getIsTileScoped() {
+    return currentScope.value === GraphScopeToken.TILE;
 });
 
 function onSetGraphSlug(graphSlug: string): void {
@@ -112,12 +147,7 @@ function onUpdateRelationship(
 </script>
 
 <template>
-    <div
-        :class="[
-            'group-header',
-            props.hasBodyContent && 'group-header--spaced',
-        ]"
-    >
+    <div :class="['group-header', hasBodyContent && 'group-header--spaced']">
         <div class="group-selectors">
             <Button
                 class="group-gear-toggle"
@@ -130,7 +160,7 @@ function onUpdateRelationship(
                 @click="onToggleOptions"
             />
             <Select
-                :model-value="props.graphSlug"
+                :model-value="currentGraphSlug"
                 :options="graphOptions"
                 option-label="label"
                 option-value="value"
@@ -146,7 +176,7 @@ function onUpdateRelationship(
                     :value="$gettext('Constrained')"
                 />
                 <Tag
-                    v-if="props.hasRelationship"
+                    v-if="hasRelationship"
                     class="group-indicator-pill"
                     icon="pi pi-link"
                     :value="$gettext('Related')"
@@ -168,7 +198,7 @@ function onUpdateRelationship(
                 @click="onAddClauseClick"
             />
             <Button
-                v-if="!props.isRoot"
+                v-if="!isRoot"
                 severity="danger"
                 icon="pi pi-times"
                 :aria-label="$gettext('Remove group')"
@@ -181,16 +211,16 @@ function onUpdateRelationship(
             class="group-advanced-row"
         >
             <GroupAdvancedOptions
-                :scope="props.scope"
-                :has-nested-groups="props.hasNestedGroups"
-                :has-relationship="props.hasRelationship"
-                :relationship="props.relationship"
-                :anchor-graph-slug="props.graphSlug"
-                :inner-graph-slug="props.innerGraphSlug"
-                @change-scope="onChangeScope"
+                :anchor-graph-slug="currentGraphSlug"
+                :has-nested-groups="hasNestedGroups"
+                :has-relationship="hasRelationship"
+                :inner-graph-slug="innerGraphSlug"
+                :relationship="currentRelationship"
+                :scope="currentScope"
                 @add-relationship="onAddRelationship"
-                @remove-relationship="onRemoveRelationship"
+                @change-scope="onChangeScope"
                 @update-relationship="onUpdateRelationship"
+                @remove-relationship="onRemoveRelationship"
             />
         </div>
     </div>
@@ -209,7 +239,6 @@ function onUpdateRelationship(
 .group-header {
     display: grid;
     grid-template-columns: 1fr auto;
-    font-size: 1.2rem;
 }
 
 .group-header--spaced {
@@ -228,10 +257,6 @@ function onUpdateRelationship(
     flex-shrink: 0;
 }
 
-.group-field {
-    min-width: 12rem;
-}
-
 .group-indicators {
     display: flex;
     align-items: center;
@@ -242,7 +267,6 @@ function onUpdateRelationship(
 
 .group-indicator-pill {
     padding: 0.5rem 1rem;
-    font-size: 1.2rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;

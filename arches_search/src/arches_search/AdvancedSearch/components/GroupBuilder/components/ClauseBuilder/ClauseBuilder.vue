@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-    computed,
-    defineEmits,
-    defineProps,
-    inject,
-    ref,
-    watch,
-    useId,
-} from "vue";
+import { computed, inject, ref, watch, useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Select from "primevue/select";
@@ -21,15 +13,14 @@ import ClauseAdvancedOptions from "@/arches_search/AdvancedSearch/components/Gro
 import type { Ref } from "vue";
 import type {
     AdvancedSearchFacet,
-    Node,
     GroupPayload,
+    Node,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
 
 type ClauseTypeToken = "LITERAL" | "RELATED";
 type ClauseQuantifierToken = "ANY" | "ALL" | "NONE";
-
 type OperandPayloadTypeToken = "LITERAL" | "PATH";
 
 type OperandPayload = {
@@ -46,14 +37,81 @@ type ClausePayload = {
 };
 
 type GraphSummary = {
-    slug?: string;
-    graphid?: string;
+    graphid: string;
+    slug: string;
+    name: string;
     [key: string]: unknown;
 };
 
 type RelationshipPayload = GroupPayload["relationship"];
 
-const props = defineProps<{
+const CLAUSE_TYPE_LITERAL: ClauseTypeToken = "LITERAL";
+const CLAUSE_TYPE_RELATED: ClauseTypeToken = "RELATED";
+
+const CLAUSE_QUANTIFIER_ANY: ClauseQuantifierToken = "ANY";
+const CLAUSE_QUANTIFIER_ALL: ClauseQuantifierToken = "ALL";
+const CLAUSE_QUANTIFIER_NONE: ClauseQuantifierToken = "NONE";
+
+const OPERAND_TYPE_LITERAL: OperandPayloadTypeToken = "LITERAL";
+const OPERAND_TYPE_PATH: OperandPayloadTypeToken = "PATH";
+
+const clauseTypeOptions: { label: string; value: ClauseTypeToken }[] = [
+    { label: $gettext("Literal value"), value: CLAUSE_TYPE_LITERAL },
+    { label: $gettext("Related resource"), value: CLAUSE_TYPE_RELATED },
+];
+
+const clauseQuantifierOptions: {
+    label: string;
+    value: ClauseQuantifierToken;
+}[] = [
+    { label: $gettext("Any"), value: CLAUSE_QUANTIFIER_ANY },
+    { label: $gettext("All"), value: CLAUSE_QUANTIFIER_ALL },
+    { label: $gettext("None"), value: CLAUSE_QUANTIFIER_NONE },
+];
+
+const operandTypeOptions: {
+    label: string;
+    value: OperandPayloadTypeToken;
+}[] = [
+    { label: $gettext("Literal"), value: OPERAND_TYPE_LITERAL },
+    { label: $gettext("Path"), value: OPERAND_TYPE_PATH },
+];
+
+const datatypesToAdvancedSearchFacets = inject<
+    Ref<Record<string, AdvancedSearchFacet[]>>
+>("datatypesToAdvancedSearchFacets");
+
+if (!datatypesToAdvancedSearchFacets) {
+    throw new Error(
+        "ClauseBuilder is missing datatypesToAdvancedSearchFacets injection.",
+    );
+}
+
+const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
+
+if (!graphs) {
+    throw new Error("ClauseBuilder is missing graphs injection.");
+}
+
+const getNodesForGraphId =
+    inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId");
+
+if (!getNodesForGraphId) {
+    throw new Error("ClauseBuilder is missing getNodesForGraphId injection.");
+}
+
+const emit = defineEmits<{
+    (event: "update:modelValue", updatedClause: ClausePayload): void;
+    (event: "request:remove"): void;
+}>();
+
+const {
+    modelValue,
+    anchorGraph,
+    parentGroupAnchorGraph,
+    relationship,
+    innerGroupGraphSlug,
+} = defineProps<{
     modelValue: ClausePayload;
     anchorGraph: GraphSummary;
     parentGroupAnchorGraph?: GraphSummary;
@@ -61,61 +119,18 @@ const props = defineProps<{
     innerGroupGraphSlug?: string;
 }>();
 
-const emit = defineEmits<{
-    (event: "update:modelValue", updatedClause: ClausePayload): void;
-    (event: "request:remove"): void;
-}>();
-
-const datatypesToAdvancedSearchFacets = inject<
-    Ref<Record<string, AdvancedSearchFacet[]>>
->("datatypesToAdvancedSearchFacets")!;
-const graphs = inject<Ref<GraphSummary[]>>("graphs")!;
-const getNodesForGraphId =
-    inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId")!;
-
-const clauseTypeOptions: { label: string; value: ClauseTypeToken }[] = [
-    { label: $gettext("Literal value"), value: "LITERAL" },
-    { label: $gettext("Related resource"), value: "RELATED" },
-];
-
-const clauseQuantifierOptions: {
-    label: string;
-    value: ClauseQuantifierToken;
-}[] = [
-    { label: $gettext("Any"), value: "ANY" },
-    { label: $gettext("All"), value: "ALL" },
-    { label: $gettext("None"), value: "NONE" },
-];
-
-const operandTypeOptions: {
-    label: string;
-    value: OperandPayloadTypeToken;
-}[] = [
-    { label: $gettext("Literal"), value: "LITERAL" },
-    { label: $gettext("Path"), value: "PATH" },
-];
-
 const isAdvancedOptionsOpen = ref(false);
-
-const localClauseType = ref<ClauseTypeToken>(props.modelValue.type);
-const localQuantifier = ref<ClauseQuantifierToken>(props.modelValue.quantifier);
-const localOperator = ref<string | null>(props.modelValue.operator);
-
-const initialOperandType: OperandPayloadTypeToken =
-    props.modelValue.operands &&
-    props.modelValue.operands.length > 0 &&
-    props.modelValue.operands[0]?.type === "PATH"
-        ? "PATH"
-        : "LITERAL";
-
-const localOperandType = ref<OperandPayloadTypeToken>(initialOperandType);
-
 const subjectTerminalNode = ref<Node | null>(null);
 const subjectTerminalGraph = ref<GraphSummary | null>(null);
 const operandKeysByIndex = ref<string[]>([]);
+const localOperandType = ref<OperandPayloadTypeToken>(OPERAND_TYPE_LITERAL);
+
+if (modelValue.operands[0]?.type === OPERAND_TYPE_PATH) {
+    localOperandType.value = OPERAND_TYPE_PATH;
+}
 
 const subjectPathSequence = computed<[string, string][]>(() => {
-    return props.modelValue.subject ?? [];
+    return modelValue.subject;
 });
 
 const subjectPathSequenceKey = computed<string>(() => {
@@ -130,115 +145,109 @@ const subjectPathTerminalGraphSlugAndNodeAlias = computed<
     if (subjectPathSequence.value.length === 0) {
         return null;
     }
-    return subjectPathSequence.value[subjectPathSequence.value.length - 1];
+    const lastIndex = subjectPathSequence.value.length - 1;
+    return subjectPathSequence.value[lastIndex];
 });
 
 const baseSubjectAnchorGraph = computed<GraphSummary>(() => {
-    if (subjectPathSequence.value.length > 0) {
-        const [firstGraphSlug] = subjectPathSequence.value[0];
-        if (firstGraphSlug) {
-            const matchingGraph = graphs.value.find((graphCandidate) => {
-                return graphCandidate.slug === firstGraphSlug;
-            });
-            if (matchingGraph) {
-                return matchingGraph;
-            }
-            return { slug: firstGraphSlug };
-        }
+    if (subjectPathSequence.value.length === 0) {
+        return anchorGraph;
     }
-    return props.anchorGraph;
+
+    const [firstGraphSlug] = subjectPathSequence.value[0];
+
+    const matchingGraph = graphs.value.find((graphCandidate) => {
+        return graphCandidate.slug === firstGraphSlug;
+    });
+
+    if (matchingGraph) {
+        return matchingGraph;
+    }
+
+    return anchorGraph;
 });
 
 const subjectAnchorGraph = computed<GraphSummary>(() => {
+    const isRelatedClause = modelValue.type === CLAUSE_TYPE_RELATED;
+
     if (
         subjectPathSequence.value.length === 0 &&
-        props.modelValue.type === "RELATED" &&
-        props.relationship &&
-        props.innerGroupGraphSlug
+        isRelatedClause &&
+        relationship &&
+        innerGroupGraphSlug
     ) {
-        const isInverse = Boolean(props.relationship.is_inverse);
-        const startingSlug = isInverse
-            ? props.innerGroupGraphSlug
-            : props.anchorGraph.slug;
+        const isInverse = Boolean(relationship.is_inverse);
+        const startingSlug = isInverse ? innerGroupGraphSlug : anchorGraph.slug;
 
         const matchingGraph = graphs.value.find((graphCandidate) => {
             return graphCandidate.slug === startingSlug;
         });
 
-        return matchingGraph ?? { slug: startingSlug };
+        if (matchingGraph) {
+            return matchingGraph;
+        }
+
+        return anchorGraph;
     }
 
     return baseSubjectAnchorGraph.value;
 });
 
 const operandAnchorGraph = computed<GraphSummary>(() => {
-    if (
-        props.modelValue.type === "RELATED" &&
-        props.relationship &&
-        props.innerGroupGraphSlug
-    ) {
-        const isInverse = Boolean(props.relationship.is_inverse);
-        const oppositeSlug = isInverse
-            ? props.anchorGraph.slug
-            : props.innerGroupGraphSlug;
+    const isRelatedClause = modelValue.type === CLAUSE_TYPE_RELATED;
+
+    if (isRelatedClause && relationship && innerGroupGraphSlug) {
+        const isInverse = Boolean(relationship.is_inverse);
+        const oppositeSlug = isInverse ? anchorGraph.slug : innerGroupGraphSlug;
 
         const matchingGraph = graphs.value.find((graphCandidate) => {
             return graphCandidate.slug === oppositeSlug;
         });
 
-        return matchingGraph ?? { slug: oppositeSlug };
+        if (matchingGraph) {
+            return matchingGraph;
+        }
+
+        return anchorGraph;
     }
 
-    return props.anchorGraph;
+    return anchorGraph;
 });
 
 const availableOperatorOptions = computed<AdvancedSearchFacet[]>(() => {
     if (!subjectTerminalNode.value?.datatype) {
         return [];
     }
+
     const facetsForDatatype =
         datatypesToAdvancedSearchFacets.value[
             subjectTerminalNode.value.datatype
-        ] ?? [];
+        ];
+
+    if (!facetsForDatatype) {
+        return [];
+    }
+
     return facetsForDatatype;
 });
 
 const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(() => {
-    if (!localOperator.value) {
+    if (!modelValue.operator) {
         return null;
     }
+
     const matchingFacet = availableOperatorOptions.value.find(
         (advancedSearchFacet) => {
-            return advancedSearchFacet.operator === localOperator.value;
+            return advancedSearchFacet.operator === modelValue.operator;
         },
     );
-    return matchingFacet ?? null;
-});
 
-watch(
-    () => props.modelValue,
-    (updatedClause) => {
-        if (localClauseType.value !== updatedClause.type) {
-            localClauseType.value = updatedClause.type;
-        }
-        if (localQuantifier.value !== updatedClause.quantifier) {
-            localQuantifier.value = updatedClause.quantifier;
-        }
-        if (localOperator.value !== updatedClause.operator) {
-            localOperator.value = updatedClause.operator;
-        }
-        if (
-            updatedClause.operands &&
-            updatedClause.operands.length > 0 &&
-            updatedClause.operands[0]?.type &&
-            updatedClause.operands[0].type !== localOperandType.value
-        ) {
-            localOperandType.value = updatedClause.operands[0]
-                .type as OperandPayloadTypeToken;
-        }
-    },
-    { deep: true },
-);
+    if (!matchingFacet) {
+        return null;
+    }
+
+    return matchingFacet;
+});
 
 watch(
     subjectPathTerminalGraphSlugAndNodeAlias,
@@ -251,20 +260,17 @@ watch(
         }
 
         const [terminalGraphSlug, terminalNodeAlias] = updatedTerminal;
-        if (!terminalGraphSlug || !terminalNodeAlias) {
-            return;
-        }
 
         const matchingGraph = graphs.value.find((graphCandidate) => {
             return graphCandidate.slug === terminalGraphSlug;
         });
 
-        if (!matchingGraph || !matchingGraph.graphid) {
+        if (!matchingGraph) {
             return;
         }
 
         const allNodesForGraph = await getNodesForGraphId(
-            matchingGraph.graphid as string,
+            matchingGraph.graphid,
         );
 
         subjectTerminalGraph.value = matchingGraph;
@@ -276,42 +282,9 @@ watch(
     { immediate: true },
 );
 
-watch(localOperator, (updatedOperator, previousOperator) => {
-    if (updatedOperator === previousOperator) {
-        return;
-    }
-    patchClause({ operator: updatedOperator, operands: [] });
-});
-
-watch(localClauseType, (updatedType, previousType) => {
-    if (updatedType === previousType) {
-        return;
-    }
-
-    const resetClause: ClausePayload = {
-        ...props.modelValue,
-        type: updatedType,
-        quantifier: "ANY",
-        subject: [],
-        operator: null,
-        operands: [],
-    };
-
-    emit("update:modelValue", resetClause);
-    localQuantifier.value = resetClause.quantifier;
-    localOperator.value = resetClause.operator;
-});
-
-watch(localQuantifier, (updatedQuantifier, previousQuantifier) => {
-    if (updatedQuantifier === previousQuantifier) {
-        return;
-    }
-    patchClause({ quantifier: updatedQuantifier });
-});
-
 function patchClause(partialClause: Partial<ClausePayload>): void {
     const updatedClause: ClausePayload = {
-        ...props.modelValue,
+        ...modelValue,
         ...partialClause,
     };
     emit("update:modelValue", updatedClause);
@@ -327,27 +300,20 @@ function ensureOperandKey(parameterIndex: number): string {
 function handleSubjectUpdate(
     updatedSubjectPathSequence: [string, string][],
 ): void {
-    if (
-        updatedSubjectPathSequence === props.modelValue.subject ||
-        JSON.stringify(updatedSubjectPathSequence) ===
-            JSON.stringify(props.modelValue.subject)
-    ) {
-        return;
-    }
     patchClause({
         subject: updatedSubjectPathSequence,
         operator: null,
         operands: [],
     });
-    localOperator.value = null;
 }
 
 function handleOperandUpdate(
     parameterIndex: number,
     updatedOperand: OperandPayload | null,
 ): void {
-    const currentOperands = props.modelValue.operands ?? [];
+    const currentOperands = modelValue.operands ?? [];
     const updatedOperands = [...currentOperands];
+
     if (updatedOperand === null) {
         updatedOperands[parameterIndex] = {
             type: localOperandType.value,
@@ -356,7 +322,15 @@ function handleOperandUpdate(
     } else {
         updatedOperands[parameterIndex] = updatedOperand;
     }
+
     patchClause({ operands: updatedOperands });
+}
+
+function handleOperatorChange(nextOperator: string | null): void {
+    if (nextOperator === modelValue.operator) {
+        return;
+    }
+    patchClause({ operator: nextOperator, operands: [] });
 }
 
 function handleRemoveSelf(): void {
@@ -368,20 +342,25 @@ function handleToggleAdvancedOptions(event: MouseEvent): void {
     isAdvancedOptionsOpen.value = !isAdvancedOptionsOpen.value;
 }
 
-function handleRelationshipTypeClick(
-    nextRelationshipType: ClauseTypeToken,
-): void {
-    if (localClauseType.value === nextRelationshipType) {
+function handleClauseTypeClick(nextClauseType: ClauseTypeToken): void {
+    if (modelValue.type === nextClauseType) {
         return;
     }
-    localClauseType.value = nextRelationshipType;
+
+    patchClause({
+        type: nextClauseType,
+        quantifier: CLAUSE_QUANTIFIER_ANY,
+        subject: [],
+        operator: null,
+        operands: [],
+    });
 }
 
 function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
-    if (localQuantifier.value === nextQuantifier) {
+    if (modelValue.quantifier === nextQuantifier) {
         return;
     }
-    localQuantifier.value = nextQuantifier;
+    patchClause({ quantifier: nextQuantifier });
 }
 
 function handleOperandTypeClick(
@@ -416,19 +395,20 @@ function handleOperandTypeClick(
                     :path-sequence="subjectPathSequence"
                     :anchor-graph="subjectAnchorGraph"
                     :show-anchor-graph-dropdown="
-                        props.modelValue.type === 'RELATED'
+                        modelValue.type === CLAUSE_TYPE_RELATED
                     "
                     @update:path-sequence="handleSubjectUpdate"
                 />
 
                 <Select
-                    v-model="localOperator"
+                    :model-value="modelValue.operator"
                     class="clause-operator-select"
                     :options="availableOperatorOptions"
                     option-label="label"
                     option-value="operator"
                     :disabled="availableOperatorOptions.length === 0"
                     :placeholder="$gettext('Select an operator...')"
+                    @update:model-value="handleOperatorChange"
                 />
 
                 <div
@@ -444,7 +424,7 @@ function handleOperandTypeClick(
                         v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
                         :key="ensureOperandKey(parameterIndex - 1)"
                         :model-value="
-                            modelValue.operands?.[parameterIndex - 1] ?? null
+                            modelValue.operands[parameterIndex - 1] ?? null
                         "
                         :anchor-graph="operandAnchorGraph"
                         :parent-group-anchor-graph="parentGroupAnchorGraph"
@@ -458,7 +438,7 @@ function handleOperandTypeClick(
                 </div>
 
                 <Tag
-                    v-if="localClauseType === 'RELATED'"
+                    v-if="modelValue.type === CLAUSE_TYPE_RELATED"
                     class="clause-indicator-pill"
                     icon="pi pi-link"
                     :value="$gettext('Related')"
@@ -479,13 +459,13 @@ function handleOperandTypeClick(
             class="clause-advanced-row"
         >
             <ClauseAdvancedOptions
-                :clause-type="localClauseType"
-                :quantifier="localQuantifier"
+                :clause-type="modelValue.type"
+                :quantifier="modelValue.quantifier"
                 :operand-type="localOperandType"
                 :clause-type-options="clauseTypeOptions"
                 :clause-quantifier-options="clauseQuantifierOptions"
                 :operand-type-options="operandTypeOptions"
-                @update:clause-type="handleRelationshipTypeClick"
+                @update:clause-type="handleClauseTypeClick"
                 @update:quantifier="handleQuantifierClick"
                 @update:operand-type="handleOperandTypeClick"
             />
@@ -515,44 +495,28 @@ function handleOperandTypeClick(
 }
 
 .clause-gear-toggle {
-    flex-shrink: 0;
     margin-top: 0.15rem;
 }
 
 .clause-core-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
-}
-
-.clause-subject-path {
-}
-
-.clause-operator-select {
-    flex: 0 0 14rem;
-    min-width: 10rem;
 }
 
 .clause-operands-row {
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    flex: 1 1 auto;
     flex-wrap: wrap;
 }
 
 .clause-indicator-pill {
     padding: 0.5rem 1rem;
-    font-size: 1.2rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
-}
-
-.clause-remove-button {
-    flex-shrink: 0;
 }
 
 .clause-advanced-row {

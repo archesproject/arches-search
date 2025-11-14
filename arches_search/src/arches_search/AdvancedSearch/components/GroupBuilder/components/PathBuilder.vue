@@ -1,38 +1,29 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch } from "vue";
+
 import { useGettext } from "vue3-gettext";
 
 import Message from "primevue/message";
 import Select from "primevue/select";
 
+const { $gettext } = useGettext();
+
 type GraphSummary = {
-    id?: string;
-    graphid?: string;
-    slug?: string;
-    name?: string;
+    graphid: string;
+    slug: string;
+    name: string;
     label?: string;
     [key: string]: unknown;
 };
 
 type NodeSummary = {
-    alias?: string;
-    name?: string;
+    alias: string;
+    name: string;
     label?: string;
     [key: string]: unknown;
 };
 
-const props = defineProps<{
-    anchorGraph: GraphSummary;
-    pathSequence?: readonly (readonly [string, string])[];
-    maxPathSegments?: number;
-    showAnchorGraphDropdown?: boolean;
-}>();
-
-const emit = defineEmits<{
-    (event: "update:pathSequence", value: [string, string][]): void;
-}>();
-
-const { $gettext } = useGettext();
+type PathSequence = readonly (readonly [string, string])[];
 
 const getNodesForGraphId =
     inject<(graphId: string) => Promise<NodeSummary[]>>("getNodesForGraphId");
@@ -41,108 +32,75 @@ if (!getNodesForGraphId) {
     throw new Error("PathBuilder is missing getNodesForGraphId injection.");
 }
 
+const emit = defineEmits<{
+    (event: "update:pathSequence", value: [string, string][]): void;
+}>();
+
+const { anchorGraph, pathSequence, showAnchorGraphDropdown } = defineProps<{
+    anchorGraph: GraphSummary;
+    pathSequence?: PathSequence;
+    showAnchorGraphDropdown?: boolean;
+}>();
+
 const isLoading = ref(false);
 const configurationError = ref<Error | null>(null);
 const nodesForAnchorGraph = ref<NodeSummary[]>([]);
+const selectedNodeAlias = ref<string>("");
 
-const anchorGraphSlug = computed<string>(function getAnchorGraphSlug() {
-    return String(props.anchorGraph.slug ?? "");
+const anchorGraphDisplayOption = computed<GraphSummary>(() => {
+    return {
+        ...anchorGraph,
+        label: anchorGraph.name,
+    };
 });
 
-const anchorGraphIdentifier = computed<string | null>(
-    function getAnchorGraphIdentifier() {
-        const rawIdentifier = props.anchorGraph.graphid ?? props.anchorGraph.id;
-        const identifierString =
-            rawIdentifier !== undefined && rawIdentifier !== null
-                ? String(rawIdentifier)
-                : "";
-
-        return identifierString || null;
-    },
-);
-
-const anchorGraphOptionForDisplay = computed<GraphSummary>(
-    function getAnchorGraphOptionForDisplay() {
-        const fallbackLabel =
-            props.anchorGraph.label ??
-            props.anchorGraph.name ??
-            props.anchorGraph.slug ??
-            "";
-
-        return {
-            ...props.anchorGraph,
-            label: String(fallbackLabel),
-        };
-    },
-);
-
-const shouldShowAnchorGraphDropdown = computed<boolean>(
-    function getShouldShowAnchorGraphDropdown() {
-        return Boolean(props.showAnchorGraphDropdown);
-    },
-);
-
-const selectedNodeAlias = computed<string>({
-    get(): string {
-        const pathSequenceRaw = props.pathSequence;
-
-        if (!Array.isArray(pathSequenceRaw) || pathSequenceRaw.length === 0) {
-            return "";
-        }
-
-        const firstSegment = pathSequenceRaw[0];
-
-        if (!Array.isArray(firstSegment) || firstSegment.length < 2) {
-            return "";
-        }
-
-        const segmentGraphSlug = String(firstSegment[0] ?? "");
-        const segmentNodeAlias = String(firstSegment[1] ?? "");
-
-        if (segmentGraphSlug !== anchorGraphSlug.value) {
-            return "";
-        }
-
-        return segmentNodeAlias;
-    },
-    set(nextAliasRaw: string): void {
-        const normalizedAlias =
-            typeof nextAliasRaw === "string" ? nextAliasRaw : "";
-
-        const graphSlug = anchorGraphSlug.value;
-
-        const nextPath: [string, string][] = graphSlug
-            ? [[graphSlug, normalizedAlias]]
-            : [];
-
-        emit("update:pathSequence", nextPath);
-    },
+const shouldShowAnchorGraphDropdown = computed<boolean>(() => {
+    return Boolean(showAnchorGraphDropdown);
 });
 
 watch(
-    anchorGraphIdentifier,
-    async function loadNodesForAnchorGraph(nextGraphIdentifier) {
-        if (!nextGraphIdentifier) {
-            nodesForAnchorGraph.value = [];
-            return;
-        }
-
+    () => anchorGraph.graphid,
+    async (nextGraphId) => {
         try {
             isLoading.value = true;
             configurationError.value = null;
 
-            const fetchedNodes = await getNodesForGraphId(nextGraphIdentifier);
-            nodesForAnchorGraph.value = Array.isArray(fetchedNodes)
-                ? fetchedNodes
-                : [];
+            const fetchedNodes = await getNodesForGraphId(nextGraphId);
+            nodesForAnchorGraph.value = fetchedNodes;
         } catch (error) {
             configurationError.value = error as Error;
+            nodesForAnchorGraph.value = [];
         } finally {
             isLoading.value = false;
         }
     },
     { immediate: true },
 );
+
+watch(
+    [() => pathSequence, () => anchorGraph.slug],
+    () => {
+        if (!pathSequence || pathSequence.length === 0) {
+            selectedNodeAlias.value = "";
+            return;
+        }
+
+        const [segmentGraphSlug, segmentNodeAlias] = pathSequence[0];
+
+        if (segmentGraphSlug !== anchorGraph.slug) {
+            selectedNodeAlias.value = "";
+            return;
+        }
+
+        selectedNodeAlias.value = segmentNodeAlias;
+    },
+    { immediate: true },
+);
+
+watch(selectedNodeAlias, (nextAlias) => {
+    const nextPath: [string, string][] = [[anchorGraph.slug, nextAlias]];
+    emit("update:pathSequence", nextPath);
+});
 </script>
 
 <template>
@@ -159,8 +117,8 @@ watch(
     >
         <Select
             v-if="shouldShowAnchorGraphDropdown"
-            :model-value="anchorGraphOptionForDisplay"
-            :options="[anchorGraphOptionForDisplay]"
+            :model-value="anchorGraphDisplayOption"
+            :options="[anchorGraphDisplayOption]"
             option-label="label"
             disabled
         />
