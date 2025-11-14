@@ -34,6 +34,7 @@ class RelatedClauseEvaluator:
                 raise ValueError("traversal_context is required for mode='child'")
             return self._build_child_presence_exists(clause_payload, traversal_context)
         raise ValueError(f"Unsupported evaluation mode: {mode}")
+        raise ValueError(_("Unsupported evaluation mode: {mode}").format(mode=mode))
 
     def _build_anchor_presence_exists(
         self,
