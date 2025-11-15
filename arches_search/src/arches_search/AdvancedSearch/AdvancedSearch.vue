@@ -118,74 +118,33 @@ watchEffect(() => {
         logic: "AND",
         clauses: [
             {
-                node_alias: "",
+                node_alias: "string",
                 search_table: "term",
                 datatype: "string",
                 operator: "EQUALS",
-                params: ["Active"],
+                params: ["STRING"],
             },
         ],
         groups: [],
         aggregations: [
             {
-                name: "funding_by_project_type",
-                // "where": { "numeric_funding_awarded__value__lt": 100000 },
-                group_by: [
-                    {
-                        alias: "Projects_by_Type",
-                        search_table: "term",
-                        field: "term_project_type__value",
-                        node_alias: "project_type",
-                    },
-                ],
+                name: "count_by_graph_slug",
+                where: { name__isnull: false },
+                group_by: ["graph__slug"],
                 metrics: [
                     {
-                        alias: "Total_Funding",
-                        fn: "Sum",
-                        search_table: "numeric",
-                        field: "numeric_funding_awarded__value",
-                        node_alias: "funding_awarded",
-                    },
-                ],
-                // order_by: ["-numeric_funding_awarded__value", "term_project_type__value"],
-                //limit: 3,
-            },
-            {
-                name: "count_by_project_type",
-                where: { term_project_type__value: "Consortia" },
-                group_by: [
-                    {
-                        alias: "Projects_by_Type",
-                        search_table: "term",
-                        field: "term_project_type__value",
-                        node_alias: "project_type",
-                    },
-                ],
-                metrics: [
-                    {
-                        alias: "Project_Count",
+                        alias: "row_count",
                         fn: "Count",
-                        search_table: "term",
-                        field: "term_project_type__value",
-                        node_alias: "project_type",
+                        field: "resourceinstanceid",
+                        distinct: true,
                     },
                 ],
+                order_by: ["-row_count", "graph__slug"],
+                limit: 6,
             },
-            // {
-            //     "name": "average_funding_per_project",
-            //     // "where": { "numeric_funding_awarded__value__lt": 100000 },
-            //     "group_by": [],
-            //     "metrics": [ {
-            //         "alias": "Average_Funding",
-            //         "fn": "Avg",
-            //         "search_table": "numeric",
-            //         "field": "numeric_funding_awarded__value",
-            //         "node_alias": "funding_awarded"
-            //     }]
-            // },
             {
-                name: "project_totals",
-                where: {},
+                name: "totals_with_graph_names",
+                where: { name__isnull: false },
                 aggregate: [
                     {
                         alias: "total_rows",
@@ -195,25 +154,11 @@ watchEffect(() => {
                     },
                 ],
             },
-            {
-                name: "total_funding_awarded",
-                where: {},
-                aggregate: [
-                    {
-                        alias: "total_funding_awarded",
-                        fn: "Sum",
-                        search_table: "numeric",
-                        field: "numeric_funding_awarded__value",
-                        node_alias: "funding_awarded",
-                        distinct: true,
-                    },
-                ],
-            },
         ],
     };
 
     getSearchResults({
-        graph_slug: "casf-project",
+        graph_slug: "new_resource_model",
         query: query,
     });
 });
