@@ -26,7 +26,9 @@ class NodeAliasDatatypeRegistry:
         )
         if not datatype_name:
             raise ValueError(
-                _("Datatype for node alias '{alias}' in graph '{graph}' not found.").format(alias=alias, graph=graph)                
+                _(
+                    "Datatype for node alias '{alias}' in graph '{graph}' not found."
+                ).format(alias=alias, graph=graph)
             )
 
         cache_for_graph[node_alias] = datatype_name
