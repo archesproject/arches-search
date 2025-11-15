@@ -22,3 +22,54 @@ export async function getSearchResults(searchQuery: {
 
     return parsed;
 }
+
+export async function getNodesForGraphId(graphId: string) {
+    const response = await fetch(
+        generateArchesURL("arches:graph_nodes", { graphid: graphId }),
+        {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
+export async function getAdvancedSearchFacets() {
+    const response = await fetch(
+        generateArchesURL("arches_search:all_datatype_facets"),
+        {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
+export async function getGraphs() {
+    const response = await fetch(
+        generateArchesURL("arches:get_graph_models_api"),
+        {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}

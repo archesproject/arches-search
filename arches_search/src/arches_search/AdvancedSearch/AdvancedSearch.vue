@@ -1,172 +1,166 @@
 <script setup lang="ts">
-import { ref, watchEffect } from "vue";
+import { defineProps, provide, ref, watchEffect } from "vue";
+import { useGettext } from "vue3-gettext";
 
-import GraphSelection from "@/arches_search/AdvancedSearch/components/GraphSelection/GraphSelection.vue";
+import Button from "primevue/button";
+import Message from "primevue/message";
+import Skeleton from "primevue/skeleton";
 
-import { getSearchResults } from "@/arches_search/AdvancedSearch/api.ts";
+import QueryGroup from "@/arches_search/AdvancedSearch/components/QueryGroup.vue";
 
-const selectedGraph = ref<string | null>(null);
-console.log(selectedGraph);
+import {
+    getAdvancedSearchFacets,
+    getGraphs,
+    getNodesForGraphId as fetchNodesForGraphId,
+    getSearchResults,
+} from "@/arches_search/AdvancedSearch/api.ts";
 
-watchEffect(() => {
-    // const query = {
-    //         logic: "AND",
-    //         clauses: [
-    //             {
-    //                 node_alias: "number",
-    //                 search_table: "numeric",
-    //                 datatype: "number",
-    //                 operator: "LESS_THAN",
-    //                 params: [5],
-    //             },
-    //         ],
-    //         groups: [],
-    // };
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/utils/query-tree";
+import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types";
 
-    // const query = {
-    //         logic: "AND",
-    //         clauses: [
-    //             {
-    //                 node_alias: "string",
-    //                 search_table: "term",
-    //                 datatype: "string",
-    //                 operator: "EQUALS",
-    //                 params: ["STRING"],
-    //             },
-    //         ],
-    //         groups: [],
-    // };
+const { $gettext } = useGettext();
 
-    // const query = {
-    //     logic: "AND",
-    //     clauses: [
-    //         {
-    //             node_alias: "number",
-    //             search_table: "numeric",
-    //             datatype: "number",
-    //             operator: "LESS_THAN",
-    //             params: [5],
-    //         },
-    //         {
-    //             node_alias: "string",
-    //             search_table: "term",
-    //             datatype: "string",
-    //             operator: "EQUALS",
-    //             params: ["STRING"],
-    //         },
-    //     ],
-    //     groups: [],
-    // };
+const { query } = defineProps<{ query?: GroupPayload }>();
 
-    // const query = {
-    //     logic: "OR",
-    //     clauses: [
-    //         {
-    //             node_alias: "number",
-    //             search_table: "numeric",
-    //             datatype: "number",
-    //             operator: "LESS_THAN",
-    //             params: [5],
-    //         },
-    //         {
-    //             node_alias: "string",
-    //             search_table: "term",
-    //             datatype: "string",
-    //             operator: "EQUALS",
-    //             params: ["STRING"],
-    //         },
-    //     ],
-    //     groups: [],
-    // }
+const isLoading = ref(true);
+const fetchError = ref<Error | null>(null);
 
-    // const query =  {
-    //     logic: "OR",
-    //     clauses: [
-    //         {
-    //             node_alias: "string_2",
-    //             search_table: "term",
-    //             datatype: "string",
-    //             operator: "EQUALS",
-    //             params: ["STRING TWO"],
-    //         }
-    //     ],
-    //     groups: [
-    //         {
-    //             logic: "AND",
-    //             clauses: [
-    //                 {
-    //                     node_alias: "number",
-    //                     search_table: "numeric",
-    //                     datatype: "number",
-    //                     operator: "LESS_THAN",
-    //                     params: [5],
-    //                 },
-    //                 {
-    //                     node_alias: "string",
-    //                     search_table: "term",
-    //                     datatype: "string",
-    //                     operator: "EQUALS",
-    //                     params: ["STRING"],
-    //                 },
-    //             ],
-    //             groups: [],
-    //         }
-    //     ],
-    // }
+const rootGroupPayload = ref<GroupPayload>();
 
-    const query = {
-        logic: "AND",
-        clauses: [
-            {
-                node_alias: "string",
-                search_table: "term",
-                datatype: "string",
-                operator: "EQUALS",
-                params: ["STRING"],
-            },
-        ],
-        groups: [],
-        aggregations: [
-            {
-                name: "count_by_graph_slug",
-                where: { name__isnull: false },
-                group_by: ["graph__slug"],
-                metrics: [
-                    {
-                        alias: "row_count",
-                        fn: "Count",
-                        field: "resourceinstanceid",
-                        distinct: true,
-                    },
-                ],
-                order_by: ["-row_count", "graph__slug"],
-                limit: 6,
-            },
-            {
-                name: "totals_with_graph_names",
-                where: { name__isnull: false },
-                aggregate: [
-                    {
-                        alias: "total_rows",
-                        fn: "Count",
-                        field: "resourceinstanceid",
-                        distinct: true,
-                    },
-                ],
-            },
-        ],
-    };
+const datatypesToAdvancedSearchFacets = ref<{ [datatype: string]: unknown[] }>(
+    {},
+);
+const graphs = ref([]);
 
-    getSearchResults({
-        graph_slug: "new_resource_model",
-        query: query,
-    });
+const graphIdsToNodes = ref<{ [graphId: string]: unknown[] }>({});
+const inflightLoads: Map<string, Promise<unknown[]>> = new Map();
+
+provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
+provide("graphs", graphs);
+provide("getNodesForGraphId", getNodesForGraphId);
+
+watchEffect(async () => {
+    try {
+        isLoading.value = true;
+        fetchError.value = null;
+
+        seedRootGroup();
+
+        await Promise.all([fetchGraphs(), fetchFacets()]);
+    } catch (error) {
+        fetchError.value = error as Error;
+    } finally {
+        isLoading.value = false;
+    }
 });
+
+async function getNodesForGraphId(graphId: string): Promise<unknown[]> {
+    const cachedNodes = graphIdsToNodes.value[graphId];
+    if (cachedNodes) {
+        return cachedNodes;
+    }
+
+    const isAlreadyRequested = Boolean(inflightLoads.get(graphId));
+    if (isAlreadyRequested) {
+        return await inflightLoads.get(graphId)!;
+    }
+
+    const pendingNodesRequest = fetchNodesForGraphId(graphId)
+        .then((nodesMap) => {
+            const nodes = Object.values(nodesMap);
+
+            graphIdsToNodes.value = {
+                ...graphIdsToNodes.value,
+                [graphId]: nodes,
+            };
+            inflightLoads.delete(graphId);
+
+            return nodes;
+        })
+        .catch((error) => {
+            inflightLoads.delete(graphId);
+            fetchError.value = error as Error;
+
+            throw error;
+        });
+
+    inflightLoads.set(graphId, pendingNodesRequest);
+    return await pendingNodesRequest;
+}
+
+async function fetchFacets() {
+    const facets = await getAdvancedSearchFacets();
+
+    datatypesToAdvancedSearchFacets.value = facets.reduce(
+        (
+            datatypeToAdvancedSearchFacets: Record<
+                string,
+                AdvancedSearchFacet[]
+            >,
+            advancedSearchFacet: AdvancedSearchFacet,
+        ) => {
+            const existingFacetsForDatatype =
+                datatypeToAdvancedSearchFacets[
+                    advancedSearchFacet.datatype_id
+                ] ?? [];
+            datatypeToAdvancedSearchFacets[advancedSearchFacet.datatype_id] =
+                existingFacetsForDatatype.concat([advancedSearchFacet]);
+
+            return datatypeToAdvancedSearchFacets;
+        },
+        {},
+    );
+}
+
+async function fetchGraphs() {
+    graphs.value = await getGraphs();
+}
+
+function seedRootGroup() {
+    if (query) {
+        rootGroupPayload.value = structuredClone(query);
+    } else {
+        rootGroupPayload.value = {
+            graph_slug: undefined,
+            logic: "AND",
+            clauses: [],
+            groups: [],
+            aggregations: [],
+        };
+    }
+}
+
+async function search() {
+    const results = await getSearchResults(rootGroupPayload.value!);
+    console.log("Search results:", results);
+}
 </script>
 
 <template>
     <div class="advanced-search">
-        <GraphSelection @graph-selected="console.log($event)" />
+        <Skeleton
+            v-if="isLoading"
+            style="height: 100%"
+        />
+
+        <Message
+            v-else-if="fetchError"
+            severity="error"
+        >
+            {{ fetchError.message }}
+        </Message>
+
+        <div v-else>
+            <QueryGroup :group-payload="rootGroupPayload!" />
+
+            <Button
+                icon="pi pi-search"
+                size="large"
+                :label="$gettext('Search')"
+                style="margin-top: 1rem; align-self: flex-start"
+                @click="search"
+            />
+        </div>
     </div>
 </template>
 
@@ -176,5 +170,7 @@ watchEffect(() => {
     height: 100%;
     background: var(--p-content-background);
     color: var(--p-text-color);
+    display: flex;
+    flex-direction: column;
 }
 </style>

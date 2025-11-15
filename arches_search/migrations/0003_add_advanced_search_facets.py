@@ -14,7 +14,6 @@ BOOLEAN_FACETS = [
         "param_formats": [],
         "orm_template": "{col}",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS TRUE",
     },
     {
         "datatype": "boolean",
@@ -24,7 +23,6 @@ BOOLEAN_FACETS = [
         "param_formats": [],
         "orm_template": "{col}",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS FALSE",
     },
     {
         "datatype": "boolean",
@@ -34,7 +32,6 @@ BOOLEAN_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "boolean",
@@ -44,7 +41,6 @@ BOOLEAN_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -57,7 +53,6 @@ DATE_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = {p0}",
     },
     {
         "datatype": "date",
@@ -67,7 +62,6 @@ DATE_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS DISTINCT FROM {p0}",
     },
     {
         "datatype": "date",
@@ -77,7 +71,6 @@ DATE_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__lt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} < {p0}",
     },
     {
         "datatype": "date",
@@ -87,7 +80,6 @@ DATE_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__gt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} > {p0}",
     },
     {
         "datatype": "date",
@@ -97,7 +89,6 @@ DATE_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__lte",
         "is_orm_template_negated": False,
-        "sql_template": "{col} <= {p0}",
     },
     {
         "datatype": "date",
@@ -107,7 +98,6 @@ DATE_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__gte",
         "is_orm_template_negated": False,
-        "sql_template": "{col} >= {p0}",
     },
     {
         "datatype": "date",
@@ -117,7 +107,6 @@ DATE_FACETS = [
         "param_formats": ["{value0}", "{value1}"],
         "orm_template": "{col}__range",
         "is_orm_template_negated": False,
-        "sql_template": "({col} BETWEEN {p0} AND {p1})",
     },
     {
         "datatype": "date",
@@ -127,7 +116,6 @@ DATE_FACETS = [
         "param_formats": ["{value0}", "{value1}"],
         "orm_template": "{col}__range",
         "is_orm_template_negated": True,
-        "sql_template": "NOT ({col} BETWEEN {p0} AND {p1})",
     },
     {
         "datatype": "date",
@@ -137,7 +125,6 @@ DATE_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "date",
@@ -147,7 +134,6 @@ DATE_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -160,7 +146,6 @@ EDTF_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = {p0}",
     },
     {
         "datatype": "edtf",
@@ -170,7 +155,6 @@ EDTF_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS DISTINCT FROM {p0}",
     },
     {
         "datatype": "edtf",
@@ -180,7 +164,6 @@ EDTF_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__lt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} < {p0}",
     },
     {
         "datatype": "edtf",
@@ -190,7 +173,6 @@ EDTF_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__gt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} > {p0}",
     },
     {
         "datatype": "edtf",
@@ -200,7 +182,6 @@ EDTF_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__lte",
         "is_orm_template_negated": False,
-        "sql_template": "{col} <= {p0}",
     },
     {
         "datatype": "edtf",
@@ -210,7 +191,6 @@ EDTF_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__gte",
         "is_orm_template_negated": False,
-        "sql_template": "{col} >= {p0}",
     },
     {
         "datatype": "edtf",
@@ -220,7 +200,6 @@ EDTF_FACETS = [
         "param_formats": ["{value0}", "{value1}"],
         "orm_template": "AND:{col_start}__lte:{p1};{col_end}__gte:{p0}",
         "is_orm_template_negated": False,
-        "sql_template": "({col_start} <= {p1} AND {col_end} >= {p0})",
     },
     {
         "datatype": "edtf",
@@ -230,7 +209,6 @@ EDTF_FACETS = [
         "param_formats": ["{value0}", "{value1}"],
         "orm_template": "AND:{col_start}__gte:{p0};{col_end}__lte:{p1}",
         "is_orm_template_negated": False,
-        "sql_template": "({col_start} >= {p0} AND {col_end} <= {p1})",
     },
     {
         "datatype": "edtf",
@@ -240,7 +218,6 @@ EDTF_FACETS = [
         "param_formats": ["{value0}", "{value1}"],
         "orm_template": "AND:{col_start}__lte:{p0};{col_end}__gte:{p1}",
         "is_orm_template_negated": False,
-        "sql_template": "({col_start} <= {p0} AND {col_end} >= {p1})",
     },
     {
         "datatype": "edtf",
@@ -250,7 +227,6 @@ EDTF_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col_start}",
         "is_orm_template_negated": False,
-        "sql_template": "{col_start} = {p0}",
     },
     {
         "datatype": "edtf",
@@ -260,7 +236,6 @@ EDTF_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col_end}",
         "is_orm_template_negated": False,
-        "sql_template": "{col_end} = {p0}",
     },
     {
         "datatype": "edtf",
@@ -270,7 +245,6 @@ EDTF_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "edtf",
@@ -280,7 +254,6 @@ EDTF_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -293,7 +266,6 @@ FILE_LIST_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__gt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} > {p0}",
     },
     {
         "datatype": "file-list",
@@ -303,7 +275,6 @@ FILE_LIST_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__lt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} < {p0}",
     },
     {
         "datatype": "file-list",
@@ -313,7 +284,6 @@ FILE_LIST_FACETS = [
         "param_formats": ["{value0}", "{value1}"],
         "orm_template": "{col}__range",
         "is_orm_template_negated": False,
-        "sql_template": "({col} BETWEEN {p0} AND {p1})",
     },
     {
         "datatype": "file-list",
@@ -323,7 +293,6 @@ FILE_LIST_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__gt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} > {p0}",
     },
     {
         "datatype": "file-list",
@@ -333,7 +302,6 @@ FILE_LIST_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__lt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} < {p0}",
     },
     {
         "datatype": "file-list",
@@ -343,7 +311,6 @@ FILE_LIST_FACETS = [
         "param_formats": ["%{value}%"],
         "orm_template": "{col}__icontains",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "file-list",
@@ -353,7 +320,6 @@ FILE_LIST_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__iexact",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = {p0}",
     },
     {
         "datatype": "file-list",
@@ -363,7 +329,6 @@ FILE_LIST_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "file-list",
@@ -373,7 +338,6 @@ FILE_LIST_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -386,7 +350,6 @@ GEOJSON_FEATURE_COLLECTION_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__contains",
         "is_orm_template_negated": False,
-        "sql_template": "ST_Contains({col}, ST_SetSRID(ST_GeomFromGeoJSON({p0}), 4326))",
     },
     {
         "datatype": "geojson-feature-collection",
@@ -396,7 +359,6 @@ GEOJSON_FEATURE_COLLECTION_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__contains",
         "is_orm_template_negated": False,
-        "sql_template": "ST_Contains({col}, ST_SetSRID(ST_GeomFromGeoJSON({p0}), 4326))",
     },
     {
         "datatype": "geojson-feature-collection",
@@ -406,7 +368,6 @@ GEOJSON_FEATURE_COLLECTION_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__contains",
         "is_orm_template_negated": False,
-        "sql_template": "ST_Contains({col}, ST_SetSRID(ST_GeomFromGeoJSON({p0}), 4326))",
     },
     {
         "datatype": "geojson-feature-collection",
@@ -416,7 +377,6 @@ GEOJSON_FEATURE_COLLECTION_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "geojson-feature-collection",
@@ -426,7 +386,6 @@ GEOJSON_FEATURE_COLLECTION_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -439,7 +398,6 @@ NON_LOCALIZED_STRING_FACETS = [
         "param_formats": ["%{value}%"],
         "orm_template": "{col}__icontains",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "non-localized-string",
@@ -449,7 +407,6 @@ NON_LOCALIZED_STRING_FACETS = [
         "param_formats": ["%{value}%"],
         "orm_template": "{col}__icontains",
         "is_orm_template_negated": True,
-        "sql_template": "{col} NOT ILIKE {p0}",
     },
     {
         "datatype": "non-localized-string",
@@ -459,7 +416,6 @@ NON_LOCALIZED_STRING_FACETS = [
         "param_formats": ["{value}%"],
         "orm_template": "{col}__istartswith",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "non-localized-string",
@@ -469,7 +425,6 @@ NON_LOCALIZED_STRING_FACETS = [
         "param_formats": ["%{value}"],
         "orm_template": "{col}__iendswith",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "non-localized-string",
@@ -479,7 +434,6 @@ NON_LOCALIZED_STRING_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__iexact",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = {p0}",
     },
     {
         "datatype": "non-localized-string",
@@ -489,7 +443,6 @@ NON_LOCALIZED_STRING_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__iexact",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS DISTINCT FROM {p0}",
     },
     {
         "datatype": "non-localized-string",
@@ -499,7 +452,6 @@ NON_LOCALIZED_STRING_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "non-localized-string",
@@ -509,7 +461,6 @@ NON_LOCALIZED_STRING_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -522,7 +473,6 @@ NUMBER_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = {p0}",
     },
     {
         "datatype": "number",
@@ -532,7 +482,6 @@ NUMBER_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS DISTINCT FROM {p0}",
     },
     {
         "datatype": "number",
@@ -542,7 +491,6 @@ NUMBER_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__lt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} < {p0}",
     },
     {
         "datatype": "number",
@@ -552,7 +500,6 @@ NUMBER_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__gt",
         "is_orm_template_negated": False,
-        "sql_template": "{col} > {p0}",
     },
     {
         "datatype": "number",
@@ -562,7 +509,6 @@ NUMBER_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__lte",
         "is_orm_template_negated": False,
-        "sql_template": "{col} <= {p0}",
     },
     {
         "datatype": "number",
@@ -572,7 +518,6 @@ NUMBER_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__gte",
         "is_orm_template_negated": False,
-        "sql_template": "{col} >= {p0}",
     },
     {
         "datatype": "number",
@@ -582,7 +527,6 @@ NUMBER_FACETS = [
         "param_formats": ["{value0}", "{value1}"],
         "orm_template": "{col}__range",
         "is_orm_template_negated": False,
-        "sql_template": "({col} BETWEEN {p0} AND {p1})",
     },
     {
         "datatype": "number",
@@ -592,7 +536,6 @@ NUMBER_FACETS = [
         "param_formats": ["{value0}", "{value1}"],
         "orm_template": "{col}__range",
         "is_orm_template_negated": True,
-        "sql_template": "NOT ({col} BETWEEN {p0} AND {p1})",
     },
     {
         "datatype": "number",
@@ -602,7 +545,6 @@ NUMBER_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "number",
@@ -612,7 +554,6 @@ NUMBER_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -625,7 +566,6 @@ REFERENCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "{col}__in",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = ANY ({p0})",
     },
     {
         "datatype": "reference",
@@ -635,7 +575,6 @@ REFERENCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "HAVING_ALL:{col}:{values}",
         "is_orm_template_negated": False,
-        "sql_template": "({p0} <@ array_agg({col}))",
     },
     {
         "datatype": "reference",
@@ -645,7 +584,6 @@ REFERENCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "HAVING_ONLY:{col}:{values}",
         "is_orm_template_negated": False,
-        "sql_template": "(array_agg({col}) <@ {p0})",
     },
     {
         "datatype": "reference",
@@ -655,7 +593,6 @@ REFERENCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "{col}__in",
         "is_orm_template_negated": True,
-        "sql_template": "{col} <> ALL ({p0})",
     },
     {
         "datatype": "reference",
@@ -665,7 +602,6 @@ REFERENCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "{col}__in",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = ANY ({p0})",
     },
     {
         "datatype": "reference",
@@ -675,7 +611,6 @@ REFERENCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "{col}__in",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = ANY ({p0})",
     },
     {
         "datatype": "reference",
@@ -685,7 +620,6 @@ REFERENCE_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "reference",
@@ -695,7 +629,6 @@ REFERENCE_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -708,7 +641,6 @@ RESOURCE_INSTANCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "{col}__in",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = ANY ({p0})",
     },
     {
         "datatype": "resource-instance",
@@ -718,7 +650,6 @@ RESOURCE_INSTANCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "AGG_SUPERSET:{col}:{p0}",
         "is_orm_template_negated": False,
-        "sql_template": "({p0} <@ array_agg({col}))",
     },
     {
         "datatype": "resource-instance",
@@ -728,7 +659,6 @@ RESOURCE_INSTANCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "AGG_SET_EQUAL:{col}:{p0}",
         "is_orm_template_negated": False,
-        "sql_template": "((array_agg({col}) <@ {p0}) AND ({p0} <@ array_agg({col})))",
     },
     {
         "datatype": "resource-instance",
@@ -738,7 +668,6 @@ RESOURCE_INSTANCE_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "{col}__in",
         "is_orm_template_negated": True,
-        "sql_template": "{col} <> ALL ({p0})",
     },
     {
         "datatype": "resource-instance",
@@ -748,7 +677,6 @@ RESOURCE_INSTANCE_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "resource-instance",
@@ -758,7 +686,6 @@ RESOURCE_INSTANCE_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -771,7 +698,6 @@ RESOURCE_INSTANCE_LIST_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "{col}__in",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = ANY ({p0})",
     },
     {
         "datatype": "resource-instance-list",
@@ -781,7 +707,6 @@ RESOURCE_INSTANCE_LIST_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "AGG_SUPERSET:{col}:{p0}",
         "is_orm_template_negated": False,
-        "sql_template": "({p0} <@ array_agg({col}))",
     },
     {
         "datatype": "resource-instance-list",
@@ -791,7 +716,6 @@ RESOURCE_INSTANCE_LIST_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "AGG_SET_EQUAL:{col}:{p0}",
         "is_orm_template_negated": False,
-        "sql_template": "((array_agg({col}) <@ {p0}) AND ({p0} <@ array_agg({col})))",
     },
     {
         "datatype": "resource-instance-list",
@@ -801,7 +725,6 @@ RESOURCE_INSTANCE_LIST_FACETS = [
         "param_formats": ["{values}"],
         "orm_template": "{col}__in",
         "is_orm_template_negated": True,
-        "sql_template": "{col} <> ALL ({p0})",
     },
     {
         "datatype": "resource-instance-list",
@@ -811,7 +734,6 @@ RESOURCE_INSTANCE_LIST_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col_count}__gt",
         "is_orm_template_negated": False,
-        "sql_template": "{col_count} > {p0}",
     },
     {
         "datatype": "resource-instance-list",
@@ -821,7 +743,6 @@ RESOURCE_INSTANCE_LIST_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col_count}__lt",
         "is_orm_template_negated": False,
-        "sql_template": "{col_count} < {p0}",
     },
     {
         "datatype": "resource-instance-list",
@@ -831,7 +752,6 @@ RESOURCE_INSTANCE_LIST_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "resource-instance-list",
@@ -841,7 +761,6 @@ RESOURCE_INSTANCE_LIST_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -854,7 +773,6 @@ STRING_FACETS = [
         "param_formats": ["%{value}%"],
         "orm_template": "{col}__icontains",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "string",
@@ -864,7 +782,6 @@ STRING_FACETS = [
         "param_formats": ["%{value}%"],
         "orm_template": "{col}__icontains",
         "is_orm_template_negated": True,
-        "sql_template": "{col} NOT ILIKE {p0}",
     },
     {
         "datatype": "string",
@@ -874,7 +791,6 @@ STRING_FACETS = [
         "param_formats": ["{value}%"],
         "orm_template": "{col}__istartswith",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "string",
@@ -884,7 +800,6 @@ STRING_FACETS = [
         "param_formats": ["%{value}"],
         "orm_template": "{col}__iendswith",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "string",
@@ -894,7 +809,6 @@ STRING_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__iexact",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = {p0}",
     },
     {
         "datatype": "string",
@@ -904,7 +818,6 @@ STRING_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__iexact",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS DISTINCT FROM {p0}",
     },
     {
         "datatype": "string",
@@ -914,7 +827,6 @@ STRING_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "string",
@@ -924,7 +836,6 @@ STRING_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -937,7 +848,6 @@ URL_FACETS = [
         "param_formats": ["%{value}%"],
         "orm_template": "{col}__icontains",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "url",
@@ -947,7 +857,6 @@ URL_FACETS = [
         "param_formats": ["%{value}%"],
         "orm_template": "{col}__icontains",
         "is_orm_template_negated": True,
-        "sql_template": "{col} NOT ILIKE {p0}",
     },
     {
         "datatype": "url",
@@ -957,7 +866,6 @@ URL_FACETS = [
         "param_formats": ["{value}%"],
         "orm_template": "{col}__istartswith",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "url",
@@ -967,7 +875,6 @@ URL_FACETS = [
         "param_formats": ["%{value}"],
         "orm_template": "{col}__iendswith",
         "is_orm_template_negated": False,
-        "sql_template": "{col} ILIKE {p0}",
     },
     {
         "datatype": "url",
@@ -977,7 +884,6 @@ URL_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__iexact",
         "is_orm_template_negated": False,
-        "sql_template": "{col} = {p0}",
     },
     {
         "datatype": "url",
@@ -987,7 +893,6 @@ URL_FACETS = [
         "param_formats": ["{value}"],
         "orm_template": "{col}__iexact",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS DISTINCT FROM {p0}",
     },
     {
         "datatype": "url",
@@ -997,7 +902,6 @@ URL_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": False,
-        "sql_template": "{col} IS NULL",
     },
     {
         "datatype": "url",
@@ -1007,7 +911,6 @@ URL_FACETS = [
         "param_formats": [],
         "orm_template": "{col}__isnull",
         "is_orm_template_negated": True,
-        "sql_template": "{col} IS NOT NULL",
     },
 ]
 
@@ -1044,7 +947,6 @@ def seed_facets(apps, schema_editor):
             sortorder=current_count,
             orm_template=spec["orm_template"],
             is_orm_template_negated=spec["is_orm_template_negated"],
-            sql_template=spec["sql_template"],
         )
 
 
@@ -1084,7 +986,6 @@ class Migration(migrations.Migration):
                 ("sortorder", models.PositiveSmallIntegerField()),
                 ("orm_template", models.CharField(blank=True, max_length=255)),
                 ("is_orm_template_negated", models.BooleanField(default=False)),
-                ("sql_template", models.TextField()),
                 (
                     "datatype",
                     models.ForeignKey(
