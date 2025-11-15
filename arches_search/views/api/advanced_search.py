@@ -1,28 +1,27 @@
-from arches.app.models import models
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
 from arches_search.utils.advanced_search import resources_queryset_from_payload
-from arches_search.utils.search_aggregation import apply_json_aggregations
+from arches_search.utils.search_aggregation import build_aggregations
 
 
 class AdvancedSearchAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
-
-        results = resources_queryset_from_payload(body)
-
         aggregations = {}
         payload_query = body.get("query", body)
         raw_aggregations = payload_query.get("aggregations")
 
+        base_queryset = resources_queryset_from_payload(body)
+
         if raw_aggregations:
-            aggregations = apply_json_aggregations(raw_aggregations, results)
+            # dynamically join the necessary arches_search_* tables
+            aggregations = build_aggregations(base_queryset, raw_aggregations)
 
         return JSONResponse(
             {
-                "resources": list(results),
+                "resources": list(base_queryset),
                 "aggregations": aggregations,
             }
         )
