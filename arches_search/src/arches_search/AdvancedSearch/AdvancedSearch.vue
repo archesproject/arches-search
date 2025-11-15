@@ -1,138 +1,145 @@
 <script setup lang="ts">
-import { defineProps, provide, ref, watchEffect } from "vue";
+import { defineProps, provide, ref, onMounted } from "vue";
+
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
 import Message from "primevue/message";
 import Skeleton from "primevue/skeleton";
+import Card from "primevue/card";
 
-import QueryGroup from "@/arches_search/AdvancedSearch/components/QueryGroup.vue";
+import GroupBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/GroupBuilder.vue";
 
 import {
     getAdvancedSearchFacets,
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
-    getSearchResults,
+    getSearchResults as fetchSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
 
-import type { GroupPayload } from "@/arches_search/AdvancedSearch/utils/query-tree";
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import type { AdvancedSearchFacet } from "@/arches_search/AdvancedSearch/types";
 
-const { $gettext } = useGettext();
+type NodeCacheEntry =
+    | { status: typeof PENDING; pending: Promise<Record<string, unknown>[]> }
+    | { status: typeof READY; nodes: Record<string, unknown>[] };
 
-const { query } = defineProps<{ query?: GroupPayload }>();
+const PENDING = "pending";
+const READY = "ready";
+
+const { $gettext } = useGettext();
+const props = defineProps<{ query?: GroupPayload }>();
 
 const isLoading = ref(true);
 const fetchError = ref<Error | null>(null);
 
-const rootGroupPayload = ref<GroupPayload>();
+const rootPayload = ref<GroupPayload | undefined>(props.query);
 
-const datatypesToAdvancedSearchFacets = ref<{ [datatype: string]: unknown[] }>(
-    {},
-);
+const datatypesToAdvancedSearchFacets = ref<
+    Record<string, AdvancedSearchFacet[]>
+>({});
 const graphs = ref([]);
-
-const graphIdsToNodes = ref<{ [graphId: string]: unknown[] }>({});
-const inflightLoads: Map<string, Promise<unknown[]>> = new Map();
+const graphIdToNodeCache = ref<Record<string, NodeCacheEntry>>({});
 
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
 provide("getNodesForGraphId", getNodesForGraphId);
 
-watchEffect(async () => {
+onMounted(async () => {
     try {
         isLoading.value = true;
         fetchError.value = null;
 
-        seedRootGroup();
-
         await Promise.all([fetchGraphs(), fetchFacets()]);
-    } catch (error) {
-        fetchError.value = error as Error;
+    } catch (possibleError) {
+        fetchError.value = possibleError as Error;
     } finally {
         isLoading.value = false;
     }
 });
 
-async function getNodesForGraphId(graphId: string): Promise<unknown[]> {
-    const cachedNodes = graphIdsToNodes.value[graphId];
-    if (cachedNodes) {
-        return cachedNodes;
+function onUpdateRoot(updatedGroupPayload: GroupPayload): void {
+    rootPayload.value = updatedGroupPayload;
+}
+
+async function getNodesForGraphId(
+    graphId: string,
+): Promise<Record<string, unknown>[]> {
+    const existingEntry = graphIdToNodeCache.value[graphId];
+
+    if (existingEntry?.status === PENDING) {
+        return await existingEntry.pending;
     }
 
-    const isAlreadyRequested = Boolean(inflightLoads.get(graphId));
-    if (isAlreadyRequested) {
-        return await inflightLoads.get(graphId)!;
+    if (existingEntry?.status === READY) {
+        return existingEntry.nodes;
     }
 
-    const pendingNodesRequest = fetchNodesForGraphId(graphId)
-        .then((nodesMap) => {
-            const nodes = Object.values(nodesMap);
+    const pendingRequest = fetchNodesForGraphId(graphId)
+        .then((nodesMap: Record<string, Record<string, unknown>>) => {
+            const nodesArray = Object.values(nodesMap);
 
-            graphIdsToNodes.value = {
-                ...graphIdsToNodes.value,
-                [graphId]: nodes,
+            graphIdToNodeCache.value = {
+                ...graphIdToNodeCache.value,
+                [graphId]: { status: READY, nodes: nodesArray },
             };
-            inflightLoads.delete(graphId);
 
-            return nodes;
+            return nodesArray;
         })
         .catch((error) => {
-            inflightLoads.delete(graphId);
             fetchError.value = error as Error;
-
             throw error;
         });
 
-    inflightLoads.set(graphId, pendingNodesRequest);
-    return await pendingNodesRequest;
+    graphIdToNodeCache.value = {
+        ...graphIdToNodeCache.value,
+        [graphId]: { status: PENDING, pending: pendingRequest },
+    };
+
+    return await pendingRequest;
 }
 
-async function fetchFacets() {
-    const facets = await getAdvancedSearchFacets();
+async function fetchFacets(): Promise<void> {
+    const advancedSearchFacets = await getAdvancedSearchFacets();
 
-    datatypesToAdvancedSearchFacets.value = facets.reduce(
+    datatypesToAdvancedSearchFacets.value = advancedSearchFacets.reduce(
         (
-            datatypeToAdvancedSearchFacets: Record<
-                string,
-                AdvancedSearchFacet[]
-            >,
-            advancedSearchFacet: AdvancedSearchFacet,
+            acc: Record<string, AdvancedSearchFacet[]>,
+            facet: AdvancedSearchFacet,
         ) => {
-            const existingFacetsForDatatype =
-                datatypeToAdvancedSearchFacets[
-                    advancedSearchFacet.datatype_id
-                ] ?? [];
-            datatypeToAdvancedSearchFacets[advancedSearchFacet.datatype_id] =
-                existingFacetsForDatatype.concat([advancedSearchFacet]);
+            const currentList = acc[facet.datatype_id] ?? [];
 
-            return datatypeToAdvancedSearchFacets;
+            acc[facet.datatype_id] = [...currentList, facet];
+            return acc;
         },
         {},
     );
 }
 
-async function fetchGraphs() {
+async function fetchGraphs(): Promise<void> {
     graphs.value = await getGraphs();
 }
 
-function seedRootGroup() {
-    if (query) {
-        rootGroupPayload.value = structuredClone(query);
-    } else {
-        rootGroupPayload.value = {
-            graph_slug: undefined,
-            logic: "AND",
-            clauses: [],
-            groups: [],
-            aggregations: [],
-        };
+async function search(): Promise<void> {
+    console.log(
+        "Performing search...",
+        JSON.stringify(rootPayload.value, null, 4),
+    );
+    if (!rootPayload.value) {
+        fetchError.value = new Error(
+            $gettext("Cannot perform search: no search query defined."),
+        );
+        return;
     }
-}
 
-async function search() {
-    const results = await getSearchResults(rootGroupPayload.value!);
-    console.log("Search results:", results);
+    try {
+        fetchError.value = null;
+
+        const results = await fetchSearchResults(rootPayload.value);
+        console.log("Search results:", results);
+    } catch (possibleError) {
+        fetchError.value = possibleError as Error;
+    }
 }
 </script>
 
@@ -150,17 +157,22 @@ async function search() {
             {{ fetchError.message }}
         </Message>
 
-        <div v-else>
-            <QueryGroup :group-payload="rootGroupPayload!" />
-
-            <Button
-                icon="pi pi-search"
-                size="large"
-                :label="$gettext('Search')"
-                style="margin-top: 1rem; align-self: flex-start"
-                @click="search"
-            />
-        </div>
+        <Card v-else>
+            <template #content>
+                <GroupBuilder
+                    :model-value="rootPayload"
+                    :is-root="true"
+                    @update:model-value="onUpdateRoot"
+                />
+                <Button
+                    class="search-button"
+                    icon="pi pi-search"
+                    size="large"
+                    :label="$gettext('Search')"
+                    @click="search"
+                />
+            </template>
+        </Card>
     </div>
 </template>
 
@@ -172,5 +184,38 @@ async function search() {
     color: var(--p-text-color);
     display: flex;
     flex-direction: column;
+    overflow: auto;
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.search-button {
+    margin-top: 1rem;
+    align-self: flex-start;
+}
+
+:deep(.p-card-body) {
+    gap: 0;
+}
+
+:deep(.p-inputtext),
+:deep(.p-button),
+:deep(.p-select),
+:deep(.p-select-label),
+:deep(.p-select-option),
+:deep(.p-select-filter-input),
+:deep(.p-selectbutton .p-button),
+:deep(.p-tag),
+:deep(.p-message),
+:deep(.p-dropdown),
+:deep(.p-dropdown-label),
+:deep(.p-togglebutton-label),
+:deep(.p-button-icon),
+:deep(.p-dropdown-item) {
+    font-size: 1.2rem;
 }
 </style>
