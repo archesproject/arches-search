@@ -58,6 +58,17 @@ class GroupCompiler:
             group_logic_token=group_logic_token,
         )
 
+    def _group_has_any_relationship(self, group_payload: Dict[str, Any]) -> bool:
+        relationship_block = group_payload.get("relationship") or {}
+        if bool((relationship_block.get("path") or [])):
+            return True
+
+        for subgroup_payload in group_payload.get("groups") or []:
+            if self._group_has_any_relationship(group_payload=subgroup_payload):
+                return True
+
+        return False
+
     def _compile_tile_scope_without_relationship(
         self,
         group_payload: Dict[str, Any],
@@ -85,6 +96,13 @@ class GroupCompiler:
             logic=group_logic_token,
         )
         parent_q = reduce_result.relationshipless_q or Q()
+
+        has_relationship_anywhere = self._group_has_any_relationship(
+            group_payload=group_payload
+        )
+
+        if not has_relationship_anywhere:
+            return parent_q, []
 
         children_q, children_existence_predicates = self._compile_children(
             subgroups=group_payload["groups"],
