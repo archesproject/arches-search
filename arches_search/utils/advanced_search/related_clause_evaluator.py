@@ -6,8 +6,6 @@ QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
 QUANTIFIER_NONE = "NONE"
 
-CLAUSE_TYPE_RELATED = "RELATED"
-
 
 class RelatedClauseEvaluator:
     def __init__(
@@ -31,10 +29,8 @@ class RelatedClauseEvaluator:
             )
         if mode == "child":
             if traversal_context is None:
-                raise ValueError("traversal_context is required for mode='child'")
                 raise ValueError(_("traversal_context is required for mode='child'"))
             return self._build_child_presence_exists(clause_payload, traversal_context)
-        raise ValueError(f"Unsupported evaluation mode: {mode}")
         raise ValueError(_("Unsupported evaluation mode: {mode}").format(mode=mode))
 
     def _build_anchor_presence_exists(
