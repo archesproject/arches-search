@@ -16,6 +16,7 @@ class AdvancedSearchAPI(APIBase):
 
         results = AdvancedSearchQueryCompiler(body).compile()
 
+        aggregations = {}
         if raw_aggregations:
             # dynamically join the necessary arches_search_* tables
             aggregations = build_aggregations(results, raw_aggregations)
