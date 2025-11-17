@@ -107,3 +107,26 @@ export type GroupPayload = {
     readonly aggregations: ReadonlyArray<unknown>;
     readonly relationship: RelationshipBlock | null;
 };
+
+export type SearchResults = {
+    resources: ResourceData[];
+    aggregations: { [key: string]: unknown };
+};
+
+export interface ResourceData {
+    resourceinstanceid: string;
+    name?: string;
+    descriptors?: {
+        [key: string]: {
+            name: string;
+            map_popup: string;
+            description: string;
+        };
+    };
+    legacyid?: string | null;
+    createdtime: string;
+    graph_id: string;
+    graph_publication_id?: string;
+    principaluser_id?: number;
+    resource_instance_lifecycle_state_id?: string | null;
+}

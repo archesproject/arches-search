@@ -73,3 +73,14 @@ export async function getGraphs() {
 
     return parsed;
 }
+
+export async function getThumbnailExists(resourceIdentifier: string) {
+    const response = await fetch(
+        generateArchesURL("arches:thumbnail", {
+            resource_id: resourceIdentifier,
+        }),
+        { method: "HEAD" },
+    );
+
+    return response.ok;
+}
