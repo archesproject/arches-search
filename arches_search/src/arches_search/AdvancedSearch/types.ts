@@ -59,3 +59,74 @@ export interface Node {
     source_identifier_id: number | null;
     sourcebranchpublication_id: string | null;
 }
+
+export enum GraphScopeToken {
+    RESOURCE = "RESOURCE",
+    TILE = "TILE",
+}
+
+export enum LogicToken {
+    AND = "AND",
+    OR = "OR",
+}
+
+type ClauseTypeToken = "LITERAL";
+type QuantifierToken = "ANY";
+
+export type OperatorString = string;
+
+export type SubjectPair = readonly [graphSlug: string, nodeAlias: string];
+export type SubjectPath = ReadonlyArray<SubjectPair>;
+export type RelationshipPath = ReadonlyArray<SubjectPair>;
+
+export type LiteralOperand = {
+    readonly type: "LITERAL";
+    readonly value: string | number | boolean | null;
+};
+
+export type LiteralClause = {
+    readonly type: ClauseTypeToken;
+    readonly quantifier: QuantifierToken;
+    readonly subject: SubjectPath;
+    readonly operator: OperatorString;
+    readonly operands: ReadonlyArray<LiteralOperand>;
+};
+
+export type RelationshipBlock = {
+    readonly path: RelationshipPath;
+    readonly is_inverse: boolean;
+    readonly traversal_quantifiers: ReadonlyArray<QuantifierToken>;
+};
+
+export type GroupPayload = {
+    readonly graph_slug: string;
+    readonly scope: GraphScopeToken;
+    readonly logic: LogicToken;
+    readonly clauses: ReadonlyArray<LiteralClause>;
+    readonly groups: ReadonlyArray<GroupPayload>;
+    readonly aggregations: ReadonlyArray<unknown>;
+    readonly relationship: RelationshipBlock | null;
+};
+
+export type SearchResults = {
+    resources: ResourceData[];
+    aggregations: { [key: string]: unknown };
+};
+
+export interface ResourceData {
+    resourceinstanceid: string;
+    name?: string;
+    descriptors?: {
+        [key: string]: {
+            name: string;
+            map_popup: string;
+            description: string;
+        };
+    };
+    legacyid?: string | null;
+    createdtime: string;
+    graph_id: string;
+    graph_publication_id?: string;
+    principaluser_id?: number;
+    resource_instance_lifecycle_state_id?: string | null;
+}
