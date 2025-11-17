@@ -3,11 +3,10 @@ Utility functions for building nested subqueries and aggregations
 used in advanced search queries within the Arches search system.
 """
 
+from django.apps import apps
 from django.db import models
 from django.db.models import OuterRef, Subquery, Q, QuerySet
 from typing import Optional, Dict, Any, List, Union, Callable
-
-from arches_search.utils.advanced_search import SEARCH_TABLE_TO_MODEL
 
 
 def get_search_model(search_table: str) -> models.Model:
@@ -23,10 +22,13 @@ def get_search_model(search_table: str) -> models.Model:
     Raises:
         ValueError: If the search table name is not found in SEARCH_TABLE_TO_MODEL.
     """
-    try:
-        return SEARCH_TABLE_TO_MODEL[search_table]
-    except KeyError:
-        raise ValueError(f"Unknown search table '{search_table}'")
+    arches_search_config = apps.get_app_config("arches_search")
+
+    for model_class in arches_search_config.get_models():
+        if model_class._meta.db_table == search_table:
+            return model_class
+
+    raise ValueError(f"Unknown search table '{search_table}'")
 
 
 def get_aggregate_function(fn_name: str) -> Callable[..., Any]:
@@ -49,7 +51,7 @@ def get_aggregate_function(fn_name: str) -> Callable[..., Any]:
 
 
 def build_value_subquery(
-    search_table: str,
+    search_table_name: str,
     node_alias: str,
     parent_ref_field: str = "resourceinstanceid",
     where: Optional[Dict[str, Any]] = None,
@@ -62,7 +64,7 @@ def build_value_subquery(
     Typically used as a building block for group-by or metric aggregations.
 
     Args:
-        search_table (str): The search table used to look up the model.
+        search_table_name (str): The search table used to look up the model.
         node_alias (str): The node alias used to filter the queryset.
         parent_ref_field (str, optional): The reference field in the parent queryset.
             Defaults to "resourceinstanceid".
@@ -74,12 +76,12 @@ def build_value_subquery(
     Returns:
         Subquery: A Django ORM Subquery returning the specified field value.
     """
-    model = get_search_model(search_table)
+    search_model = get_search_model(search_table_name)
     filters = {
         "node_alias": node_alias,
         "resourceinstanceid": OuterRef(parent_ref_field),
     }
-    qs = model.objects.filter(**filters)
+    qs = search_model.objects.filter(**filters)
     if annotations:
         qs = qs.annotate(**annotations)
     if where:
@@ -104,7 +106,7 @@ def build_subquery(
         Subquery: The constructed nested Subquery.
     """
     subquery = build_value_subquery(
-        search_table=group_spec["search_table"],
+        search_table_name=group_spec["search_table"],
         node_alias=group_spec["node_alias"],
         parent_ref_field=parent_ref_field,
         where=group_spec.get("where"),
@@ -115,7 +117,7 @@ def build_subquery(
         for nested_group in agg.get("group_by", []):
             nested_subquery = build_subquery(nested_group, parent_ref_field="value")
             subquery = build_value_subquery(
-                search_table=group_spec["search_table"],
+                search_table_name=group_spec["search_table"],
                 node_alias=group_spec["node_alias"],
                 parent_ref_field=parent_ref_field,
                 where=group_spec.get("where"),

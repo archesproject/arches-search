@@ -4,9 +4,23 @@ from django.conf.urls.i18n import i18n_patterns
 from django.urls import include, path
 
 from arches_search.views.api.advanced_search import AdvancedSearchAPI
+from arches_search.views.api.advance_search_facet import (
+    DatatypeFacetsAPI,
+    AllDatatypeFacetsAPI,
+)
 
 urlpatterns = [
-    path("api/advanced_search", AdvancedSearchAPI.as_view(), name="advanced_search"),
+    path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
+    path(
+        "api/advanced-search/datatypes/<str:datatype>/facets",
+        DatatypeFacetsAPI.as_view(),
+        name="datatype_facets",
+    ),
+    path(
+        "api/advanced-search/facets",
+        AllDatatypeFacetsAPI.as_view(),
+        name="all_datatype_facets",
+    ),
 ]
 
 handler400 = "arches.app.views.main.custom_400"
