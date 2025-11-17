@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.utils.translation import get_language
 
 
 EVAL_MODE_ANCHOR = "anchor"
@@ -42,15 +43,28 @@ class LiteralClauseEvaluator:
         terminal_graph_slug: Optional[str] = None,
     ):
         if mode == EVAL_MODE_ANCHOR:
+            if clause_payload is None:
+                raise ValueError("clause_payload is required for anchor mode")
             return self._build_anchor_exists(clause_payload)
 
         if mode == EVAL_MODE_CHILD:
+            if clause_payload is None or correlate_field is None:
+                raise ValueError(
+                    "clause_payload and correlate_field are required for child mode"
+                )
             return self._build_child_exists(
                 clause_payload=clause_payload,
                 correlate_field=correlate_field,
             )
 
         if mode == EVAL_MODE_TILE:
+            if clause_payload is None or tiles_for_anchor_resource is None:
+                raise ValueError(
+                    "clause_payload and tiles_for_anchor_resource are required for "
+                    "tile mode"
+                )
+            if tile_id_outer_ref is None:
+                raise ValueError("tile_id_outer_ref is required for tile mode")
             return self._build_tile_scope_predicates(
                 clause_payload=clause_payload,
                 tiles_for_anchor_resource=tiles_for_anchor_resource,
@@ -58,6 +72,15 @@ class LiteralClauseEvaluator:
             )
 
         if mode == EVAL_MODE_COMPUTE_CHILD_ROWS:
+            if group_payload is None:
+                raise ValueError(
+                    "group_payload is required for compute_child_rows mode"
+                )
+            if correlate_field is None or terminal_graph_slug is None:
+                raise ValueError(
+                    "correlate_field and terminal_graph_slug are required for "
+                    "compute_child_rows mode"
+                )
             return self._compute_child_rows(
                 group_payload=group_payload,
                 correlate_field=correlate_field,
@@ -74,7 +97,8 @@ class LiteralClauseEvaluator:
 
         datatype_name = (
             self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                subject_graph_slug, subject_node_alias
+                subject_graph_slug,
+                subject_node_alias,
             )
         )
         model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
@@ -89,11 +113,12 @@ class LiteralClauseEvaluator:
 
         if not operand_items:
             presence_implies_match = self.facet_registry.presence_implies_match(
-                datatype_name, operator_token
+                datatype_name,
+                operator_token,
             )
             if quantifier_token == QUANTIFIER_NONE:
                 return (
-                    (~Exists(correlated_rows))
+                    ~Exists(correlated_rows)
                     if presence_implies_match
                     else Exists(correlated_rows)
                 )
@@ -103,11 +128,16 @@ class LiteralClauseEvaluator:
                 else ~Exists(correlated_rows)
             )
 
+        normalized_operand_items = self._normalize_operands(
+            datatype_name=datatype_name,
+            operand_items=operand_items,
+        )
+
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
                 datatype_name=datatype_name,
                 operator_token=operator_token,
-                operands=operand_items,
+                operands=normalized_operand_items,
                 anchor_resource_id_annotation=None,
             )
         )
@@ -131,14 +161,18 @@ class LiteralClauseEvaluator:
             positive_per_row = self._positive_rows_for_negated_template(
                 operator_token=operator_token,
                 datatype_name=datatype_name,
-                operand_items=operand_items,
+                operand_items=normalized_operand_items,
                 correlated_rows=correlated_rows,
                 predicate_expression=predicate_q,
             )
             return Exists(correlated_rows) & ~Exists(positive_per_row)
 
+        raise ValueError(f"Unsupported quantifier: {quantifier_token}")
+
     def _build_child_exists(
-        self, clause_payload: Dict[str, Any], correlate_field: str
+        self,
+        clause_payload: Dict[str, Any],
+        correlate_field: str,
     ) -> Exists:
         subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
         operator_token = clause_payload["operator"]
@@ -146,7 +180,8 @@ class LiteralClauseEvaluator:
 
         datatype_name = (
             self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                subject_graph_slug, subject_node_alias
+                subject_graph_slug,
+                subject_node_alias,
             )
         )
         model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
@@ -161,7 +196,8 @@ class LiteralClauseEvaluator:
 
         if not operand_items:
             presence_implies_match = self.facet_registry.presence_implies_match(
-                datatype_name, operator_token
+                datatype_name,
+                operator_token,
             )
             return (
                 Exists(correlated_rows)
@@ -169,11 +205,16 @@ class LiteralClauseEvaluator:
                 else ~Exists(correlated_rows)
             )
 
+        normalized_operand_items = self._normalize_operands(
+            datatype_name=datatype_name,
+            operand_items=operand_items,
+        )
+
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
                 datatype_name=datatype_name,
                 operator_token=operator_token,
-                operands=operand_items,
+                operands=normalized_operand_items,
                 anchor_resource_id_annotation=None,
             )
         )
@@ -189,7 +230,7 @@ class LiteralClauseEvaluator:
         positive_rows = self._positive_rows_for_negated_template(
             operator_token=operator_token,
             datatype_name=datatype_name,
-            operand_items=operand_items,
+            operand_items=normalized_operand_items,
             correlated_rows=correlated_rows,
             predicate_expression=predicate_q,
         )
@@ -239,7 +280,8 @@ class LiteralClauseEvaluator:
 
             datatype_name = (
                 self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                    subject_graph_slug, subject_node_alias
+                    subject_graph_slug,
+                    subject_node_alias,
                 )
             )
             model_class = self.search_model_registry.get_model_for_datatype(
@@ -256,7 +298,8 @@ class LiteralClauseEvaluator:
 
             if not operand_items:
                 presence_implies_match = self.facet_registry.presence_implies_match(
-                    datatype_name, operator_token
+                    datatype_name,
+                    operator_token,
                 )
                 predicate_rows = (
                     correlated_rows
@@ -264,11 +307,16 @@ class LiteralClauseEvaluator:
                     else correlated_rows.none()
                 )
             else:
+                normalized_operand_items = self._normalize_operands(
+                    datatype_name=datatype_name,
+                    operand_items=operand_items,
+                )
+
                 predicate_expression, is_template_negated = (
                     self.predicate_builder.build_predicate(
                         datatype_name=datatype_name,
                         operator_token=operator_token,
-                        operands=operand_items,
+                        operands=normalized_operand_items,
                         anchor_resource_id_annotation=None,
                     )
                 )
@@ -284,7 +332,7 @@ class LiteralClauseEvaluator:
                     positive_rows = self._positive_rows_for_negated_template(
                         operator_token=operator_token,
                         datatype_name=datatype_name,
-                        operand_items=operand_items,
+                        operand_items=normalized_operand_items,
                         correlated_rows=correlated_rows,
                         predicate_expression=predicate_q,
                     )
@@ -313,7 +361,8 @@ class LiteralClauseEvaluator:
 
         datatype_name = (
             self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                subject_graph_slug, subject_node_alias
+                subject_graph_slug,
+                subject_node_alias,
             )
         )
         model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
@@ -334,7 +383,8 @@ class LiteralClauseEvaluator:
 
         if not operand_items:
             presence_implies_match = self.facet_registry.presence_implies_match(
-                datatype_name, operator_token
+                datatype_name,
+                operator_token,
             )
 
             if quantifier_token == QUANTIFIER_ANY:
@@ -362,17 +412,22 @@ class LiteralClauseEvaluator:
                 ~Exists(tile_rows.filter(tileid=tile_id_outer_ref))
             )
             resource_level_q = (
-                (Q(~Exists(tiles_missing_presence)) & any_tile_for_resource_q)
+                Q(~Exists(tiles_missing_presence)) & any_tile_for_resource_q
                 if presence_implies_match
                 else Q(~Exists(tiles_for_anchor_resource))
             )
-            return (None, resource_level_q)
+            return None, resource_level_q
+
+        normalized_operand_items = self._normalize_operands(
+            datatype_name=datatype_name,
+            operand_items=operand_items,
+        )
 
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
                 datatype_name=datatype_name,
                 operator_token=operator_token,
-                operands=operand_items,
+                operands=normalized_operand_items,
                 anchor_resource_id_annotation=None,
             )
         )
@@ -386,11 +441,11 @@ class LiteralClauseEvaluator:
             per_tile_matches = tile_rows.filter(predicate_q).filter(
                 tileid=tile_id_outer_ref
             )
-            return (Q(Exists(per_tile_matches)), None)
+            return Q(Exists(per_tile_matches)), None
 
         if quantifier_token == QUANTIFIER_NONE:
             resource_level_matches = resource_rows.filter(predicate_q)
-            return (None, Q(~Exists(resource_level_matches)))
+            return None, Q(~Exists(resource_level_matches))
 
         if quantifier_token == QUANTIFIER_ALL:
             if not is_template_negated:
@@ -400,19 +455,27 @@ class LiteralClauseEvaluator:
                 tiles_missing_match = tiles_for_anchor_resource.filter(
                     ~Exists(per_tile_matches)
                 )
-                return (None, Q(~Exists(tiles_missing_match)) & any_tile_for_resource_q)
+                return (
+                    None,
+                    Q(~Exists(tiles_missing_match)) & any_tile_for_resource_q,
+                )
 
             positive_per_tile_rows = self._positive_rows_for_negated_template(
                 operator_token=operator_token,
                 datatype_name=datatype_name,
-                operand_items=operand_items,
+                operand_items=normalized_operand_items,
                 correlated_rows=tile_rows.filter(tileid=tile_id_outer_ref),
                 predicate_expression=predicate_q,
             )
             tiles_with_violations = tiles_for_anchor_resource.filter(
                 Exists(positive_per_tile_rows)
             )
-            return (None, Q(~Exists(tiles_with_violations)) & any_tile_for_resource_q)
+            return (
+                None,
+                Q(~Exists(tiles_with_violations)) & any_tile_for_resource_q,
+            )
+
+        raise ValueError(f"Unsupported quantifier: {quantifier_token}")
 
     def _positive_rows_for_negated_template(
         self,
@@ -423,7 +486,8 @@ class LiteralClauseEvaluator:
         predicate_expression: Q | Dict[str, Any],
     ) -> QuerySet:
         positive_facet = self.facet_registry.resolve_positive_facet(
-            operator_token, datatype_name
+            operator_token,
+            datatype_name,
         )
 
         if positive_facet is not None:
@@ -441,7 +505,9 @@ class LiteralClauseEvaluator:
             return correlated_rows.filter(positive_q)
 
         if isinstance(predicate_expression, Q) and getattr(
-            predicate_expression, "negated", False
+            predicate_expression,
+            "negated",
+            False,
         ):
             return correlated_rows.filter(~predicate_expression)
 
@@ -451,3 +517,38 @@ class LiteralClauseEvaluator:
             else Q(**predicate_expression)
         )
         return correlated_rows.exclude(predicate_q)
+
+    def _normalize_operands(
+        self,
+        datatype_name: str,
+        operand_items: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        if datatype_name.lower() != "string":
+            return operand_items
+
+        language_code = get_language()
+        short_language_code = None
+
+        if language_code:
+            short_language_code = language_code.split("-")[0]
+
+        normalized_items: List[Dict[str, Any]] = []
+
+        for operand_item in operand_items:
+            raw_value = operand_item.get("value")
+
+            if isinstance(raw_value, dict) and raw_value:
+                chosen_value = None
+
+                if language_code and language_code in raw_value:
+                    chosen_value = raw_value[language_code]
+                elif short_language_code and short_language_code in raw_value:
+                    chosen_value = raw_value[short_language_code]
+                else:
+                    chosen_value = next(iter(raw_value.values()))
+
+                normalized_items.append({**operand_item, "value": chosen_value})
+            else:
+                normalized_items.append(operand_item)
+
+        return normalized_items
