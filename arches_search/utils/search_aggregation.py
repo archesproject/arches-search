@@ -1,75 +1,196 @@
-from django.db.models import aggregates, Q
-from django.utils.translation import gettext as _
+"""
+Utility functions for building nested subqueries and aggregations
+used in advanced search queries within the Arches search system.
+"""
+
+from django.db import models
+from django.db.models import OuterRef, Subquery, Q, QuerySet
+from typing import Optional, Dict, Any, List, Union, Callable
+
+from arches_search.utils.advanced_search import SEARCH_TABLE_TO_MODEL
 
 
-def _build_annotations(metric_specs):
-    annotations = {}
+def get_search_model(search_table: str) -> models.Model:
+    """
+    Retrieve the Django model associated with a given search table name.
 
-    for metric_spec in metric_specs:
-        metric_alias = metric_spec["alias"]
-        aggregate_name = metric_spec["fn"]
-        field_name = metric_spec.get("field")
+    Args:
+        search_table (str): The key identifying a search table.
 
-        try:
-            aggregate_fn = getattr(aggregates, aggregate_name)
-        except AttributeError as error:
-            raise ValueError(f"Unknown aggregate '{aggregate_name}'") from error
+    Returns:
+        models.Model: The model class associated with the given search table.
 
-        kwargs = dict(metric_spec.get("kwargs") or {})
-
-        if metric_spec.get("where"):
-            kwargs["filter"] = Q(**metric_spec.get("where"))
-        if metric_spec.get("distinct"):
-            kwargs["distinct"] = True
-
-        annotations[metric_alias] = aggregate_fn(field_name, **kwargs)
-
-    return annotations
+    Raises:
+        ValueError: If the search table name is not found in SEARCH_TABLE_TO_MODEL.
+    """
+    try:
+        return SEARCH_TABLE_TO_MODEL[search_table]
+    except KeyError:
+        raise ValueError(f"Unknown search table '{search_table}'")
 
 
-def apply_json_aggregations(raw_aggregations, queryset):
-    if not raw_aggregations:
-        raise ValueError(_("No aggregations provided"))
+def get_aggregate_function(fn_name: str) -> Callable[..., Any]:
+    """
+    Return a Django aggregate function by its name (e.g., "Sum", "Avg").
 
-    results = {}
+    Args:
+        fn_name (str): The name of the aggregate function.
 
-    for raw_aggregation in raw_aggregations:
-        aggregation_name = raw_aggregation["name"]
+    Returns:
+        Callable[..., Any]: The corresponding Django aggregate function class.
 
-        if raw_aggregation.get("where"):
-            queryset = queryset.filter(**raw_aggregation.get("where"))
+    Raises:
+        ValueError: If no aggregate function matches the provided name.
+    """
+    try:
+        return getattr(models, fn_name)
+    except AttributeError:
+        raise ValueError(f"Unknown aggregate function: {fn_name}")
 
-        if "aggregate" in raw_aggregation:
-            annotations = _build_annotations(raw_aggregation["aggregate"])
-            results[aggregation_name] = queryset.aggregate(**annotations)
-            continue
 
-        if "group_by" in raw_aggregation and "metrics" in raw_aggregation:
-            annotations = _build_annotations(raw_aggregation["metrics"])
-            group_by_fields = raw_aggregation["group_by"]
-            grouped = queryset.values(*group_by_fields).annotate(**annotations)
+def build_value_subquery(
+    search_table: str,
+    node_alias: str,
+    parent_ref_field: str = "resourceinstanceid",
+    where: Optional[Dict[str, Any]] = None,
+    value_field: str = "value",
+    annotations: Optional[Dict[str, Any]] = None,
+) -> Subquery:
+    """
+    Build a base Subquery returning a single value from a search table.
 
-            order_by_fields = raw_aggregation.get("order_by")
-            if order_by_fields:
-                grouped = grouped.order_by(*order_by_fields)
-            else:
-                metric_aliases_in_order = list(annotations.keys())
-                default_order = (
-                    [f"-{metric_aliases_in_order[0]}"]
-                    if metric_aliases_in_order
-                    else []
-                ) + group_by_fields
-                grouped = grouped.order_by(*default_order)
+    Typically used as a building block for group-by or metric aggregations.
 
-            limit_value = raw_aggregation.get("limit")
-            if isinstance(limit_value, int) and limit_value > 0:
-                grouped = grouped[:limit_value]
+    Args:
+        search_table (str): The search table used to look up the model.
+        node_alias (str): The node alias used to filter the queryset.
+        parent_ref_field (str, optional): The reference field in the parent queryset.
+            Defaults to "resourceinstanceid".
+        where (dict, optional): Additional filter conditions to apply.
+        value_field (str, optional): The field to select as the subquery value.
+            Defaults to "value".
+        annotations (dict, optional): Extra annotations to apply before subquery selection.
 
-            results[aggregation_name] = list(grouped)
-            continue
+    Returns:
+        Subquery: A Django ORM Subquery returning the specified field value.
+    """
+    model = get_search_model(search_table)
+    filters = {
+        "node_alias": node_alias,
+        "resourceinstanceid": OuterRef(parent_ref_field),
+    }
+    qs = model.objects.filter(**filters)
+    if annotations:
+        qs = qs.annotate(**annotations)
+    if where:
+        qs = qs.filter(**where)
+    return Subquery(qs.values(value_field)[:1])
 
-        raise ValueError(
-            "Each raw_aggregation must be either 'aggregate' or ('group_by' + 'metrics')."
-        )
+
+def build_subquery(
+    group_spec: Dict[str, Any],
+    parent_ref_field: str = "resourceinstanceid",
+) -> Subquery:
+    """
+    Recursively build nested subqueries for deeply linked nodes in group-by specifications.
+
+    Args:
+        group_spec (dict): The group specification containing search table, node alias,
+            and potentially nested aggregations.
+        parent_ref_field (str, optional): The field in the parent queryset to reference.
+            Defaults to "resourceinstanceid".
+
+    Returns:
+        Subquery: The constructed nested Subquery.
+    """
+    subquery = build_value_subquery(
+        search_table=group_spec["search_table"],
+        node_alias=group_spec["node_alias"],
+        parent_ref_field=parent_ref_field,
+        where=group_spec.get("where"),
+    )
+
+    # Handle nested aggregations recursively
+    for agg in group_spec.get("aggregations", []):
+        for nested_group in agg.get("group_by", []):
+            nested_subquery = build_subquery(nested_group, parent_ref_field="value")
+            subquery = build_value_subquery(
+                search_table=group_spec["search_table"],
+                node_alias=group_spec["node_alias"],
+                parent_ref_field=parent_ref_field,
+                where=group_spec.get("where"),
+                value_field=nested_group["alias"],
+                annotations={nested_group["alias"]: nested_subquery},
+            )
+
+    return subquery
+
+
+def build_aggregations(
+    queryset: QuerySet,
+    aggregations: List[Dict[str, Any]],
+) -> Dict[str, Union[List[Dict[str, Any]], Dict[str, Any]]]:
+    """
+    Build and evaluate aggregations on a queryset.
+
+    Supports both grouped metric aggregations and simple global aggregates.
+
+    Args:
+        queryset (QuerySet): The base queryset to aggregate.
+        aggregations (list[dict]): Aggregation specifications that define grouping,
+            metrics, and/or direct aggregate operations.
+
+    Returns:
+        dict: A dictionary mapping aggregation names to their computed results.
+            Each value is either a list of grouped records or a dictionary of aggregate values.
+    """
+    results: Dict[str, Union[List[Dict[str, Any]], Dict[str, Any]]] = {}
+
+    for agg in aggregations:
+        name = agg["name"]
+
+        group_bys = agg.get("group_by", [])
+        metrics = agg.get("metrics", [])
+        local_queryset = queryset
+
+        # Apply group-by subqueries
+        for group_spec in group_bys:
+            field_alias = group_spec["alias"]
+            local_queryset = local_queryset.annotate(
+                **{field_alias: build_subquery(group_spec)}
+            )
+
+        # Define metric-level aggregations
+        metric_annotations: Dict[str, Any] = {}
+        for metric_spec in metrics:
+            alias = metric_spec["alias"]
+            aggregate_fn = get_aggregate_function(metric_spec["fn"])
+            subquery = build_subquery(metric_spec)
+            metric_annotations[alias] = aggregate_fn(subquery)
+
+        # Apply metric annotations and group-by fields
+        if metric_annotations:
+            group_fields = [g["alias"] for g in group_bys]
+            local_queryset = local_queryset.values(*group_fields).annotate(
+                **metric_annotations
+            )
+
+        results[name] = list(local_queryset)
+
+        # Handle "simple" aggregates on the current queryset level
+        if "aggregate" in agg:
+            for aggregate in agg["aggregate"]:
+                field = aggregate.get("field", "value")
+                aggregate_fn = get_aggregate_function(aggregate["fn"])
+                kwargs = dict(aggregate.get("kwargs") or {})
+
+                if aggregate.get("where"):
+                    kwargs["filter"] = Q(**aggregate.get("where"))
+                if aggregate.get("distinct"):
+                    kwargs["distinct"] = True
+
+                results[aggregate.get("alias")] = local_queryset.aggregate(
+                    **{aggregate.get("alias"): aggregate_fn(field, **kwargs)}
+                )[aggregate.get("alias")]
 
     return results
