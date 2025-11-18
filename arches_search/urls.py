@@ -8,6 +8,8 @@ from arches_search.views.api.advance_search_facet import (
     DatatypeFacetsAPI,
     AllDatatypeFacetsAPI,
 )
+from arches_search.views.api.graph_models import GraphModelsAPI
+from arches_search.views.api.graph_nodes import GraphNodesAPI
 
 urlpatterns = [
     path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
@@ -20,6 +22,16 @@ urlpatterns = [
         "api/advanced-search/facets",
         AllDatatypeFacetsAPI.as_view(),
         name="all_datatype_facets",
+    ),
+    path(
+        "api/advanced-search/graph/models",
+        GraphModelsAPI.as_view(),
+        name="graph_models",
+    ),
+    path(
+        "api/advanced-search/graph/<uuid:graph_id>/nodes",
+        GraphNodesAPI.as_view(),
+        name="graph_nodes",
     ),
 ]
 
