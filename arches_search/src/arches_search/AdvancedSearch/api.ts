@@ -24,11 +24,6 @@ export async function getSearchResults(searchQuery: {
 }
 
 export async function getNodesForGraphId(graphId: string) {
-    console.log(
-        "Fetching nodes for graph ID:",
-        graphId,
-        generateArchesURL("arches_search:graph_nodes", { graph_id: graphId }),
-    );
     const response = await fetch(
         generateArchesURL("arches_search:graph_nodes", { graph_id: graphId }),
         {
