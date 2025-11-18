@@ -159,7 +159,7 @@ function onUpdateRelationship(
                 severity="secondary"
                 text
                 rounded
-                :aria-label="$gettext('Toggle advanced group options')"
+                :aria-label="$gettext('Toggle advanced options')"
                 :aria-pressed="isOptionsOpen"
                 @click="onToggleOptions"
             />
