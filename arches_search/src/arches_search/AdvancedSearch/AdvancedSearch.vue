@@ -211,6 +211,7 @@ async function search(): Promise<void> {
                 </SplitterPanel>
 
                 <SplitterPanel
+                    v-show="searchResults"
                     style="overflow: auto"
                     :size="70"
                     :min-size="10"

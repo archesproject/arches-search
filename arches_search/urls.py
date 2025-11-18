@@ -11,6 +11,11 @@ from arches_search.views.api.advance_search_facet import (
 from arches_search.views.api.graph_models import GraphModelsAPI
 from arches_search.views.api.graph_nodes import GraphNodesAPI
 
+from arches_search.views.api.graph_models import GraphModelsAPI
+from arches_search.views.api.nodes_with_widget_labels_for_graph import (
+    NodesWithWidgetLabelsForGraphAPI,
+)
+
 urlpatterns = [
     path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
     path(
@@ -30,8 +35,8 @@ urlpatterns = [
     ),
     path(
         "api/advanced-search/graph/<uuid:graph_id>/nodes",
-        GraphNodesAPI.as_view(),
-        name="graph_nodes",
+        NodesWithWidgetLabelsForGraphAPI.as_view(),
+        name="nodes_with_widget_labels_for_graph",
     ),
 ]
 

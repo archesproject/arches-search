@@ -127,7 +127,7 @@ watch(selectedNodeAlias, (nextAlias) => {
             v-model="selectedNodeAlias"
             auto-filter-focus
             filter
-            option-label="name"
+            option-label="card_x_node_x_widget_label"
             option-value="alias"
             :disabled="nodesForAnchorGraph.length === 0"
             :filter-placeholder="$gettext('Search nodes...')"
