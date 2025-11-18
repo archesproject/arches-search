@@ -128,7 +128,7 @@ watch(selectedNodeAlias, (nextAlias) => {
             auto-filter-focus
             filter
             option-label="card_x_node_x_widget_label"
-            option-value="node_alias"
+            option-value="alias"
             :disabled="nodesForAnchorGraph.length === 0"
             :filter-placeholder="$gettext('Search nodes...')"
             :loading="isLoading"

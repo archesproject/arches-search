@@ -415,7 +415,7 @@ function handleOperandTypeClick(
                 text
                 rounded
                 type="button"
-                :aria-label="$gettext('Toggle advanced clause options')"
+                :aria-label="$gettext('Toggle advanced options')"
                 :aria-pressed="isAdvancedOptionsOpen"
                 @click="handleToggleAdvancedOptions"
             />
@@ -482,6 +482,7 @@ function handleOperandTypeClick(
                 severity="danger"
                 type="button"
                 class="clause-remove-button"
+                :aria-label="$gettext('Remove filter')"
                 @click="handleRemoveSelf"
             />
         </div>
