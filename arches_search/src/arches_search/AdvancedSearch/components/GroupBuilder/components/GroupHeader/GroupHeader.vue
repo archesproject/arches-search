@@ -16,10 +16,15 @@ const { $gettext } = useGettext();
 
 type GraphSummary = {
     id?: string;
-    slug?: string;
+    slug: string;
     name?: string;
     label?: string;
     [key: string]: unknown;
+};
+
+type GraphOption = {
+    label: string;
+    value: string;
 };
 
 type RelationshipState = NonNullable<GroupPayload["relationship"]>;
@@ -49,61 +54,41 @@ const { hasBodyContent, groupPayload, isRoot, hasNestedGroups } = defineProps<{
 
 const isOptionsOpen = ref(false);
 
-const graphOptions = computed<{ label: string; value: string }[]>(
-    function getGraphOptions() {
-        const availableGraphs = graphs?.value ?? [];
-        const options: { label: string; value: string }[] = [];
+const graphOptions = computed<GraphOption[]>(function () {
+    return (
+        graphs?.value.map((graph) => ({
+            label: graph.name ?? graph.slug,
+            value: graph.slug,
+        })) ?? []
+    );
+});
 
-        for (const graphSummary of availableGraphs) {
-            const graphSlug = graphSummary.slug ?? "";
-
-            if (graphSlug.length === 0) {
-                continue;
-            }
-
-            const displayName =
-                graphSummary.name ?? graphSummary.label ?? graphSlug;
-
-            options.push({
-                label: String(displayName),
-                value: String(graphSlug),
-            });
-        }
-
-        return options;
-    },
-);
-
-const currentScope = computed<GraphScopeToken>(function getCurrentScope() {
+const currentScope = computed<GraphScopeToken>(function () {
     return groupPayload.scope;
 });
 
-const currentGraphSlug = computed<string>(function getCurrentGraphSlug() {
+const currentGraphSlug = computed<string>(function () {
     return groupPayload.graph_slug;
 });
 
-const isGraphSelected = computed<boolean>(function getIsGraphSelected() {
+const isGraphSelected = computed<boolean>(function () {
     return currentGraphSlug.value.trim().length > 0;
 });
 
-const currentRelationship = computed<RelationshipState | null>(
-    function getCurrentRelationship() {
-        return groupPayload.relationship as RelationshipState | null;
-    },
-);
+const currentRelationship = computed<RelationshipState | null>(function () {
+    return groupPayload.relationship as RelationshipState | null;
+});
 
-const hasRelationship = computed<boolean>(function getHasRelationship() {
+const hasRelationship = computed<boolean>(function () {
     return currentRelationship.value !== null;
 });
 
-const innerGraphSlug = computed<string | undefined>(
-    function getInnerGraphSlug() {
-        const firstChildGroup = groupPayload.groups[0];
-        return firstChildGroup?.graph_slug;
-    },
-);
+const innerGraphSlug = computed<string | undefined>(function () {
+    const firstChildGroup = groupPayload.groups[0];
+    return firstChildGroup?.graph_slug;
+});
 
-const isTileScoped = computed<boolean>(function getIsTileScoped() {
+const isTileScoped = computed<boolean>(function () {
     return currentScope.value === GraphScopeToken.TILE;
 });
 
@@ -235,9 +220,6 @@ function onUpdateRelationship(
 <style scoped>
 :deep(.p-tag-icon) {
     font-size: 1.4rem;
-}
-
-:deep(.p-tag-icon) {
     margin-bottom: 0.5rem;
     margin-inline-end: 1rem;
 }

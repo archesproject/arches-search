@@ -25,7 +25,7 @@ export async function getSearchResults(searchQuery: {
 
 export async function getNodesForGraphId(graphId: string) {
     const response = await fetch(
-        generateArchesURL("arches:graph_nodes", { graphid: graphId }),
+        generateArchesURL("arches_search:graph_nodes", { graph_id: graphId }),
         {
             method: "GET",
             headers: {
@@ -59,7 +59,7 @@ export async function getAdvancedSearchFacets() {
 
 export async function getGraphs() {
     const response = await fetch(
-        generateArchesURL("arches:get_graph_models_api"),
+        generateArchesURL("arches_search:graph_models"),
         {
             method: "GET",
             headers: {

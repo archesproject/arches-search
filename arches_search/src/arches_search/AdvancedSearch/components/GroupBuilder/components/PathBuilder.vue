@@ -125,12 +125,15 @@ watch(selectedNodeAlias, (nextAlias) => {
 
         <Select
             v-model="selectedNodeAlias"
+            auto-filter-focus
+            filter
             option-label="name"
             option-value="alias"
+            :disabled="nodesForAnchorGraph.length === 0"
+            :filter-placeholder="$gettext('Search nodes...')"
+            :loading="isLoading"
             :options="nodesForAnchorGraph"
             :placeholder="$gettext('Select node...')"
-            :disabled="nodesForAnchorGraph.length === 0"
-            :loading="isLoading"
         />
     </div>
 </template>
