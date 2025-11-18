@@ -199,7 +199,7 @@ function onUpdateRelationship(
             <Button
                 severity="secondary"
                 icon="pi pi-plus"
-                :label="$gettext('Add clause')"
+                :label="$gettext('Add filter')"
                 :disabled="!isGraphSelected"
                 @click="onAddClauseClick"
             />

@@ -164,7 +164,10 @@ async function search(): Promise<void> {
 </script>
 
 <template>
-    <div class="advanced-search">
+    <div
+        class="advanced-search"
+        :class="{ 'advanced-search--has-results': !!searchResults }"
+    >
         <Skeleton
             v-if="isLoading"
             style="height: 100%"
@@ -181,67 +184,46 @@ async function search(): Promise<void> {
             v-else
             class="content"
         >
-            <!-- BEFORE FIRST SEARCH: no splitter, no results -->
-            <template v-if="!searchResults">
-                <div class="query-panel">
-                    <GroupBuilder
-                        :model-value="rootPayload"
-                        :is-root="true"
-                        @update:model-value="onUpdateRoot"
-                    />
-
-                    <Button
-                        class="search-button"
-                        icon="pi pi-search"
-                        size="large"
-                        :label="searchButtonLabel"
-                        @click="search"
-                    />
-                </div>
-            </template>
-
-            <!-- AFTER FIRST SUCCESSFUL SEARCH: show splitter + results -->
-            <template v-else>
-                <Splitter
-                    layout="vertical"
-                    class="search-splitter"
+            <Splitter
+                layout="vertical"
+                class="search-splitter"
+            >
+                <SplitterPanel
+                    style="overflow: auto"
+                    :size="30"
+                    :min-size="20"
                 >
-                    <SplitterPanel
-                        style="overflow: auto"
-                        :size="30"
-                        :min-size="20"
-                    >
-                        <div class="query-panel">
-                            <GroupBuilder
-                                :model-value="rootPayload"
-                                :is-root="true"
-                                @update:model-value="onUpdateRoot"
-                            />
+                    <div class="query-panel">
+                        <GroupBuilder
+                            :model-value="rootPayload"
+                            :is-root="true"
+                            @update:model-value="onUpdateRoot"
+                        />
 
-                            <Button
-                                class="search-button"
-                                icon="pi pi-search"
-                                size="large"
-                                :label="searchButtonLabel"
-                                @click="search"
-                            />
-                        </div>
-                    </SplitterPanel>
+                        <Button
+                            class="search-button"
+                            icon="pi pi-search"
+                            size="large"
+                            :label="searchButtonLabel"
+                            @click="search"
+                        />
+                    </div>
+                </SplitterPanel>
 
-                    <SplitterPanel
-                        style="overflow: auto"
-                        :size="70"
-                        :min-size="10"
-                    >
-                        <div class="results-panel">
-                            <SearchResults
-                                :results="searchResults"
-                                :is-searching="isSearching"
-                            />
-                        </div>
-                    </SplitterPanel>
-                </Splitter>
-            </template>
+                <SplitterPanel
+                    style="overflow: auto"
+                    :size="70"
+                    :min-size="10"
+                >
+                    <div class="results-panel">
+                        <SearchResults
+                            v-if="searchResults"
+                            :results="searchResults"
+                            :is-searching="isSearching"
+                        />
+                    </div>
+                </SplitterPanel>
+            </Splitter>
         </div>
     </div>
 </template>
@@ -283,7 +265,6 @@ async function search(): Promise<void> {
     min-height: 0;
 }
 
-/* shared query panel styling */
 .query-panel {
     display: flex;
     flex-direction: column;
@@ -296,7 +277,6 @@ async function search(): Promise<void> {
     align-self: flex-start;
 }
 
-/* splitter + results */
 .search-splitter {
     display: flex;
     flex-direction: column;
@@ -310,6 +290,18 @@ async function search(): Promise<void> {
     flex: 1;
     min-height: 0;
     overflow: hidden;
+}
+
+.advanced-search:not(.advanced-search--has-results) .results-panel {
+    display: none;
+}
+
+.advanced-search:not(.advanced-search--has-results) :deep(.p-splitter-gutter) {
+    display: none;
+}
+
+.advanced-search:not(.advanced-search--has-results) :deep(.p-splitter-panel) {
+    flex: 1 !important;
 }
 
 :deep(.p-inputtext),
