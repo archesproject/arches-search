@@ -311,6 +311,7 @@ async function search(): Promise<void> {
 .actions {
     display: flex;
     gap: 0.75rem;
+    margin-inline-start: 1rem;
 }
 
 .search-button {
