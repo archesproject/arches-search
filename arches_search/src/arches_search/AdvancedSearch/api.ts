@@ -23,6 +23,46 @@ export async function getSearchResults(searchQuery: {
     return parsed;
 }
 
+export async function getSearchSQL(searchQuery: { [key: string]: unknown }) {
+    const response = await fetch(
+        generateArchesURL("arches_search:advanced_search_sql"),
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify(searchQuery),
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
+export async function getNodeMetadataForPayload(payload: {
+    [key: string]: unknown;
+}) {
+    const response = await fetch(
+        generateArchesURL("arches_search:node_metadata_for_payload"),
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify(payload),
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
 export async function getNodesForGraphId(graphId: string) {
     const response = await fetch(
         generateArchesURL("arches_search:nodes_with_widget_labels_for_graph", {
