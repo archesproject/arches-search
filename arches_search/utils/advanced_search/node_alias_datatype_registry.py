@@ -8,13 +8,20 @@ TYPE_PATH = "PATH"
 
 class NodeAliasDatatypeRegistry:
     def __init__(self, payload_query: Optional[Dict[str, Any]] = None) -> None:
-        self._datatype_cache_by_graph: Dict[str, Dict[str, str]] = {}
+        self._graph_slug_node_alias_to_datatype: Dict[str, Dict[str, str]] = {}
+
         if payload_query is not None:
             required_aliases_by_graph = self._collect_required_aliases(payload_query)
             self._preload_required_datatypes(required_aliases_by_graph)
 
+    @property
+    def datatype_cache_by_graph(self) -> Dict[str, Dict[str, str]]:
+        return self._graph_slug_node_alias_to_datatype
+
     def get_datatype_for_alias(self, graph_slug: str, node_alias: str) -> str:
-        cache_for_graph = self._datatype_cache_by_graph.setdefault(graph_slug, {})
+        cache_for_graph = self._graph_slug_node_alias_to_datatype.setdefault(
+            graph_slug, {}
+        )
         cached_datatype = cache_for_graph.get(node_alias)
         if cached_datatype:
             return cached_datatype
@@ -24,12 +31,6 @@ class NodeAliasDatatypeRegistry:
             .values_list("datatype", flat=True)
             .first()
         )
-        if not datatype_name:
-            raise ValueError(
-                _(
-                    "Datatype for node alias '{node_alias}' in graph '{graph_slug}' not found."
-                ).format(node_alias=node_alias, graph_slug=graph_slug)
-            )
 
         cache_for_graph[node_alias] = datatype_name
         return datatype_name
@@ -57,14 +58,14 @@ class NodeAliasDatatypeRegistry:
             .values("graph__slug", "alias", "datatype")
         )
 
-        for row in node_rows.iterator():
-            graph_slug = row["graph__slug"]
-            node_alias = row["alias"]
+        for node_row in node_rows.iterator():
+            graph_slug = node_row["graph__slug"]
+            node_alias = node_row["alias"]
             if node_alias in required_aliases_by_graph[graph_slug]:
-                cache_for_graph = self._datatype_cache_by_graph.setdefault(
+                cache_for_graph = self._graph_slug_node_alias_to_datatype.setdefault(
                     graph_slug, {}
                 )
-                cache_for_graph[node_alias] = row["datatype"]
+                cache_for_graph[node_alias] = node_row["datatype"]
 
     def _collect_required_aliases(
         self, group_payload: Dict[str, Any]

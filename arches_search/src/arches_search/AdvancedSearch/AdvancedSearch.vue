@@ -11,6 +11,7 @@ import SplitterPanel from "primevue/splitterpanel";
 
 import GroupBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/GroupBuilder.vue";
 import SearchResults from "@/arches_search/AdvancedSearch/components/SearchResults/SearchResults.vue";
+import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/PayloadAnalyzer.vue";
 
 import {
     getAdvancedSearchFacets,
@@ -32,6 +33,14 @@ type NodeCacheEntry =
     | { status: typeof PENDING; pending: Promise<Record<string, unknown>[]> }
     | { status: typeof READY; nodes: Record<string, unknown>[] };
 
+type GraphSummary = {
+    graphid?: string;
+    slug?: string;
+    name?: string;
+    label?: string;
+    [key: string]: unknown;
+};
+
 const { $gettext } = useGettext();
 
 const props = defineProps<{
@@ -48,11 +57,14 @@ const datatypesToAdvancedSearchFacets = ref<
     Record<string, AdvancedSearchFacet[]>
 >({});
 
-const graphs = ref<Record<string, unknown>[]>([]);
+const graphs = ref<GraphSummary[]>([]);
 const graphIdToNodeCache = ref<Record<string, NodeCacheEntry>>({});
 const searchResults = ref<SearchResultsPayload | null>(null);
 
 const searchButtonLabel = $gettext("Search");
+const analyzePayloadLabel = $gettext("Analyze payload");
+
+const shouldShowNarrationDialog = ref(false);
 
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
@@ -200,13 +212,24 @@ async function search(): Promise<void> {
                             @update:model-value="onUpdateRoot"
                         />
 
-                        <Button
-                            class="search-button"
-                            icon="pi pi-search"
-                            size="large"
-                            :label="searchButtonLabel"
-                            @click="search"
-                        />
+                        <div class="actions">
+                            <Button
+                                class="search-button"
+                                icon="pi pi-search"
+                                size="large"
+                                :label="searchButtonLabel"
+                                @click="search"
+                            />
+
+                            <Button
+                                class="analyze-button"
+                                icon="pi pi-info-circle"
+                                size="large"
+                                :label="analyzePayloadLabel"
+                                :disabled="!rootPayload"
+                                @click="shouldShowNarrationDialog = true"
+                            />
+                        </div>
                     </div>
                 </SplitterPanel>
 
@@ -226,6 +249,17 @@ async function search(): Promise<void> {
                 </SplitterPanel>
             </Splitter>
         </div>
+
+        <PayloadAnalyzer
+            v-if="rootPayload"
+            :visible="shouldShowNarrationDialog"
+            :payload="rootPayload"
+            :graphs="graphs"
+            :datatypes-to-advanced-search-facets="
+                datatypesToAdvancedSearchFacets
+            "
+            @update:visible="shouldShowNarrationDialog = $event"
+        />
     </div>
 </template>
 
@@ -274,7 +308,17 @@ async function search(): Promise<void> {
     overflow: auto;
 }
 
+.actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-inline-start: 1rem;
+}
+
 .search-button {
+    align-self: flex-start;
+}
+
+.analyze-button {
     align-self: flex-start;
 }
 

@@ -4,20 +4,29 @@ from django.conf.urls.i18n import i18n_patterns
 from django.urls import include, path
 
 from arches_search.views.api.advanced_search import AdvancedSearchAPI
-from arches_search.views.api.advance_search_facet import (
+from arches_search.views.api.advanced_search_sql import AdvancedSearchSQLAPI
+from arches_search.views.api.advanced_search_facet import (
     DatatypeFacetsAPI,
     AllDatatypeFacetsAPI,
 )
 from arches_search.views.api.graph_models import GraphModelsAPI
-from arches_search.views.api.graph_nodes import GraphNodesAPI
-
-from arches_search.views.api.graph_models import GraphModelsAPI
+from arches_search.views.api.node_metadata_for_payload import NodeMetadataForPayloadAPI
 from arches_search.views.api.nodes_with_widget_labels_for_graph import (
     NodesWithWidgetLabelsForGraphAPI,
 )
 
 urlpatterns = [
     path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
+    path(
+        "api/advanced-search/sql",
+        AdvancedSearchSQLAPI.as_view(),
+        name="advanced_search_sql",
+    ),
+    path(
+        "api/advanced-search/node-metadata-for-payload",
+        NodeMetadataForPayloadAPI.as_view(),
+        name="node_metadata_for_payload",
+    ),
     path(
         "api/advanced-search/datatypes/<str:datatype>/facets",
         DatatypeFacetsAPI.as_view(),
