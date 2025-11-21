@@ -112,7 +112,7 @@ class GroupCompiler:
         )
 
         if group_logic_token == LOGIC_OR:
-            combined_or_q = None
+            combined_or_q: Optional[Q] = None
             combined_or_q = (
                 parent_q if combined_or_q is None else (combined_or_q | parent_q)
             )
@@ -140,6 +140,11 @@ class GroupCompiler:
         group_logic_token: str,
     ) -> Tuple[Q, List[Exists]]:
         relationship_block = group_payload["relationship"]
+
+        anchor_q, has_anchor_literals = self.clause_reducer.build_anchor_literal_q(
+            group_payload=group_payload,
+            logic=group_logic_token,
+        )
 
         traversal_context, child_row_set = self.path_navigator.build_relationship_pairs(
             relationship_block
@@ -200,7 +205,18 @@ class GroupCompiler:
         ]
 
         if group_logic_token == LOGIC_OR:
-            combined_or_q = children_q
+            combined_or_q: Optional[Q] = None
+
+            if has_anchor_literals:
+                combined_or_q = anchor_q
+
+            if children_q is not None:
+                combined_or_q = (
+                    children_q
+                    if combined_or_q is None
+                    else (combined_or_q | children_q)
+                )
+
             for existence_expression in all_existence_predicates:
                 existence_q = Q(existence_expression)
                 combined_or_q = (
@@ -208,9 +224,10 @@ class GroupCompiler:
                     if combined_or_q is None
                     else (combined_or_q | existence_q)
                 )
+
             return combined_or_q or Q(), []
 
-        combined_and_q = children_q or Q()
+        combined_and_q = anchor_q & (children_q or Q())
         return combined_and_q, all_existence_predicates
 
     def _build_existence_predicates_for_quantifier(

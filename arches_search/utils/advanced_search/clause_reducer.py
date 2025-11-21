@@ -19,6 +19,7 @@ from arches_search.utils.advanced_search.node_alias_datatype_registry import (
 )
 
 LOGIC_AND = "AND"
+LOGIC_OR = "OR"
 
 SCOPE_RESOURCE = "RESOURCE"
 SCOPE_TILE = "TILE"
@@ -62,6 +63,53 @@ class ClauseReducer:
             facet_registry=self.facet_registry,
             path_navigator=self.path_navigator,
         )
+
+    def build_anchor_literal_q(
+        self,
+        group_payload: Dict[str, Any],
+        logic: str,
+    ) -> Tuple[Q, bool]:
+        anchor_graph_slug = group_payload["graph_slug"]
+        anchor_exists_expressions: List[Exists] = []
+
+        for clause_payload in group_payload.get("clauses") or []:
+            clause_type_token = clause_payload.get("type")
+            if clause_type_token != CLAUSE_TYPE_LITERAL:
+                continue
+
+            subject_pairs = clause_payload.get("subject") or []
+            if not subject_pairs:
+                continue
+
+            subject_graph_slug, _subject_node_alias = subject_pairs[0]
+            if subject_graph_slug != anchor_graph_slug:
+                continue
+
+            exists_expression = self.literal_clause_evaluator.evaluate(
+                mode="anchor",
+                clause_payload=clause_payload,
+            )
+            anchor_exists_expressions.append(exists_expression)
+
+        if not anchor_exists_expressions:
+            return Q(), False
+
+        if logic == LOGIC_OR:
+            combined_predicate: Optional[Q] = None
+            for exists_expression in anchor_exists_expressions:
+                exists_q = Q(exists_expression)
+                combined_predicate = (
+                    exists_q
+                    if combined_predicate is None
+                    else (combined_predicate | exists_q)
+                )
+            return combined_predicate or Q(), True
+
+        combined_predicate = Q()
+        for exists_expression in anchor_exists_expressions:
+            combined_predicate &= Q(exists_expression)
+
+        return combined_predicate, True
 
     def reduce(
         self,
