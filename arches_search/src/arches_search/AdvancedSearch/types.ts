@@ -81,7 +81,7 @@ export type RelationshipPath = ReadonlyArray<SubjectPair>;
 
 export type LiteralOperand = {
     readonly type: "LITERAL";
-    readonly value: string | number | boolean | null;
+    readonly value: unknown;
 };
 
 export type LiteralClause = {
