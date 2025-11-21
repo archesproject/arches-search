@@ -75,37 +75,37 @@ type QuantifierToken = "ANY";
 
 export type OperatorString = string;
 
-export type SubjectPair = readonly [graphSlug: string, nodeAlias: string];
-export type SubjectPath = ReadonlyArray<SubjectPair>;
-export type RelationshipPath = ReadonlyArray<SubjectPair>;
+export type SubjectPair = [graphSlug: string, nodeAlias: string];
+export type SubjectPath = SubjectPair[];
+export type RelationshipPath = SubjectPair[];
 
 export type LiteralOperand = {
-    readonly type: "LITERAL";
-    readonly value: string | number | boolean | null;
+    type: "LITERAL";
+    value: unknown;
 };
 
 export type LiteralClause = {
-    readonly type: ClauseTypeToken;
-    readonly quantifier: QuantifierToken;
-    readonly subject: SubjectPath;
-    readonly operator: OperatorString;
-    readonly operands: ReadonlyArray<LiteralOperand>;
+    type: ClauseTypeToken;
+    quantifier: QuantifierToken;
+    subject: SubjectPath;
+    operator: OperatorString;
+    operands: LiteralOperand[];
 };
 
 export type RelationshipBlock = {
-    readonly path: RelationshipPath;
-    readonly is_inverse: boolean;
-    readonly traversal_quantifiers: ReadonlyArray<QuantifierToken>;
+    path: RelationshipPath;
+    is_inverse: boolean;
+    traversal_quantifiers: QuantifierToken[];
 };
 
 export type GroupPayload = {
-    readonly graph_slug: string;
-    readonly scope: GraphScopeToken;
-    readonly logic: LogicToken;
-    readonly clauses: ReadonlyArray<LiteralClause>;
-    readonly groups: ReadonlyArray<GroupPayload>;
-    readonly aggregations: ReadonlyArray<unknown>;
-    readonly relationship: RelationshipBlock | null;
+    graph_slug: string;
+    scope: GraphScopeToken;
+    logic: LogicToken;
+    clauses: LiteralClause[];
+    groups: GroupPayload[];
+    aggregations: unknown[];
+    relationship: RelationshipBlock | null;
 };
 
 export type SearchResults = {
