@@ -1,10 +1,8 @@
 import Cookies from "js-cookie";
-
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
-export async function getSearchResults(searchQuery: {
-    [key: string]: unknown;
-}) {
+export async function getSearchResults(searchQuery: GroupPayload) {
     const response = await fetch(
         generateArchesURL("arches_search:advanced_search"),
         {
