@@ -76,8 +76,8 @@ type QuantifierToken = "ANY";
 export type OperatorString = string;
 
 export type SubjectPair = [graphSlug: string, nodeAlias: string];
-export type SubjectPath = ReadonlyArray<SubjectPair>;
-export type RelationshipPath = ReadonlyArray<SubjectPair>;
+export type SubjectPath = SubjectPair[];
+export type RelationshipPath = SubjectPair[];
 
 export type LiteralOperand = {
     type: "LITERAL";
@@ -89,22 +89,22 @@ export type LiteralClause = {
     quantifier: QuantifierToken;
     subject: SubjectPath;
     operator: OperatorString;
-    operands: ReadonlyArray<LiteralOperand>;
+    operands: LiteralOperand[];
 };
 
 export type RelationshipBlock = {
     path: RelationshipPath;
     is_inverse: boolean;
-    traversal_quantifiers: ReadonlyArray<QuantifierToken>;
+    traversal_quantifiers: QuantifierToken[];
 };
 
 export type GroupPayload = {
     graph_slug: string;
     scope: GraphScopeToken;
     logic: LogicToken;
-    clauses: ReadonlyArray<LiteralClause>;
-    groups: ReadonlyArray<GroupPayload>;
-    aggregations: ReadonlyArray<unknown>;
+    clauses: LiteralClause[];
+    groups: GroupPayload[];
+    aggregations: unknown[];
     relationship: RelationshipBlock | null;
 };
 
