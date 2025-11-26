@@ -17,8 +17,8 @@ class NonLocalizedStringIndexing(BaseIndexing):
         for string_object in document["strings"]:
             term_search = TermSearch.objects.create(
                 node_alias=node.alias,
-                tileid=tile.tileid,
-                resourceinstanceid=tile.resourceinstance_id,
+                tileid_id=tile.tileid,
+                resourceinstanceid_id=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 graph_slug=node.graph.slug,
                 value=string_object["string"],

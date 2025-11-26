@@ -18,8 +18,8 @@ class NumberIndexing(BaseIndexing):
         for number_object in document["numbers"]:
             numeric_search = NumericSearch.objects.create(
                 node_alias=node.alias,
-                tileid=tile.tileid,
-                resourceinstanceid=tile.resourceinstance_id,
+                tileid_id=tile.tileid,
+                resourceinstanceid_id=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 graph_slug=node.graph.slug,
                 value=number_object["number"],

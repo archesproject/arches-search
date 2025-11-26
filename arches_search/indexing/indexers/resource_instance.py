@@ -19,8 +19,8 @@ class ResourceInstanceIndexing(BaseIndexing):
         for string in document["strings"]:
             string_search = TermSearch.objects.create(
                 node_alias=node.alias,
-                tileid=tile.tileid,
-                resourceinstanceid=tile.resourceinstance_id,
+                tileid_id=tile.tileid,
+                resourceinstanceid_id=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 graph_slug=node.graph.slug,
                 value=string["string"],
@@ -37,8 +37,8 @@ class ResourceInstanceIndexing(BaseIndexing):
         for related_resource_id in document["ids"]:
             uuid_search = UUIDSearch.objects.create(
                 node_alias=node.alias,
-                tileid=tile.tileid,
-                resourceinstanceid=tile.resourceinstance_id,
+                tileid_id=tile.tileid,
+                resourceinstanceid_id=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 graph_slug=node.graph.slug,
                 value=related_resource_id["id"],

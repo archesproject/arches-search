@@ -26,8 +26,8 @@ class StringIndexing(BaseIndexing):
         for string_object in document["strings"]:
             term_search = TermSearch.objects.create(
                 node_alias=node.alias,
-                tileid=tile.tileid,
-                resourceinstanceid=tile.resourceinstance_id,
+                tileid_id=tile.tileid,
+                resourceinstanceid_id=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 language=string_object["language"],
                 graph_slug=node.graph.slug,
