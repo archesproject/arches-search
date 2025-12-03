@@ -99,17 +99,10 @@ const effectiveAnchorGraph = computed<GraphSummary>(
     },
 );
 
-const shouldHaveBracket = computed<boolean>(function getShouldHaveBracket() {
+const shouldHaveBracket = computed<boolean>(function () {
     return (
         currentGroup.value.groups.length + currentGroup.value.clauses.length >=
         2
-    );
-});
-
-const hasBodyContent = computed<boolean>(function getHasBodyContent() {
-    return (
-        currentGroup.value.clauses.length > 0 ||
-        currentGroup.value.groups.length > 0
     );
 });
 
@@ -245,9 +238,9 @@ function onRequestRemoveGroup(): void {
         <template #title>
             <GroupHeader
                 :group-payload="currentGroup"
-                :has-body-content="hasBodyContent"
                 :has-nested-groups="currentGroup.groups.length > 0"
-                :is-root="Boolean(isRoot)"
+                :is-root="isRoot"
+                :should-indent="shouldHaveBracket"
                 @add-clause="onAddClause"
                 @add-group="onAddGroup"
                 @add-relationship="onAddRelationship"
@@ -358,12 +351,14 @@ function onRequestRemoveGroup(): void {
     border: 0.0125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
+    margin-inline-end: 0;
 }
 
 .clause-card {
     border: 0.0125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
+    margin-inline-end: 3rem;
 }
 
 .group-content {
@@ -405,6 +400,10 @@ function onRequestRemoveGroup(): void {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+}
+
+.children .children > .group-card {
+    margin-inline-end: 3rem;
 }
 
 .clauses-without-bracket,

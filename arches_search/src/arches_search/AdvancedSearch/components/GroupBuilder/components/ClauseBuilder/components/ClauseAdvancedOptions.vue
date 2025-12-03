@@ -3,30 +3,20 @@ import { useGettext } from "vue3-gettext";
 import SelectButton from "primevue/selectbutton";
 
 type ClauseTypeToken = "LITERAL" | "RELATED";
-type ClauseQuantifierToken = "ANY" | "ALL" | "NONE";
 type OperandPayloadTypeToken = "LITERAL" | "PATH";
 
 const { $gettext } = useGettext();
 
-const {
-    clauseType,
-    quantifier,
-    operandType,
-    clauseTypeOptions,
-    clauseQuantifierOptions,
-    operandTypeOptions,
-} = defineProps<{
-    clauseType: ClauseTypeToken;
-    quantifier: ClauseQuantifierToken;
-    operandType: OperandPayloadTypeToken;
-    clauseTypeOptions: { label: string; value: ClauseTypeToken }[];
-    clauseQuantifierOptions: { label: string; value: ClauseQuantifierToken }[];
-    operandTypeOptions: { label: string; value: OperandPayloadTypeToken }[];
-}>();
+const { clauseType, operandType, clauseTypeOptions, operandTypeOptions } =
+    defineProps<{
+        clauseType: ClauseTypeToken;
+        operandType: OperandPayloadTypeToken;
+        clauseTypeOptions: { label: string; value: ClauseTypeToken }[];
+        operandTypeOptions: { label: string; value: OperandPayloadTypeToken }[];
+    }>();
 
 const emit = defineEmits<{
     (event: "update:clause-type", nextClauseType: ClauseTypeToken): void;
-    (event: "update:quantifier", nextQuantifier: ClauseQuantifierToken): void;
     (
         event: "update:operand-type",
         nextOperandType: OperandPayloadTypeToken,
@@ -38,13 +28,6 @@ function onChangeClauseType(nextClauseType: ClauseTypeToken): void {
         return;
     }
     emit("update:clause-type", nextClauseType);
-}
-
-function onChangeQuantifier(nextQuantifier: ClauseQuantifierToken): void {
-    if (nextQuantifier === quantifier) {
-        return;
-    }
-    emit("update:quantifier", nextQuantifier);
 }
 
 function onChangeOperandType(nextOperandType: OperandPayloadTypeToken): void {
@@ -77,22 +60,6 @@ function onChangeOperandType(nextOperandType: OperandPayloadTypeToken): void {
                     :allow-empty="false"
                     class="clause-advanced-select"
                     @update:model-value="onChangeClauseType"
-                />
-            </div>
-
-            <div class="clause-advanced-option">
-                <div class="clause-advanced-label">
-                    {{ $gettext("Quantifier") }}
-                </div>
-
-                <SelectButton
-                    :model-value="quantifier"
-                    :options="clauseQuantifierOptions"
-                    option-label="label"
-                    option-value="value"
-                    :allow-empty="false"
-                    class="clause-advanced-select"
-                    @update:model-value="onChangeQuantifier"
                 />
             </div>
 

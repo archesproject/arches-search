@@ -45,11 +45,11 @@ const emit = defineEmits<{
     (event: "remove-group"): void;
 }>();
 
-const { hasBodyContent, groupPayload, isRoot, hasNestedGroups } = defineProps<{
-    hasBodyContent: boolean;
+const { groupPayload, isRoot, hasNestedGroups, shouldIndent } = defineProps<{
     groupPayload: GroupPayload;
     isRoot?: boolean;
     hasNestedGroups: boolean;
+    shouldIndent: boolean;
 }>();
 
 const isOptionsOpen = ref(false);
@@ -136,7 +136,7 @@ function onUpdateRelationship(
 </script>
 
 <template>
-    <div :class="['group-header', hasBodyContent && 'group-header--spaced']">
+    <div :class="['group-header', shouldIndent && 'group-header--spaced']">
         <div class="group-selectors">
             <Button
                 class="group-gear-toggle"

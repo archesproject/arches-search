@@ -66,7 +66,7 @@ const clauseQuantifierOptions: {
 }[] = [
     { label: $gettext("Any"), value: CLAUSE_QUANTIFIER_ANY },
     { label: $gettext("All"), value: CLAUSE_QUANTIFIER_ALL },
-    { label: $gettext("None"), value: CLAUSE_QUANTIFIER_NONE },
+    { label: $gettext("No"), value: CLAUSE_QUANTIFIER_NONE },
 ];
 
 const operandTypeOptions: {
@@ -83,21 +83,25 @@ const datatypesToAdvancedSearchFacets = inject<
 
 if (!datatypesToAdvancedSearchFacets) {
     throw new Error(
-        "ClauseBuilder is missing datatypesToAdvancedSearchFacets injection.",
+        $gettext(
+            "ClauseBuilder is missing datatypesToAdvancedSearchFacets injection.",
+        ),
     );
 }
 
 const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
 
 if (!graphs) {
-    throw new Error("ClauseBuilder is missing graphs injection.");
+    throw new Error($gettext("ClauseBuilder is missing graphs injection."));
 }
 
 const getNodesForGraphId =
     inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId");
 
 if (!getNodesForGraphId) {
-    throw new Error("ClauseBuilder is missing getNodesForGraphId injection.");
+    throw new Error(
+        $gettext("ClauseBuilder is missing getNodesForGraphId injection."),
+    );
 }
 
 const emit = defineEmits<{
@@ -369,10 +373,10 @@ function handleRemoveSelf(): void {
     emit("request:remove");
 }
 
-function handleToggleAdvancedOptions(event: MouseEvent): void {
-    event.stopPropagation();
-    isAdvancedOptionsOpen.value = !isAdvancedOptionsOpen.value;
-}
+// function handleToggleAdvancedOptions(event: MouseEvent): void {
+//     event.stopPropagation();
+//     isAdvancedOptionsOpen.value = !isAdvancedOptionsOpen.value;
+// }
 
 function handleClauseTypeClick(nextClauseType: ClauseTypeToken): void {
     if (modelValue.type === nextClauseType) {
@@ -408,7 +412,7 @@ function handleOperandTypeClick(
 <template>
     <div class="clause-builder">
         <div class="clause-main-row">
-            <Button
+            <!-- <Button
                 class="clause-gear-toggle"
                 icon="pi pi-cog"
                 severity="secondary"
@@ -418,9 +422,18 @@ function handleOperandTypeClick(
                 :aria-label="$gettext('Toggle advanced options')"
                 :aria-pressed="isAdvancedOptionsOpen"
                 @click="handleToggleAdvancedOptions"
-            />
+            /> -->
 
             <div class="clause-core-row">
+                <Select
+                    :model-value="modelValue.quantifier"
+                    class="clause-quantifier-select"
+                    :options="clauseQuantifierOptions"
+                    option-label="label"
+                    option-value="value"
+                    @update:model-value="handleQuantifierClick"
+                />
+
                 <PathBuilder
                     :key="subjectPathSequenceKey"
                     class="clause-subject-path"
@@ -493,13 +506,10 @@ function handleOperandTypeClick(
         >
             <ClauseAdvancedOptions
                 :clause-type="modelValue.type"
-                :quantifier="modelValue.quantifier"
                 :operand-type="localOperandType"
                 :clause-type-options="clauseTypeOptions"
-                :clause-quantifier-options="clauseQuantifierOptions"
                 :operand-type-options="operandTypeOptions"
                 @update:clause-type="handleClauseTypeClick"
-                @update:quantifier="handleQuantifierClick"
                 @update:operand-type="handleOperandTypeClick"
             />
         </div>
@@ -555,5 +565,9 @@ function handleOperandTypeClick(
 .clause-advanced-row {
     margin-top: 0.5rem;
     margin-inline-start: 2.75rem;
+}
+
+.clause-remove-button {
+    justify-self: flex-end;
 }
 </style>
