@@ -90,27 +90,30 @@ class GroupCompiler:
         current_context_side: str,
         traversal_context_for_parent: Optional[Dict[str, Any]],
     ) -> Tuple[Q, List[Exists]]:
-        has_relationship_anywhere = self._group_has_any_relationship(
+        group_has_any_relationship = self._group_has_any_relationship(
             group_payload=group_payload
         )
 
-        if has_relationship_anywhere:
-            group_payload_for_reduce: Dict[str, Any] = {
+        if group_has_any_relationship:
+            # When there are relationship subgroups, we don't want the reducer
+            # to process any clauses in this group, since those clauses should
+            # apply to the parent context of the relationship subgroups.
+            group_payload_for_clause_reducer: Dict[str, Any] = {
                 **group_payload,
                 "groups": [],
             }
         else:
-            group_payload_for_reduce = group_payload
+            group_payload_for_clause_reducer = group_payload
 
         reduce_result = self.clause_reducer.reduce(
-            group_payload=group_payload_for_reduce,
+            group_payload=group_payload_for_clause_reducer,
             traversal_context=None,
             child_rows=None,
             logic=group_logic_token,
         )
         parent_q = reduce_result.relationshipless_q or Q()
 
-        if not has_relationship_anywhere:
+        if not group_has_any_relationship:
             return parent_q, []
 
         children_q, children_existence_predicates = self._compile_children(
