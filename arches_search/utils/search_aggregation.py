@@ -55,6 +55,7 @@ def build_value_subquery(
     node_alias: str,
     parent_ref_field: str = "resourceinstanceid",
     where: Optional[Dict[str, Any]] = None,
+    fn: Optional[str] = None,
     value_field: str = "value",
     annotations: Optional[Dict[str, Any]] = None,
 ) -> Subquery:
@@ -69,6 +70,8 @@ def build_value_subquery(
         parent_ref_field (str, optional): The reference field in the parent queryset.
             Defaults to "resourceinstanceid".
         where (dict, optional): Additional filter conditions to apply.
+        fn (str, optional): An aggregate function name to apply (e.g., "Sum", "Avg").
+            If provided, the subquery will return the aggregated value.
         value_field (str, optional): The field to select as the subquery value.
             Defaults to "value".
         annotations (dict, optional): Extra annotations to apply before subquery selection.
@@ -86,6 +89,15 @@ def build_value_subquery(
         qs = qs.annotate(**annotations)
     if where:
         qs = qs.filter(**where)
+    if fn:
+        aggregate_fn = get_aggregate_function(fn)
+        aggregated_value_field = f"{fn.lower()}_{node_alias}"
+        qs = (
+            qs.values("resourceinstanceid")
+            .annotate(**{aggregated_value_field: aggregate_fn(value_field)})
+            .values(aggregated_value_field)
+        )
+        return Subquery(qs[:1])
     return Subquery(qs.values(value_field)[:1])
 
 
@@ -110,6 +122,7 @@ def build_subquery(
         node_alias=group_spec["node_alias"],
         parent_ref_field=parent_ref_field,
         where=group_spec.get("where"),
+        fn=group_spec.get("fn"),
     )
 
     # Handle nested aggregations recursively
@@ -166,9 +179,8 @@ def build_aggregations(
         metric_annotations: Dict[str, Any] = {}
         for metric_spec in metrics:
             alias = metric_spec["alias"]
-            aggregate_fn = get_aggregate_function(metric_spec["fn"])
             subquery = build_subquery(metric_spec)
-            metric_annotations[alias] = aggregate_fn(subquery)
+            metric_annotations[alias] = subquery
 
         # Apply metric annotations and group-by fields
         if metric_annotations:
