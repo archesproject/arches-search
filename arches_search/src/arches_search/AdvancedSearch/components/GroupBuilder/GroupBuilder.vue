@@ -358,7 +358,6 @@ function onRequestRemoveGroup(): void {
     border: 0.0125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
-    margin-inline-end: 3rem;
 }
 
 .group-content {
@@ -402,12 +401,13 @@ function onRequestRemoveGroup(): void {
     gap: 0.75rem;
 }
 
-.children .children > .group-card {
-    margin-inline-end: 3rem;
+.children .children > .group-card,
+.children .clauses > .clause-card {
+    margin-inline-end: 3.5rem;
 }
 
 .clauses-without-bracket,
 .children-without-bracket {
-    margin-inline-start: 4.25rem;
+    margin-inline-start: 3rem;
 }
 </style>

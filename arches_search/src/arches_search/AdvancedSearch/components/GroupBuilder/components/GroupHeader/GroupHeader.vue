@@ -266,6 +266,7 @@ function onUpdateRelationship(
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
+    margin-inline-end: 0.5rem;
 }
 
 .group-advanced-row {
