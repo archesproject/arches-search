@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, computed, ref } from "vue";
+import { inject, computed } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
@@ -7,9 +7,8 @@ import Select from "primevue/select";
 import Button from "primevue/button";
 import Tag from "primevue/tag";
 
-import GroupAdvancedOptions from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader/components/GroupAdvancedOptions.vue";
+import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/RelationshipEditor.vue";
 
-import { GraphScopeToken } from "@/arches_search/AdvancedSearch/types.ts";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
@@ -33,7 +32,6 @@ const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
 
 const emit = defineEmits<{
     (event: "change-graph", graphSlug: string): void;
-    (event: "change-scope", scope: GraphScopeToken): void;
     (event: "add-group"): void;
     (event: "add-clause"): void;
     (event: "add-relationship"): void;
@@ -45,26 +43,29 @@ const emit = defineEmits<{
     (event: "remove-group"): void;
 }>();
 
-const { hasBodyContent, groupPayload, isRoot, hasNestedGroups } = defineProps<{
-    hasBodyContent: boolean;
+const {
+    groupPayload,
+    isRoot,
+    hasNestedGroups,
+    shouldIndent,
+    relationshipToParent,
+} = defineProps<{
     groupPayload: GroupPayload;
     isRoot?: boolean;
     hasNestedGroups: boolean;
+    shouldIndent: boolean;
+    relationshipToParent?: RelationshipState | null;
 }>();
-
-const isOptionsOpen = ref(false);
 
 const graphOptions = computed<GraphOption[]>(function () {
     return (
-        graphs?.value.map((graph) => ({
-            label: graph.name ?? graph.slug,
-            value: graph.slug,
-        })) ?? []
+        graphs?.value.map(function (graphSummary) {
+            return {
+                label: graphSummary.name ?? graphSummary.slug,
+                value: graphSummary.slug,
+            };
+        }) ?? []
     );
-});
-
-const currentScope = computed<GraphScopeToken>(function () {
-    return groupPayload.scope;
 });
 
 const currentGraphSlug = computed<string>(function () {
@@ -88,36 +89,90 @@ const innerGraphSlug = computed<string | undefined>(function () {
     return firstChildGroup?.graph_slug;
 });
 
-const isTileScoped = computed<boolean>(function () {
-    return currentScope.value === GraphScopeToken.TILE;
+const relateButtonTitle = computed<string>(function () {
+    if (!isGraphSelected.value) {
+        return $gettext("Select what this group filters before relating.");
+    }
+
+    if (!hasNestedGroups) {
+        return $gettext("Add a nested group below to enable relationships.");
+    }
+
+    if (hasRelationship.value) {
+        return $gettext("This group is already related to its nested group.");
+    }
+
+    return $gettext("Relate this group to its nested group.");
+});
+
+const showsRelationshipToParentTag = computed<boolean>(function () {
+    return !isRoot && relationshipToParent != null;
+});
+
+const relationshipToParentNodeIdentifier = computed<string | null>(function () {
+    if (!relationshipToParent) {
+        return null;
+    }
+
+    const unsafeRelationship = relationshipToParent as unknown as {
+        path?: unknown;
+    };
+
+    const relationshipPath = unsafeRelationship.path;
+
+    if (!Array.isArray(relationshipPath) || relationshipPath.length === 0) {
+        return null;
+    }
+
+    const lastPathStep = relationshipPath[
+        relationshipPath.length - 1
+    ] as unknown;
+
+    if (!Array.isArray(lastPathStep) || lastPathStep.length < 2) {
+        return null;
+    }
+
+    const unsafeNodeIdentifier = lastPathStep[1] as unknown;
+
+    if (
+        typeof unsafeNodeIdentifier !== "string" ||
+        unsafeNodeIdentifier.trim().length === 0
+    ) {
+        return null;
+    }
+
+    return unsafeNodeIdentifier;
+});
+
+const relationshipToParentLabel = computed<string>(function () {
+    const nodeIdentifier = relationshipToParentNodeIdentifier.value;
+
+    if (nodeIdentifier) {
+        return $gettext("Related to parent via %{nodeIdentifier}", {
+            nodeIdentifier,
+        });
+    }
+
+    return $gettext("Related to parent via node");
 });
 
 function onSetGraphSlug(graphSlug: string): void {
     emit("change-graph", graphSlug);
 }
 
-function onToggleOptions(event: MouseEvent): void {
-    event.stopPropagation();
-    isOptionsOpen.value = !isOptionsOpen.value;
-}
-
-function onAddGroupClick(event: MouseEvent): void {
-    event.stopPropagation();
+function onAddGroupClick(clickEvent: MouseEvent): void {
+    clickEvent.stopPropagation();
     emit("add-group");
 }
 
-function onAddClauseClick(event: MouseEvent): void {
-    event.stopPropagation();
+function onAddClauseClick(clickEvent: MouseEvent): void {
+    clickEvent.stopPropagation();
     emit("add-clause");
 }
 
-function onRemoveGroupClick(event: MouseEvent): void {
-    event.stopPropagation();
+function onRemoveGroupClick(clickEvent: MouseEvent): void {
+    clickEvent.stopPropagation();
     emit("remove-group");
-}
-
-function onChangeScope(nextScopeToken: GraphScopeToken): void {
-    emit("change-scope", nextScopeToken);
 }
 
 function onAddRelationship(): void {
@@ -131,89 +186,104 @@ function onRemoveRelationship(): void {
 function onUpdateRelationship(
     nextRelationship: RelationshipState | null,
 ): void {
+    if (nextRelationship === null) {
+        onClearRelationship(new MouseEvent("click"));
+        return;
+    }
+
     emit("update-relationship", nextRelationship);
+}
+
+function onRelationshipButtonClick(clickEvent: MouseEvent): void {
+    clickEvent.stopPropagation();
+
+    if (!hasNestedGroups || hasRelationship.value) {
+        return;
+    }
+
+    onAddRelationship();
+}
+
+function onClearRelationship(clickEvent?: MouseEvent): void {
+    if (clickEvent) {
+        clickEvent.stopPropagation();
+    }
+    emit("update-relationship", null);
+    onRemoveRelationship();
 }
 </script>
 
 <template>
-    <div :class="['group-header', hasBodyContent && 'group-header--spaced']">
-        <div class="group-selectors">
-            <Button
-                class="group-gear-toggle"
-                icon="pi pi-cog"
-                severity="secondary"
-                text
-                rounded
-                :aria-label="$gettext('Toggle advanced options')"
-                :aria-pressed="isOptionsOpen"
-                @click="onToggleOptions"
-            />
-            <Select
-                :model-value="currentGraphSlug"
-                :options="graphOptions"
-                option-label="label"
-                option-value="value"
-                :placeholder="$gettext('Select graph')"
-                class="group-field"
-                @update:model-value="onSetGraphSlug"
-            />
-            <div class="group-indicators">
-                <Tag
-                    v-if="isTileScoped"
-                    class="group-indicator-pill"
-                    icon="pi pi-th-large"
-                    :value="$gettext('Constrained')"
+    <div :class="['group-header', shouldIndent && 'group-header--spaced']">
+        <div class="group-header-row">
+            <div class="group-selectors">
+                <Select
+                    :model-value="currentGraphSlug"
+                    :options="graphOptions"
+                    option-label="label"
+                    option-value="value"
+                    :placeholder="$gettext('Select what to filter')"
+                    class="group-field"
+                    @update:model-value="onSetGraphSlug"
                 />
-                <Tag
-                    v-if="hasRelationship"
-                    class="group-indicator-pill"
+
+                <div class="group-indicators">
+                    <Tag
+                        v-if="showsRelationshipToParentTag"
+                        class="group-indicator-pill"
+                        icon="pi pi-link"
+                        :value="relationshipToParentLabel"
+                    />
+                </div>
+
+                <Button
+                    v-if="!hasRelationship"
+                    class="group-relate-button"
+                    severity="secondary"
                     icon="pi pi-link"
-                    :value="$gettext('Related')"
+                    :label="$gettext('Relate to nested groups')"
+                    :title="relateButtonTitle"
+                    :disabled="
+                        !isGraphSelected || !hasNestedGroups || hasRelationship
+                    "
+                    @click="onRelationshipButtonClick"
+                />
+            </div>
+
+            <div class="group-actions">
+                <Button
+                    severity="secondary"
+                    icon="pi pi-plus"
+                    :label="$gettext('Add group')"
+                    :disabled="!isGraphSelected"
+                    @click="onAddGroupClick"
+                />
+                <Button
+                    severity="secondary"
+                    icon="pi pi-plus"
+                    :label="$gettext('Add filter')"
+                    :disabled="!isGraphSelected"
+                    @click="onAddClauseClick"
+                />
+                <Button
+                    v-if="!isRoot"
+                    severity="danger"
+                    icon="pi pi-times"
+                    :aria-label="$gettext('Remove group')"
+                    @click="onRemoveGroupClick"
                 />
             </div>
         </div>
 
-        <div class="group-actions">
-            <Button
-                severity="secondary"
-                icon="pi pi-plus"
-                :label="$gettext('Add group')"
-                :disabled="!isGraphSelected"
-                @click="onAddGroupClick"
-            />
-            <Button
-                severity="secondary"
-                icon="pi pi-plus"
-                :label="$gettext('Add filter')"
-                :disabled="!isGraphSelected"
-                @click="onAddClauseClick"
-            />
-            <Button
-                v-if="!isRoot"
-                severity="danger"
-                icon="pi pi-times"
-                :aria-label="$gettext('Remove group')"
-                @click="onRemoveGroupClick"
-            />
-        </div>
-
-        <div
-            v-if="isOptionsOpen"
-            class="group-advanced-row"
-        >
-            <GroupAdvancedOptions
-                :anchor-graph-slug="currentGraphSlug"
-                :has-nested-groups="hasNestedGroups"
-                :has-relationship="hasRelationship"
-                :inner-graph-slug="innerGraphSlug"
-                :relationship="currentRelationship"
-                :scope="currentScope"
-                @add-relationship="onAddRelationship"
-                @change-scope="onChangeScope"
-                @update-relationship="onUpdateRelationship"
-                @remove-relationship="onRemoveRelationship"
-            />
-        </div>
+        <RelationshipEditor
+            v-if="hasRelationship"
+            class="relationship-editor-inline"
+            :anchor-graph-slug="currentGraphSlug"
+            :inner-graph-slug="innerGraphSlug"
+            :is-root="isRoot"
+            :relationship="currentRelationship as RelationshipState"
+            @update:relationship="onUpdateRelationship"
+        />
     </div>
 </template>
 
@@ -225,13 +295,21 @@ function onUpdateRelationship(
 }
 
 .group-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
 .group-header--spaced {
-    margin-bottom: 1rem;
-    margin-inline-start: 1.25rem;
+    margin-inline-start: 0.25rem;
+}
+
+.group-header-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
 }
 
 .group-selectors {
@@ -239,10 +317,6 @@ function onUpdateRelationship(
     gap: 0.5rem;
     align-items: center;
     flex-wrap: wrap;
-}
-
-.group-gear-toggle {
-    flex-shrink: 0;
 }
 
 .group-indicators {
@@ -266,11 +340,10 @@ function onUpdateRelationship(
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
+    flex-shrink: 0;
 }
 
-.group-advanced-row {
-    grid-column: 1 / -1;
-    margin-top: 1rem;
-    margin-inline-start: 3rem;
+.relationship-editor-inline {
+    align-self: stretch;
 }
 </style>

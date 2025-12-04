@@ -3,7 +3,10 @@ import { computed, inject, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import SelectButton from "primevue/selectbutton";
+import Button from "primevue/button";
+import Select from "primevue/select";
+import Tag from "primevue/tag";
+import Card from "primevue/card";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/PathBuilder.vue";
 
@@ -49,25 +52,26 @@ const emit = defineEmits<{
     (event: "update:relationship", value: RelationshipState | null): void;
 }>();
 
-const { relationship, anchorGraphSlug, innerGraphSlug } = defineProps<{
+const { relationship, anchorGraphSlug, innerGraphSlug, isRoot } = defineProps<{
     relationship: RelationshipState;
     anchorGraphSlug: string;
     innerGraphSlug?: string;
+    isRoot?: boolean;
 }>();
 
 const traversalQuantifierOptions = computed<{ label: string; value: string }[]>(
     () => {
         return [
             {
-                label: $gettext("Any"),
+                label: $gettext("Any related record"),
                 value: TRAVERSAL_QUANTIFIER_ANY,
             },
             {
-                label: $gettext("All"),
+                label: $gettext("All related records"),
                 value: TRAVERSAL_QUANTIFIER_ALL,
             },
             {
-                label: $gettext("None"),
+                label: $gettext("No related records"),
                 value: TRAVERSAL_QUANTIFIER_NONE,
             },
         ];
@@ -78,11 +82,11 @@ const relationshipDirectionOptions = computed<RelationshipDirectionOption[]>(
     () => {
         return [
             {
-                label: $gettext("From outer group to nested group"),
+                label: $gettext("Outer group → Nested groups"),
                 value: RELATIONSHIP_DIRECTION_OUTER_TO_NESTED,
             },
             {
-                label: $gettext("From nested group to outer group"),
+                label: $gettext("Nested groups → Outer group"),
                 value: RELATIONSHIP_DIRECTION_NESTED_TO_OUTER,
             },
         ];
@@ -223,100 +227,101 @@ function onUpdatePathSequence(
 
     emit("update:relationship", updatedRelationship);
 }
+
+function onCloseClick(): void {
+    emit("update:relationship", null);
+}
 </script>
 
 <template>
-    <div class="relationship">
-        <div class="relationship-header-row">
-            <span class="relationship-label">
-                {{ $gettext("Relationship") }}
-            </span>
-        </div>
+    <Card
+        class="relationship-card"
+        :style="{
+            marginInlineEnd: isRoot ? 0 : '3rem',
+        }"
+    >
+        <template #content>
+            <div class="relationship-inline-row">
+                <Tag
+                    style="padding: 0.5rem 1rem"
+                    icon="pi pi-link"
+                    :value="$gettext('Relationship')"
+                />
 
-        <div class="relationship-row">
-            <label class="relationship-inline-label">
-                {{ $gettext("Relationship direction:") }}
-            </label>
+                <Select
+                    :model-value="currentRelationshipDirection"
+                    :options="relationshipDirectionOptions"
+                    option-label="label"
+                    option-value="value"
+                    class="relationship-direction-select"
+                    :placeholder="$gettext('Direction between groups')"
+                    :aria-label="$gettext('Relationship direction')"
+                    :title="
+                        $gettext(
+                            'Choose whether the relationship goes from the outer group to the nested group, or the other way around.',
+                        )
+                    "
+                    @update:model-value="onChangeRelationshipDirection"
+                />
 
-            <SelectButton
-                :model-value="currentRelationshipDirection"
-                :options="relationshipDirectionOptions"
-                option-label="label"
-                option-value="value"
-                :allow-empty="false"
-                class="relationship-direction-select"
-                @update:model-value="onChangeRelationshipDirection"
-            />
-        </div>
+                <PathBuilder
+                    v-if="anchorGraph"
+                    :anchor-graph="anchorGraph"
+                    :max-path-segments="1"
+                    :path-sequence="relationship.path"
+                    @update:path-sequence="onUpdatePathSequence"
+                />
 
-        <div
-            v-if="anchorGraph"
-            class="relationship-path-row"
-        >
-            <label class="relationship-inline-label">
-                {{ $gettext("Relationship node:") }}
-            </label>
+                <Select
+                    :model-value="currentTraversalQuantifier"
+                    :options="traversalQuantifierOptions"
+                    option-label="label"
+                    option-value="value"
+                    class="relationship-quantifier-select"
+                    :placeholder="$gettext('Match requirement')"
+                    :aria-label="$gettext('Relationship match requirement')"
+                    :title="
+                        $gettext(
+                            'Decide how many related records must match for this relationship to be considered true.',
+                        )
+                    "
+                    @update:model-value="onChangeTraversalQuantifier"
+                />
 
-            <PathBuilder
-                :anchor-graph="anchorGraph"
-                :max-path-segments="1"
-                :path-sequence="relationship.path"
-                @update:path-sequence="onUpdatePathSequence"
-            />
-        </div>
-
-        <div class="relationship-row">
-            <label class="relationship-inline-label">
-                {{ $gettext("Quantifier:") }}
-            </label>
-
-            <SelectButton
-                :model-value="currentTraversalQuantifier"
-                :options="traversalQuantifierOptions"
-                option-label="label"
-                option-value="value"
-                :allow-empty="false"
-                class="relationship-quantifier-select"
-                @update:model-value="onChangeTraversalQuantifier"
-            />
-        </div>
-    </div>
+                <Button
+                    severity="danger"
+                    icon="pi pi-times"
+                    class="relationship-inline-close"
+                    :aria-label="$gettext('Remove relationship')"
+                    @click="onCloseClick"
+                />
+            </div>
+        </template>
+    </Card>
 </template>
 
 <style scoped>
-.relationship {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem;
-    border-radius: 0.75rem;
-    border: 0.125rem solid var(--p-content-border-color);
+.relationship-card {
+    margin-inline-start: 3rem;
+    font-size: 1.2rem;
+    border: 0.0125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
+    box-shadow: none;
 }
 
-.relationship-header-row {
+.relationship-card :deep(.p-card-body) {
+    padding: 0.75rem 1rem;
+}
+
+.relationship-inline-row {
     display: flex;
     align-items: center;
-    padding-bottom: 0.5rem;
-    margin-bottom: 0.5rem;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
-}
-
-.relationship-label {
-    color: var(--p-text-color-secondary);
-    text-transform: uppercase;
-}
-
-.relationship-row,
-.relationship-path-row {
-    display: flex;
-    gap: 0.75rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
-    align-items: center;
+    font-size: 1.2rem;
 }
 
-.relationship-row > label,
-.relationship-path-row > label {
-    margin-bottom: 0;
+.relationship-inline-close {
+    margin-left: auto;
 }
 </style>

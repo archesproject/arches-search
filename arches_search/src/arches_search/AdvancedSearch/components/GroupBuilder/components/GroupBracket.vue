@@ -66,7 +66,6 @@ function onToggle(): void {
     grid-template-columns: var(--lane-width) var(--button-col);
     grid-template-rows: 1fr auto 1fr;
     row-gap: 0.5rem;
-    margin-inline-start: 1rem;
 }
 
 .bracket[data-logic="AND"] {

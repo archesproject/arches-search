@@ -40,6 +40,8 @@ type GraphSummary = {
     [key: string]: unknown;
 };
 
+type RelationshipState = NonNullable<GroupPayload["relationship"]>;
+
 const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
 
 const emit = defineEmits<{
@@ -47,11 +49,13 @@ const emit = defineEmits<{
     (event: "remove"): void;
 }>();
 
-const { modelValue, isRoot, parentGroupAnchorGraph } = defineProps<{
-    modelValue?: GroupPayload;
-    isRoot?: boolean;
-    parentGroupAnchorGraph?: GraphSummary;
-}>();
+const { modelValue, isRoot, parentGroupAnchorGraph, relationshipToParent } =
+    defineProps<{
+        modelValue?: GroupPayload;
+        isRoot?: boolean;
+        parentGroupAnchorGraph?: GraphSummary;
+        relationshipToParent?: RelationshipState | null;
+    }>();
 
 const childGroupKeys = ref<string[]>([]);
 const clauseKeys = ref<string[]>([]);
@@ -99,17 +103,10 @@ const effectiveAnchorGraph = computed<GraphSummary>(
     },
 );
 
-const shouldHaveBracket = computed<boolean>(function getShouldHaveBracket() {
+const shouldHaveBracket = computed<boolean>(function () {
     return (
         currentGroup.value.groups.length + currentGroup.value.clauses.length >=
         2
-    );
-});
-
-const hasBodyContent = computed<boolean>(function getHasBodyContent() {
-    return (
-        currentGroup.value.clauses.length > 0 ||
-        currentGroup.value.groups.length > 0
     );
 });
 
@@ -162,8 +159,37 @@ function onSetLogicFromBracket(_logicToken: LogicToken): void {
 }
 
 function onAddGroup(): void {
-    const updatedGroup = addChildGroupLikeParent(currentGroup.value);
-    emitUpdatedGroupPayload(updatedGroup);
+    const existingChildGroups = currentGroup.value.groups;
+    const updatedGroupWithNewChild = addChildGroupLikeParent(
+        currentGroup.value,
+    );
+
+    if (existingChildGroups.length === 0) {
+        emitUpdatedGroupPayload(updatedGroupWithNewChild);
+        return;
+    }
+
+    const referenceChildGroup = existingChildGroups[0];
+    const targetGraphSlug =
+        referenceChildGroup.graph_slug || currentGroup.value.graph_slug;
+
+    const nextChildGroups = updatedGroupWithNewChild.groups.slice();
+    const newChildIndex = nextChildGroups.length - 1;
+
+    if (newChildIndex >= 0) {
+        const newChildGroup = nextChildGroups[newChildIndex];
+        nextChildGroups[newChildIndex] = {
+            ...newChildGroup,
+            graph_slug: targetGraphSlug,
+        };
+    }
+
+    const normalizedUpdatedGroup: GroupPayload = {
+        ...updatedGroupWithNewChild,
+        groups: nextChildGroups,
+    };
+
+    emitUpdatedGroupPayload(normalizedUpdatedGroup);
 }
 
 function onRemoveChildGroup(childIndex: number): void {
@@ -241,13 +267,19 @@ function onRequestRemoveGroup(): void {
 </script>
 
 <template>
-    <Card class="group-card">
+    <Card
+        class="group-card"
+        :style="{
+            paddingInlineStart: shouldHaveBracket ? '1rem' : 0,
+        }"
+    >
         <template #title>
             <GroupHeader
                 :group-payload="currentGroup"
-                :has-body-content="hasBodyContent"
                 :has-nested-groups="currentGroup.groups.length > 0"
-                :is-root="Boolean(isRoot)"
+                :is-root="isRoot"
+                :should-indent="shouldHaveBracket"
+                :relationship-to-parent="relationshipToParent ?? null"
                 @add-clause="onAddClause"
                 @add-group="onAddGroup"
                 @add-relationship="onAddRelationship"
@@ -332,6 +364,9 @@ function onRequestRemoveGroup(): void {
                                 :parent-group-anchor-graph="
                                     effectiveAnchorGraph
                                 "
+                                :relationship-to-parent="
+                                    currentGroup.relationship ?? null
+                                "
                                 @update:model-value="
                                     onUpdateChildGroupModelValue(
                                         $event,
@@ -358,6 +393,7 @@ function onRequestRemoveGroup(): void {
     border: 0.0125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
+    margin-inline-end: 0;
 }
 
 .clause-card {
@@ -407,8 +443,13 @@ function onRequestRemoveGroup(): void {
     gap: 0.75rem;
 }
 
+.children .children > .group-card,
+.children .clauses > .clause-card {
+    margin-inline-end: 3rem;
+}
+
 .clauses-without-bracket,
 .children-without-bracket {
-    margin-inline-start: 4.25rem;
+    margin-inline-start: 3rem;
 }
 </style>

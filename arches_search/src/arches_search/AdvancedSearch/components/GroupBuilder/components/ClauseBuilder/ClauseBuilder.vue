@@ -49,8 +49,8 @@ const CLAUSE_TYPE_LITERAL: ClauseTypeToken = "LITERAL";
 const CLAUSE_TYPE_RELATED: ClauseTypeToken = "RELATED";
 
 const CLAUSE_QUANTIFIER_ANY: ClauseQuantifierToken = "ANY";
-const CLAUSE_QUANTIFIER_ALL: ClauseQuantifierToken = "ALL";
-const CLAUSE_QUANTIFIER_NONE: ClauseQuantifierToken = "NONE";
+// const CLAUSE_QUANTIFIER_ALL: ClauseQuantifierToken = "ALL";
+// const CLAUSE_QUANTIFIER_NONE: ClauseQuantifierToken = "NONE";
 
 const OPERAND_TYPE_LITERAL: OperandPayloadTypeToken = "LITERAL";
 const OPERAND_TYPE_PATH: OperandPayloadTypeToken = "PATH";
@@ -60,14 +60,14 @@ const clauseTypeOptions: { label: string; value: ClauseTypeToken }[] = [
     { label: $gettext("Related resource"), value: CLAUSE_TYPE_RELATED },
 ];
 
-const clauseQuantifierOptions: {
-    label: string;
-    value: ClauseQuantifierToken;
-}[] = [
-    { label: $gettext("Any"), value: CLAUSE_QUANTIFIER_ANY },
-    { label: $gettext("All"), value: CLAUSE_QUANTIFIER_ALL },
-    { label: $gettext("None"), value: CLAUSE_QUANTIFIER_NONE },
-];
+// const clauseQuantifierOptions: {
+//     label: string;
+//     value: ClauseQuantifierToken;
+// }[] = [
+//     { label: $gettext("Any"), value: CLAUSE_QUANTIFIER_ANY },
+//     { label: $gettext("All"), value: CLAUSE_QUANTIFIER_ALL },
+//     { label: $gettext("No"), value: CLAUSE_QUANTIFIER_NONE },
+// ];
 
 const operandTypeOptions: {
     label: string;
@@ -83,21 +83,25 @@ const datatypesToAdvancedSearchFacets = inject<
 
 if (!datatypesToAdvancedSearchFacets) {
     throw new Error(
-        "ClauseBuilder is missing datatypesToAdvancedSearchFacets injection.",
+        $gettext(
+            "ClauseBuilder is missing datatypesToAdvancedSearchFacets injection.",
+        ),
     );
 }
 
 const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
 
 if (!graphs) {
-    throw new Error("ClauseBuilder is missing graphs injection.");
+    throw new Error($gettext("ClauseBuilder is missing graphs injection."));
 }
 
 const getNodesForGraphId =
     inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId");
 
 if (!getNodesForGraphId) {
-    throw new Error("ClauseBuilder is missing getNodesForGraphId injection.");
+    throw new Error(
+        $gettext("ClauseBuilder is missing getNodesForGraphId injection."),
+    );
 }
 
 const emit = defineEmits<{
@@ -369,10 +373,10 @@ function handleRemoveSelf(): void {
     emit("request:remove");
 }
 
-function handleToggleAdvancedOptions(event: MouseEvent): void {
-    event.stopPropagation();
-    isAdvancedOptionsOpen.value = !isAdvancedOptionsOpen.value;
-}
+// function handleToggleAdvancedOptions(event: MouseEvent): void {
+//     event.stopPropagation();
+//     isAdvancedOptionsOpen.value = !isAdvancedOptionsOpen.value;
+// }
 
 function handleClauseTypeClick(nextClauseType: ClauseTypeToken): void {
     if (modelValue.type === nextClauseType) {
@@ -388,12 +392,12 @@ function handleClauseTypeClick(nextClauseType: ClauseTypeToken): void {
     });
 }
 
-function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
-    if (modelValue.quantifier === nextQuantifier) {
-        return;
-    }
-    patchClause({ quantifier: nextQuantifier });
-}
+// function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
+//     if (modelValue.quantifier === nextQuantifier) {
+//         return;
+//     }
+//     patchClause({ quantifier: nextQuantifier });
+// }
 
 function handleOperandTypeClick(
     nextOperandType: OperandPayloadTypeToken,
@@ -408,7 +412,7 @@ function handleOperandTypeClick(
 <template>
     <div class="clause-builder">
         <div class="clause-main-row">
-            <Button
+            <!-- <Button
                 class="clause-gear-toggle"
                 icon="pi pi-cog"
                 severity="secondary"
@@ -418,9 +422,18 @@ function handleOperandTypeClick(
                 :aria-label="$gettext('Toggle advanced options')"
                 :aria-pressed="isAdvancedOptionsOpen"
                 @click="handleToggleAdvancedOptions"
-            />
+            /> -->
 
             <div class="clause-core-row">
+                <!-- <Select
+                    :model-value="modelValue.quantifier"
+                    class="clause-quantifier-select"
+                    :options="clauseQuantifierOptions"
+                    option-label="label"
+                    option-value="value"
+                    @update:model-value="handleQuantifierClick"
+                /> -->
+
                 <PathBuilder
                     :key="subjectPathSequenceKey"
                     class="clause-subject-path"
@@ -493,13 +506,10 @@ function handleOperandTypeClick(
         >
             <ClauseAdvancedOptions
                 :clause-type="modelValue.type"
-                :quantifier="modelValue.quantifier"
                 :operand-type="localOperandType"
                 :clause-type-options="clauseTypeOptions"
-                :clause-quantifier-options="clauseQuantifierOptions"
                 :operand-type-options="operandTypeOptions"
                 @update:clause-type="handleClauseTypeClick"
-                @update:quantifier="handleQuantifierClick"
                 @update:operand-type="handleOperandTypeClick"
             />
         </div>
@@ -524,7 +534,6 @@ function handleOperandTypeClick(
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: flex-start;
-    column-gap: 0.5rem;
 }
 
 .clause-gear-toggle {
@@ -555,5 +564,9 @@ function handleOperandTypeClick(
 .clause-advanced-row {
     margin-top: 0.5rem;
     margin-inline-start: 2.75rem;
+}
+
+.clause-remove-button {
+    justify-self: flex-end;
 }
 </style>

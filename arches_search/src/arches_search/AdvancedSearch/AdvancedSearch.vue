@@ -284,7 +284,6 @@ async function search(): Promise<void> {
     display: flex;
     flex-direction: column;
     flex: 1;
-    gap: 0;
 }
 
 :deep(.p-card-content) {
