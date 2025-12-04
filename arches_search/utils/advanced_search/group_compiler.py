@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Tuple
+
 from django.db.models import Exists, OuterRef, Q
 
 from arches_search.utils.advanced_search.clause_reducer import ClauseReducer
@@ -89,19 +90,30 @@ class GroupCompiler:
         current_context_side: str,
         traversal_context_for_parent: Optional[Dict[str, Any]],
     ) -> Tuple[Q, List[Exists]]:
+        group_has_any_relationship = self._group_has_any_relationship(
+            group_payload=group_payload
+        )
+
+        if group_has_any_relationship:
+            # When there are relationship subgroups, we don't want the reducer
+            # to process any clauses in this group, since those clauses should
+            # apply to the parent context of the relationship subgroups.
+            group_payload_for_clause_reducer: Dict[str, Any] = {
+                **group_payload,
+                "groups": [],
+            }
+        else:
+            group_payload_for_clause_reducer = group_payload
+
         reduce_result = self.clause_reducer.reduce(
-            group_payload=group_payload,
+            group_payload=group_payload_for_clause_reducer,
             traversal_context=None,
             child_rows=None,
             logic=group_logic_token,
         )
         parent_q = reduce_result.relationshipless_q or Q()
 
-        has_relationship_anywhere = self._group_has_any_relationship(
-            group_payload=group_payload
-        )
-
-        if not has_relationship_anywhere:
+        if not group_has_any_relationship:
             return parent_q, []
 
         children_q, children_existence_predicates = self._compile_children(
@@ -272,7 +284,15 @@ class GroupCompiler:
             subgroup_has_relationship = bool(
                 (subgroup_payload["relationship"] or {}).get("path")
             )
+
             if parent_has_relationship and subgroup_has_relationship:
+                continue
+
+            if (
+                parent_has_relationship
+                and not subgroup_has_relationship
+                and current_context_side == CONTEXT_CHILD
+            ):
                 continue
 
             next_context_side = (
@@ -286,13 +306,6 @@ class GroupCompiler:
                 current_context_side=next_context_side,
                 traversal_context_for_parent=traversal_context_for_parent,
             )
-
-            if (
-                parent_has_relationship
-                and not subgroup_has_relationship
-                and current_context_side == CONTEXT_CHILD
-            ):
-                continue
 
             combined_children_q = (
                 subgroup_q
