@@ -234,7 +234,12 @@ function onRequestRemoveGroup(): void {
 </script>
 
 <template>
-    <Card class="group-card">
+    <Card
+        class="group-card"
+        :style="{
+            paddingInlineStart: shouldHaveBracket ? '1rem' : 0,
+        }"
+    >
         <template #title>
             <GroupHeader
                 :group-payload="currentGroup"

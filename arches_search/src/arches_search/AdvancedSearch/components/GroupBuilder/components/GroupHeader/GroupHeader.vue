@@ -144,6 +144,9 @@ function onUpdateRelationship(
                 severity="secondary"
                 text
                 rounded
+                :style="{
+                    marginInlineEnd: shouldIndent ? '0.75rem' : 0,
+                }"
                 :aria-label="$gettext('Toggle advanced options')"
                 :aria-pressed="isOptionsOpen"
                 @click="onToggleOptions"
@@ -235,7 +238,7 @@ function onUpdateRelationship(
 }
 
 .group-header--spaced {
-    margin-inline-start: 1.25rem;
+    margin-inline-start: 0.25rem;
 }
 
 .group-selectors {
