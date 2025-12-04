@@ -237,12 +237,13 @@ function onCloseClick(): void {
     <Card
         class="relationship-card"
         :style="{
-            marginInlineEnd: isRoot ? 0 : '3.5rem',
+            marginInlineEnd: isRoot ? 0 : '3rem',
         }"
     >
         <template #content>
             <div class="relationship-inline-row">
                 <Tag
+                    style="padding: 0.5rem 1rem"
                     icon="pi pi-link"
                     :value="$gettext('Relationship')"
                 />

@@ -445,7 +445,7 @@ function onRequestRemoveGroup(): void {
 
 .children .children > .group-card,
 .children .clauses > .clause-card {
-    margin-inline-end: 3.5rem;
+    margin-inline-end: 3rem;
 }
 
 .clauses-without-bracket,
