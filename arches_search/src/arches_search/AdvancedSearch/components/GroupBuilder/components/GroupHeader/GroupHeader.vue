@@ -173,7 +173,12 @@ function onUpdateRelationship(
             </div>
         </div>
 
-        <div class="group-actions">
+        <div
+            class="group-actions"
+            :style="{
+                marginInlineEnd: isRoot ? '0' : '0.5rem',
+            }"
+        >
             <Button
                 severity="secondary"
                 icon="pi pi-plus"
@@ -230,7 +235,6 @@ function onUpdateRelationship(
 }
 
 .group-header--spaced {
-    margin-bottom: 1rem;
     margin-inline-start: 1.25rem;
 }
 
@@ -266,7 +270,6 @@ function onUpdateRelationship(
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
-    margin-inline-end: 0.5rem;
 }
 
 .group-advanced-row {
