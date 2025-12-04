@@ -40,6 +40,8 @@ type GraphSummary = {
     [key: string]: unknown;
 };
 
+type RelationshipState = NonNullable<GroupPayload["relationship"]>;
+
 const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
 
 const emit = defineEmits<{
@@ -47,11 +49,13 @@ const emit = defineEmits<{
     (event: "remove"): void;
 }>();
 
-const { modelValue, isRoot, parentGroupAnchorGraph } = defineProps<{
-    modelValue?: GroupPayload;
-    isRoot?: boolean;
-    parentGroupAnchorGraph?: GraphSummary;
-}>();
+const { modelValue, isRoot, parentGroupAnchorGraph, relationshipToParent } =
+    defineProps<{
+        modelValue?: GroupPayload;
+        isRoot?: boolean;
+        parentGroupAnchorGraph?: GraphSummary;
+        relationshipToParent?: RelationshipState | null;
+    }>();
 
 const childGroupKeys = ref<string[]>([]);
 const clauseKeys = ref<string[]>([]);
@@ -155,8 +159,37 @@ function onSetLogicFromBracket(_logicToken: LogicToken): void {
 }
 
 function onAddGroup(): void {
-    const updatedGroup = addChildGroupLikeParent(currentGroup.value);
-    emitUpdatedGroupPayload(updatedGroup);
+    const existingChildGroups = currentGroup.value.groups;
+    const updatedGroupWithNewChild = addChildGroupLikeParent(
+        currentGroup.value,
+    );
+
+    if (existingChildGroups.length === 0) {
+        emitUpdatedGroupPayload(updatedGroupWithNewChild);
+        return;
+    }
+
+    const referenceChildGroup = existingChildGroups[0];
+    const targetGraphSlug =
+        referenceChildGroup.graph_slug || currentGroup.value.graph_slug;
+
+    const nextChildGroups = updatedGroupWithNewChild.groups.slice();
+    const newChildIndex = nextChildGroups.length - 1;
+
+    if (newChildIndex >= 0) {
+        const newChildGroup = nextChildGroups[newChildIndex];
+        nextChildGroups[newChildIndex] = {
+            ...newChildGroup,
+            graph_slug: targetGraphSlug,
+        };
+    }
+
+    const normalizedUpdatedGroup: GroupPayload = {
+        ...updatedGroupWithNewChild,
+        groups: nextChildGroups,
+    };
+
+    emitUpdatedGroupPayload(normalizedUpdatedGroup);
 }
 
 function onRemoveChildGroup(childIndex: number): void {
@@ -246,6 +279,7 @@ function onRequestRemoveGroup(): void {
                 :has-nested-groups="currentGroup.groups.length > 0"
                 :is-root="isRoot"
                 :should-indent="shouldHaveBracket"
+                :relationship-to-parent="relationshipToParent ?? null"
                 @add-clause="onAddClause"
                 @add-group="onAddGroup"
                 @add-relationship="onAddRelationship"
@@ -329,6 +363,9 @@ function onRequestRemoveGroup(): void {
                                 :model-value="childGroup"
                                 :parent-group-anchor-graph="
                                     effectiveAnchorGraph
+                                "
+                                :relationship-to-parent="
+                                    currentGroup.relationship ?? null
                                 "
                                 @update:model-value="
                                     onUpdateChildGroupModelValue(
