@@ -110,6 +110,13 @@ const shouldHaveBracket = computed<boolean>(function () {
     );
 });
 
+const hasGroupBodyContent = computed<boolean>(function () {
+    return (
+        currentGroup.value.clauses.length > 0 ||
+        currentGroup.value.groups.length > 0
+    );
+});
+
 watchEffect(function () {
     childGroupKeys.value = buildStableKeys(
         childGroupKeys.value,
@@ -267,18 +274,12 @@ function onRequestRemoveGroup(): void {
 </script>
 
 <template>
-    <Card
-        class="group-card"
-        :style="{
-            paddingInlineStart: shouldHaveBracket ? '1rem' : 0,
-        }"
-    >
+    <Card class="group-card">
         <template #title>
             <GroupHeader
                 :group-payload="currentGroup"
                 :has-nested-groups="currentGroup.groups.length > 0"
                 :is-root="isRoot"
-                :should-indent="shouldHaveBracket"
                 :relationship-to-parent="relationshipToParent ?? null"
                 @add-clause="onAddClause"
                 @add-group="onAddGroup"
@@ -292,7 +293,10 @@ function onRequestRemoveGroup(): void {
         </template>
 
         <template #content>
-            <div class="group-content">
+            <div
+                class="group-content"
+                :class="hasGroupBodyContent && 'group-content-with-top-padding'"
+            >
                 <div
                     :class="[
                         'group-grid',
@@ -390,14 +394,19 @@ function onRequestRemoveGroup(): void {
 }
 
 .group-card {
-    border: 0.0125rem solid var(--p-content-border-color);
+    border: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
     margin-inline-end: 0;
 }
 
+.group-card :deep(.p-card-body) {
+    gap: 0;
+    padding: 1rem;
+}
+
 .clause-card {
-    border: 0.0125rem solid var(--p-content-border-color);
+    border: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
 }
@@ -405,7 +414,11 @@ function onRequestRemoveGroup(): void {
 .group-content {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    padding-inline-start: 1.5rem;
+}
+
+.group-content-with-top-padding {
+    padding-top: 1rem;
 }
 
 .group-grid {
@@ -450,6 +463,6 @@ function onRequestRemoveGroup(): void {
 
 .clauses-without-bracket,
 .children-without-bracket {
-    margin-inline-start: 3rem;
+    margin-inline-start: 2rem;
 }
 </style>

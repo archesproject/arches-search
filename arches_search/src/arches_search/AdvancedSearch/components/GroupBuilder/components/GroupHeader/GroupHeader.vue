@@ -21,13 +21,6 @@ type GraphSummary = {
     [key: string]: unknown;
 };
 
-type GraphOption = {
-    label: string;
-    value: string;
-};
-
-type RelationshipState = NonNullable<GroupPayload["relationship"]>;
-
 const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
 
 const emit = defineEmits<{
@@ -38,26 +31,20 @@ const emit = defineEmits<{
     (event: "remove-relationship"): void;
     (
         event: "update-relationship",
-        relationship: RelationshipState | null,
+        relationship: GroupPayload["relationship"],
     ): void;
     (event: "remove-group"): void;
 }>();
 
-const {
-    groupPayload,
-    isRoot,
-    hasNestedGroups,
-    shouldIndent,
-    relationshipToParent,
-} = defineProps<{
-    groupPayload: GroupPayload;
-    isRoot?: boolean;
-    hasNestedGroups: boolean;
-    shouldIndent: boolean;
-    relationshipToParent?: RelationshipState | null;
-}>();
+const { groupPayload, isRoot, hasNestedGroups, relationshipToParent } =
+    defineProps<{
+        groupPayload: GroupPayload;
+        isRoot?: boolean;
+        hasNestedGroups: boolean;
+        relationshipToParent?: GroupPayload["relationship"];
+    }>();
 
-const graphOptions = computed<GraphOption[]>(function () {
+const graphOptions = computed<{ label: string; value: string }[]>(function () {
     return (
         graphs?.value.map(function (graphSummary) {
             return {
@@ -76,8 +63,8 @@ const isGraphSelected = computed<boolean>(function () {
     return currentGraphSlug.value.trim().length > 0;
 });
 
-const currentRelationship = computed<RelationshipState | null>(function () {
-    return groupPayload.relationship as RelationshipState | null;
+const currentRelationship = computed<GroupPayload["relationship"]>(function () {
+    return groupPayload.relationship as GroupPayload["relationship"];
 });
 
 const hasRelationship = computed<boolean>(function () {
@@ -184,7 +171,7 @@ function onRemoveRelationship(): void {
 }
 
 function onUpdateRelationship(
-    nextRelationship: RelationshipState | null,
+    nextRelationship: GroupPayload["relationship"],
 ): void {
     if (nextRelationship === null) {
         onClearRelationship(new MouseEvent("click"));
@@ -214,7 +201,7 @@ function onClearRelationship(clickEvent?: MouseEvent): void {
 </script>
 
 <template>
-    <div :class="['group-header', shouldIndent && 'group-header--spaced']">
+    <div class="group-header">
         <div class="group-header-row">
             <div class="group-selectors">
                 <Select
@@ -227,17 +214,7 @@ function onClearRelationship(clickEvent?: MouseEvent): void {
                     @update:model-value="onSetGraphSlug"
                 />
 
-                <div class="group-indicators">
-                    <Tag
-                        v-if="showsRelationshipToParentTag"
-                        class="group-indicator-pill"
-                        icon="pi pi-link"
-                        :value="relationshipToParentLabel"
-                    />
-                </div>
-
                 <Button
-                    v-if="!hasRelationship"
                     class="group-relate-button"
                     severity="secondary"
                     icon="pi pi-link"
@@ -248,19 +225,28 @@ function onClearRelationship(clickEvent?: MouseEvent): void {
                     "
                     @click="onRelationshipButtonClick"
                 />
+
+                <Tag
+                    v-if="showsRelationshipToParentTag"
+                    class="group-indicator-pill"
+                    icon="pi pi-link"
+                    :value="relationshipToParentLabel"
+                />
             </div>
 
             <div class="group-actions">
                 <Button
                     severity="secondary"
-                    icon="pi pi-plus"
+                    variant="text"
+                    icon="pi pi-table"
                     :label="$gettext('Add group')"
                     :disabled="!isGraphSelected"
                     @click="onAddGroupClick"
                 />
                 <Button
                     severity="secondary"
-                    icon="pi pi-plus"
+                    variant="text"
+                    icon="pi pi-filter"
                     :label="$gettext('Add filter')"
                     :disabled="!isGraphSelected"
                     @click="onAddClauseClick"
@@ -268,6 +254,7 @@ function onClearRelationship(clickEvent?: MouseEvent): void {
                 <Button
                     v-if="!isRoot"
                     severity="danger"
+                    variant="text"
                     icon="pi pi-times"
                     :aria-label="$gettext('Remove group')"
                     @click="onRemoveGroupClick"
@@ -281,7 +268,7 @@ function onClearRelationship(clickEvent?: MouseEvent): void {
             :anchor-graph-slug="currentGraphSlug"
             :inner-graph-slug="innerGraphSlug"
             :is-root="isRoot"
-            :relationship="currentRelationship as RelationshipState"
+            :relationship="currentRelationship!"
             @update:relationship="onUpdateRelationship"
         />
     </div>
@@ -297,16 +284,10 @@ function onClearRelationship(clickEvent?: MouseEvent): void {
 .group-header {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-}
-
-.group-header--spaced {
-    margin-inline-start: 0.25rem;
 }
 
 .group-header-row {
     display: flex;
-    gap: 0.5rem;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
@@ -323,7 +304,6 @@ function onClearRelationship(clickEvent?: MouseEvent): void {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-inline-start: 0.5rem;
     flex-wrap: wrap;
 }
 

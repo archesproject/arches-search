@@ -493,6 +493,7 @@ function handleOperandTypeClick(
             <Button
                 icon="pi pi-times"
                 severity="danger"
+                variant="text"
                 type="button"
                 class="clause-remove-button"
                 :aria-label="$gettext('Remove filter')"

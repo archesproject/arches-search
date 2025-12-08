@@ -61,10 +61,12 @@ function onToggle(): void {
     --lane-width: 0.25rem;
     --gap-inline: 0.75rem;
     --button-col: 1.5rem;
+    --button-gap: 2.25rem;
 
+    position: relative;
     display: grid;
     grid-template-columns: var(--lane-width) var(--button-col);
-    grid-template-rows: 1fr auto 1fr;
+    grid-template-rows: 1fr var(--button-gap) 1fr;
     row-gap: 0.5rem;
 }
 
@@ -115,14 +117,18 @@ function onToggle(): void {
 }
 
 .bracket-lane {
-    grid-column: 1;
+    grid-column: 1 / span 2;
     grid-row: 2;
-    display: grid;
-    place-items: center;
-    width: var(--lane-width);
 }
 
 .bracket-logic.p-button {
+    position: absolute;
+    left: calc(var(--gap-inline) + (var(--spine-thickness) / 2));
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    width: 4rem;
+
     background: var(--logic-color);
     border-color: var(--logic-color);
     color: var(--p-surface-0);

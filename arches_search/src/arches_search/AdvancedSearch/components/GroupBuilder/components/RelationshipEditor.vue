@@ -289,6 +289,7 @@ function onCloseClick(): void {
                 />
 
                 <Button
+                    variant="text"
                     severity="danger"
                     icon="pi pi-times"
                     class="relationship-inline-close"
@@ -302,15 +303,11 @@ function onCloseClick(): void {
 
 <style scoped>
 .relationship-card {
-    margin-inline-start: 3rem;
     font-size: 1.2rem;
-    border: 0.0125rem solid var(--p-content-border-color);
+    border: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
-}
-
-.relationship-card :deep(.p-card-body) {
-    padding: 0.75rem 1rem;
+    margin-top: 1rem;
 }
 
 .relationship-inline-row {
@@ -322,6 +319,6 @@ function onCloseClick(): void {
 }
 
 .relationship-inline-close {
-    margin-left: auto;
+    margin-inline-start: auto;
 }
 </style>

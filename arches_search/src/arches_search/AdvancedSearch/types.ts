@@ -111,6 +111,14 @@ export type GroupPayload = {
 export type SearchResults = {
     resources: ResourceData[];
     aggregations: { [key: string]: unknown };
+    pagination: {
+        page: number;
+        page_size: number;
+        total_results: number;
+        total_pages: number;
+        has_next: boolean;
+        has_previous: boolean;
+    };
 };
 
 export interface ResourceData {
