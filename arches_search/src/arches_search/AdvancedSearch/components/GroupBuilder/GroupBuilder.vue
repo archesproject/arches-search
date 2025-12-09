@@ -421,13 +421,13 @@ function onRequestRemoveGroup(): void {
 .clauses {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
 }
 
 .children {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
 }
 
 .children .children > .group-card,
