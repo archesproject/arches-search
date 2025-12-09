@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, watch } from "vue";
+import { computed, watch, ref } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
@@ -7,6 +7,7 @@ import Button from "primevue/button";
 import Select from "primevue/select";
 import Tag from "primevue/tag";
 import Card from "primevue/card";
+import Message from "primevue/message";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/PathBuilder.vue";
 
@@ -16,13 +17,6 @@ const { $gettext } = useGettext();
 
 type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 type TraversalQuantifier = RelationshipState["traversal_quantifiers"][number];
-
-type GraphSummary = {
-    graphid: string;
-    name: string;
-    slug: string;
-    [key: string]: unknown;
-};
 
 type RelationshipDirection = "OUTER_TO_NESTED" | "NESTED_TO_OUTER";
 
@@ -42,12 +36,6 @@ const RELATIONSHIP_DIRECTION_OUTER_TO_NESTED: RelationshipDirection =
 const RELATIONSHIP_DIRECTION_NESTED_TO_OUTER: RelationshipDirection =
     "NESTED_TO_OUTER";
 
-const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
-
-if (!graphs) {
-    throw new Error("RelationshipEditor is missing graphs injection.");
-}
-
 const emit = defineEmits<{
     (event: "update:relationship", value: RelationshipState | null): void;
 }>();
@@ -55,23 +43,25 @@ const emit = defineEmits<{
 const { relationship, anchorGraphSlug, innerGraphSlug, isRoot } = defineProps<{
     relationship: RelationshipState;
     anchorGraphSlug: string;
-    innerGraphSlug?: string;
+    innerGraphSlug: string;
     isRoot?: boolean;
 }>();
+
+const hasCompatibleRelationshipNodes = ref(true);
 
 const traversalQuantifierOptions = computed<{ label: string; value: string }[]>(
     () => {
         return [
             {
-                label: $gettext("Any related record"),
+                label: $gettext("At least one related record must match"),
                 value: TRAVERSAL_QUANTIFIER_ANY,
             },
             {
-                label: $gettext("All related records"),
+                label: $gettext("Every related record must match"),
                 value: TRAVERSAL_QUANTIFIER_ALL,
             },
             {
-                label: $gettext("No related records"),
+                label: $gettext("No related records match"),
                 value: TRAVERSAL_QUANTIFIER_NONE,
             },
         ];
@@ -108,29 +98,18 @@ const currentRelationshipDirection = computed<string>(() => {
     return RELATIONSHIP_DIRECTION_OUTER_TO_NESTED;
 });
 
-const startingGraphSlug = computed<string | undefined>(() => {
-    if (relationship.is_inverse && innerGraphSlug) {
-        return innerGraphSlug;
-    }
-    return anchorGraphSlug;
-});
+const graphSlugsForPathBuilder = computed<string[]>(() => {
+    const graphSlugs: string[] = [];
 
-const anchorGraph = computed<GraphSummary | null>(() => {
-    const graphsArray = graphs.value;
-
-    if (!graphsArray || graphsArray.length === 0) {
-        return null;
+    if (anchorGraphSlug) {
+        graphSlugs.push(anchorGraphSlug);
     }
 
-    const directMatch = graphsArray.find((graphSummary) => {
-        return graphSummary.slug === startingGraphSlug.value;
-    });
-
-    if (directMatch) {
-        return directMatch;
+    if (innerGraphSlug && innerGraphSlug !== anchorGraphSlug) {
+        graphSlugs.push(innerGraphSlug);
     }
 
-    return graphsArray[0];
+    return graphSlugs;
 });
 
 watch(
@@ -190,18 +169,24 @@ function onChangeRelationshipDirection(nextDirectionRaw: string): void {
 function onUpdateInverse(nextIsInverseRaw: boolean): void {
     const nextIsInverse = Boolean(nextIsInverseRaw);
 
-    let nextStartingSlug: string | undefined;
+    let nextPath: [string, string][];
 
-    if (nextIsInverse && innerGraphSlug) {
-        nextStartingSlug = innerGraphSlug;
+    if (anchorGraphSlug === innerGraphSlug) {
+        nextPath = relationship.path;
     } else {
-        nextStartingSlug = anchorGraphSlug;
-    }
+        let nextStartingSlug: string | undefined;
 
-    const nextPath: [string, string][] = [];
+        if (nextIsInverse && innerGraphSlug) {
+            nextStartingSlug = innerGraphSlug;
+        } else {
+            nextStartingSlug = anchorGraphSlug;
+        }
 
-    if (nextStartingSlug) {
-        nextPath.push([nextStartingSlug, ""]);
+        nextPath = [];
+
+        if (nextStartingSlug) {
+            nextPath.push([nextStartingSlug, ""]);
+        }
     }
 
     const updatedRelationship: RelationshipState = {
@@ -213,6 +198,36 @@ function onUpdateInverse(nextIsInverseRaw: boolean): void {
     emit("update:relationship", updatedRelationship);
 }
 
+function deriveIsInverseFromPathSequence(
+    nextPathSequence: RelationshipPathSequence,
+): boolean {
+    if (!anchorGraphSlug || !innerGraphSlug) {
+        return relationship.is_inverse;
+    }
+
+    if (anchorGraphSlug === innerGraphSlug) {
+        return relationship.is_inverse;
+    }
+
+    const firstSegment = nextPathSequence[0];
+
+    if (!firstSegment) {
+        return relationship.is_inverse;
+    }
+
+    const firstGraphSlug = firstSegment[0];
+
+    if (firstGraphSlug === innerGraphSlug) {
+        return true;
+    }
+
+    if (firstGraphSlug === anchorGraphSlug) {
+        return false;
+    }
+
+    return relationship.is_inverse;
+}
+
 function onUpdatePathSequence(
     nextPathSequence: RelationshipPathSequence,
 ): void {
@@ -220,12 +235,21 @@ function onUpdatePathSequence(
         return [segment[0], segment[1]] as [string, string];
     });
 
+    const nextIsInverse = deriveIsInverseFromPathSequence(nextPathSequence);
+
     const updatedRelationship: RelationshipState = {
         ...relationship,
         path: nextPath,
+        is_inverse: nextIsInverse,
     };
 
     emit("update:relationship", updatedRelationship);
+}
+
+function onCompatibleRelationshipNodesChanged(
+    nextHasCompatibleRelationshipNodes: boolean,
+): void {
+    hasCompatibleRelationshipNodes.value = nextHasCompatibleRelationshipNodes;
 }
 
 function onCloseClick(): void {
@@ -248,13 +272,30 @@ function onCloseClick(): void {
                     :value="$gettext('Relationship')"
                 />
 
+                <PathBuilder
+                    v-if="graphSlugsForPathBuilder.length > 0"
+                    v-show="hasCompatibleRelationshipNodes"
+                    :graph-slugs="graphSlugsForPathBuilder"
+                    :relationship-between-graphs="graphSlugsForPathBuilder"
+                    :path-sequence="relationship.path"
+                    :should-prepend-graph-name="true"
+                    @update:path-sequence="onUpdatePathSequence"
+                    @compatible-relationship-nodes-changed="
+                        onCompatibleRelationshipNodesChanged
+                    "
+                />
+
                 <Select
+                    v-if="
+                        hasCompatibleRelationshipNodes &&
+                        anchorGraphSlug === innerGraphSlug
+                    "
                     :model-value="currentRelationshipDirection"
                     :options="relationshipDirectionOptions"
                     option-label="label"
                     option-value="value"
                     class="relationship-direction-select"
-                    :placeholder="$gettext('Direction between groups')"
+                    :placeholder="$gettext('Direction')"
                     :aria-label="$gettext('Relationship direction')"
                     :title="
                         $gettext(
@@ -264,15 +305,8 @@ function onCloseClick(): void {
                     @update:model-value="onChangeRelationshipDirection"
                 />
 
-                <PathBuilder
-                    v-if="anchorGraph"
-                    :anchor-graph="anchorGraph"
-                    :max-path-segments="1"
-                    :path-sequence="relationship.path"
-                    @update:path-sequence="onUpdatePathSequence"
-                />
-
                 <Select
+                    v-if="hasCompatibleRelationshipNodes"
                     :model-value="currentTraversalQuantifier"
                     :options="traversalQuantifierOptions"
                     option-label="label"
@@ -287,6 +321,18 @@ function onCloseClick(): void {
                     "
                     @update:model-value="onChangeTraversalQuantifier"
                 />
+
+                <Message
+                    v-if="!hasCompatibleRelationshipNodes"
+                    severity="error"
+                    class="relationship-error-message"
+                >
+                    {{
+                        $gettext(
+                            "No compatible relationship nodes exist between the selected graphs.",
+                        )
+                    }}
+                </Message>
 
                 <Button
                     variant="text"
@@ -320,5 +366,9 @@ function onCloseClick(): void {
 
 .relationship-inline-close {
     margin-inline-start: auto;
+}
+
+.relationship-error-message {
+    flex: 1 1 auto;
 }
 </style>

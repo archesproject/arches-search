@@ -323,6 +323,7 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
 :deep(.p-dropdown-label),
 :deep(.p-togglebutton-label),
 :deep(.p-button-icon),
+:deep(.p-treeselect),
 :deep(.p-dropdown-item) {
     font-size: 1.2rem;
 }

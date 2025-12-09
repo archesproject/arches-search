@@ -4,7 +4,7 @@ import { ref, computed, watchEffect, inject } from "vue";
 import Card from "primevue/card";
 
 import GroupBracket from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupBracket.vue";
-import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader/GroupHeader.vue";
+import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader.vue";
 import ClauseBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/ClauseBuilder/ClauseBuilder.vue";
 
 import {
@@ -27,22 +27,16 @@ import {
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
+import type {
+    GraphModel,
+    GroupPayload,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 defineOptions({ name: "GroupBuilder" });
 
-type GraphSummary = {
-    graphid: string;
-    name: string;
-    slug: string;
-    id?: string;
-    label?: string;
-    [key: string]: unknown;
-};
-
 type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 
-const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
+const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs");
 
 const emit = defineEmits<{
     (event: "update:modelValue", value: GroupPayload): void;
@@ -53,7 +47,7 @@ const { modelValue, isRoot, parentGroupAnchorGraph, relationshipToParent } =
     defineProps<{
         modelValue?: GroupPayload;
         isRoot?: boolean;
-        parentGroupAnchorGraph?: GraphSummary;
+        parentGroupAnchorGraph?: GraphModel;
         relationshipToParent?: RelationshipState | null;
     }>();
 
@@ -64,7 +58,7 @@ const currentGroup = computed<GroupPayload>(function getCurrentGroup() {
     return modelValue ?? makeEmptyGroupPayload();
 });
 
-const currentGroupAnchorGraph = computed<GraphSummary | null>(
+const currentGroupAnchorGraph = computed<GraphModel | null>(
     function getCurrentGroupAnchorGraph() {
         const allGraphs = graphs?.value ?? [];
         const groupSlug = currentGroup.value.graph_slug;
@@ -80,26 +74,6 @@ const currentGroupAnchorGraph = computed<GraphSummary | null>(
         );
 
         return matchingGraph ?? null;
-    },
-);
-
-const effectiveAnchorGraph = computed<GraphSummary>(
-    function getEffectiveAnchorGraph() {
-        if (currentGroupAnchorGraph.value) {
-            return currentGroupAnchorGraph.value;
-        }
-
-        if (parentGroupAnchorGraph) {
-            return parentGroupAnchorGraph;
-        }
-
-        const fallbackSlug = currentGroup.value.graph_slug;
-
-        return {
-            graphid: fallbackSlug,
-            name: fallbackSlug,
-            slug: fallbackSlug,
-        };
     },
 );
 
@@ -326,8 +300,8 @@ function onRequestRemoveGroup(): void {
                             >
                                 <template #content>
                                     <ClauseBuilder
-                                        :model-value="clause as any"
-                                        :anchor-graph="effectiveAnchorGraph"
+                                        :model-value="clause"
+                                        :anchor-graph="currentGroupAnchorGraph!"
                                         :parent-group-anchor-graph="
                                             parentGroupAnchorGraph
                                         "
@@ -366,7 +340,7 @@ function onRequestRemoveGroup(): void {
                                 :key="childGroupKeys[childIndex]"
                                 :model-value="childGroup"
                                 :parent-group-anchor-graph="
-                                    effectiveAnchorGraph
+                                    currentGroupAnchorGraph!
                                 "
                                 :relationship-to-parent="
                                     currentGroup.relationship ?? null

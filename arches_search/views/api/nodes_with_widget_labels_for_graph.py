@@ -19,6 +19,7 @@ class NodesWithWidgetLabelsForGraphAPI(APIBase):
         nodes = (
             arches_models.Node.objects.filter(graph_id=graph_id)
             .order_by("sortorder", "name")
+            .select_related("nodegroup")
             .prefetch_related(
                 models.Prefetch(
                     "cardxnodexwidget_set",
@@ -36,6 +37,14 @@ class NodesWithWidgetLabelsForGraphAPI(APIBase):
             semantic_parent_id = (
                 str(semantic_parent.nodeid) if semantic_parent else None
             )
+
+            nodegroup = getattr(node, "nodegroup", None)
+            nodegroup_cardinality = (
+                str(nodegroup.cardinality).strip().lower()
+                if nodegroup and nodegroup.cardinality is not None
+                else None
+            )
+            nodegroup_has_cardinality_n = nodegroup_cardinality == "n"
 
             card_node_widget_rows = list(node.cardxnodexwidget_set.all())
             primary_card_node_widget = (
@@ -59,6 +68,7 @@ class NodesWithWidgetLabelsForGraphAPI(APIBase):
                     "config": node.config,
                     "card_x_node_x_widget_label": widget_label,
                     "semantic_parent_id": semantic_parent_id,
+                    "nodegroup_has_cardinality_n": nodegroup_has_cardinality_n,
                 }
             )
 

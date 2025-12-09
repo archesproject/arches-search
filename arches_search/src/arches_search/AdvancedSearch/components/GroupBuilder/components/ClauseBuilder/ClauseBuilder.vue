@@ -4,14 +4,13 @@ import { useGettext } from "vue3-gettext";
 
 import Select from "primevue/select";
 import Button from "primevue/button";
-import Tag from "primevue/tag";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/PathBuilder.vue";
 import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
-import ClauseAdvancedOptions from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/ClauseBuilder/components/ClauseAdvancedOptions.vue";
 
 import type { Ref } from "vue";
 import type {
+    GraphModel,
     AdvancedSearchFacet,
     GroupPayload,
     Node,
@@ -36,129 +35,79 @@ type ClausePayload = {
     operands: OperandPayload[];
 };
 
-type GraphSummary = {
-    graphid: string;
-    slug: string;
-    name: string;
-    [key: string]: unknown;
-};
-
 type RelationshipPayload = GroupPayload["relationship"];
 
-const CLAUSE_TYPE_LITERAL: ClauseTypeToken = "LITERAL";
+type NodeWithCardinality = Node & {
+    nodegroup_has_cardinality_n?: boolean;
+};
+
 const CLAUSE_TYPE_RELATED: ClauseTypeToken = "RELATED";
 
 const CLAUSE_QUANTIFIER_ANY: ClauseQuantifierToken = "ANY";
-// const CLAUSE_QUANTIFIER_ALL: ClauseQuantifierToken = "ALL";
-// const CLAUSE_QUANTIFIER_NONE: ClauseQuantifierToken = "NONE";
+const CLAUSE_QUANTIFIER_ALL: ClauseQuantifierToken = "ALL";
+const CLAUSE_QUANTIFIER_NONE: ClauseQuantifierToken = "NONE";
 
 const OPERAND_TYPE_LITERAL: OperandPayloadTypeToken = "LITERAL";
-const OPERAND_TYPE_PATH: OperandPayloadTypeToken = "PATH";
 
-const clauseTypeOptions: { label: string; value: ClauseTypeToken }[] = [
-    { label: $gettext("Literal value"), value: CLAUSE_TYPE_LITERAL },
-    { label: $gettext("Related resource"), value: CLAUSE_TYPE_RELATED },
-];
-
-// const clauseQuantifierOptions: {
-//     label: string;
-//     value: ClauseQuantifierToken;
-// }[] = [
-//     { label: $gettext("Any"), value: CLAUSE_QUANTIFIER_ANY },
-//     { label: $gettext("All"), value: CLAUSE_QUANTIFIER_ALL },
-//     { label: $gettext("No"), value: CLAUSE_QUANTIFIER_NONE },
-// ];
-
-const operandTypeOptions: {
-    label: string;
-    value: OperandPayloadTypeToken;
-}[] = [
-    { label: $gettext("Literal"), value: OPERAND_TYPE_LITERAL },
-    { label: $gettext("Path"), value: OPERAND_TYPE_PATH },
-];
+const operandTypeLiteral: OperandPayloadTypeToken = OPERAND_TYPE_LITERAL;
 
 const datatypesToAdvancedSearchFacets = inject<
     Ref<Record<string, AdvancedSearchFacet[]>>
->("datatypesToAdvancedSearchFacets");
+>("datatypesToAdvancedSearchFacets")!;
 
-if (!datatypesToAdvancedSearchFacets) {
-    throw new Error(
-        $gettext(
-            "ClauseBuilder is missing datatypesToAdvancedSearchFacets injection.",
-        ),
-    );
-}
-
-const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
-
-if (!graphs) {
-    throw new Error($gettext("ClauseBuilder is missing graphs injection."));
-}
+const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs")!;
 
 const getNodesForGraphId =
-    inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId");
+    inject<(graphId: string) => Promise<NodeWithCardinality[]>>(
+        "getNodesForGraphId",
+    )!;
 
-if (!getNodesForGraphId) {
-    throw new Error(
-        $gettext("ClauseBuilder is missing getNodesForGraphId injection."),
-    );
-}
+const { modelValue, anchorGraph, relationship, innerGroupGraphSlug } =
+    defineProps<{
+        modelValue: ClausePayload;
+        anchorGraph: GraphModel;
+        relationship?: RelationshipPayload | null;
+        innerGroupGraphSlug?: string;
+    }>();
 
 const emit = defineEmits<{
     (event: "update:modelValue", updatedClause: ClausePayload): void;
     (event: "request:remove"): void;
 }>();
 
-const {
-    modelValue,
-    anchorGraph,
-    parentGroupAnchorGraph,
-    relationship,
-    innerGroupGraphSlug,
-} = defineProps<{
-    modelValue: ClausePayload;
-    anchorGraph: GraphSummary;
-    parentGroupAnchorGraph?: GraphSummary;
-    relationship?: RelationshipPayload | null;
-    innerGroupGraphSlug?: string;
-}>();
+const clauseQuantifierOptions: {
+    label: string;
+    value: ClauseQuantifierToken;
+}[] = [
+    { label: $gettext("At least one"), value: CLAUSE_QUANTIFIER_ANY },
+    { label: $gettext("Every"), value: CLAUSE_QUANTIFIER_ALL },
+    { label: $gettext("No"), value: CLAUSE_QUANTIFIER_NONE },
+];
 
-const isAdvancedOptionsOpen = ref(false);
-const subjectTerminalNode = ref<Node | null>(null);
-const subjectTerminalGraph = ref<GraphSummary | null>(null);
+const subjectNode = ref<NodeWithCardinality | null>(null);
+const subjectGraph = ref<GraphModel | null>(null);
 const operandKeysByIndex = ref<string[]>([]);
-const localOperandType = ref<OperandPayloadTypeToken>(OPERAND_TYPE_LITERAL);
 
-if (modelValue.operands[0]?.type === OPERAND_TYPE_PATH) {
-    localOperandType.value = OPERAND_TYPE_PATH;
-}
-
-const subjectPathSequence = computed<[string, string][]>(() => {
+const subjectPath = computed<[string, string][]>(() => {
     return modelValue.subject;
-});
-
-const subjectPathSequenceKey = computed<string>(() => {
-    return subjectPathSequence.value
-        .map(([graphSlug, nodeAlias]) => `${graphSlug}:${nodeAlias}`)
-        .join("|");
 });
 
 const subjectPathTerminalGraphSlugAndNodeAlias = computed<
     [string, string] | null
 >(() => {
-    if (subjectPathSequence.value.length === 0) {
+    if (subjectPath.value.length === 0) {
         return null;
     }
-    const lastIndex = subjectPathSequence.value.length - 1;
-    return subjectPathSequence.value[lastIndex];
+    const lastIndex = subjectPath.value.length - 1;
+    return subjectPath.value[lastIndex];
 });
 
-const baseSubjectAnchorGraph = computed<GraphSummary>(() => {
-    if (subjectPathSequence.value.length === 0) {
+const baseSubjectAnchorGraph = computed<GraphModel>(() => {
+    if (subjectPath.value.length === 0) {
         return anchorGraph;
     }
 
-    const [firstGraphSlug] = subjectPathSequence.value[0];
+    const [firstGraphSlug] = subjectPath.value[0];
 
     const matchingGraph = graphs.value.find((graphCandidate) => {
         return graphCandidate.slug === firstGraphSlug;
@@ -171,11 +120,11 @@ const baseSubjectAnchorGraph = computed<GraphSummary>(() => {
     return anchorGraph;
 });
 
-const subjectAnchorGraph = computed<GraphSummary>(() => {
+const subjectAnchorGraph = computed<GraphModel>(() => {
     const isRelatedClause = modelValue.type === CLAUSE_TYPE_RELATED;
 
     if (
-        subjectPathSequence.value.length === 0 &&
+        subjectPath.value.length === 0 &&
         isRelatedClause &&
         relationship &&
         innerGroupGraphSlug
@@ -197,36 +146,13 @@ const subjectAnchorGraph = computed<GraphSummary>(() => {
     return baseSubjectAnchorGraph.value;
 });
 
-const operandAnchorGraph = computed<GraphSummary>(() => {
-    const isRelatedClause = modelValue.type === CLAUSE_TYPE_RELATED;
-
-    if (isRelatedClause && relationship && innerGroupGraphSlug) {
-        const isInverse = Boolean(relationship.is_inverse);
-        const oppositeSlug = isInverse ? anchorGraph.slug : innerGroupGraphSlug;
-
-        const matchingGraph = graphs.value.find((graphCandidate) => {
-            return graphCandidate.slug === oppositeSlug;
-        });
-
-        if (matchingGraph) {
-            return matchingGraph;
-        }
-
-        return anchorGraph;
-    }
-
-    return anchorGraph;
-});
-
 const availableOperatorOptions = computed<AdvancedSearchFacet[]>(() => {
-    if (!subjectTerminalNode.value?.datatype) {
+    if (!subjectNode.value?.datatype) {
         return [];
     }
 
     const facetsForDatatype =
-        datatypesToAdvancedSearchFacets.value[
-            subjectTerminalNode.value.datatype
-        ];
+        datatypesToAdvancedSearchFacets.value[subjectNode.value.datatype];
 
     if (!facetsForDatatype) {
         return [];
@@ -246,18 +172,31 @@ const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(() => {
         },
     );
 
-    if (!matchingFacet) {
-        return null;
+    return matchingFacet ?? null;
+});
+
+const resolvedClauseQuantifierOptions = computed(() => {
+    if (!subjectNode.value) {
+        return clauseQuantifierOptions;
     }
 
-    return matchingFacet;
+    if (!subjectNode.value.nodegroup_has_cardinality_n) {
+        return [
+            {
+                label: $gettext("Value of"),
+                value: CLAUSE_QUANTIFIER_ANY,
+            },
+        ];
+    }
+
+    return clauseQuantifierOptions;
 });
 
 watch(
     subjectPathTerminalGraphSlugAndNodeAlias,
     async (updatedTerminal) => {
-        subjectTerminalNode.value = null;
-        subjectTerminalGraph.value = null;
+        subjectNode.value = null;
+        subjectGraph.value = null;
 
         if (!updatedTerminal) {
             return;
@@ -277,11 +216,24 @@ watch(
             matchingGraph.graphid,
         );
 
-        subjectTerminalGraph.value = matchingGraph;
-        subjectTerminalNode.value =
+        subjectGraph.value = matchingGraph;
+        subjectNode.value =
             allNodesForGraph.find((nodeCandidate) => {
                 return nodeCandidate.alias === terminalNodeAlias;
             }) ?? null;
+    },
+    { immediate: true },
+);
+
+watch(
+    () => subjectNode.value?.nodegroup_has_cardinality_n,
+    (nodegroupHasCardinalityN) => {
+        if (
+            nodegroupHasCardinalityN === false &&
+            modelValue.quantifier !== CLAUSE_QUANTIFIER_ANY
+        ) {
+            patchClause({ quantifier: CLAUSE_QUANTIFIER_ANY });
+        }
     },
     { immediate: true },
 );
@@ -320,7 +272,7 @@ function handleOperandUpdate(
 
     if (updatedOperand === null) {
         updatedOperands[parameterIndex] = {
-            type: localOperandType.value,
+            type: operandTypeLiteral,
             value: null,
         };
     } else {
@@ -361,6 +313,7 @@ function handleOperatorChange(nextOperator: string | null): void {
             operator: nextOperator,
             operands: [],
         });
+
         return;
     }
 
@@ -373,147 +326,79 @@ function handleRemoveSelf(): void {
     emit("request:remove");
 }
 
-// function handleToggleAdvancedOptions(event: MouseEvent): void {
-//     event.stopPropagation();
-//     isAdvancedOptionsOpen.value = !isAdvancedOptionsOpen.value;
-// }
-
-function handleClauseTypeClick(nextClauseType: ClauseTypeToken): void {
-    if (modelValue.type === nextClauseType) {
+function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
+    if (modelValue.quantifier === nextQuantifier) {
         return;
     }
-
-    patchClause({
-        type: nextClauseType,
-        quantifier: CLAUSE_QUANTIFIER_ANY,
-        subject: [],
-        operator: null,
-        operands: [],
-    });
-}
-
-// function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
-//     if (modelValue.quantifier === nextQuantifier) {
-//         return;
-//     }
-//     patchClause({ quantifier: nextQuantifier });
-// }
-
-function handleOperandTypeClick(
-    nextOperandType: OperandPayloadTypeToken,
-): void {
-    if (localOperandType.value === nextOperandType) {
-        return;
-    }
-    localOperandType.value = nextOperandType;
+    patchClause({ quantifier: nextQuantifier });
 }
 </script>
 
 <template>
     <div class="clause-builder">
-        <div class="clause-main-row">
-            <!-- <Button
-                class="clause-gear-toggle"
-                icon="pi pi-cog"
-                severity="secondary"
-                text
-                rounded
-                type="button"
-                :aria-label="$gettext('Toggle advanced options')"
-                :aria-pressed="isAdvancedOptionsOpen"
-                @click="handleToggleAdvancedOptions"
-            /> -->
+        <div class="clause-core-row">
+            <Select
+                :disabled="!subjectNode?.nodegroup_has_cardinality_n"
+                :model-value="modelValue.quantifier"
+                class="clause-quantifier-select"
+                :options="resolvedClauseQuantifierOptions"
+                option-label="label"
+                option-value="value"
+                @update:model-value="handleQuantifierClick"
+            />
 
-            <div class="clause-core-row">
-                <!-- <Select
-                    :model-value="modelValue.quantifier"
-                    class="clause-quantifier-select"
-                    :options="clauseQuantifierOptions"
-                    option-label="label"
-                    option-value="value"
-                    @update:model-value="handleQuantifierClick"
-                /> -->
+            <PathBuilder
+                class="clause-subject-path"
+                :path-sequence="subjectPath"
+                :graph-slugs="[subjectAnchorGraph.slug]"
+                @update:path-sequence="handleSubjectUpdate"
+            />
 
-                <PathBuilder
-                    :key="subjectPathSequenceKey"
-                    class="clause-subject-path"
-                    :path-sequence="subjectPathSequence"
-                    :anchor-graph="subjectAnchorGraph"
-                    :show-anchor-graph-dropdown="
-                        modelValue.type === CLAUSE_TYPE_RELATED
+            <Select
+                :model-value="modelValue.operator"
+                class="clause-operator-select"
+                :options="availableOperatorOptions"
+                option-label="label"
+                option-value="operator"
+                :disabled="availableOperatorOptions.length === 0"
+                :placeholder="$gettext('Select an operator...')"
+                @update:model-value="handleOperatorChange"
+            />
+
+            <div
+                v-if="
+                    selectedAdvancedSearchFacet &&
+                    selectedAdvancedSearchFacet.arity > 0 &&
+                    subjectNode &&
+                    subjectGraph
+                "
+                class="clause-operands-row"
+            >
+                <ClauseOperandBuilder
+                    v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
+                    :key="ensureOperandKey(parameterIndex - 1)"
+                    :model-value="
+                        modelValue.operands[parameterIndex - 1] ?? null
                     "
-                    @update:path-sequence="handleSubjectUpdate"
-                />
-
-                <Select
-                    :model-value="modelValue.operator"
-                    class="clause-operator-select"
-                    :options="availableOperatorOptions"
-                    option-label="label"
-                    option-value="operator"
-                    :disabled="availableOperatorOptions.length === 0"
-                    :placeholder="$gettext('Select an operator...')"
-                    @update:model-value="handleOperatorChange"
-                />
-
-                <div
-                    v-if="
-                        selectedAdvancedSearchFacet &&
-                        selectedAdvancedSearchFacet.arity > 0 &&
-                        subjectTerminalNode &&
-                        subjectTerminalGraph
+                    :subject-terminal-node="subjectNode"
+                    :subject-terminal-graph="subjectGraph"
+                    :operand-type="operandTypeLiteral"
+                    @update:model-value="
+                        handleOperandUpdate(parameterIndex - 1, $event)
                     "
-                    class="clause-operands-row"
-                >
-                    <ClauseOperandBuilder
-                        v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
-                        :key="ensureOperandKey(parameterIndex - 1)"
-                        :model-value="
-                            modelValue.operands[parameterIndex - 1] ?? null
-                        "
-                        :anchor-graph="operandAnchorGraph"
-                        :parent-group-anchor-graph="parentGroupAnchorGraph"
-                        :subject-terminal-node="subjectTerminalNode"
-                        :subject-terminal-graph="subjectTerminalGraph"
-                        :operand-type="localOperandType"
-                        @update:model-value="
-                            handleOperandUpdate(parameterIndex - 1, $event)
-                        "
-                    />
-                </div>
-
-                <Tag
-                    v-if="modelValue.type === CLAUSE_TYPE_RELATED"
-                    class="clause-indicator-pill"
-                    icon="pi pi-link"
-                    :value="$gettext('Related')"
                 />
             </div>
-
-            <Button
-                icon="pi pi-times"
-                severity="danger"
-                variant="text"
-                type="button"
-                class="clause-remove-button"
-                :aria-label="$gettext('Remove filter')"
-                @click="handleRemoveSelf"
-            />
         </div>
 
-        <div
-            v-if="isAdvancedOptionsOpen"
-            class="clause-advanced-row"
-        >
-            <ClauseAdvancedOptions
-                :clause-type="modelValue.type"
-                :operand-type="localOperandType"
-                :clause-type-options="clauseTypeOptions"
-                :operand-type-options="operandTypeOptions"
-                @update:clause-type="handleClauseTypeClick"
-                @update:operand-type="handleOperandTypeClick"
-            />
-        </div>
+        <Button
+            class="clause-remove-button"
+            icon="pi pi-times"
+            severity="danger"
+            variant="text"
+            type="button"
+            :aria-label="$gettext('Remove filter')"
+            @click="handleRemoveSelf"
+        />
     </div>
 </template>
 
@@ -526,12 +411,7 @@ function handleOperandTypeClick(
 
 .clause-builder {
     font-size: 1rem;
-    display: flex;
-    flex-direction: column;
     gap: 0.5rem;
-}
-
-.clause-main-row {
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: flex-start;

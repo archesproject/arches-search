@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, computed } from "vue";
+import { inject, computed, ref, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
@@ -9,19 +9,28 @@ import Tag from "primevue/tag";
 
 import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/RelationshipEditor.vue";
 
-import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
+import type {
+    GraphModel,
+    GroupPayload,
+    Node,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
 
-type GraphSummary = {
-    id?: string;
-    slug: string;
-    name?: string;
-    label?: string;
-    [key: string]: unknown;
+type RelationshipState = GroupPayload["relationship"];
+
+type RelationshipNodeDescriptor = {
+    graphSlug: string;
+    nodeAlias: string;
 };
 
-const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
+type LabelledNode = Node & {
+    card_x_node_x_widget_label: string;
+};
+
+const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs");
+const getNodesForGraphId =
+    inject<(graphId: string) => Promise<LabelledNode[]>>("getNodesForGraphId");
 
 const emit = defineEmits<{
     (event: "change-graph", graphSlug: string): void;
@@ -29,10 +38,7 @@ const emit = defineEmits<{
     (event: "add-clause"): void;
     (event: "add-relationship"): void;
     (event: "remove-relationship"): void;
-    (
-        event: "update-relationship",
-        relationship: GroupPayload["relationship"],
-    ): void;
+    (event: "update-relationship", relationship: RelationshipState): void;
     (event: "remove-group"): void;
 }>();
 
@@ -41,18 +47,20 @@ const { groupPayload, isRoot, hasNestedGroups, relationshipToParent } =
         groupPayload: GroupPayload;
         isRoot?: boolean;
         hasNestedGroups: boolean;
-        relationshipToParent?: GroupPayload["relationship"];
+        relationshipToParent?: RelationshipState;
     }>();
 
-const graphOptions = computed<{ label: string; value: string }[]>(function () {
-    return (
-        graphs?.value.map(function (graphSummary) {
-            return {
-                label: graphSummary.name ?? graphSummary.slug,
-                value: graphSummary.slug,
-            };
-        }) ?? []
-    );
+const graphOptions = computed(function () {
+    if (!graphs?.value) {
+        return [];
+    }
+
+    return graphs.value.map(function (graphSummary) {
+        return {
+            label: graphSummary.name ?? graphSummary.slug,
+            value: graphSummary.slug,
+        };
+    });
 });
 
 const currentGraphSlug = computed<string>(function () {
@@ -63,17 +71,20 @@ const isGraphSelected = computed<boolean>(function () {
     return currentGraphSlug.value.trim().length > 0;
 });
 
-const currentRelationship = computed<GroupPayload["relationship"]>(function () {
-    return groupPayload.relationship as GroupPayload["relationship"];
+const currentRelationship = computed<RelationshipState>(function () {
+    return groupPayload.relationship;
 });
 
 const hasRelationship = computed<boolean>(function () {
     return currentRelationship.value !== null;
 });
 
-const innerGraphSlug = computed<string | undefined>(function () {
-    const firstChildGroup = groupPayload.groups[0];
-    return firstChildGroup?.graph_slug;
+const innerGraphSlug = computed<string>(function () {
+    if (!groupPayload.groups || groupPayload.groups.length === 0) {
+        return "";
+    }
+
+    return groupPayload.groups[0].graph_slug;
 });
 
 const relateButtonTitle = computed<string>(function () {
@@ -96,51 +107,147 @@ const showsRelationshipToParentTag = computed<boolean>(function () {
     return !isRoot && relationshipToParent != null;
 });
 
+const relationshipToParentNodeDescriptor =
+    computed<RelationshipNodeDescriptor | null>(function () {
+        if (!relationshipToParent) {
+            return null;
+        }
+
+        const relationshipWithPotentialPath = relationshipToParent as {
+            path?: unknown;
+        };
+
+        const relationshipPath = relationshipWithPotentialPath.path;
+
+        if (!Array.isArray(relationshipPath) || relationshipPath.length === 0) {
+            return null;
+        }
+
+        const lastPathStep = relationshipPath[
+            relationshipPath.length - 1
+        ] as unknown;
+
+        if (!Array.isArray(lastPathStep) || lastPathStep.length < 2) {
+            return null;
+        }
+
+        const graphSlug = String(lastPathStep[0]);
+        const nodeAlias = String(lastPathStep[1]);
+
+        return {
+            graphSlug,
+            nodeAlias,
+        };
+    });
+
 const relationshipToParentNodeIdentifier = computed<string | null>(function () {
-    if (!relationshipToParent) {
+    const descriptor = relationshipToParentNodeDescriptor.value;
+
+    if (!descriptor) {
         return null;
     }
 
-    const unsafeRelationship = relationshipToParent as unknown as {
-        path?: unknown;
-    };
-
-    const relationshipPath = unsafeRelationship.path;
-
-    if (!Array.isArray(relationshipPath) || relationshipPath.length === 0) {
-        return null;
-    }
-
-    const lastPathStep = relationshipPath[
-        relationshipPath.length - 1
-    ] as unknown;
-
-    if (!Array.isArray(lastPathStep) || lastPathStep.length < 2) {
-        return null;
-    }
-
-    const unsafeNodeIdentifier = lastPathStep[1] as unknown;
-
-    if (
-        typeof unsafeNodeIdentifier !== "string" ||
-        unsafeNodeIdentifier.trim().length === 0
-    ) {
-        return null;
-    }
-
-    return unsafeNodeIdentifier;
+    return descriptor.nodeAlias;
 });
 
+const relationshipToParentGraphLabel = ref<string | null>(null);
+const relationshipToParentNodeLabel = ref<string | null>(null);
+
+watch(
+    relationshipToParentNodeDescriptor,
+    async function (nextNodeDescriptor) {
+        relationshipToParentGraphLabel.value = null;
+        relationshipToParentNodeLabel.value = null;
+
+        if (!nextNodeDescriptor) {
+            return;
+        }
+
+        if (!graphs || graphs.value.length === 0) {
+            return;
+        }
+
+        const matchingGraphSummary = graphs.value.find(function (graphSummary) {
+            return graphSummary.slug === nextNodeDescriptor.graphSlug;
+        });
+
+        if (matchingGraphSummary) {
+            const graphLabel =
+                matchingGraphSummary.name ?? matchingGraphSummary.slug ?? "";
+            relationshipToParentGraphLabel.value = graphLabel || null;
+        }
+
+        if (
+            !getNodesForGraphId ||
+            !matchingGraphSummary ||
+            !matchingGraphSummary.graphid
+        ) {
+            return;
+        }
+
+        try {
+            const nodeSummaries = await getNodesForGraphId(
+                matchingGraphSummary.graphid,
+            );
+
+            const matchingNodeSummary = nodeSummaries.find(
+                function (nodeSummary) {
+                    return nodeSummary.alias === nextNodeDescriptor.nodeAlias;
+                },
+            );
+
+            if (!matchingNodeSummary) {
+                return;
+            }
+
+            const nodeLabel =
+                matchingNodeSummary.card_x_node_x_widget_label ||
+                matchingNodeSummary.name ||
+                matchingNodeSummary.alias;
+
+            relationshipToParentNodeLabel.value = nodeLabel || null;
+        } catch {
+            relationshipToParentNodeLabel.value = null;
+        }
+    },
+    { immediate: true },
+);
+
+const relationshipToParentPathDescription = computed<string | null>(
+    function () {
+        const graphLabel = relationshipToParentGraphLabel.value;
+        const nodeLabel = relationshipToParentNodeLabel.value;
+
+        if (!graphLabel && !nodeLabel) {
+            return null;
+        }
+
+        if (graphLabel && nodeLabel) {
+            return `${graphLabel} → ${nodeLabel}`;
+        }
+
+        return graphLabel ?? nodeLabel;
+    },
+);
+
 const relationshipToParentLabel = computed<string>(function () {
+    const description = relationshipToParentPathDescription.value;
+
+    if (description) {
+        return $gettext("Related via %{description}", {
+            description,
+        });
+    }
+
     const nodeIdentifier = relationshipToParentNodeIdentifier.value;
 
     if (nodeIdentifier) {
-        return $gettext("Related to parent via %{nodeIdentifier}", {
+        return $gettext("Related via %{nodeIdentifier}", {
             nodeIdentifier,
         });
     }
 
-    return $gettext("Related to parent via node");
+    return $gettext("Related via node");
 });
 
 function onSetGraphSlug(graphSlug: string): void {
@@ -166,15 +273,10 @@ function onAddRelationship(): void {
     emit("add-relationship");
 }
 
-function onRemoveRelationship(): void {
-    emit("remove-relationship");
-}
-
-function onUpdateRelationship(
-    nextRelationship: GroupPayload["relationship"],
-): void {
+function onUpdateRelationship(nextRelationship: RelationshipState): void {
     if (nextRelationship === null) {
-        onClearRelationship(new MouseEvent("click"));
+        emit("update-relationship", null);
+        emit("remove-relationship");
         return;
     }
 
@@ -190,14 +292,6 @@ function onRelationshipButtonClick(clickEvent: MouseEvent): void {
 
     onAddRelationship();
 }
-
-function onClearRelationship(clickEvent?: MouseEvent): void {
-    if (clickEvent) {
-        clickEvent.stopPropagation();
-    }
-    emit("update-relationship", null);
-    onRemoveRelationship();
-}
 </script>
 
 <template>
@@ -209,7 +303,7 @@ function onClearRelationship(clickEvent?: MouseEvent): void {
                     :options="graphOptions"
                     option-label="label"
                     option-value="value"
-                    :placeholder="$gettext('Select what to filter')"
+                    :placeholder="$gettext('Filter...')"
                     class="group-field"
                     @update:model-value="onSetGraphSlug"
                 />
@@ -297,13 +391,6 @@ function onClearRelationship(clickEvent?: MouseEvent): void {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-    flex-wrap: wrap;
-}
-
-.group-indicators {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
     flex-wrap: wrap;
 }
 
