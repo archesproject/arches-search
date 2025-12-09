@@ -114,7 +114,7 @@ function onAnalyzePayloadButtonClick(): void {
                 icon="pi pi-info-circle"
                 severity="secondary"
                 size="large"
-                :label="$gettext('Analyze payload')"
+                :label="$gettext('Describe Query')"
                 :disabled="!searchPayload"
                 @click="onAnalyzePayloadButtonClick"
             />
