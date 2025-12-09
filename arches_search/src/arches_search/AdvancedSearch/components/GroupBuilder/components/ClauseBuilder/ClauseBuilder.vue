@@ -176,11 +176,7 @@ const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(() => {
 });
 
 const resolvedClauseQuantifierOptions = computed(() => {
-    if (!subjectNode.value) {
-        return clauseQuantifierOptions;
-    }
-
-    if (!subjectNode.value.nodegroup_has_cardinality_n) {
+    if (!subjectNode.value || !subjectNode.value.nodegroup_has_cardinality_n) {
         return [
             {
                 label: $gettext("Value of"),
