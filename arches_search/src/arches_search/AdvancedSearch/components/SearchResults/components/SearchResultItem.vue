@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watchEffect } from "vue";
+import { ref, computed, onMounted, nextTick } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
@@ -8,7 +8,6 @@ import Card from "primevue/card";
 import arches from "arches";
 
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
-import { getThumbnailExists } from "@/arches_search/AdvancedSearch/api.ts";
 
 import type { ResourceData } from "@/arches_search/AdvancedSearch/types.ts";
 
@@ -18,91 +17,93 @@ type ResourceDescriptor = {
     [key: string]: unknown;
 };
 
+const { $gettext } = useGettext();
+
+const EDIT_BUTTON_LABEL = $gettext("Edit");
+
 const { result } = defineProps<{
     result: ResourceData;
 }>();
 
-const { $gettext } = useGettext();
-
-const resourceLink = ref<string>("");
-const resourceDisplayName = ref<string>("");
-const resourceDescriptionText = ref<string>("");
-
-const doesThumbnailExist = ref(false);
 const shouldShowMoreDetails = ref(false);
+const shouldShowThumbnailContainer = ref(false);
+const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
 
-watchEffect(function () {
-    const resourceIdentifier = result.resourceinstanceid;
-
-    updateResourceLink(resourceIdentifier);
-    updateResourceText();
-    void updateThumbnail(resourceIdentifier);
+const resourceDescriptorsForActiveLanguage = computed<
+    ResourceDescriptor | undefined
+>(function () {
+    return result.descriptors?.[arches.activeLanguage];
 });
 
-const showMoreButtonState = computed(() => {
-    if (shouldShowMoreDetails.value) {
-        return {
-            label: $gettext("Show Less"),
-            icon: "pi pi-chevron-down",
-        };
-    }
-
-    return {
-        label: $gettext("Show More"),
-        icon: "pi pi-chevron-right",
-    };
-});
-
-function updateResourceLink(resourceIdentifier: string): void {
-    resourceLink.value = generateArchesURL("arches:resource_editor", {
-        resourceid: resourceIdentifier,
+const resourceLink = computed<string>(function () {
+    return generateArchesURL("arches:resource_editor", {
+        resourceid: result.resourceinstanceid,
     });
-}
+});
 
-function updateResourceText(): void {
-    const descriptorsByLanguage = result.descriptors as
-        | Record<string, ResourceDescriptor>
-        | undefined;
+const resourceDisplayName = computed<string>(function () {
+    return resourceDescriptorsForActiveLanguage.value?.name || "";
+});
 
-    const descriptorsForActiveLanguage =
-        descriptorsByLanguage?.[arches.activeLanguage];
+const resourceDescriptionText = computed<string>(function () {
+    return resourceDescriptorsForActiveLanguage.value?.description || "";
+});
 
-    resourceDisplayName.value = descriptorsForActiveLanguage?.name ?? "";
-    resourceDescriptionText.value =
-        descriptorsForActiveLanguage?.description ?? "";
-}
-
-async function updateThumbnail(resourceIdentifier: string): Promise<void> {
-    try {
-        const isThumbnailAvailable =
-            await getThumbnailExists(resourceIdentifier);
-
-        if (resourceIdentifier !== result.resourceinstanceid) {
-            return;
-        }
-
-        doesThumbnailExist.value = isThumbnailAvailable;
-    } catch {
-        doesThumbnailExist.value = false;
+const showMoreButtonLabel = computed<string>(function () {
+    if (shouldShowMoreDetails.value) {
+        return $gettext("Show Less");
     }
-}
+
+    return $gettext("Show More");
+});
+
+const showMoreButtonIcon = computed<string>(function () {
+    if (shouldShowMoreDetails.value) {
+        return "pi pi-chevron-down";
+    }
+
+    return "pi pi-chevron-right";
+});
 
 function onToggleShowMoreDetails(): void {
     shouldShowMoreDetails.value = !shouldShowMoreDetails.value;
 }
+
+onMounted(function () {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    const thumbnailImageElement = new window.Image();
+
+    thumbnailImageElement.alt = resourceDisplayName.value;
+    thumbnailImageElement.className = "search-result-thumbnail-image";
+
+    thumbnailImageElement.onload = async function () {
+        shouldShowThumbnailContainer.value = true;
+
+        await nextTick();
+
+        if (thumbnailContainerElement.value) {
+            thumbnailContainerElement.value.appendChild(thumbnailImageElement);
+        }
+    };
+
+    thumbnailImageElement.onerror = function () {
+        shouldShowThumbnailContainer.value = false;
+    };
+
+    thumbnailImageElement.src = `/thumbnail/${result.resourceinstanceid}`;
+});
 </script>
 
 <template>
     <div class="search-result">
         <div
-            v-if="doesThumbnailExist"
+            v-if="shouldShowThumbnailContainer"
+            ref="thumbnailContainerElement"
             class="search-result-thumbnail"
-        >
-            <img
-                :src="`/thumbnail/${result.resourceinstanceid}`"
-                :alt="resourceDisplayName"
-            />
-        </div>
+        />
 
         <div class="search-result-content">
             <h1 class="search-result-title">
@@ -130,8 +131,8 @@ function onToggleShowMoreDetails(): void {
                 <Button
                     size="large"
                     variant="text"
-                    :icon="showMoreButtonState.icon"
-                    :label="showMoreButtonState.label"
+                    :icon="showMoreButtonIcon"
+                    :label="showMoreButtonLabel"
                     @click="onToggleShowMoreDetails"
                 />
                 <Button
@@ -141,7 +142,7 @@ function onToggleShowMoreDetails(): void {
                     size="large"
                     variant="link"
                     :href="resourceLink"
-                    :label="$gettext('Edit')"
+                    :label="EDIT_BUTTON_LABEL"
                 />
             </div>
 
@@ -169,7 +170,6 @@ function onToggleShowMoreDetails(): void {
 }
 
 .search-result-title {
-    margin: 0 0 0.5rem;
     font-size: 2rem;
 }
 
@@ -192,16 +192,16 @@ function onToggleShowMoreDetails(): void {
     height: 10rem;
     margin: 0;
     background-color: var(--p-surface-100);
-    border: 1px solid var(--p-surface-300);
+    border: 0.125rem solid var(--p-surface-300);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
 }
 
-.search-result-thumbnail img {
-    max-width: 100%;
-    max-height: 100%;
+.search-result-thumbnail-image {
+    width: 100%;
+    height: 100%;
     object-fit: cover;
 }
 
@@ -218,15 +218,7 @@ function onToggleShowMoreDetails(): void {
     gap: 1rem;
 }
 
-.search-result-actions :deep(a) {
-    text-decoration: none;
-}
-
 .search-result-more {
     margin-top: 1rem;
-}
-
-.search-result-more-card {
-    width: 100%;
 }
 </style>

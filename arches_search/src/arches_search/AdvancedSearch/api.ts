@@ -2,18 +2,35 @@ import Cookies from "js-cookie";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
-export async function getSearchResults(searchQuery: GroupPayload) {
-    const response = await fetch(
-        generateArchesURL("arches_search:advanced_search"),
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": Cookies.get("csrftoken") || "",
-            },
-            body: JSON.stringify(searchQuery),
+export async function getSearchResults(
+    searchQuery: GroupPayload,
+    options?: { page?: number; pageSize?: number },
+) {
+    const requestPayload: GroupPayload & {
+        page?: number;
+        page_size?: number;
+    } = {
+        ...searchQuery,
+    };
+
+    if (options && options.page !== undefined) {
+        requestPayload.page = options.page;
+    }
+
+    if (options && options.pageSize !== undefined) {
+        requestPayload.page_size = options.pageSize;
+    }
+
+    const url = generateArchesURL("arches_search:advanced_search");
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": Cookies.get("csrftoken") || "",
         },
-    );
+        body: JSON.stringify(requestPayload),
+    });
 
     const parsed = await response.json();
     if (!response.ok) throw new Error(parsed.message || response.statusText);
@@ -112,15 +129,4 @@ export async function getGraphs() {
     if (!response.ok) throw new Error(parsed.message || response.statusText);
 
     return parsed;
-}
-
-export async function getThumbnailExists(resourceIdentifier: string) {
-    const response = await fetch(
-        generateArchesURL("arches:thumbnail", {
-            resource_id: resourceIdentifier,
-        }),
-        { method: "HEAD" },
-    );
-
-    return response.ok;
 }

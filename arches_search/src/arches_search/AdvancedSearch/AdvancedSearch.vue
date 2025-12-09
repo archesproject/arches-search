@@ -1,17 +1,16 @@
 <script setup lang="ts">
-import { defineProps, provide, ref, onMounted } from "vue";
+import { provide, ref, watchEffect } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
 import Message from "primevue/message";
 import Skeleton from "primevue/skeleton";
 import Splitter from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
 
+import AdvancedSearchFooter from "@/arches_search/AdvancedSearch/components/AdvancedSearchFooter.vue";
 import GroupBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/GroupBuilder.vue";
 import SearchResults from "@/arches_search/AdvancedSearch/components/SearchResults/SearchResults.vue";
-import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/PayloadAnalyzer.vue";
 
 import {
     getAdvancedSearchFacets,
@@ -43,7 +42,7 @@ type GraphSummary = {
 
 const { $gettext } = useGettext();
 
-const props = defineProps<{
+const { query } = defineProps<{
     query?: GroupPayload;
 }>();
 
@@ -51,7 +50,7 @@ const isLoading = ref(true);
 const isSearching = ref(false);
 const fetchError = ref<Error | null>(null);
 
-const rootPayload = ref<GroupPayload | undefined>(props.query);
+const searchPayload = ref<GroupPayload | undefined>(query);
 
 const datatypesToAdvancedSearchFacets = ref<
     Record<string, AdvancedSearchFacet[]>
@@ -59,18 +58,16 @@ const datatypesToAdvancedSearchFacets = ref<
 
 const graphs = ref<GraphSummary[]>([]);
 const graphIdToNodeCache = ref<Record<string, NodeCacheEntry>>({});
+
 const searchResults = ref<SearchResultsPayload | null>(null);
-
-const searchButtonLabel = $gettext("Search");
-const analyzePayloadLabel = $gettext("Analyze payload");
-
-const shouldShowNarrationDialog = ref(false);
+const searchResultsInstanceKey = ref(0);
+const searchFilterText = ref("");
 
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
 provide("getNodesForGraphId", getNodesForGraphId);
 
-onMounted(async () => {
+watchEffect(async () => {
     try {
         isLoading.value = true;
         fetchError.value = null;
@@ -82,10 +79,6 @@ onMounted(async () => {
         isLoading.value = false;
     }
 });
-
-function onUpdateRoot(updatedGroupPayload: GroupPayload): void {
-    rootPayload.value = updatedGroupPayload;
-}
 
 async function getNodesForGraphId(
     graphId: string,
@@ -149,8 +142,8 @@ async function fetchGraphs(): Promise<void> {
     graphs.value = await getGraphs();
 }
 
-async function search(): Promise<void> {
-    if (!rootPayload.value) {
+async function performSearch(pageNumberToLoad?: number): Promise<void> {
+    if (!searchPayload.value) {
         fetchError.value = new Error(
             $gettext("Cannot perform search: no search query defined."),
         );
@@ -162,10 +155,23 @@ async function search(): Promise<void> {
         isSearching.value = true;
 
         const searchResultsResponse = await fetchSearchResults(
-            rootPayload.value,
+            searchPayload.value,
+            { page: pageNumberToLoad },
         );
 
-        searchResults.value = searchResultsResponse;
+        if (searchResults.value) {
+            searchResults.value = {
+                ...searchResults.value,
+                ...searchResultsResponse,
+                resources: [
+                    ...searchResults.value.resources,
+                    ...searchResultsResponse.resources,
+                ],
+            };
+        } else {
+            searchResultsInstanceKey.value += 1;
+            searchResults.value = searchResultsResponse;
+        }
     } catch (possibleError) {
         fetchError.value = possibleError as Error;
         searchResults.value = null;
@@ -173,13 +179,23 @@ async function search(): Promise<void> {
         isSearching.value = false;
     }
 }
+
+async function searchAtPage(pageNumberToLoad: number): Promise<void> {
+    await performSearch(pageNumberToLoad);
+}
+
+function onRequestPage(nextPageNumber: number): void {
+    void searchAtPage(nextPageNumber);
+}
+
+function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
+    searchPayload.value = updatedGroupPayload;
+    searchResults.value = null;
+}
 </script>
 
 <template>
-    <div
-        class="advanced-search"
-        :class="{ 'advanced-search--has-results': !!searchResults }"
-    >
+    <div class="advanced-search">
         <Skeleton
             v-if="isLoading"
             style="height: 100%"
@@ -200,66 +216,43 @@ async function search(): Promise<void> {
                 layout="vertical"
                 class="search-splitter"
             >
-                <SplitterPanel
-                    style="overflow: auto"
-                    :size="30"
-                    :min-size="20"
-                >
+                <SplitterPanel :size="10">
                     <div class="query-panel">
                         <GroupBuilder
-                            :model-value="rootPayload"
+                            :model-value="searchPayload"
                             :is-root="true"
-                            @update:model-value="onUpdateRoot"
+                            @update:model-value="onUpdateSearchPayload"
                         />
-
-                        <div class="actions">
-                            <Button
-                                class="search-button"
-                                icon="pi pi-search"
-                                size="large"
-                                :label="searchButtonLabel"
-                                @click="search"
-                            />
-
-                            <Button
-                                class="analyze-button"
-                                icon="pi pi-info-circle"
-                                size="large"
-                                :label="analyzePayloadLabel"
-                                :disabled="!rootPayload"
-                                @click="shouldShowNarrationDialog = true"
-                            />
-                        </div>
                     </div>
                 </SplitterPanel>
 
                 <SplitterPanel
-                    v-show="searchResults"
-                    style="overflow: auto"
-                    :size="70"
-                    :min-size="10"
+                    v-if="searchResults"
+                    :size="90"
                 >
-                    <div class="results-panel">
-                        <SearchResults
-                            v-if="searchResults"
-                            :results="searchResults"
-                            :is-searching="isSearching"
-                        />
-                    </div>
+                    <SearchResults
+                        :key="searchResultsInstanceKey"
+                        :results="searchResults"
+                        :is-searching="isSearching"
+                        :filter-text="searchFilterText"
+                        @request-page="onRequestPage"
+                    />
                 </SplitterPanel>
             </Splitter>
-        </div>
 
-        <PayloadAnalyzer
-            v-if="rootPayload"
-            :visible="shouldShowNarrationDialog"
-            :payload="rootPayload"
-            :graphs="graphs"
-            :datatypes-to-advanced-search-facets="
-                datatypesToAdvancedSearchFacets
-            "
-            @update:visible="shouldShowNarrationDialog = $event"
-        />
+            <AdvancedSearchFooter
+                :filter-text="searchFilterText"
+                :is-searching="isSearching"
+                :search-payload="searchPayload"
+                :search-results="searchResults"
+                :graphs="graphs"
+                :datatypes-to-advanced-search-facets="
+                    datatypesToAdvancedSearchFacets
+                "
+                @search="performSearch"
+                @update:filter-text="searchFilterText = $event"
+            />
+        </div>
     </div>
 </template>
 
@@ -272,24 +265,7 @@ async function search(): Promise<void> {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-}
-
-.advanced-search-card {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-:deep(.p-card-body) {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-:deep(.p-card-content) {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
+    min-height: 0;
 }
 
 .content {
@@ -299,53 +275,39 @@ async function search(): Promise<void> {
     min-height: 0;
 }
 
-.query-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    min-height: 0;
-    overflow: auto;
-}
-
-.actions {
-    display: flex;
-    gap: 0.75rem;
-    margin-inline-start: 1rem;
-}
-
-.search-button {
-    align-self: flex-start;
-}
-
-.analyze-button {
-    align-self: flex-start;
-}
-
 .search-splitter {
     display: flex;
     flex-direction: column;
     flex: 1;
+    border-radius: 0;
     min-height: 0;
 }
 
-.results-panel {
+.search-splitter :deep(.p-splitterpanel) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.query-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.search-splitter[data-p-resizing="true"] :deep(.query-panel),
+.search-splitter[data-p-resizing="true"] :deep(.p-virtualscroller) {
+    overflow: hidden !important;
+}
+
+:deep(.p-card-body) {
     display: flex;
     flex-direction: column;
     flex: 1;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.advanced-search:not(.advanced-search--has-results) .results-panel {
-    display: none;
-}
-
-.advanced-search:not(.advanced-search--has-results) :deep(.p-splitter-gutter) {
-    display: none;
-}
-
-.advanced-search:not(.advanced-search--has-results) :deep(.p-splitter-panel) {
-    flex: 1 !important;
+    gap: 1rem;
 }
 
 :deep(.p-inputtext),
@@ -361,6 +323,7 @@ async function search(): Promise<void> {
 :deep(.p-dropdown-label),
 :deep(.p-togglebutton-label),
 :deep(.p-button-icon),
+:deep(.p-treeselect),
 :deep(.p-dropdown-item) {
     font-size: 1.2rem;
 }

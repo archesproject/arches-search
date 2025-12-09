@@ -4,7 +4,7 @@ import { ref, computed, watchEffect, inject } from "vue";
 import Card from "primevue/card";
 
 import GroupBracket from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupBracket.vue";
-import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader/GroupHeader.vue";
+import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader.vue";
 import ClauseBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/ClauseBuilder/ClauseBuilder.vue";
 
 import {
@@ -27,22 +27,16 @@ import {
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
+import type {
+    GraphModel,
+    GroupPayload,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 defineOptions({ name: "GroupBuilder" });
 
-type GraphSummary = {
-    graphid: string;
-    name: string;
-    slug: string;
-    id?: string;
-    label?: string;
-    [key: string]: unknown;
-};
-
 type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 
-const graphs = inject<Readonly<{ value: GraphSummary[] }>>("graphs");
+const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs");
 
 const emit = defineEmits<{
     (event: "update:modelValue", value: GroupPayload): void;
@@ -53,7 +47,7 @@ const { modelValue, isRoot, parentGroupAnchorGraph, relationshipToParent } =
     defineProps<{
         modelValue?: GroupPayload;
         isRoot?: boolean;
-        parentGroupAnchorGraph?: GraphSummary;
+        parentGroupAnchorGraph?: GraphModel;
         relationshipToParent?: RelationshipState | null;
     }>();
 
@@ -64,7 +58,7 @@ const currentGroup = computed<GroupPayload>(function getCurrentGroup() {
     return modelValue ?? makeEmptyGroupPayload();
 });
 
-const currentGroupAnchorGraph = computed<GraphSummary | null>(
+const currentGroupAnchorGraph = computed<GraphModel | null>(
     function getCurrentGroupAnchorGraph() {
         const allGraphs = graphs?.value ?? [];
         const groupSlug = currentGroup.value.graph_slug;
@@ -83,30 +77,17 @@ const currentGroupAnchorGraph = computed<GraphSummary | null>(
     },
 );
 
-const effectiveAnchorGraph = computed<GraphSummary>(
-    function getEffectiveAnchorGraph() {
-        if (currentGroupAnchorGraph.value) {
-            return currentGroupAnchorGraph.value;
-        }
-
-        if (parentGroupAnchorGraph) {
-            return parentGroupAnchorGraph;
-        }
-
-        const fallbackSlug = currentGroup.value.graph_slug;
-
-        return {
-            graphid: fallbackSlug,
-            name: fallbackSlug,
-            slug: fallbackSlug,
-        };
-    },
-);
-
 const shouldHaveBracket = computed<boolean>(function () {
     return (
         currentGroup.value.groups.length + currentGroup.value.clauses.length >=
         2
+    );
+});
+
+const hasGroupBodyContent = computed<boolean>(function () {
+    return (
+        currentGroup.value.clauses.length > 0 ||
+        currentGroup.value.groups.length > 0
     );
 });
 
@@ -267,18 +248,12 @@ function onRequestRemoveGroup(): void {
 </script>
 
 <template>
-    <Card
-        class="group-card"
-        :style="{
-            paddingInlineStart: shouldHaveBracket ? '1rem' : 0,
-        }"
-    >
+    <Card class="group-card">
         <template #title>
             <GroupHeader
                 :group-payload="currentGroup"
                 :has-nested-groups="currentGroup.groups.length > 0"
                 :is-root="isRoot"
-                :should-indent="shouldHaveBracket"
                 :relationship-to-parent="relationshipToParent ?? null"
                 @add-clause="onAddClause"
                 @add-group="onAddGroup"
@@ -292,7 +267,10 @@ function onRequestRemoveGroup(): void {
         </template>
 
         <template #content>
-            <div class="group-content">
+            <div
+                class="group-content"
+                :class="hasGroupBodyContent && 'group-content-with-top-padding'"
+            >
                 <div
                     :class="[
                         'group-grid',
@@ -322,8 +300,8 @@ function onRequestRemoveGroup(): void {
                             >
                                 <template #content>
                                     <ClauseBuilder
-                                        :model-value="clause as any"
-                                        :anchor-graph="effectiveAnchorGraph"
+                                        :model-value="clause"
+                                        :anchor-graph="currentGroupAnchorGraph!"
                                         :parent-group-anchor-graph="
                                             parentGroupAnchorGraph
                                         "
@@ -362,7 +340,7 @@ function onRequestRemoveGroup(): void {
                                 :key="childGroupKeys[childIndex]"
                                 :model-value="childGroup"
                                 :parent-group-anchor-graph="
-                                    effectiveAnchorGraph
+                                    currentGroupAnchorGraph!
                                 "
                                 :relationship-to-parent="
                                     currentGroup.relationship ?? null
@@ -390,14 +368,19 @@ function onRequestRemoveGroup(): void {
 }
 
 .group-card {
-    border: 0.0125rem solid var(--p-content-border-color);
+    border: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
     margin-inline-end: 0;
 }
 
+.group-card :deep(.p-card-body) {
+    gap: 0;
+    padding: 1rem;
+}
+
 .clause-card {
-    border: 0.0125rem solid var(--p-content-border-color);
+    border: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
 }
@@ -405,7 +388,11 @@ function onRequestRemoveGroup(): void {
 .group-content {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    padding-inline-start: 1.5rem;
+}
+
+.group-content-with-top-padding {
+    padding-top: 1rem;
 }
 
 .group-grid {
@@ -434,13 +421,13 @@ function onRequestRemoveGroup(): void {
 .clauses {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
 }
 
 .children {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
 }
 
 .children .children > .group-card,
@@ -450,6 +437,6 @@ function onRequestRemoveGroup(): void {
 
 .clauses-without-bracket,
 .children-without-bracket {
-    margin-inline-start: 3rem;
+    margin-inline-start: 2rem;
 }
 </style>
