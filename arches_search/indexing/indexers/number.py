@@ -15,8 +15,9 @@ class NumberIndexing(BaseIndexing):
         nodeid = str(node.nodeid)
         document = {"numbers": [], "strings": []}
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
+        search_items = []
         for number_object in document["numbers"]:
-            numeric_search = NumericSearch.objects.create(
+            numeric_search = NumericSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -24,4 +25,4 @@ class NumberIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=number_object["number"],
             )
-            numeric_search.save()
+            search_items.append(numeric_search)

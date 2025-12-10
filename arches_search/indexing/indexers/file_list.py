@@ -22,8 +22,9 @@ class FileListIndexing(BaseIndexing):
         self._set_languages()
         document = {"strings": []}
         self.datatype.append_to_document(document, tile.data[nodeid], nodeid, tile)
+        search_items = []
         for string in document["strings"]:
-            string_search = TermSearch.objects.create(
+            string_search = TermSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -32,11 +33,6 @@ class FileListIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=string["string"],
             )
-            string_search.save()
-            string_search.search_vector = SearchVector(
-                "value",
-                config=self.languages[node.config.lang].name.lower(),
-            )
-            TermSearch.objects.filter(pk=string_search.pk).update(
-                search_vector=string_search.search_vector
-            )
+            search_items.append(string_search)
+
+        return search_items
