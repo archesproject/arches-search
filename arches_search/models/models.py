@@ -91,12 +91,12 @@ class TermSearch(models.Model):
     value = models.TextField()
     search_vector = models.GeneratedField(
         null=True,
-        db_persist=True,  # store the value in the DB
+        db_persist=True,
         expression=SearchVector(
-            "value",  # or multiple fields: "author", "text"
-            config="english",  # your PostgreSQL text search config
+            "value",
+            config="english",
         ),
-        output_field=SearchVectorField(),  # tell Django/Postgres the column type
+        output_field=SearchVectorField(),
     )
 
     class Meta:
