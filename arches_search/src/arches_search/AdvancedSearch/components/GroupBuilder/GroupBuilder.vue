@@ -130,6 +130,18 @@ const relateButtonTitle = computed<string>(function () {
     return $gettext("Relate this group to its nested group.");
 });
 
+const footerMarginTop = computed(() => {
+    if (isRoot) {
+        return "1rem";
+    }
+
+    if (!isRoot && hasGroupBodyContent.value) {
+        return "2.5rem";
+    }
+
+    return "0rem";
+});
+
 watchEffect(function () {
     childGroupKeys.value = buildStableKeys(
         childGroupKeys.value,
@@ -474,10 +486,7 @@ function onRequestRemoveGroup(): void {
         <template #footer>
             <div
                 class="group-footer-actions"
-                :style="{
-                    marginTop:
-                        !isRoot && hasGroupBodyContent ? '2.5rem' : '0rem',
-                }"
+                :style="{ marginTop: footerMarginTop }"
             >
                 <Button
                     severity="secondary"
