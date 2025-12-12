@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { provide, ref, watchEffect } from "vue";
+import { provide, ref, watchEffect, computed } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
 import Message from "primevue/message";
 import Skeleton from "primevue/skeleton";
 import Splitter from "primevue/splitter";
@@ -10,12 +11,14 @@ import SplitterPanel from "primevue/splitterpanel";
 
 import AdvancedSearchFooter from "@/arches_search/AdvancedSearch/components/AdvancedSearchFooter.vue";
 import GroupBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/GroupBuilder.vue";
+import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/PayloadAnalyzer.vue";
 import SearchResults from "@/arches_search/AdvancedSearch/components/SearchResults/SearchResults.vue";
 
 import {
     getAdvancedSearchFacets,
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
+    getRelatableNodesTreeForGraphId as fetchRelatableNodesTreeForGraphId,
     getSearchResults as fetchSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
 
@@ -31,6 +34,23 @@ const READY = "ready";
 type NodeCacheEntry =
     | { status: typeof PENDING; pending: Promise<Record<string, unknown>[]> }
     | { status: typeof READY; nodes: Record<string, unknown>[] };
+
+type TreeSelectNode = {
+    key: string;
+    label: string;
+    children?: TreeSelectNode[];
+    leaf?: boolean;
+    data?: Record<string, unknown>;
+};
+
+type RelatableNodesTreeResponse = {
+    target_graph_id: string;
+    options: TreeSelectNode[];
+};
+
+type RelatableNodesTreeCacheEntry =
+    | { status: typeof PENDING; pending: Promise<RelatableNodesTreeResponse> }
+    | { status: typeof READY; response: RelatableNodesTreeResponse };
 
 type GraphSummary = {
     graphid?: string;
@@ -58,14 +78,29 @@ const datatypesToAdvancedSearchFacets = ref<
 
 const graphs = ref<GraphSummary[]>([]);
 const graphIdToNodeCache = ref<Record<string, NodeCacheEntry>>({});
+const graphIdToRelatableNodesTreeCache = ref<
+    Record<string, RelatableNodesTreeCacheEntry>
+>({});
 
 const searchResults = ref<SearchResultsPayload | null>(null);
 const searchResultsInstanceKey = ref(0);
 const searchFilterText = ref("");
 
+const shouldShowPayloadAnalyzer = ref(false);
+
+const searchResultsMatchCountLabel = computed<string>(function () {
+    const totalResultsCount =
+        searchResults.value?.pagination.total_results ?? 0;
+
+    return $gettext("%{count} items match your filter", {
+        count: totalResultsCount.toLocaleString(),
+    });
+});
+
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
 provide("getNodesForGraphId", getNodesForGraphId);
+provide("getRelatableNodesTreeForGraphId", getRelatableNodesTreeForGraphId);
 
 watchEffect(async () => {
     try {
@@ -111,6 +146,41 @@ async function getNodesForGraphId(
 
     graphIdToNodeCache.value = {
         ...graphIdToNodeCache.value,
+        [graphId]: { status: PENDING, pending: pendingRequest },
+    };
+
+    return await pendingRequest;
+}
+
+async function getRelatableNodesTreeForGraphId(
+    graphId: string,
+): Promise<RelatableNodesTreeResponse> {
+    const existingEntry = graphIdToRelatableNodesTreeCache.value[graphId];
+
+    if (existingEntry?.status === PENDING) {
+        return await existingEntry.pending;
+    }
+
+    if (existingEntry?.status === READY) {
+        return existingEntry.response;
+    }
+
+    const pendingRequest = fetchRelatableNodesTreeForGraphId(graphId)
+        .then((response: RelatableNodesTreeResponse) => {
+            graphIdToRelatableNodesTreeCache.value = {
+                ...graphIdToRelatableNodesTreeCache.value,
+                [graphId]: { status: READY, response },
+            };
+
+            return response;
+        })
+        .catch((error) => {
+            fetchError.value = error as Error;
+            throw error;
+        });
+
+    graphIdToRelatableNodesTreeCache.value = {
+        ...graphIdToRelatableNodesTreeCache.value,
         [graphId]: { status: PENDING, pending: pendingRequest },
     };
 
@@ -192,6 +262,18 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
     searchPayload.value = updatedGroupPayload;
     searchResults.value = null;
 }
+
+function onSearchButtonClick(): void {
+    void performSearch();
+}
+
+function onAnalyzePayloadButtonClick(): void {
+    if (!searchPayload.value) {
+        return;
+    }
+
+    shouldShowPayloadAnalyzer.value = true;
+}
 </script>
 
 <template>
@@ -218,11 +300,39 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
             >
                 <SplitterPanel :size="10">
                     <div class="query-panel">
-                        <GroupBuilder
-                            :model-value="searchPayload"
-                            :is-root="true"
-                            @update:model-value="onUpdateSearchPayload"
-                        />
+                        <div class="query-panel-body">
+                            <GroupBuilder
+                                :model-value="searchPayload"
+                                :is-root="true"
+                                @update:model-value="onUpdateSearchPayload"
+                            />
+                        </div>
+
+                        <div class="query-panel-footer">
+                            <Button
+                                icon="pi pi-search"
+                                size="large"
+                                :label="$gettext('Search')"
+                                :loading="isSearching"
+                                :disabled="!searchPayload || isSearching"
+                                @click="onSearchButtonClick"
+                            />
+
+                            <Button
+                                icon="pi pi-info-circle"
+                                size="large"
+                                :label="$gettext('Describe Query')"
+                                :disabled="!searchPayload"
+                                @click="onAnalyzePayloadButtonClick"
+                            />
+
+                            <div
+                                v-if="searchResults"
+                                style="margin-inline-start: 1rem"
+                            >
+                                {{ searchResultsMatchCountLabel }}
+                            </div>
+                        </div>
                     </div>
                 </SplitterPanel>
 
@@ -242,15 +352,19 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
 
             <AdvancedSearchFooter
                 :filter-text="searchFilterText"
-                :is-searching="isSearching"
-                :search-payload="searchPayload"
                 :search-results="searchResults"
-                :graphs="graphs"
+                @update:filter-text="searchFilterText = $event"
+            />
+
+            <PayloadAnalyzer
+                v-if="searchPayload"
                 :datatypes-to-advanced-search-facets="
                     datatypesToAdvancedSearchFacets
                 "
-                @search="performSearch"
-                @update:filter-text="searchFilterText = $event"
+                :graphs="graphs"
+                :payload="searchPayload"
+                :visible="shouldShowPayloadAnalyzer"
+                @update:visible="shouldShowPayloadAnalyzer = $event"
             />
         </div>
     </div>
@@ -292,13 +406,29 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
 .query-panel {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
     flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.query-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     min-height: 0;
     overflow: auto;
 }
 
-.search-splitter[data-p-resizing="true"] :deep(.query-panel),
+.query-panel-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--p-content-hover-background);
+    border-top: 0.125rem solid var(--p-content-border-color);
+}
+
+.search-splitter[data-p-resizing="true"] :deep(.query-panel-body),
 .search-splitter[data-p-resizing="true"] :deep(.p-virtualscroller) {
     overflow: hidden !important;
 }

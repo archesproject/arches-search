@@ -1,50 +1,22 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { computed } from "vue";
+
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 
-import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/PayloadAnalyzer.vue";
-
-import type {
-    AdvancedSearchFacet,
-    GroupPayload,
-    SearchResults as SearchResultsPayload,
-} from "@/arches_search/AdvancedSearch/types.ts";
+import type { SearchResults as SearchResultsPayload } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
 
-type GraphSummary = {
-    graphid?: string;
-    slug?: string;
-    name?: string;
-    label?: string;
-    [key: string]: unknown;
-};
-
-const {
-    filterText,
-    isSearching,
-    searchPayload,
-    searchResults,
-    graphs,
-    datatypesToAdvancedSearchFacets,
-} = defineProps<{
+const { filterText, searchResults } = defineProps<{
     filterText: string;
-    isSearching: boolean;
-    searchPayload?: GroupPayload;
     searchResults: SearchResultsPayload | null;
-    graphs: GraphSummary[];
-    datatypesToAdvancedSearchFacets: Record<string, AdvancedSearchFacet[]>;
 }>();
 
 const emit = defineEmits<{
     (event: "update:filter-text", nextFilterText: string): void;
-    (event: "search"): void;
 }>();
-
-const shouldShowPayloadAnalyzer = ref(false);
 
 const hasSearchResults = computed<boolean>(() => {
     const loadedResultsCount = searchResults?.resources?.length ?? 0;
@@ -83,43 +55,10 @@ const resultsSummaryLabelForFooter = computed<string>(() => {
 function onFilterInputChange(nextFilterText: string | undefined): void {
     emit("update:filter-text", nextFilterText ?? "");
 }
-
-function onSearchButtonClick(): void {
-    emit("search");
-}
-
-function onAnalyzePayloadButtonClick(): void {
-    if (!searchPayload) {
-        return;
-    }
-
-    shouldShowPayloadAnalyzer.value = true;
-}
 </script>
 
 <template>
     <div class="advanced-search-footer">
-        <div class="advanced-search-footer-controls">
-            <Button
-                icon="pi pi-search"
-                severity="primary"
-                size="large"
-                :label="$gettext('Search')"
-                :loading="isSearching"
-                :disabled="!searchPayload || isSearching"
-                @click="onSearchButtonClick"
-            />
-
-            <Button
-                icon="pi pi-info-circle"
-                severity="secondary"
-                size="large"
-                :label="$gettext('Describe Query')"
-                :disabled="!searchPayload"
-                @click="onAnalyzePayloadButtonClick"
-            />
-        </div>
-
         <div class="advanced-search-footer-controls">
             <InputText
                 :model-value="filterText"
@@ -132,17 +71,6 @@ function onAnalyzePayloadButtonClick(): void {
                 {{ resultsSummaryLabelForFooter }}
             </div>
         </div>
-
-        <PayloadAnalyzer
-            v-if="searchPayload"
-            :datatypes-to-advanced-search-facets="
-                datatypesToAdvancedSearchFacets
-            "
-            :graphs="graphs"
-            :payload="searchPayload"
-            :visible="shouldShowPayloadAnalyzer"
-            @update:visible="shouldShowPayloadAnalyzer = $event"
-        />
     </div>
 </template>
 
