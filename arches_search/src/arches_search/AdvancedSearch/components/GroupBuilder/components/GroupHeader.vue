@@ -3,11 +3,9 @@ import { inject, computed, ref, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import Select from "primevue/select";
 import Button from "primevue/button";
+import Select from "primevue/select";
 import Tag from "primevue/tag";
-
-import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/RelationshipEditor.vue";
 
 import type {
     GraphModel,
@@ -42,13 +40,11 @@ const emit = defineEmits<{
     (event: "remove-group"): void;
 }>();
 
-const { groupPayload, isRoot, hasNestedGroups, relationshipToParent } =
-    defineProps<{
-        groupPayload: GroupPayload;
-        isRoot?: boolean;
-        hasNestedGroups: boolean;
-        relationshipToParent?: RelationshipState;
-    }>();
+const { groupPayload, isRoot, relationshipToParent } = defineProps<{
+    groupPayload: GroupPayload;
+    isRoot?: boolean;
+    relationshipToParent?: RelationshipState;
+}>();
 
 const graphOptions = computed(function () {
     if (!graphs?.value) {
@@ -65,42 +61,6 @@ const graphOptions = computed(function () {
 
 const currentGraphSlug = computed<string>(function () {
     return groupPayload.graph_slug;
-});
-
-const isGraphSelected = computed<boolean>(function () {
-    return currentGraphSlug.value.trim().length > 0;
-});
-
-const currentRelationship = computed<RelationshipState>(function () {
-    return groupPayload.relationship;
-});
-
-const hasRelationship = computed<boolean>(function () {
-    return currentRelationship.value !== null;
-});
-
-const innerGraphSlug = computed<string>(function () {
-    if (!groupPayload.groups || groupPayload.groups.length === 0) {
-        return "";
-    }
-
-    return groupPayload.groups[0].graph_slug;
-});
-
-const relateButtonTitle = computed<string>(function () {
-    if (!isGraphSelected.value) {
-        return $gettext("Select what this group filters before relating.");
-    }
-
-    if (!hasNestedGroups) {
-        return $gettext("Add a nested group below to enable relationships.");
-    }
-
-    if (hasRelationship.value) {
-        return $gettext("This group is already related to its nested group.");
-    }
-
-    return $gettext("Relate this group to its nested group.");
 });
 
 const showsRelationshipToParentTag = computed<boolean>(function () {
@@ -254,43 +214,9 @@ function onSetGraphSlug(graphSlug: string): void {
     emit("change-graph", graphSlug);
 }
 
-function onAddGroupClick(clickEvent: MouseEvent): void {
-    clickEvent.stopPropagation();
-    emit("add-group");
-}
-
-function onAddClauseClick(clickEvent: MouseEvent): void {
-    clickEvent.stopPropagation();
-    emit("add-clause");
-}
-
 function onRemoveGroupClick(clickEvent: MouseEvent): void {
     clickEvent.stopPropagation();
     emit("remove-group");
-}
-
-function onAddRelationship(): void {
-    emit("add-relationship");
-}
-
-function onUpdateRelationship(nextRelationship: RelationshipState): void {
-    if (nextRelationship === null) {
-        emit("update-relationship", null);
-        emit("remove-relationship");
-        return;
-    }
-
-    emit("update-relationship", nextRelationship);
-}
-
-function onRelationshipButtonClick(clickEvent: MouseEvent): void {
-    clickEvent.stopPropagation();
-
-    if (!hasNestedGroups || hasRelationship.value) {
-        return;
-    }
-
-    onAddRelationship();
 }
 </script>
 
@@ -298,27 +224,23 @@ function onRelationshipButtonClick(clickEvent: MouseEvent): void {
     <div class="group-header">
         <div class="group-header-row">
             <div class="group-selectors">
-                <Select
-                    :model-value="currentGraphSlug"
-                    :options="graphOptions"
-                    option-label="label"
-                    option-value="value"
-                    :placeholder="$gettext('Filter...')"
-                    class="group-field"
-                    @update:model-value="onSetGraphSlug"
-                />
-
-                <Button
-                    class="group-relate-button"
-                    severity="secondary"
-                    icon="pi pi-link"
-                    :label="$gettext('Relate to nested groups')"
-                    :title="relateButtonTitle"
-                    :disabled="
-                        !isGraphSelected || !hasNestedGroups || hasRelationship
-                    "
-                    @click="onRelationshipButtonClick"
-                />
+                <div class="group-action-text">
+                    <span v-if="isRoot">
+                        {{ $gettext("I want to find") }}
+                    </span>
+                    <Select
+                        :model-value="currentGraphSlug"
+                        :options="graphOptions"
+                        option-label="label"
+                        option-value="value"
+                        :placeholder="$gettext('Select Resource')"
+                        class="group-field"
+                        @update:model-value="onSetGraphSlug"
+                    />
+                    <span v-if="isRoot">
+                        {{ $gettext("resources that have...") }}
+                    </span>
+                </div>
 
                 <Tag
                     v-if="showsRelationshipToParentTag"
@@ -330,22 +252,6 @@ function onRelationshipButtonClick(clickEvent: MouseEvent): void {
 
             <div class="group-actions">
                 <Button
-                    severity="secondary"
-                    variant="text"
-                    icon="pi pi-table"
-                    :label="$gettext('Add group')"
-                    :disabled="!isGraphSelected"
-                    @click="onAddGroupClick"
-                />
-                <Button
-                    severity="secondary"
-                    variant="text"
-                    icon="pi pi-filter"
-                    :label="$gettext('Add filter')"
-                    :disabled="!isGraphSelected"
-                    @click="onAddClauseClick"
-                />
-                <Button
                     v-if="!isRoot"
                     severity="danger"
                     variant="text"
@@ -355,16 +261,6 @@ function onRelationshipButtonClick(clickEvent: MouseEvent): void {
                 />
             </div>
         </div>
-
-        <RelationshipEditor
-            v-if="hasRelationship"
-            class="relationship-editor-inline"
-            :anchor-graph-slug="currentGraphSlug"
-            :inner-graph-slug="innerGraphSlug"
-            :is-root="isRoot"
-            :relationship="currentRelationship!"
-            @update:relationship="onUpdateRelationship"
-        />
     </div>
 </template>
 
@@ -410,7 +306,11 @@ function onRelationshipButtonClick(clickEvent: MouseEvent): void {
     flex-shrink: 0;
 }
 
-.relationship-editor-inline {
-    align-self: stretch;
+.group-action-text {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 1.4rem;
 }
 </style>

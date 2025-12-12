@@ -407,7 +407,6 @@ function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
 
 .clause-builder {
     font-size: 1rem;
-    gap: 0.5rem;
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: flex-start;

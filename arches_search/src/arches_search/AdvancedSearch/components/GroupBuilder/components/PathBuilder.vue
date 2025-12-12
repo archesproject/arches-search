@@ -542,7 +542,6 @@ function getGraphLabelPrefixForNode(
             style="font-size: 1.2rem"
             selection-mode="single"
             :model-value="selectedKeys"
-            :expanded-keys="expandedKeys"
             :disabled="nodeOptions.length === 0"
             filter
             :filter-placeholder="$gettext('Search nodes...')"

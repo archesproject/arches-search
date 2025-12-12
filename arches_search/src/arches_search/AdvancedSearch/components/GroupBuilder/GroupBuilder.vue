@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, watchEffect, inject } from "vue";
 
+import { useGettext } from "vue3-gettext";
+
 import Card from "primevue/card";
+import Button from "primevue/button";
 
 import GroupBracket from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupBracket.vue";
 import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader.vue";
 import ClauseBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/ClauseBuilder/ClauseBuilder.vue";
+import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/RelationshipEditor.vue";
 
 import {
     makeEmptyGroupPayload,
-    setScope,
+    // setScope,
     toggleLogic,
     addChildGroupLikeParent,
     addEmptyLiteralClauseToGroup,
@@ -23,7 +27,7 @@ import {
 } from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
 
 import {
-    GraphScopeToken,
+    // GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
@@ -33,6 +37,8 @@ import type {
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 defineOptions({ name: "GroupBuilder" });
+
+const { $gettext } = useGettext();
 
 type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 
@@ -91,6 +97,43 @@ const hasGroupBodyContent = computed<boolean>(function () {
     );
 });
 
+const isGraphSelected = computed<boolean>(function () {
+    const graphSlug = currentGroup.value.graph_slug ?? "";
+    return graphSlug.trim().length > 0;
+});
+
+const hasNestedGroups = computed<boolean>(function () {
+    return currentGroup.value.groups.length > 0;
+});
+
+const hasRelationship = computed<boolean>(function () {
+    return currentGroup.value.relationship !== null;
+});
+
+const innerGraphSlug = computed<string>(function () {
+    if (currentGroup.value.groups.length === 0) {
+        return "";
+    }
+
+    return currentGroup.value.groups[0].graph_slug;
+});
+
+const relateButtonTitle = computed<string>(function () {
+    if (!isGraphSelected.value) {
+        return $gettext("Select what this group filters before relating.");
+    }
+
+    if (!hasNestedGroups.value) {
+        return $gettext("Add a nested group below to enable relationships.");
+    }
+
+    if (hasRelationship.value) {
+        return $gettext("This group is already related to its nested group.");
+    }
+
+    return $gettext("Relate this group to its nested group.");
+});
+
 watchEffect(function () {
     childGroupKeys.value = buildStableKeys(
         childGroupKeys.value,
@@ -129,10 +172,10 @@ function onSetGraphSlug(graphSlug: string): void {
     emitUpdatedGroupPayload(updatedGroup);
 }
 
-function onSetScope(scopeToken: GraphScopeToken): void {
-    const updatedGroup = setScope(currentGroup.value, scopeToken);
-    emitUpdatedGroupPayload(updatedGroup);
-}
+// function onSetScope(scopeToken: GraphScopeToken): void {
+//     const updatedGroup = setScope(currentGroup.value, scopeToken);
+//     emitUpdatedGroupPayload(updatedGroup);
+// }
 
 function onSetLogicFromBracket(_logicToken: LogicToken): void {
     const updatedGroup = toggleLogic(currentGroup.value);
@@ -212,13 +255,13 @@ function onAddRelationship(): void {
     emitUpdatedGroupPayload(updatedGroup);
 }
 
-function onRemoveRelationship(): void {
-    const updatedGroup = setRelationshipAndReconcileClauses(
-        currentGroup.value,
-        null,
-    );
-    emitUpdatedGroupPayload(updatedGroup);
-}
+// function onRemoveRelationship(): void {
+//     const updatedGroup = setRelationshipAndReconcileClauses(
+//         currentGroup.value,
+//         null,
+//     );
+//     emitUpdatedGroupPayload(updatedGroup);
+// }
 
 function onUpdateChildGroupModelValue(
     updatedChildGroupPayload: GroupPayload,
@@ -248,21 +291,29 @@ function onRequestRemoveGroup(): void {
 </script>
 
 <template>
-    <Card class="group-card">
+    <Card
+        class="group-card"
+        :style="{
+            borderRadius: isRoot && 0,
+            borderBottom: isRoot && 'none',
+        }"
+    >
         <template #title>
             <GroupHeader
                 :group-payload="currentGroup"
-                :has-nested-groups="currentGroup.groups.length > 0"
                 :is-root="isRoot"
                 :relationship-to-parent="relationshipToParent ?? null"
-                @add-clause="onAddClause"
-                @add-group="onAddGroup"
-                @add-relationship="onAddRelationship"
                 @change-graph="onSetGraphSlug"
-                @change-scope="onSetScope"
                 @remove-group="onRequestRemoveGroup"
-                @remove-relationship="onRemoveRelationship"
-                @update-relationship="onUpdateRelationship"
+            />
+            <RelationshipEditor
+                v-if="hasRelationship"
+                class="relationship-editor-inline"
+                :anchor-graph-slug="currentGroup.graph_slug"
+                :inner-graph-slug="innerGraphSlug"
+                :is-root="isRoot"
+                :relationship="currentGroup.relationship!"
+                @update:relationship="onUpdateRelationship"
             />
         </template>
 
@@ -271,6 +322,26 @@ function onRequestRemoveGroup(): void {
                 class="group-content"
                 :class="hasGroupBodyContent && 'group-content-with-top-padding'"
             >
+                <div
+                    v-if="!hasGroupBodyContent && !currentGroupAnchorGraph"
+                    class="group-helper-note"
+                >
+                    <div>
+                        {{
+                            $gettext(
+                                "Add a filter to search the database. Groups let you bundle filters",
+                            )
+                        }}
+                    </div>
+                    <div>
+                        {{
+                            $gettext(
+                                "Click the group type to change the type of grouping.",
+                            )
+                        }}
+                    </div>
+                </div>
+
                 <div
                     :class="[
                         'group-grid',
@@ -358,6 +429,35 @@ function onRequestRemoveGroup(): void {
                 </div>
             </div>
         </template>
+
+        <template #footer>
+            <div class="group-footer-actions">
+                <Button
+                    severity="secondary"
+                    icon="pi pi-table"
+                    :label="$gettext('Add group')"
+                    :disabled="!isGraphSelected"
+                    @click.stop="onAddGroup"
+                />
+                <Button
+                    severity="secondary"
+                    icon="pi pi-filter"
+                    :label="$gettext('Add filter')"
+                    :disabled="!isGraphSelected"
+                    @click.stop="onAddClause"
+                />
+                <Button
+                    v-if="hasNestedGroups"
+                    class="group-relate-button"
+                    severity="secondary"
+                    icon="pi pi-link"
+                    :label="$gettext('Relate to nested groups')"
+                    :title="relateButtonTitle"
+                    :disabled="hasRelationship"
+                    @click.stop="onAddRelationship"
+                />
+            </div>
+        </template>
     </Card>
 </template>
 
@@ -388,7 +488,6 @@ function onRequestRemoveGroup(): void {
 .group-content {
     display: flex;
     flex-direction: column;
-    padding-inline-start: 1.5rem;
 }
 
 .group-content-with-top-padding {
@@ -404,6 +503,7 @@ function onRequestRemoveGroup(): void {
 .group-grid-with-bracket {
     display: flex;
     align-items: stretch;
+    padding-inline-start: 1.5rem;
 }
 
 .group-grid-with-bracket :deep(.bracket) {
@@ -438,5 +538,25 @@ function onRequestRemoveGroup(): void {
 .clauses-without-bracket,
 .children-without-bracket {
     margin-inline-start: 2rem;
+}
+
+.relationship-editor-inline {
+    align-self: stretch;
+}
+
+.group-footer-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.group-helper-note {
+    font-size: 1.2rem;
+    color: var(--p-text-muted-color);
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    margin-inline-start: 1.5rem;
 }
 </style>

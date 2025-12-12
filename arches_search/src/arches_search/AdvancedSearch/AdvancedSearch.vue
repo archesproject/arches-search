@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { provide, ref, watchEffect } from "vue";
+import { provide, ref, watchEffect, computed } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
 import Message from "primevue/message";
 import Skeleton from "primevue/skeleton";
 import Splitter from "primevue/splitter";
@@ -10,6 +11,7 @@ import SplitterPanel from "primevue/splitterpanel";
 
 import AdvancedSearchFooter from "@/arches_search/AdvancedSearch/components/AdvancedSearchFooter.vue";
 import GroupBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/GroupBuilder.vue";
+import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/PayloadAnalyzer.vue";
 import SearchResults from "@/arches_search/AdvancedSearch/components/SearchResults/SearchResults.vue";
 
 import {
@@ -62,6 +64,17 @@ const graphIdToNodeCache = ref<Record<string, NodeCacheEntry>>({});
 const searchResults = ref<SearchResultsPayload | null>(null);
 const searchResultsInstanceKey = ref(0);
 const searchFilterText = ref("");
+
+const shouldShowPayloadAnalyzer = ref(false);
+
+const searchResultsMatchCountLabel = computed<string>(function () {
+    const totalResultsCount =
+        searchResults.value?.pagination.total_results ?? 0;
+
+    return $gettext("%{count} items match your filter", {
+        count: totalResultsCount.toLocaleString(),
+    });
+});
 
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
@@ -192,6 +205,18 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
     searchPayload.value = updatedGroupPayload;
     searchResults.value = null;
 }
+
+function onSearchButtonClick(): void {
+    void performSearch();
+}
+
+function onAnalyzePayloadButtonClick(): void {
+    if (!searchPayload.value) {
+        return;
+    }
+
+    shouldShowPayloadAnalyzer.value = true;
+}
 </script>
 
 <template>
@@ -218,11 +243,40 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
             >
                 <SplitterPanel :size="10">
                     <div class="query-panel">
-                        <GroupBuilder
-                            :model-value="searchPayload"
-                            :is-root="true"
-                            @update:model-value="onUpdateSearchPayload"
-                        />
+                        <div class="query-panel-body">
+                            <GroupBuilder
+                                :model-value="searchPayload"
+                                :is-root="true"
+                                @update:model-value="onUpdateSearchPayload"
+                            />
+                        </div>
+
+                        <div class="query-panel-footer">
+                            <Button
+                                icon="pi pi-search"
+                                severity="warn"
+                                size="large"
+                                :label="$gettext('Search')"
+                                :loading="isSearching"
+                                :disabled="!searchPayload || isSearching"
+                                @click="onSearchButtonClick"
+                            />
+
+                            <Button
+                                icon="pi pi-info-circle"
+                                size="large"
+                                :label="$gettext('Describe Query')"
+                                :disabled="!searchPayload"
+                                @click="onAnalyzePayloadButtonClick"
+                            />
+
+                            <div
+                                v-if="searchResults"
+                                style="margin-inline-start: 1rem"
+                            >
+                                {{ searchResultsMatchCountLabel }}
+                            </div>
+                        </div>
                     </div>
                 </SplitterPanel>
 
@@ -242,15 +296,19 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
 
             <AdvancedSearchFooter
                 :filter-text="searchFilterText"
-                :is-searching="isSearching"
-                :search-payload="searchPayload"
                 :search-results="searchResults"
-                :graphs="graphs"
+                @update:filter-text="searchFilterText = $event"
+            />
+
+            <PayloadAnalyzer
+                v-if="searchPayload"
                 :datatypes-to-advanced-search-facets="
                     datatypesToAdvancedSearchFacets
                 "
-                @search="performSearch"
-                @update:filter-text="searchFilterText = $event"
+                :graphs="graphs"
+                :payload="searchPayload"
+                :visible="shouldShowPayloadAnalyzer"
+                @update:visible="shouldShowPayloadAnalyzer = $event"
             />
         </div>
     </div>
@@ -292,13 +350,29 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
 .query-panel {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
     flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.query-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     min-height: 0;
     overflow: auto;
 }
 
-.search-splitter[data-p-resizing="true"] :deep(.query-panel),
+.query-panel-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--p-content-hover-background);
+    border-top: 0.125rem solid var(--p-content-border-color);
+}
+
+.search-splitter[data-p-resizing="true"] :deep(.query-panel-body),
 .search-splitter[data-p-resizing="true"] :deep(.p-virtualscroller) {
     overflow: hidden !important;
 }
