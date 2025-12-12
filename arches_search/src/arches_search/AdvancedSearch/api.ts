@@ -97,6 +97,25 @@ export async function getNodesForGraphId(graphId: string) {
     return parsed;
 }
 
+export async function getRelatableNodesTreeForGraphId(graphId: string) {
+    const response = await fetch(
+        generateArchesURL("arches_search:api-relatable-nodes-tree-for-graph", {
+            graph_id: graphId,
+        }),
+        {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
 export async function getAdvancedSearchFacets() {
     const response = await fetch(
         generateArchesURL("arches_search:all_datatype_facets"),

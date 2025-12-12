@@ -547,6 +547,7 @@ function getGraphLabelPrefixForNode(
             :filter-placeholder="$gettext('Search nodes...')"
             :loading="isLoading"
             :placeholder="$gettext('Select node...')"
+            :expanded-keys="expandedKeys"
             :options="nodeOptions"
             @update:model-value="onUpdateModelValue"
         >

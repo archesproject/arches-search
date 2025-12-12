@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { computed, watch, ref, inject } from "vue";
+import { computed, inject, ref, watch, watchEffect } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
-import Select from "primevue/select";
 import Card from "primevue/card";
 import Message from "primevue/message";
-
-import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/PathBuilder.vue";
+import Select from "primevue/select";
+import TreeSelect from "primevue/treeselect";
 
 import type {
-    GroupPayload,
     GraphModel,
+    GroupPayload,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
@@ -21,6 +20,34 @@ type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 type TraversalQuantifier = RelationshipState["traversal_quantifiers"][number];
 
 type RelationshipPathSequence = readonly (readonly [string, string])[];
+
+type TreeSelectNode = {
+    key: string;
+    label: string;
+    children?: TreeSelectNode[];
+    leaf?: boolean;
+    data?: {
+        id?: string;
+        graph_id?: string;
+        alias?: string | null;
+        name?: string;
+        description?: string;
+        datatype?: string | null;
+        slug?: string | null;
+        [key: string]: unknown;
+    };
+};
+
+type RelatableNodesTreeResponse = {
+    target_graph_id: string;
+    options: TreeSelectNode[];
+};
+
+type SelectionKeyState =
+    | boolean
+    | { checked?: boolean; partialChecked?: boolean };
+
+type TreeSelectSelectionKeys = Record<string, SelectionKeyState>;
 
 const TRAVERSAL_QUANTIFIER_ANY = "ANY";
 const TRAVERSAL_QUANTIFIER_ALL = "ALL";
@@ -38,14 +65,153 @@ const { relationship, anchorGraphSlug, innerGraphSlug, isRoot } = defineProps<{
 }>();
 
 const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs")!;
+const getRelatableNodesTreeForGraphId = inject<
+    (graphId: string) => Promise<RelatableNodesTreeResponse>
+>("getRelatableNodesTreeForGraphId")!;
 
 const hasCompatibleRelationshipNodes = ref(true);
+const isLoadingRelatableTree = ref(false);
+
+const relatableNodesTreeResponse = ref<RelatableNodesTreeResponse | null>(null);
+
+const selectedSelectionKeys = ref<TreeSelectSelectionKeys>({});
+
+const selectedTreeNodeKey = computed<string | null>(() => {
+    const selectionKeysObject = selectedSelectionKeys.value;
+
+    for (const [possibleKey, selectionState] of Object.entries(
+        selectionKeysObject,
+    )) {
+        if (selectionState === true) {
+            return possibleKey;
+        }
+
+        if (
+            typeof selectionState === "object" &&
+            selectionState !== null &&
+            selectionState.checked === true
+        ) {
+            return possibleKey;
+        }
+    }
+
+    return null;
+});
+
+const anchorGraph = computed<GraphModel | undefined>(() => {
+    return graphs.value.find(
+        (graphModel) => graphModel.slug === anchorGraphSlug,
+    );
+});
+
+const anchorGraphId = computed<string | null>(() => {
+    return anchorGraph.value?.graphid
+        ? String(anchorGraph.value.graphid)
+        : null;
+});
+
+const anchorGraphName = computed<string>(() => {
+    return anchorGraph.value?.name ? String(anchorGraph.value.name) : "";
+});
+
+const relationshipLeadinText = computed<string>(() => {
+    return $gettext("Related to %{outer} by", {
+        outer: anchorGraphName.value,
+    });
+});
+
+const graphIdToSlug = computed<Record<string, string>>(() => {
+    const mapping: Record<string, string> = {};
+
+    for (const graphModel of graphs.value) {
+        if (!graphModel.graphid || !graphModel.slug) {
+            continue;
+        }
+
+        mapping[String(graphModel.graphid)] = String(graphModel.slug);
+    }
+
+    return mapping;
+});
+
+const graphIdToLabel = computed<Record<string, string>>(() => {
+    const mapping: Record<string, string> = {};
+
+    for (const graphModel of graphs.value) {
+        if (!graphModel.graphid) {
+            continue;
+        }
+
+        const graphLabel =
+            (graphModel.name ? String(graphModel.name) : "") ||
+            (graphModel.slug ? String(graphModel.slug) : "");
+
+        if (!graphLabel) {
+            continue;
+        }
+
+        mapping[String(graphModel.graphid)] = graphLabel;
+    }
+
+    return mapping;
+});
+
+type TreeIndex = {
+    nodeByKey: Record<string, TreeSelectNode>;
+    parentKeyByKey: Record<string, string | null>;
+    nodeKeyByGraphSlugAndAlias: Record<string, string>;
+};
+
+const treeIndex = computed<TreeIndex>(() => {
+    const nodeByKey: Record<string, TreeSelectNode> = {};
+    const parentKeyByKey: Record<string, string | null> = {};
+    const nodeKeyByGraphSlugAndAlias: Record<string, string> = {};
+
+    const rootOptions = relatableNodesTreeResponse.value?.options ?? [];
+
+    const stack: Array<{ node: TreeSelectNode; parentKey: string | null }> = [];
+    for (const rootNode of rootOptions) {
+        stack.push({ node: rootNode, parentKey: null });
+    }
+
+    while (stack.length) {
+        const stackItem = stack.pop();
+        if (!stackItem) {
+            continue;
+        }
+
+        const currentNode = stackItem.node;
+        const parentKey = stackItem.parentKey;
+
+        nodeByKey[currentNode.key] = currentNode;
+        parentKeyByKey[currentNode.key] = parentKey;
+
+        const dataGraphId = currentNode.data?.graph_id
+            ? String(currentNode.data.graph_id)
+            : "";
+        const nodeAlias = currentNode.data?.alias
+            ? String(currentNode.data.alias)
+            : "";
+
+        if (dataGraphId && nodeAlias) {
+            const graphSlug = graphIdToSlug.value[dataGraphId] ?? "";
+            if (graphSlug) {
+                nodeKeyByGraphSlugAndAlias[`${graphSlug}::${nodeAlias}`] =
+                    currentNode.key;
+            }
+        }
+
+        const childNodes = currentNode.children ?? [];
+        for (const childNode of childNodes) {
+            stack.push({ node: childNode, parentKey: currentNode.key });
+        }
+    }
+
+    return { nodeByKey, parentKeyByKey, nodeKeyByGraphSlugAndAlias };
+});
 
 const hasSelectedRelationshipPath = computed<boolean>(() => {
-    return relationship.path.some((segment) => {
-        const selectedNodeAlias = String(segment?.[1] ?? "").trim();
-        return selectedNodeAlias.length > 0;
-    });
+    return Boolean(selectedTreeNodeKey.value);
 });
 
 const traversalQuantifierOptions = computed<{ label: string; value: string }[]>(
@@ -75,55 +241,66 @@ const currentTraversalQuantifier = computed<string>(() => {
     return firstQuantifier;
 });
 
-const graphSlugsForPathBuilder = computed<string[]>(() => {
-    const graphSlugs: string[] = [];
-
-    if (anchorGraphSlug) {
-        graphSlugs.push(anchorGraphSlug);
+watchEffect(async () => {
+    const currentAnchorGraphId = anchorGraphId.value;
+    if (!currentAnchorGraphId) {
+        relatableNodesTreeResponse.value = null;
+        hasCompatibleRelationshipNodes.value = true;
+        selectedSelectionKeys.value = {};
+        return;
     }
 
-    if (innerGraphSlug && innerGraphSlug !== anchorGraphSlug) {
-        graphSlugs.push(innerGraphSlug);
+    try {
+        isLoadingRelatableTree.value = true;
+        const response =
+            await getRelatableNodesTreeForGraphId(currentAnchorGraphId);
+        relatableNodesTreeResponse.value = response;
+
+        hasCompatibleRelationshipNodes.value =
+            (response.options ?? []).length > 0;
+        if (!hasCompatibleRelationshipNodes.value) {
+            selectedSelectionKeys.value = {};
+        }
+    } finally {
+        isLoadingRelatableTree.value = false;
     }
-
-    return graphSlugs;
-});
-
-const anchorGraphName = computed<string>(() => {
-    return graphs.value.find(
-        (graphModel) => graphModel.slug === anchorGraphSlug,
-    )!.name;
-});
-
-const innerGraphName = computed<string>(() => {
-    return graphs.value.find(
-        (graphModel) => graphModel.slug === innerGraphSlug,
-    )!.name;
-});
-
-const relationshipLeadinText = computed<string>(() => {
-    return $gettext("Related %{outer} to %{inner} by", {
-        outer: anchorGraphName.value,
-        inner: innerGraphName.value,
-    });
 });
 
 watch(
-    () => innerGraphSlug,
-    (
-        nextInnerGraphSlug: string | undefined,
-        previousInnerGraphSlug: string | undefined,
-    ) => {
-        if (!previousInnerGraphSlug || !nextInnerGraphSlug) {
+    () => relationship.path,
+    (nextPath) => {
+        const lastSegment = nextPath?.[nextPath.length - 1];
+        if (!lastSegment) {
+            selectedSelectionKeys.value = {};
             return;
         }
 
-        if (nextInnerGraphSlug === previousInnerGraphSlug) {
+        const segmentGraphSlug = String(lastSegment[0] ?? "").trim();
+        const segmentNodeAlias = String(lastSegment[1] ?? "").trim();
+
+        if (!segmentGraphSlug || !segmentNodeAlias) {
+            selectedSelectionKeys.value = {};
             return;
         }
 
-        emit("update:relationship", null);
+        const expectedKey =
+            treeIndex.value.nodeKeyByGraphSlugAndAlias[
+                `${segmentGraphSlug}::${segmentNodeAlias}`
+            ] ?? null;
+
+        if (!expectedKey) {
+            selectedSelectionKeys.value = {};
+            return;
+        }
+
+        const currentSelectedKey = selectedTreeNodeKey.value;
+        if (currentSelectedKey === expectedKey) {
+            return;
+        }
+
+        selectedSelectionKeys.value = { [expectedKey]: { checked: true } };
     },
+    { deep: true },
 );
 
 function onChangeTraversalQuantifier(nextQuantifierRaw: string): void {
@@ -147,63 +324,146 @@ function onChangeTraversalQuantifier(nextQuantifierRaw: string): void {
     emit("update:relationship", updatedRelationship);
 }
 
+function normalizeSelectionKeys(
+    nextModelValue: unknown,
+): TreeSelectSelectionKeys {
+    if (!nextModelValue) {
+        return {};
+    }
+
+    if (typeof nextModelValue === "string") {
+        const trimmedKey = nextModelValue.trim();
+        return trimmedKey ? { [trimmedKey]: { checked: true } } : {};
+    }
+
+    if (typeof nextModelValue === "object") {
+        return nextModelValue as TreeSelectSelectionKeys;
+    }
+
+    return {};
+}
+
+function buildPathSequenceFromSelectedKey(
+    nextSelectedKey: string,
+): RelationshipPathSequence {
+    const keysInChainFromLeafToRoot: string[] = [];
+    let currentKey: string | null = nextSelectedKey;
+
+    while (currentKey) {
+        keysInChainFromLeafToRoot.push(currentKey);
+        currentKey = treeIndex.value.parentKeyByKey[currentKey] ?? null;
+    }
+
+    const keysInChainFromRootToLeaf = keysInChainFromLeafToRoot.reverse();
+
+    const segments: Array<[string, string]> = [];
+
+    for (const keyInChain of keysInChainFromRootToLeaf) {
+        if (keyInChain.startsWith("graph:")) {
+            continue;
+        }
+
+        const node = treeIndex.value.nodeByKey[keyInChain];
+        if (!node) {
+            continue;
+        }
+
+        const nodeGraphId = node.data?.graph_id
+            ? String(node.data.graph_id)
+            : "";
+        const nodeGraphSlug = nodeGraphId
+            ? graphIdToSlug.value[nodeGraphId] ?? ""
+            : "";
+        const nodeAlias = node.data?.alias ? String(node.data.alias) : "";
+
+        if (!nodeGraphSlug || !nodeAlias) {
+            continue;
+        }
+
+        segments.push([nodeGraphSlug, nodeAlias]);
+    }
+
+    return segments;
+}
+
 function deriveIsInverseFromPathSequence(
     nextPathSequence: RelationshipPathSequence,
 ): boolean {
-    if (!anchorGraphSlug || !innerGraphSlug) {
-        return relationship.is_inverse;
-    }
-
-    if (anchorGraphSlug === innerGraphSlug) {
-        return relationship.is_inverse;
-    }
-
     const firstSegment = nextPathSequence[0];
-
     if (!firstSegment) {
         return relationship.is_inverse;
     }
 
-    const firstGraphSlug = firstSegment[0];
-
-    if (firstGraphSlug === innerGraphSlug) {
-        return true;
+    const firstGraphSlug = String(firstSegment[0] ?? "");
+    if (!firstGraphSlug || !anchorGraphSlug) {
+        return relationship.is_inverse;
     }
 
-    if (firstGraphSlug === anchorGraphSlug) {
-        return false;
-    }
-
-    return relationship.is_inverse;
+    return firstGraphSlug !== anchorGraphSlug;
 }
 
-function onUpdatePathSequence(
-    nextPathSequence: RelationshipPathSequence,
-): void {
-    const nextPath = nextPathSequence.map((segment) => {
-        return [segment[0], segment[1]] as [string, string];
-    });
+function onUpdateSelectionKeys(nextModelValue: unknown): void {
+    const normalizedSelectionKeys = normalizeSelectionKeys(nextModelValue);
+    selectedSelectionKeys.value = normalizedSelectionKeys;
+
+    const nextSelectedKey = selectedTreeNodeKey.value;
+
+    if (!nextSelectedKey) {
+        emit("update:relationship", null);
+        return;
+    }
+
+    if (nextSelectedKey.startsWith("graph:")) {
+        selectedSelectionKeys.value = {};
+        return;
+    }
+
+    const nextPathSequence = buildPathSequenceFromSelectedKey(nextSelectedKey);
+    if (nextPathSequence.length === 0) {
+        selectedSelectionKeys.value = {};
+        return;
+    }
 
     const nextIsInverse = deriveIsInverseFromPathSequence(nextPathSequence);
 
     const updatedRelationship: RelationshipState = {
         ...relationship,
-        path: nextPath,
+        path: nextPathSequence.map(
+            (segment) => [segment[0], segment[1]] as [string, string],
+        ),
         is_inverse: nextIsInverse,
     };
 
     emit("update:relationship", updatedRelationship);
 }
 
-function onCompatibleRelationshipNodesChanged(
-    nextHasCompatibleRelationshipNodes: boolean,
-): void {
-    hasCompatibleRelationshipNodes.value = nextHasCompatibleRelationshipNodes;
+function getGraphLabelPrefixForTreeNode(
+    treeNode: TreeSelectNode | undefined,
+): string {
+    if (!treeNode) {
+        return "";
+    }
+
+    const nodeGraphId = treeNode.data?.graph_id
+        ? String(treeNode.data.graph_id)
+        : "";
+    if (!nodeGraphId) {
+        return "";
+    }
+
+    const graphLabel = graphIdToLabel.value[nodeGraphId] ?? "";
+    if (!graphLabel) {
+        return "";
+    }
+
+    return `${graphLabel}: `;
 }
 
 function onCloseClick(): void {
     emit("update:relationship", null);
 }
+
+void innerGraphSlug;
 </script>
 
 <template>
@@ -219,18 +479,36 @@ function onCloseClick(): void {
                     {{ relationshipLeadinText }}
                 </span>
 
-                <PathBuilder
-                    v-if="graphSlugsForPathBuilder.length > 0"
+                <TreeSelect
                     v-show="hasCompatibleRelationshipNodes"
-                    :graph-slugs="graphSlugsForPathBuilder"
-                    :relationship-between-graphs="graphSlugsForPathBuilder"
-                    :path-sequence="relationship.path"
-                    :should-prepend-graph-name="true"
-                    @update:path-sequence="onUpdatePathSequence"
-                    @compatible-relationship-nodes-changed="
-                        onCompatibleRelationshipNodesChanged
-                    "
-                />
+                    :model-value="selectedSelectionKeys"
+                    :options="relatableNodesTreeResponse?.options ?? []"
+                    selection-mode="single"
+                    :disabled="isLoadingRelatableTree || !anchorGraphId"
+                    class="relationship-tree-select"
+                    :placeholder="$gettext('Choose relationship')"
+                    :aria-label="$gettext('Relationship path')"
+                    @update:model-value="onUpdateSelectionKeys"
+                >
+                    <template #value="valueSlotProps">
+                        <span
+                            v-if="
+                                valueSlotProps.value &&
+                                valueSlotProps.value.length > 0
+                            "
+                        >
+                            {{
+                                getGraphLabelPrefixForTreeNode(
+                                    valueSlotProps.value[0] as TreeSelectNode,
+                                )
+                            }}
+                            {{ valueSlotProps.value[0].label }}
+                        </span>
+                        <span v-else>
+                            {{ valueSlotProps.placeholder }}
+                        </span>
+                    </template>
+                </TreeSelect>
 
                 <Select
                     v-if="
@@ -259,7 +537,7 @@ function onCloseClick(): void {
                 >
                     {{
                         $gettext(
-                            "No compatible relationship nodes exist between the selected graphs.",
+                            "No compatible relationship nodes exist for the selected record type.",
                         )
                     }}
                 </Message>

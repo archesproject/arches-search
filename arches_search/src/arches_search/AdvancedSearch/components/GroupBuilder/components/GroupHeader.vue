@@ -100,15 +100,15 @@ const relationshipToParentNodeDescriptor =
         };
     });
 
-const relationshipToParentNodeIdentifier = computed<string | null>(function () {
-    const descriptor = relationshipToParentNodeDescriptor.value;
+// const relationshipToParentNodeIdentifier = computed<string | null>(function () {
+//     const descriptor = relationshipToParentNodeDescriptor.value;
 
-    if (!descriptor) {
-        return null;
-    }
+//     if (!descriptor) {
+//         return null;
+//     }
 
-    return descriptor.nodeAlias;
-});
+//     return descriptor.nodeAlias;
+// });
 
 const relationshipToParentGraphLabel = ref<string | null>(null);
 const relationshipToParentNodeLabel = ref<string | null>(null);
@@ -173,41 +173,25 @@ watch(
     { immediate: true },
 );
 
-const relationshipToParentPathDescription = computed<string | null>(
-    function () {
-        const graphLabel = relationshipToParentGraphLabel.value;
-        const nodeLabel = relationshipToParentNodeLabel.value;
+// const relationshipToParentPathDescription = computed<string | null>(
+//     function () {
+//         const graphLabel = relationshipToParentGraphLabel.value;
+//         const nodeLabel = relationshipToParentNodeLabel.value;
 
-        if (!graphLabel && !nodeLabel) {
-            return null;
-        }
+//         if (!graphLabel && !nodeLabel) {
+//             return null;
+//         }
 
-        if (graphLabel && nodeLabel) {
-            return `${graphLabel} → ${nodeLabel}`;
-        }
+//         if (graphLabel && nodeLabel) {
+//             return `${graphLabel} → ${nodeLabel}`;
+//         }
 
-        return graphLabel ?? nodeLabel;
-    },
-);
+//         return graphLabel ?? nodeLabel;
+//     },
+// );
 
 const relationshipToParentLabel = computed<string>(function () {
-    const description = relationshipToParentPathDescription.value;
-
-    if (description) {
-        return $gettext("Related via %{description}", {
-            description,
-        });
-    }
-
-    const nodeIdentifier = relationshipToParentNodeIdentifier.value;
-
-    if (nodeIdentifier) {
-        return $gettext("Related via %{nodeIdentifier}", {
-            nodeIdentifier,
-        });
-    }
-
-    return $gettext("Related via node");
+    return relationshipToParentGraphLabel.value!;
 });
 
 function onSetGraphSlug(graphSlug: string): void {
@@ -229,6 +213,7 @@ function onRemoveGroupClick(clickEvent: MouseEvent): void {
                         {{ $gettext("I want to find") }}
                     </span>
                     <Select
+                        v-if="isRoot"
                         :model-value="currentGraphSlug"
                         :options="graphOptions"
                         option-label="label"

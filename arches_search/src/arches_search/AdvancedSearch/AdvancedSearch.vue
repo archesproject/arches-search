@@ -18,6 +18,7 @@ import {
     getAdvancedSearchFacets,
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
+    getRelatableNodesTreeForGraphId as fetchRelatableNodesTreeForGraphId,
     getSearchResults as fetchSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
 
@@ -33,6 +34,23 @@ const READY = "ready";
 type NodeCacheEntry =
     | { status: typeof PENDING; pending: Promise<Record<string, unknown>[]> }
     | { status: typeof READY; nodes: Record<string, unknown>[] };
+
+type TreeSelectNode = {
+    key: string;
+    label: string;
+    children?: TreeSelectNode[];
+    leaf?: boolean;
+    data?: Record<string, unknown>;
+};
+
+type RelatableNodesTreeResponse = {
+    target_graph_id: string;
+    options: TreeSelectNode[];
+};
+
+type RelatableNodesTreeCacheEntry =
+    | { status: typeof PENDING; pending: Promise<RelatableNodesTreeResponse> }
+    | { status: typeof READY; response: RelatableNodesTreeResponse };
 
 type GraphSummary = {
     graphid?: string;
@@ -60,6 +78,9 @@ const datatypesToAdvancedSearchFacets = ref<
 
 const graphs = ref<GraphSummary[]>([]);
 const graphIdToNodeCache = ref<Record<string, NodeCacheEntry>>({});
+const graphIdToRelatableNodesTreeCache = ref<
+    Record<string, RelatableNodesTreeCacheEntry>
+>({});
 
 const searchResults = ref<SearchResultsPayload | null>(null);
 const searchResultsInstanceKey = ref(0);
@@ -79,6 +100,7 @@ const searchResultsMatchCountLabel = computed<string>(function () {
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
 provide("getNodesForGraphId", getNodesForGraphId);
+provide("getRelatableNodesTreeForGraphId", getRelatableNodesTreeForGraphId);
 
 watchEffect(async () => {
     try {
@@ -124,6 +146,41 @@ async function getNodesForGraphId(
 
     graphIdToNodeCache.value = {
         ...graphIdToNodeCache.value,
+        [graphId]: { status: PENDING, pending: pendingRequest },
+    };
+
+    return await pendingRequest;
+}
+
+async function getRelatableNodesTreeForGraphId(
+    graphId: string,
+): Promise<RelatableNodesTreeResponse> {
+    const existingEntry = graphIdToRelatableNodesTreeCache.value[graphId];
+
+    if (existingEntry?.status === PENDING) {
+        return await existingEntry.pending;
+    }
+
+    if (existingEntry?.status === READY) {
+        return existingEntry.response;
+    }
+
+    const pendingRequest = fetchRelatableNodesTreeForGraphId(graphId)
+        .then((response: RelatableNodesTreeResponse) => {
+            graphIdToRelatableNodesTreeCache.value = {
+                ...graphIdToRelatableNodesTreeCache.value,
+                [graphId]: { status: READY, response },
+            };
+
+            return response;
+        })
+        .catch((error) => {
+            fetchError.value = error as Error;
+            throw error;
+        });
+
+    graphIdToRelatableNodesTreeCache.value = {
+        ...graphIdToRelatableNodesTreeCache.value,
         [graphId]: { status: PENDING, pending: pendingRequest },
     };
 
@@ -254,7 +311,6 @@ function onAnalyzePayloadButtonClick(): void {
                         <div class="query-panel-footer">
                             <Button
                                 icon="pi pi-search"
-                                severity="warn"
                                 size="large"
                                 :label="$gettext('Search')"
                                 :loading="isSearching"

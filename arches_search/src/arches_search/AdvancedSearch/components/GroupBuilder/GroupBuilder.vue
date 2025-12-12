@@ -13,7 +13,6 @@ import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupB
 
 import {
     makeEmptyGroupPayload,
-    // setScope,
     toggleLogic,
     addChildGroupLikeParent,
     addEmptyLiteralClauseToGroup,
@@ -26,10 +25,7 @@ import {
     setRelationshipAndReconcileClauses,
 } from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
 
-import {
-    // GraphScopeToken,
-    LogicToken,
-} from "@/arches_search/AdvancedSearch/types.ts";
+import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type {
     GraphModel,
@@ -172,11 +168,6 @@ function onSetGraphSlug(graphSlug: string): void {
     emitUpdatedGroupPayload(updatedGroup);
 }
 
-// function onSetScope(scopeToken: GraphScopeToken): void {
-//     const updatedGroup = setScope(currentGroup.value, scopeToken);
-//     emitUpdatedGroupPayload(updatedGroup);
-// }
-
 function onSetLogicFromBracket(_logicToken: LogicToken): void {
     const updatedGroup = toggleLogic(currentGroup.value);
     emitUpdatedGroupPayload(updatedGroup);
@@ -255,14 +246,6 @@ function onAddRelationship(): void {
     emitUpdatedGroupPayload(updatedGroup);
 }
 
-// function onRemoveRelationship(): void {
-//     const updatedGroup = setRelationshipAndReconcileClauses(
-//         currentGroup.value,
-//         null,
-//     );
-//     emitUpdatedGroupPayload(updatedGroup);
-// }
-
 function onUpdateChildGroupModelValue(
     updatedChildGroupPayload: GroupPayload,
     childIndex: number,
@@ -275,6 +258,33 @@ function onUpdateChildGroupModelValue(
     emitUpdatedGroupPayload(updatedParentGroup);
 }
 
+function deriveChildGraphSlugFromRelationship(
+    anchorGraphSlug: string,
+    nextRelationship: GroupPayload["relationship"],
+): string {
+    if (!nextRelationship) {
+        return "";
+    }
+
+    const slugsInPath = nextRelationship.path
+        .map((segment) => String(segment?.[0] ?? "").trim())
+        .filter((slug) => slug.length > 0);
+
+    if (slugsInPath.length === 0) {
+        return "";
+    }
+
+    const otherSlugFromEnd = [...slugsInPath]
+        .reverse()
+        .find((slug) => slug !== anchorGraphSlug);
+
+    if (otherSlugFromEnd) {
+        return otherSlugFromEnd;
+    }
+
+    return slugsInPath[0] ?? "";
+}
+
 function onUpdateRelationship(
     nextRelationship: GroupPayload["relationship"],
 ): void {
@@ -282,6 +292,37 @@ function onUpdateRelationship(
         currentGroup.value,
         nextRelationship,
     );
+
+    const anchorGraphSlug = updatedGroup.graph_slug ?? "";
+    const previousChildAnchorGraphSlug =
+        updatedGroup.groups[0]?.graph_slug ?? "";
+
+    const nextChildAnchorGraphSlug = deriveChildGraphSlugFromRelationship(
+        anchorGraphSlug,
+        nextRelationship,
+    );
+
+    if (
+        nextChildAnchorGraphSlug &&
+        nextChildAnchorGraphSlug !== previousChildAnchorGraphSlug &&
+        updatedGroup.groups.length > 0
+    ) {
+        const nextChildGroups = updatedGroup.groups.map((childGroup) => {
+            return {
+                ...childGroup,
+                graph_slug: nextChildAnchorGraphSlug,
+            };
+        });
+
+        const updatedGroupWithUpdatedChildren: GroupPayload = {
+            ...updatedGroup,
+            groups: nextChildGroups,
+        };
+
+        emitUpdatedGroupPayload(updatedGroupWithUpdatedChildren);
+        return;
+    }
+
     emitUpdatedGroupPayload(updatedGroup);
 }
 
@@ -431,7 +472,12 @@ function onRequestRemoveGroup(): void {
         </template>
 
         <template #footer>
-            <div class="group-footer-actions">
+            <div
+                class="group-footer-actions"
+                :style="{
+                    marginTop: hasGroupBodyContent ? '3rem' : '1rem',
+                }"
+            >
                 <Button
                     severity="secondary"
                     icon="pi pi-table"
@@ -451,7 +497,7 @@ function onRequestRemoveGroup(): void {
                     class="group-relate-button"
                     severity="secondary"
                     icon="pi pi-link"
-                    :label="$gettext('Relate to nested groups')"
+                    :label="$gettext('Add relationship filter')"
                     :title="relateButtonTitle"
                     :disabled="hasRelationship"
                     @click.stop="onAddRelationship"
@@ -549,7 +595,6 @@ function onRequestRemoveGroup(): void {
     gap: 0.5rem;
     flex-wrap: wrap;
     align-items: center;
-    margin-top: 1rem;
 }
 
 .group-helper-note {

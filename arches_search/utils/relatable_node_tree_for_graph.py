@@ -1,0 +1,249 @@
+from collections import defaultdict
+
+from django.db import models
+from django.db.models import F
+from django.db.models.functions import Cast
+
+from arches.app.models import models as arches_models
+
+
+def build_relatable_nodes_tree_response(target_graph_uuid):
+    relatable_node_rows = _get_relatable_node_rows(target_graph_uuid)
+
+    if not relatable_node_rows:
+        return {"target_graph_id": str(target_graph_uuid), "options": []}
+
+    relatable_graph_ids = sorted({graph_uuid for _, graph_uuid in relatable_node_rows})
+
+    parent_by_child_id_by_graph_id = _build_semantic_parent_maps(relatable_graph_ids)
+
+    included_node_ids_by_graph_id = _collect_relatable_nodes_plus_ancestors(
+        relatable_node_rows,
+        parent_by_child_id_by_graph_id,
+    )
+
+    included_node_ids = set()
+    for node_ids_for_graph in included_node_ids_by_graph_id.values():
+        included_node_ids.update(node_ids_for_graph)
+
+    node_rows_by_id, ordered_node_ids = _fetch_nodes_by_id_with_order(included_node_ids)
+    widget_label_by_node_id = _fetch_primary_widget_labels(included_node_ids)
+
+    graph_rows_by_id = {
+        graph_row["graphid"]: graph_row
+        for graph_row in arches_models.GraphModel.objects.filter(
+            graphid__in=relatable_graph_ids
+        ).values("graphid", "name", "slug")
+    }
+
+    options = _build_treeselect_options(
+        relatable_graph_ids,
+        graph_rows_by_id,
+        included_node_ids_by_graph_id,
+        node_rows_by_id,
+        ordered_node_ids,
+        widget_label_by_node_id,
+        parent_by_child_id_by_graph_id,
+    )
+
+    return {"target_graph_id": str(target_graph_uuid), "options": options}
+
+
+def _get_relatable_node_rows(target_graph_uuid):
+    config_contains_payload = {"graphs": [{"graphid": str(target_graph_uuid)}]}
+
+    return list(
+        arches_models.Node.objects.filter(
+            datatype__in=("resource-instance", "resource-instance-list"),
+        )
+        .annotate(config_jsonb=Cast(F("config"), output_field=models.JSONField()))
+        .filter(config_jsonb__contains=config_contains_payload)
+        .values_list("nodeid", "graph_id")
+    )
+
+
+def _build_semantic_parent_maps(relatable_graph_ids):
+    parent_by_child_id_by_graph_id = defaultdict(dict)
+
+    edge_rows = arches_models.Edge.objects.filter(
+        graph_id__in=relatable_graph_ids,
+        rangenode_id__isnull=False,
+        domainnode_id__isnull=False,
+    ).values_list(
+        "graph_id",
+        "rangenode_id",
+        "domainnode_id",
+    )
+
+    for graph_uuid, child_node_uuid, parent_node_uuid in edge_rows:
+        if child_node_uuid not in parent_by_child_id_by_graph_id[graph_uuid]:
+            parent_by_child_id_by_graph_id[graph_uuid][
+                child_node_uuid
+            ] = parent_node_uuid
+
+    return parent_by_child_id_by_graph_id
+
+
+def _collect_relatable_nodes_plus_ancestors(
+    relatable_node_rows, parent_by_child_id_by_graph_id
+):
+    included_node_ids_by_graph_id = defaultdict(set)
+
+    for node_uuid, graph_uuid in relatable_node_rows:
+        included_node_ids_by_graph_id[graph_uuid].add(node_uuid)
+
+        current_node_uuid = node_uuid
+        visited_node_ids = set()
+
+        while current_node_uuid not in visited_node_ids:
+            visited_node_ids.add(current_node_uuid)
+
+            parent_node_uuid = parent_by_child_id_by_graph_id.get(graph_uuid, {}).get(
+                current_node_uuid
+            )
+            if parent_node_uuid is None:
+                break
+
+            included_node_ids_by_graph_id[graph_uuid].add(parent_node_uuid)
+            current_node_uuid = parent_node_uuid
+
+    return included_node_ids_by_graph_id
+
+
+def _fetch_nodes_by_id_with_order(included_node_ids):
+    node_rows_by_id = {}
+    ordered_node_ids = []
+
+    for node_row in (
+        arches_models.Node.objects.filter(nodeid__in=included_node_ids)
+        .order_by(
+            "sortorder",
+            "name",
+        )
+        .values(
+            "nodeid",
+            "graph_id",
+            "alias",
+            "name",
+            "description",
+            "datatype",
+            "sortorder",
+        )
+    ):
+        node_uuid = node_row["nodeid"]
+        node_rows_by_id[node_uuid] = node_row
+        ordered_node_ids.append(node_uuid)
+
+    return node_rows_by_id, ordered_node_ids
+
+
+def _fetch_primary_widget_labels(included_node_ids):
+    widget_label_by_node_id = {}
+
+    for node_uuid, widget_label in (
+        arches_models.CardXNodeXWidget.objects.filter(node_id__in=included_node_ids)
+        .order_by("node_id", "sortorder")
+        .distinct("node_id")
+        .values_list("node_id", "label")
+    ):
+        if widget_label:
+            widget_label_by_node_id[node_uuid] = str(widget_label)
+
+    return widget_label_by_node_id
+
+
+def _build_treeselect_options(
+    relatable_graph_ids,
+    graph_rows_by_id,
+    included_node_ids_by_graph_id,
+    node_rows_by_id,
+    ordered_node_ids,
+    widget_label_by_node_id,
+    parent_by_child_id_by_graph_id,
+):
+    options = []
+
+    for graph_uuid in relatable_graph_ids:
+        graph_row = graph_rows_by_id.get(graph_uuid) or {}
+        graph_label = str(graph_row.get("name") or graph_uuid)
+
+        included_node_ids_for_graph = included_node_ids_by_graph_id.get(
+            graph_uuid, set()
+        )
+        parent_by_child_id = parent_by_child_id_by_graph_id.get(graph_uuid, {})
+
+        children_by_parent_id = defaultdict(list)
+        root_node_ids = []
+
+        for node_uuid in ordered_node_ids:
+            if node_uuid not in included_node_ids_for_graph:
+                continue
+
+            node_row = node_rows_by_id[node_uuid]
+            if node_row["graph_id"] != graph_uuid:
+                continue
+
+            parent_node_uuid = parent_by_child_id.get(node_uuid)
+            if parent_node_uuid and parent_node_uuid in included_node_ids_for_graph:
+                children_by_parent_id[parent_node_uuid].append(node_uuid)
+            else:
+                root_node_ids.append(node_uuid)
+
+        def build_node_tree(node_uuid):
+            node_row = node_rows_by_id[node_uuid]
+            node_label = widget_label_by_node_id.get(node_uuid) or str(
+                node_row.get("name") or ""
+            )
+
+            child_node_ids = children_by_parent_id.get(node_uuid, [])
+            return {
+                "key": str(node_uuid),
+                "label": node_label,
+                "children": [
+                    build_node_tree(child_uuid) for child_uuid in child_node_ids
+                ],
+                "data": {
+                    "id": str(node_uuid),
+                    "graph_id": str(node_row.get("graph_id") or graph_uuid),
+                    "alias": node_row.get("alias"),
+                    "name": str(node_row.get("name") or ""),
+                    "description": str(node_row.get("description") or ""),
+                    "datatype": node_row.get("datatype"),
+                },
+            }
+
+        graph_children = [build_node_tree(node_uuid) for node_uuid in root_node_ids]
+
+        if len(root_node_ids) == 1:
+            only_root_node_uuid = root_node_ids[0]
+            only_root_node_row = node_rows_by_id[only_root_node_uuid]
+            only_root_node_label = widget_label_by_node_id.get(
+                only_root_node_uuid
+            ) or str(only_root_node_row.get("name") or "")
+
+            if (
+                only_root_node_row.get("datatype") == "semantic"
+                and only_root_node_label == graph_label
+            ):
+                lifted_child_node_ids = children_by_parent_id.get(
+                    only_root_node_uuid, []
+                )
+                graph_children = [
+                    build_node_tree(node_uuid) for node_uuid in lifted_child_node_ids
+                ]
+
+        options.append(
+            {
+                "key": f"graph:{str(graph_uuid)}",
+                "label": graph_label,
+                "children": graph_children,
+                "data": {
+                    "graph_id": str(graph_uuid),
+                    "slug": graph_row.get("slug"),
+                    "name": graph_label,
+                },
+            }
+        )
+
+    options.sort(key=lambda graph_option: (graph_option.get("label") or ""))
+    return options
