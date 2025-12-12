@@ -50,16 +50,32 @@ def build_relatable_nodes_tree_response(target_graph_uuid):
 
 
 def _get_relatable_node_rows(target_graph_uuid):
-    config_contains_payload = {"graphs": [{"graphid": str(target_graph_uuid)}]}
+    config_contains_target_graph = {"graphs": [{"graphid": str(target_graph_uuid)}]}
 
-    return list(
+    incoming_node_rows = (
         arches_models.Node.objects.filter(
             datatype__in=("resource-instance", "resource-instance-list"),
         )
-        .annotate(config_jsonb=Cast(F("config"), output_field=models.JSONField()))
-        .filter(config_jsonb__contains=config_contains_payload)
-        .values_list("nodeid", "graph_id")
+        .annotate(
+            config_jsonb=Cast(F("config"), output_field=models.JSONField()),
+        )
+        .filter(config_jsonb__contains=config_contains_target_graph)
+        .values_list(
+            "nodeid",
+            "graph_id",
+        )
     )
+
+    outgoing_node_rows = arches_models.Node.objects.filter(
+        graph_id=target_graph_uuid,
+        datatype__in=("resource-instance", "resource-instance-list"),
+    ).values_list(
+        "nodeid",
+        "graph_id",
+    )
+
+    combined_node_rows = set(incoming_node_rows) | set(outgoing_node_rows)
+    return list(combined_node_rows)
 
 
 def _build_semantic_parent_maps(relatable_graph_ids):
