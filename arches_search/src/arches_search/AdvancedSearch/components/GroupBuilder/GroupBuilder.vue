@@ -475,7 +475,8 @@ function onRequestRemoveGroup(): void {
             <div
                 class="group-footer-actions"
                 :style="{
-                    marginTop: hasGroupBodyContent ? '3rem' : '1rem',
+                    marginTop:
+                        !isRoot && hasGroupBodyContent ? '2.5rem' : '0rem',
                 }"
             >
                 <Button
@@ -595,6 +596,7 @@ function onRequestRemoveGroup(): void {
     gap: 0.5rem;
     flex-wrap: wrap;
     align-items: center;
+    margin-top: 1rem;
 }
 
 .group-helper-note {
