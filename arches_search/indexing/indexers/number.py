@@ -26,3 +26,5 @@ class NumberIndexing(BaseIndexing):
                 value=number_object["number"],
             )
             search_items.append(numeric_search)
+
+        return search_items
