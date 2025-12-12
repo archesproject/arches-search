@@ -1,4 +1,3 @@
-from django.contrib.postgres.search import SearchVector
 from arches.app.datatypes.datatypes import DataTypeFactory, BaseDataType
 from arches.app.models.models import Language
 from arches_search.models.models import TermSearch
@@ -22,8 +21,9 @@ class URLIndexing(BaseIndexing):
         self._set_languages()
         document = {"strings": []}
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
+        search_items = []
         for string in document["strings"]:
-            string_search = TermSearch.objects.create(
+            string_search = TermSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -31,11 +31,5 @@ class URLIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=string["string"],
             )
-            string_search.save()
-            string_search.search_vector = SearchVector(
-                "value",
-                config="simple",
-            )
-            TermSearch.objects.filter(pk=string_search.pk).update(
-                search_vector=string_search.search_vector
-            )
+            search_items.append(string_search)
+        return search_items

@@ -21,8 +21,9 @@ class ConceptIndexing(BaseIndexing):
         nodeid = str(node.nodeid)
         document = {"domains": [], "strings": [], "date_ranges": []}
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
+        search_items = []
         for string in document["strings"]:
-            string_search = TermSearch.objects.create(
+            string_search = TermSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -30,18 +31,11 @@ class ConceptIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=string["string"],
             )
-            string_search.save()
-            string_search.search_vector = SearchVector(
-                "value",
-                config="simple",
-            )
-            TermSearch.objects.filter(pk=string_search.pk).update(
-                search_vector=string_search.search_vector
-            )
+            search_items.append(string_search)
 
         for concept in document["domains"]:
             for id in [concept["conceptid"], concept["valueid"]]:
-                uuid_search = UUIDSearch.objects.create(
+                uuid_search = UUIDSearch(
                     node_alias=node.alias,
                     tileid=tile.tileid,
                     resourceinstanceid=tile.resourceinstance_id,
@@ -49,10 +43,10 @@ class ConceptIndexing(BaseIndexing):
                     graph_slug=node.graph.slug,
                     value=id,
                 )
-                uuid_search.save()
+                search_items.append(uuid_search)
 
         for concept in document["date_ranges"]:
-            date_range_search = DateRangeSearch.objects.create(
+            date_range_search = DateRangeSearch(
                 node_alias=node.alias,
                 tileid=tile.tileid,
                 resourceinstanceid=tile.resourceinstance_id,
@@ -61,4 +55,6 @@ class ConceptIndexing(BaseIndexing):
                 start_value=concept["date_range"]["gte"],
                 end_value=concept["date_range"]["lte"],
             )
-            date_range_search.save()
+            search_items.append(date_range_search)
+
+        return search_items

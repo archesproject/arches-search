@@ -16,8 +16,9 @@ class ResourceInstanceIndexing(BaseIndexing):
         nodeid = str(node.nodeid)
         document = {"strings": [], "ids": []}
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
+        search_items = []
         for string in document["strings"]:
-            string_search = TermSearch.objects.create(
+            string_search = TermSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -25,17 +26,10 @@ class ResourceInstanceIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=string["string"],
             )
-            string_search.save()
-            string_search.search_vector = SearchVector(
-                "value",
-                config="simple",
-            )
-            TermSearch.objects.filter(pk=string_search.pk).update(
-                search_vector=string_search.search_vector
-            )
+            search_items.append(string_search)
 
         for related_resource_id in document["ids"]:
-            uuid_search = UUIDSearch.objects.create(
+            uuid_search = UUIDSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -43,4 +37,5 @@ class ResourceInstanceIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=related_resource_id["id"],
             )
-            uuid_search.save()
+            search_items.append(uuid_search)
+        return search_items

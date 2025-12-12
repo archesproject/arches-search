@@ -18,9 +18,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """This module contains commands for building Arches."""
 import logging
-from django.db import transaction
+import datetime
 from django.core.management.base import BaseCommand
-from django.core.paginator import Paginator
 from arches.app.models.models import TileModel
 
 from arches_search.indexing.index_from_tile import index_from_tile
@@ -39,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     """
-    Commands for running common elasticsearch commands
+    Commands for managing search index data
 
     """
 
@@ -63,15 +62,55 @@ class Command(BaseCommand):
         nodegroup_cache = {}
         indexing_factory = IndexingFactory()
 
+        terms = []
+        numbers = []
+        dates = []
+        date_ranges = []
+        booleans = []
+        uuids = []
+        print("Calculating index values")
+        value_calculation_start = datetime.datetime.now()
+
         for tile in (
             TileModel.objects.order_by("tileid").all().iterator(chunk_size=1000)
         ):
-            index_from_tile(
+            index_values = index_from_tile(
                 tile,
                 delete_existing=False,
                 indexing_factory=indexing_factory,
                 nodegroup_cache=nodegroup_cache,
             )
+            if index_values:
+                for val in index_values:
+                    if isinstance(val, TermSearch):
+                        terms.append(val)
+                    elif isinstance(val, DateSearch):
+                        dates.append(val)
+                    elif isinstance(val, NumericSearch):
+                        numbers.append(val)
+                    elif isinstance(val, UUIDSearch):
+                        uuids.append(val)
+                    elif isinstance(val, BooleanSearch):
+                        booleans.append(val)
+                    elif isinstance(val, DateRangeSearch):
+                        date_ranges.append(val)
+
+        print(
+            f"Value calculation took {datetime.datetime.now() - value_calculation_start} seconds"
+        )
+
+        print("Saving index records")
+        value_saving_start = datetime.datetime.now()
+        TermSearch.objects.bulk_create(terms, batch_size=1000)
+        NumericSearch.objects.bulk_create(numbers, batch_size=1000)
+        DateSearch.objects.bulk_create(dates, batch_size=1000)
+        UUIDSearch.objects.bulk_create(uuids, batch_size=1000)
+        DateRangeSearch.objects.bulk_create(date_ranges, batch_size=1000)
+        BooleanSearch.objects.bulk_create(booleans, batch_size=1000)
+
+        print(
+            f"Value saving took {datetime.datetime.now() - value_saving_start} seconds"
+        )
 
     def delete_indexes(self, name=None):
         TermSearch.objects.all().delete()

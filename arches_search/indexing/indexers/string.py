@@ -1,7 +1,6 @@
 from django.db.models import Value
 from django.contrib.postgres.search import SearchVector
 from arches.app.datatypes.datatypes import DataTypeFactory
-from arches.app.models.models import Language
 from arches_search.models.models import TermSearch
 from arches_search.indexing.base import BaseIndexing
 import sys
@@ -10,21 +9,15 @@ import sys
 class StringIndexing(BaseIndexing):
     def __init__(self):
         super().__init__()
-        self.languages: dict[str, Language] = {}
         self.datatype = DataTypeFactory().get_instance("string")
-
-    def _set_languages(self):
-        if not self.languages:
-            for l_obj in Language.objects.all():
-                self.languages[l_obj.code] = l_obj
 
     def index(self, tile, node):
         nodeid = str(node.nodeid)
-        self._set_languages()
         document = {"strings": []}
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
+        search_items = []
         for string_object in document["strings"]:
-            term_search = TermSearch.objects.create(
+            term_search = TermSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -33,14 +26,6 @@ class StringIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=string_object["string"],
             )
-            term_search.search_vector = SearchVector(
-                Value(string_object["string"]),
-                config=self.languages[string_object["language"]].name.lower(),
-            )
-            try:
-                term_search.save()
-            except Exception as e:
-                sys.stdout.write(
-                    f"Unable to index: value '{term_search.value}' in language '{term_search.language}' on node '{term_search.node_alias}' in tile '{term_search.tileid}' due to the following error:"
-                )
-                sys.stdout.write(str(e))
+            search_items.append(term_search)
+
+        return search_items

@@ -38,6 +38,7 @@ def index_from_tile(
         factory = IndexingFactory()
     else:
         factory = indexing_factory
+    result = []
     for node in nodes:
         nodeid = str(node.nodeid)
         if nodeid in tile.data.keys():
@@ -45,4 +46,7 @@ def index_from_tile(
                 continue
 
             indexer = factory.get_indexing_class(node.datatype)
-            indexer.index(tile, node)
+            res = indexer.index(tile, node)
+            if res:
+                result.extend(res)
+    return result

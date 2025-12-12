@@ -14,8 +14,9 @@ class NonLocalizedStringIndexing(BaseIndexing):
         nodeid = str(node.nodeid)
         document = {"strings": []}
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
+        search_items = []
         for string_object in document["strings"]:
-            term_search = TermSearch.objects.create(
+            term_search = TermSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -23,8 +24,5 @@ class NonLocalizedStringIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=string_object["string"],
             )
-            term_search.save()
-            term_search.search_vector = SearchVector("value", config="simple")
-            TermSearch.objects.filter(pk=term_search.pk).update(
-                search_vector=term_search.search_vector
-            )
+            search_items.append(term_search)
+        return search_items

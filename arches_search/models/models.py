@@ -5,6 +5,7 @@ from django.contrib.postgres.search import SearchVectorField
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
 from arches.app.models.fields.i18n import I18n_TextField
+from django.contrib.postgres.search import SearchVector
 
 
 class DDatatypeXAdvancedSearchModel(models.Model):
@@ -88,7 +89,15 @@ class TermSearch(models.Model):
     language = models.TextField()
     datatype = models.TextField()
     value = models.TextField()
-    search_vector = SearchVectorField(null=True)
+    search_vector = models.GeneratedField(
+        null=True,
+        db_persist=True,
+        expression=SearchVector(
+            "value",
+            config="english",
+        ),
+        output_field=SearchVectorField(),
+    )
 
     class Meta:
         managed = True

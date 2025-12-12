@@ -15,6 +15,7 @@ class DateIndexing(BaseIndexing):
         document = {"dates": [], "date_ranges": []}
         date_value = tile.data[nodeid]
         date_components = date_value.split("-")
+        search_items = []
         if len(date_components[0]) == 4 and len(date_components) == 3:
             # date parsing with the edtf library is slow, so for known
             # formats (like date) we can speed it up with this
@@ -22,7 +23,7 @@ class DateIndexing(BaseIndexing):
         else:
             self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
         for date in document["dates"]:
-            date_search = DateSearch.objects.create(
+            date_search = DateSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -30,7 +31,8 @@ class DateIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=date["date"],
             )
-            date_search.save()
+            search_items.append(date_search)
+        return search_items
 
     def _short_circuit_date(self, document, date_components, nodeid, node, tile):
 

@@ -7,4 +7,8 @@ class SearchIndexingFunction(BaseFunction):
     # occurrs after Tile.save
     def post_save(self, *args, **kwargs):
         tile: Tile = args[0]
-        index_from_tile(tile)
+        index_records = index_from_tile(tile)
+        for record in index_records:
+            record.save()
+
+
