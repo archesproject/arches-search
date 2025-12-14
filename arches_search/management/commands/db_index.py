@@ -17,11 +17,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
 """This module contains commands for building Arches."""
-import logging
 import datetime
 from django.core.management.base import BaseCommand
 from arches.app.models.models import TileModel
-
 from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
@@ -32,8 +30,6 @@ from arches_search.models.models import (
     DateSearch,
     UUIDSearch,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
