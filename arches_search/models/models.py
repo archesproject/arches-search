@@ -1,11 +1,13 @@
 from django.db import models
-from django.db.models import F, Func
+from django.db.models import F
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import get_language, get_language_info
 from arches.app.models.fields.i18n import I18n_TextField
 from django.contrib.postgres.search import SearchVector
+from django.conf import settings
 
 
 class DDatatypeXAdvancedSearchModel(models.Model):
@@ -94,7 +96,10 @@ class TermSearch(models.Model):
         db_persist=True,
         expression=SearchVector(
             "value",
-            config="english",
+            config=next(
+                (lang[1] for lang in settings.LANGUAGES if lang[0] == F("language")),
+                get_language_info(get_language())["name"].lower(),
+            ),
         ),
         output_field=SearchVectorField(),
     )
