@@ -10,5 +10,3 @@ class SearchIndexingFunction(BaseFunction):
         index_records = index_from_tile(tile)
         for record in index_records:
             record.save()
-
-
