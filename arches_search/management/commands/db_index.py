@@ -46,7 +46,7 @@ class Command(BaseCommand):
                 "reindex_database",
             ],
             help="Operation Type; "
-            + "'reindex_database'=Deletes and re-creates all indices in ElasticSearch, then indexes all data found in the database",
+            + "'reindex_database'=Deletes and re-creates all arches search indices",
         )
 
     def handle(self, *args, **options):
@@ -57,16 +57,17 @@ class Command(BaseCommand):
         self.delete_indexes()
         nodegroup_cache = {}
         indexing_factory = IndexingFactory()
+        values_to_index = {
+            TermSearch: [],
+            NumericSearch: [],
+            DateSearch: [],
+            UUIDSearch: [],
+            DateRangeSearch: [],
+            BooleanSearch: [],
+        }
 
-        terms = []
-        numbers = []
-        dates = []
-        date_ranges = []
-        booleans = []
-        uuids = []
         print("Calculating index values")
         value_calculation_start = datetime.datetime.now()
-
         for tile in (
             TileModel.objects.order_by("tileid").all().iterator(chunk_size=1000)
         ):
@@ -78,18 +79,7 @@ class Command(BaseCommand):
             )
             if index_values:
                 for val in index_values:
-                    if isinstance(val, TermSearch):
-                        terms.append(val)
-                    elif isinstance(val, DateSearch):
-                        dates.append(val)
-                    elif isinstance(val, NumericSearch):
-                        numbers.append(val)
-                    elif isinstance(val, UUIDSearch):
-                        uuids.append(val)
-                    elif isinstance(val, BooleanSearch):
-                        booleans.append(val)
-                    elif isinstance(val, DateRangeSearch):
-                        date_ranges.append(val)
+                    values_to_index[type(val)].append(val)
 
         print(
             f"Value calculation took {datetime.datetime.now() - value_calculation_start} seconds"
@@ -97,13 +87,10 @@ class Command(BaseCommand):
 
         print("Saving index records")
         value_saving_start = datetime.datetime.now()
-        TermSearch.objects.bulk_create(terms, batch_size=1000)
-        NumericSearch.objects.bulk_create(numbers, batch_size=1000)
-        DateSearch.objects.bulk_create(dates, batch_size=1000)
-        UUIDSearch.objects.bulk_create(uuids, batch_size=1000)
-        DateRangeSearch.objects.bulk_create(date_ranges, batch_size=1000)
-        BooleanSearch.objects.bulk_create(booleans, batch_size=1000)
-
+        for index_type, values in values_to_index.items():
+            print(f"Saving {len(values)} {index_type.__name__} values")
+            index_type.objects.bulk_create(values, batch_size=1000)
+ 
         print(
             f"Value saving took {datetime.datetime.now() - value_saving_start} seconds"
         )
