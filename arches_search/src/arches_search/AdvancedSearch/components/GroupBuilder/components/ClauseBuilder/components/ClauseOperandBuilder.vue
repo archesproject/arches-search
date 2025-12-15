@@ -20,7 +20,7 @@ const emit = defineEmits<{
 
 const { modelValue, subjectTerminalNode, subjectTerminalGraph, operandType } =
     defineProps<{
-        modelValue: OperandPayload;
+        modelValue: OperandPayload | null;
         subjectTerminalNode: Node;
         subjectTerminalGraph: GraphModel;
         operandType: OperandPayloadTypeToken;

@@ -8,14 +8,41 @@ from arches.app.models import models as arches_models
 
 
 def build_relatable_nodes_tree_response(target_graph_uuid):
-    relatable_node_rows = _get_relatable_node_rows(target_graph_uuid)
+    incoming_node_rows = _get_incoming_node_rows(target_graph_uuid)
+    outgoing_node_rows, outgoing_related_graph_ids = (
+        _get_outgoing_node_rows_and_related_graphs(target_graph_uuid)
+    )
 
+    relatable_node_rows = list(set(incoming_node_rows) | set(outgoing_node_rows))
     if not relatable_node_rows:
-        return {"target_graph_id": str(target_graph_uuid), "options": []}
+        return {
+            "target_graph_id": str(target_graph_uuid),
+            "relatable_graphs": [],
+            "options": [],
+        }
 
-    relatable_graph_ids = sorted({graph_uuid for _, graph_uuid in relatable_node_rows})
+    relatable_node_graph_ids = sorted(
+        {graph_uuid for _, graph_uuid in relatable_node_rows}
+    )
 
-    parent_by_child_id_by_graph_id = _build_semantic_parent_maps(relatable_graph_ids)
+    relatable_target_graph_ids = set()
+    relatable_target_graph_ids.update(
+        {graph_uuid for _, graph_uuid in incoming_node_rows}
+    )
+    relatable_target_graph_ids.update(outgoing_related_graph_ids)
+
+    graph_ids_to_fetch = set(relatable_node_graph_ids) | set(relatable_target_graph_ids)
+
+    graph_rows_by_id = {
+        graph_row["graphid"]: graph_row
+        for graph_row in arches_models.GraphModel.objects.filter(
+            graphid__in=graph_ids_to_fetch
+        ).values("graphid", "name", "slug")
+    }
+
+    parent_by_child_id_by_graph_id = _build_semantic_parent_maps(
+        relatable_node_graph_ids
+    )
 
     included_node_ids_by_graph_id = _collect_relatable_nodes_plus_ancestors(
         relatable_node_rows,
@@ -29,15 +56,8 @@ def build_relatable_nodes_tree_response(target_graph_uuid):
     node_rows_by_id, ordered_node_ids = _fetch_nodes_by_id_with_order(included_node_ids)
     widget_label_by_node_id = _fetch_primary_widget_labels(included_node_ids)
 
-    graph_rows_by_id = {
-        graph_row["graphid"]: graph_row
-        for graph_row in arches_models.GraphModel.objects.filter(
-            graphid__in=relatable_graph_ids
-        ).values("graphid", "name", "slug")
-    }
-
     options = _build_treeselect_options(
-        relatable_graph_ids,
+        relatable_node_graph_ids,
         graph_rows_by_id,
         included_node_ids_by_graph_id,
         node_rows_by_id,
@@ -46,36 +66,62 @@ def build_relatable_nodes_tree_response(target_graph_uuid):
         parent_by_child_id_by_graph_id,
     )
 
-    return {"target_graph_id": str(target_graph_uuid), "options": options}
+    relatable_graphs = [
+        {
+            "graph_id": str(graph_uuid),
+            "slug": graph_rows_by_id[graph_uuid]["slug"],
+            "name": graph_rows_by_id[graph_uuid]["name"],
+        }
+        for graph_uuid in relatable_target_graph_ids
+        if graph_uuid in graph_rows_by_id
+    ]
+    relatable_graphs.sort(key=lambda row: str(row.get("name") or ""))
+
+    return {
+        "target_graph_id": str(target_graph_uuid),
+        "relatable_graphs": relatable_graphs,
+        "options": options,
+    }
 
 
-def _get_relatable_node_rows(target_graph_uuid):
+def _get_incoming_node_rows(target_graph_uuid):
     config_contains_target_graph = {"graphs": [{"graphid": str(target_graph_uuid)}]}
 
-    incoming_node_rows = (
+    return list(
         arches_models.Node.objects.filter(
             datatype__in=("resource-instance", "resource-instance-list"),
         )
-        .annotate(
-            config_jsonb=Cast(F("config"), output_field=models.JSONField()),
-        )
+        .annotate(config_jsonb=Cast(F("config"), output_field=models.JSONField()))
         .filter(config_jsonb__contains=config_contains_target_graph)
-        .values_list(
-            "nodeid",
-            "graph_id",
+        .values_list("nodeid", "graph_id")
+    )
+
+
+def _get_outgoing_node_rows_and_related_graphs(target_graph_uuid):
+    outgoing_nodes = list(
+        arches_models.Node.objects.filter(
+            graph_id=target_graph_uuid,
+            datatype__in=("resource-instance", "resource-instance-list"),
         )
+        .annotate(config_jsonb=Cast(F("config"), output_field=models.JSONField()))
+        .values("nodeid", "graph_id", "config_jsonb")
     )
 
-    outgoing_node_rows = arches_models.Node.objects.filter(
-        graph_id=target_graph_uuid,
-        datatype__in=("resource-instance", "resource-instance-list"),
-    ).values_list(
-        "nodeid",
-        "graph_id",
-    )
+    node_rows = []
+    related_graph_ids = set()
 
-    combined_node_rows = set(incoming_node_rows) | set(outgoing_node_rows)
-    return list(combined_node_rows)
+    for row in outgoing_nodes:
+        node_rows.append((row["nodeid"], row["graph_id"]))
+
+        config = row.get("config_jsonb") or {}
+        graphs = config.get("graphs") or []
+
+        for graph_entry in graphs:
+            graph_id = graph_entry.get("graphid")
+            if graph_id:
+                related_graph_ids.add(graph_id)
+
+    return node_rows, related_graph_ids
 
 
 def _build_semantic_parent_maps(relatable_graph_ids):
@@ -132,10 +178,7 @@ def _fetch_nodes_by_id_with_order(included_node_ids):
 
     for node_row in (
         arches_models.Node.objects.filter(nodeid__in=included_node_ids)
-        .order_by(
-            "sortorder",
-            "name",
-        )
+        .order_by("sortorder", "name")
         .values(
             "nodeid",
             "graph_id",
@@ -163,7 +206,7 @@ def _fetch_primary_widget_labels(included_node_ids):
         .values_list("node_id", "label")
     ):
         if widget_label:
-            widget_label_by_node_id[node_uuid] = str(widget_label)
+            widget_label_by_node_id[node_uuid] = widget_label
 
     return widget_label_by_node_id
 
@@ -181,7 +224,7 @@ def _build_treeselect_options(
 
     for graph_uuid in relatable_graph_ids:
         graph_row = graph_rows_by_id.get(graph_uuid) or {}
-        graph_label = str(graph_row.get("name") or graph_uuid)
+        graph_label = graph_row.get("name") or str(graph_uuid)
 
         included_node_ids_for_graph = included_node_ids_by_graph_id.get(
             graph_uuid, set()
@@ -207,8 +250,8 @@ def _build_treeselect_options(
 
         def build_node_tree(node_uuid):
             node_row = node_rows_by_id[node_uuid]
-            node_label = widget_label_by_node_id.get(node_uuid) or str(
-                node_row.get("name") or ""
+            node_label = (
+                widget_label_by_node_id.get(node_uuid) or node_row.get("name") or ""
             )
 
             child_node_ids = children_by_parent_id.get(node_uuid, [])
@@ -222,35 +265,17 @@ def _build_treeselect_options(
                     "id": str(node_uuid),
                     "graph_id": str(node_row.get("graph_id") or graph_uuid),
                     "alias": node_row.get("alias"),
-                    "name": str(node_row.get("name") or ""),
-                    "description": str(node_row.get("description") or ""),
+                    "name": node_row.get("name") or "",
+                    "description": node_row.get("description") or "",
                     "datatype": node_row.get("datatype"),
                 },
             }
 
         graph_children = [build_node_tree(node_uuid) for node_uuid in root_node_ids]
 
-        if len(root_node_ids) == 1:
-            only_root_node_uuid = root_node_ids[0]
-            only_root_node_row = node_rows_by_id[only_root_node_uuid]
-            only_root_node_label = widget_label_by_node_id.get(
-                only_root_node_uuid
-            ) or str(only_root_node_row.get("name") or "")
-
-            if (
-                only_root_node_row.get("datatype") == "semantic"
-                and only_root_node_label == graph_label
-            ):
-                lifted_child_node_ids = children_by_parent_id.get(
-                    only_root_node_uuid, []
-                )
-                graph_children = [
-                    build_node_tree(node_uuid) for node_uuid in lifted_child_node_ids
-                ]
-
         options.append(
             {
-                "key": f"graph:{str(graph_uuid)}",
+                "key": f"graph:{graph_uuid}",
                 "label": graph_label,
                 "children": graph_children,
                 "data": {
@@ -261,5 +286,5 @@ def _build_treeselect_options(
             }
         )
 
-    options.sort(key=lambda graph_option: (graph_option.get("label") or ""))
+    options.sort(key=lambda graph_option: str(graph_option.get("label") or ""))
     return options

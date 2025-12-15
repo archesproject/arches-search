@@ -1,34 +1,21 @@
 <script setup lang="ts">
-import { inject, computed, ref, watch } from "vue";
+import { inject, computed } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
 import Select from "primevue/select";
 import Tag from "primevue/tag";
 
 import type {
     GraphModel,
     GroupPayload,
-    Node,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
 
 type RelationshipState = GroupPayload["relationship"];
 
-type RelationshipNodeDescriptor = {
-    graphSlug: string;
-    nodeAlias: string;
-};
-
-type LabelledNode = Node & {
-    card_x_node_x_widget_label: string;
-};
-
 const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs");
-const getNodesForGraphId =
-    inject<(graphId: string) => Promise<LabelledNode[]>>("getNodesForGraphId");
 
 const emit = defineEmits<{
     (event: "change-graph", graphSlug: string): void;
@@ -46,12 +33,16 @@ const { groupPayload, isRoot, relationshipToParent } = defineProps<{
     relationshipToParent?: RelationshipState;
 }>();
 
-const graphOptions = computed(function () {
+const shouldRenderHeader = computed<boolean>(function getShouldRenderHeader() {
+    return Boolean(isRoot) || relationshipToParent != null;
+});
+
+const graphOptions = computed(function getGraphOptions() {
     if (!graphs?.value) {
         return [];
     }
 
-    return graphs.value.map(function (graphSummary) {
+    return graphs.value.map(function mapGraphOption(graphSummary) {
         return {
             label: graphSummary.name ?? graphSummary.slug,
             value: graphSummary.slug,
@@ -59,153 +50,47 @@ const graphOptions = computed(function () {
     });
 });
 
-const currentGraphSlug = computed<string>(function () {
+const currentGraphSlug = computed<string>(function getCurrentGraphSlug() {
     return groupPayload.graph_slug;
 });
 
-const showsRelationshipToParentTag = computed<boolean>(function () {
-    return !isRoot && relationshipToParent != null;
+const currentGraphLabel = computed<string>(function getCurrentGraphLabel() {
+    const graphSlug = currentGraphSlug.value;
+
+    if (!graphs?.value || graphs.value.length === 0) {
+        return graphSlug;
+    }
+
+    const matchingGraphSummary = graphs.value.find(
+        function findMatchingGraphSummary(graphSummary) {
+            return graphSummary.slug === graphSlug;
+        },
+    );
+
+    return (
+        matchingGraphSummary?.name ?? matchingGraphSummary?.slug ?? graphSlug
+    );
 });
 
-const relationshipToParentNodeDescriptor =
-    computed<RelationshipNodeDescriptor | null>(function () {
-        if (!relationshipToParent) {
-            return null;
-        }
-
-        const relationshipWithPotentialPath = relationshipToParent as {
-            path?: unknown;
-        };
-
-        const relationshipPath = relationshipWithPotentialPath.path;
-
-        if (!Array.isArray(relationshipPath) || relationshipPath.length === 0) {
-            return null;
-        }
-
-        const lastPathStep = relationshipPath[
-            relationshipPath.length - 1
-        ] as unknown;
-
-        if (!Array.isArray(lastPathStep) || lastPathStep.length < 2) {
-            return null;
-        }
-
-        const graphSlug = String(lastPathStep[0]);
-        const nodeAlias = String(lastPathStep[1]);
-
-        return {
-            graphSlug,
-            nodeAlias,
-        };
-    });
-
-// const relationshipToParentNodeIdentifier = computed<string | null>(function () {
-//     const descriptor = relationshipToParentNodeDescriptor.value;
-
-//     if (!descriptor) {
-//         return null;
-//     }
-
-//     return descriptor.nodeAlias;
-// });
-
-const relationshipToParentGraphLabel = ref<string | null>(null);
-const relationshipToParentNodeLabel = ref<string | null>(null);
-
-watch(
-    relationshipToParentNodeDescriptor,
-    async function (nextNodeDescriptor) {
-        relationshipToParentGraphLabel.value = null;
-        relationshipToParentNodeLabel.value = null;
-
-        if (!nextNodeDescriptor) {
-            return;
-        }
-
-        if (!graphs || graphs.value.length === 0) {
-            return;
-        }
-
-        const matchingGraphSummary = graphs.value.find(function (graphSummary) {
-            return graphSummary.slug === nextNodeDescriptor.graphSlug;
-        });
-
-        if (matchingGraphSummary) {
-            const graphLabel =
-                matchingGraphSummary.name ?? matchingGraphSummary.slug ?? "";
-            relationshipToParentGraphLabel.value = graphLabel || null;
-        }
-
-        if (
-            !getNodesForGraphId ||
-            !matchingGraphSummary ||
-            !matchingGraphSummary.graphid
-        ) {
-            return;
-        }
-
-        try {
-            const nodeSummaries = await getNodesForGraphId(
-                matchingGraphSummary.graphid,
-            );
-
-            const matchingNodeSummary = nodeSummaries.find(
-                function (nodeSummary) {
-                    return nodeSummary.alias === nextNodeDescriptor.nodeAlias;
-                },
-            );
-
-            if (!matchingNodeSummary) {
-                return;
-            }
-
-            const nodeLabel =
-                matchingNodeSummary.card_x_node_x_widget_label ||
-                matchingNodeSummary.name ||
-                matchingNodeSummary.alias;
-
-            relationshipToParentNodeLabel.value = nodeLabel || null;
-        } catch {
-            relationshipToParentNodeLabel.value = null;
-        }
+const showsRelationshipTag = computed<boolean>(
+    function getShowsRelationshipTag() {
+        return !isRoot && relationshipToParent != null;
     },
-    { immediate: true },
 );
-
-// const relationshipToParentPathDescription = computed<string | null>(
-//     function () {
-//         const graphLabel = relationshipToParentGraphLabel.value;
-//         const nodeLabel = relationshipToParentNodeLabel.value;
-
-//         if (!graphLabel && !nodeLabel) {
-//             return null;
-//         }
-
-//         if (graphLabel && nodeLabel) {
-//             return `${graphLabel} → ${nodeLabel}`;
-//         }
-
-//         return graphLabel ?? nodeLabel;
-//     },
-// );
-
-const relationshipToParentLabel = computed<string>(function () {
-    return relationshipToParentGraphLabel.value!;
-});
 
 function onSetGraphSlug(graphSlug: string): void {
     emit("change-graph", graphSlug);
 }
-
-function onRemoveGroupClick(clickEvent: MouseEvent): void {
-    clickEvent.stopPropagation();
-    emit("remove-group");
-}
 </script>
 
 <template>
-    <div class="group-header">
+    <div
+        v-if="shouldRenderHeader"
+        class="group-header"
+        :style="{
+            marginBottom: isRoot ? '1rem' : '1.5rem',
+        }"
+    >
         <div class="group-header-row">
             <div class="group-selectors">
                 <div class="group-action-text">
@@ -220,6 +105,8 @@ function onRemoveGroupClick(clickEvent: MouseEvent): void {
                         option-value="value"
                         :placeholder="$gettext('Select Resource')"
                         class="group-field"
+                        filter
+                        :filter-placeholder="$gettext('Filter resource models')"
                         @update:model-value="onSetGraphSlug"
                     />
                     <span v-if="isRoot">
@@ -228,21 +115,10 @@ function onRemoveGroupClick(clickEvent: MouseEvent): void {
                 </div>
 
                 <Tag
-                    v-if="showsRelationshipToParentTag"
+                    v-if="showsRelationshipTag"
                     class="group-indicator-pill"
                     icon="pi pi-link"
-                    :value="relationshipToParentLabel"
-                />
-            </div>
-
-            <div class="group-actions">
-                <Button
-                    v-if="!isRoot"
-                    severity="danger"
-                    variant="text"
-                    icon="pi pi-times"
-                    :aria-label="$gettext('Remove group')"
-                    @click="onRemoveGroupClick"
+                    :value="currentGraphLabel"
                 />
             </div>
         </div>
@@ -270,7 +146,6 @@ function onRemoveGroupClick(clickEvent: MouseEvent): void {
 
 .group-selectors {
     display: flex;
-    gap: 0.5rem;
     align-items: center;
     flex-wrap: wrap;
 }
@@ -280,15 +155,6 @@ function onRemoveGroupClick(clickEvent: MouseEvent): void {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-}
-
-.group-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
-    flex-shrink: 0;
 }
 
 .group-action-text {
