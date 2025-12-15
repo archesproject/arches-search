@@ -13,8 +13,9 @@ class EDTFIndexing(BaseIndexing):
         nodeid = str(node.nodeid)
         document = {"dates": [], "date_ranges": []}
         self.datatype.append_to_document(document, tile.data[nodeid], nodeid, tile)
+        search_items = []
         for date in document["dates"]:
-            date_search = DateSearch.objects.create(
+            date_search = DateSearch(
                 node_alias=node.alias,
                 tileid=tile.tileid,
                 resourceinstanceid=tile.resourceinstance_id,
@@ -22,10 +23,10 @@ class EDTFIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=date["date"],
             )
-            date_search.save()
+            search_items.append(date_search)
 
         for date_range in document["date_ranges"]:
-            date_range_search = DateRangeSearch.objects.create(
+            date_range_search = DateRangeSearch(
                 node_alias=node.alias,
                 tileid=tile.tileid,
                 resourceinstanceid=tile.resourceinstance_id,
@@ -34,4 +35,6 @@ class EDTFIndexing(BaseIndexing):
                 start_value=date_range["date_range"]["lte"],
                 end_value=date_range["date_range"]["gte"],
             )
-            date_range_search.save()
+            search_items.append(date_range_search)
+
+        return search_items
