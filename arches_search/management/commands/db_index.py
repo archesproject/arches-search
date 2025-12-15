@@ -90,7 +90,7 @@ class Command(BaseCommand):
         for index_type, values in values_to_index.items():
             print(f"Saving {len(values)} {index_type.__name__} values")
             index_type.objects.bulk_create(values, batch_size=1000)
- 
+
         print(
             f"Value saving took {datetime.datetime.now() - value_saving_start} seconds"
         )
