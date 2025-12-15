@@ -17,8 +17,8 @@ class EDTFIndexing(BaseIndexing):
         for date in document["dates"]:
             date_search = DateSearch(
                 node_alias=node.alias,
-                tileid=tile.tileid,
-                resourceinstanceid=tile.resourceinstance_id,
+                tileid_id=tile.tileid,
+                resourceinstanceid_id=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 graph_slug=node.graph.slug,
                 value=date["date"],
@@ -28,8 +28,8 @@ class EDTFIndexing(BaseIndexing):
         for date_range in document["date_ranges"]:
             date_range_search = DateRangeSearch(
                 node_alias=node.alias,
-                tileid=tile.tileid,
-                resourceinstanceid=tile.resourceinstance_id,
+                tileid_id=tile.tileid,
+                resourceinstanceid_id=tile.resourceinstance_id,
                 datatype=self.datatype.datatype_name,
                 graph_slug=node.graph.slug,
                 start_value=date_range["date_range"]["lte"],
