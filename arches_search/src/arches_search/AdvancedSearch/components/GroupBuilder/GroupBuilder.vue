@@ -574,12 +574,10 @@ function onRequestRemoveGroup(): void {
                             v-if="visibleGroup.clauses.length > 0"
                             :class="[
                                 'clauses',
-                                !isRoot &&
-                                    !shouldHaveBracket &&
-                                    'clauses-without-bracket',
+                                !shouldHaveBracket && 'clauses-without-bracket',
                             ]"
                             :style="{
-                                marginInlineEnd: isRoot ? 0 : '2.5rem',
+                                marginInlineEnd: '5.5rem',
                             }"
                         >
                             <Card
@@ -626,12 +624,11 @@ function onRequestRemoveGroup(): void {
                             v-if="visibleGroup.groups.length > 0"
                             :class="[
                                 'children',
-                                !isRoot &&
-                                    !shouldHaveBracket &&
+                                !shouldHaveBracket &&
                                     'children-without-bracket',
                             ]"
                             :style="{
-                                marginInlineEnd: isRoot ? 0 : '2.5rem',
+                                marginInlineEnd: '5.5rem',
                             }"
                         >
                             <GroupBuilder

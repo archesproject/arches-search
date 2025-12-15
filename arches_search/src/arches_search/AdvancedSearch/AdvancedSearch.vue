@@ -40,14 +40,14 @@ import type {
 const PENDING = "pending";
 const READY = "ready";
 
-const MINIMUM_BOTTOM_PANEL_HEIGHT_PIXELS = 260;
-const MINIMUM_TOP_PANEL_HEIGHT_PIXELS = 160;
+const MINIMUM_BOTTOM_PANEL_HEIGHT_PIXELS = 0;
+const MINIMUM_TOP_PANEL_HEIGHT_PIXELS = 0;
 
-const TOP_PANEL_PERCENT_FALLBACK = 40;
+const TOP_PANEL_PERCENT_FALLBACK = 30;
 const TOP_PANEL_PERCENT_CHANGE_EPSILON = 0.25;
 
 const AUTO_GROW_COOLDOWN_MILLISECONDS = 0;
-const TOP_PANEL_SCROLL_GUARD_PIXELS = 10;
+const TOP_PANEL_SCROLL_GUARD_PIXELS = 25;
 
 type CacheEntry<T> =
     | { status: typeof PENDING; pending: Promise<T> }
@@ -617,7 +617,7 @@ function onAnalyzePayloadButtonClick(): void {
                 >
                     <SplitterPanel
                         v-bind="topPanelSplitterProps"
-                        :min-size="24"
+                        :min-size="10"
                     >
                         <div class="query-panel">
                             <div
@@ -671,7 +671,7 @@ function onAnalyzePayloadButtonClick(): void {
 
                     <SplitterPanel
                         v-bind="bottomPanelSplitterProps"
-                        :min-size="24"
+                        :min-size="10"
                     >
                         <div class="results-panel">
                             <SearchResults
@@ -765,6 +765,7 @@ function onAnalyzePayloadButtonClick(): void {
 .query-panel-body {
     display: flex;
     flex-direction: column;
+    margin-top: 1rem;
     flex: 1;
     gap: 1rem;
     min-height: 0;
@@ -773,6 +774,11 @@ function onAnalyzePayloadButtonClick(): void {
 
 .query-panel-content {
     display: block;
+}
+
+.query-panel-content > :first-child {
+    padding-inline: 3rem;
+    border: 0;
 }
 
 .prelayout-body {

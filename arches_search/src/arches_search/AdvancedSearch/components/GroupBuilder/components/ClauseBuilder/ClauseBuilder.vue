@@ -179,7 +179,7 @@ const resolvedClauseQuantifierOptions = computed(() => {
     if (!subjectNode.value || !subjectNode.value.nodegroup_has_cardinality_n) {
         return [
             {
-                label: $gettext("Value of"),
+                label: $gettext("Has"),
                 value: CLAUSE_QUANTIFIER_ANY,
             },
         ];
@@ -332,57 +332,70 @@ function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
 
 <template>
     <div class="clause-builder">
-        <div class="clause-core-row">
-            <Select
-                :disabled="!subjectNode?.nodegroup_has_cardinality_n"
-                :model-value="modelValue.quantifier"
-                class="clause-quantifier-select"
-                :options="resolvedClauseQuantifierOptions"
-                option-label="label"
-                option-value="value"
-                @update:model-value="handleQuantifierClick"
-            />
+        <div class="clause-main">
+            <div class="clause-core-row">
+                <PathBuilder
+                    class="clause-subject-path"
+                    :path-sequence="subjectPath"
+                    :graph-slugs="[subjectAnchorGraph.slug]"
+                    @update:path-sequence="handleSubjectUpdate"
+                />
 
-            <PathBuilder
-                class="clause-subject-path"
-                :path-sequence="subjectPath"
-                :graph-slugs="[subjectAnchorGraph.slug]"
-                @update:path-sequence="handleSubjectUpdate"
-            />
+                <Select
+                    v-if="subjectNode?.nodegroup_has_cardinality_n"
+                    :model-value="modelValue.quantifier"
+                    class="clause-quantifier-select"
+                    :options="resolvedClauseQuantifierOptions"
+                    option-label="label"
+                    option-value="value"
+                    @update:model-value="handleQuantifierClick"
+                />
 
-            <Select
-                :model-value="modelValue.operator"
-                class="clause-operator-select"
-                :options="availableOperatorOptions"
-                option-label="label"
-                option-value="operator"
-                :disabled="availableOperatorOptions.length === 0"
-                :placeholder="$gettext('Select an operator...')"
-                @update:model-value="handleOperatorChange"
-            />
+                <Select
+                    :model-value="modelValue.operator"
+                    class="clause-operator-select"
+                    :options="availableOperatorOptions"
+                    option-label="label"
+                    option-value="operator"
+                    :disabled="availableOperatorOptions.length === 0"
+                    :placeholder="$gettext('Select an operator...')"
+                    @update:model-value="handleOperatorChange"
+                />
+
+                <div
+                    v-if="
+                        selectedAdvancedSearchFacet &&
+                        selectedAdvancedSearchFacet.arity > 0 &&
+                        subjectNode &&
+                        subjectGraph
+                    "
+                    class="clause-operands-row"
+                >
+                    <ClauseOperandBuilder
+                        v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
+                        :key="ensureOperandKey(parameterIndex - 1)"
+                        :model-value="
+                            modelValue.operands[parameterIndex - 1] ?? null
+                        "
+                        :subject-terminal-node="subjectNode"
+                        :subject-terminal-graph="subjectGraph"
+                        :operand-type="operandTypeLiteral"
+                        @update:model-value="
+                            handleOperandUpdate(parameterIndex - 1, $event)
+                        "
+                    />
+                </div>
+            </div>
 
             <div
-                v-if="
-                    selectedAdvancedSearchFacet &&
-                    selectedAdvancedSearchFacet.arity > 0 &&
-                    subjectNode &&
-                    subjectGraph
-                "
-                class="clause-operands-row"
+                v-if="subjectNode?.nodegroup_has_cardinality_n"
+                class="clause-cardinality-subtext"
             >
-                <ClauseOperandBuilder
-                    v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
-                    :key="ensureOperandKey(parameterIndex - 1)"
-                    :model-value="
-                        modelValue.operands[parameterIndex - 1] ?? null
-                    "
-                    :subject-terminal-node="subjectNode"
-                    :subject-terminal-graph="subjectGraph"
-                    :operand-type="operandTypeLiteral"
-                    @update:model-value="
-                        handleOperandUpdate(parameterIndex - 1, $event)
-                    "
-                />
+                {{
+                    $gettext(
+                        "This attribute can have multiple values. Please select how you want to filter values.",
+                    )
+                }}
             </div>
         </div>
 
@@ -412,6 +425,13 @@ function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
     align-items: flex-start;
 }
 
+.clause-main {
+    grid-column: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
 .clause-gear-toggle {
     margin-top: 0.15rem;
 }
@@ -430,6 +450,14 @@ function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
     flex-wrap: wrap;
 }
 
+.clause-cardinality-subtext {
+    margin-inline-start: 0.5rem;
+    margin-top: 1rem;
+    font-size: 1rem;
+    line-height: 1.25;
+    opacity: 0.75;
+}
+
 .clause-indicator-pill {
     padding: 0.5rem 1rem;
     display: inline-flex;
@@ -443,6 +471,7 @@ function handleQuantifierClick(nextQuantifier: ClauseQuantifierToken): void {
 }
 
 .clause-remove-button {
+    grid-column: 3;
     justify-self: flex-end;
 }
 </style>

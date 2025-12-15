@@ -57,8 +57,12 @@ const currentGraphSlug = computed<string>(function getCurrentGraphSlug() {
 const currentGraphLabel = computed<string>(function getCurrentGraphLabel() {
     const graphSlug = currentGraphSlug.value;
 
+    if (!graphSlug) {
+        return $gettext("Filtering by...");
+    }
+
     if (!graphs?.value || graphs.value.length === 0) {
-        return graphSlug;
+        return $gettext("Filtering by...");
     }
 
     const matchingGraphSummary = graphs.value.find(
@@ -68,7 +72,9 @@ const currentGraphLabel = computed<string>(function getCurrentGraphLabel() {
     );
 
     return (
-        matchingGraphSummary?.name ?? matchingGraphSummary?.slug ?? graphSlug
+        matchingGraphSummary?.name ??
+        matchingGraphSummary?.slug ??
+        $gettext("Filtering by...")
     );
 });
 
@@ -110,7 +116,7 @@ function onSetGraphSlug(graphSlug: string): void {
                         @update:model-value="onSetGraphSlug"
                     />
                     <span v-if="isRoot">
-                        {{ $gettext("resources that have...") }}
+                        {{ $gettext("resources that...") }}
                     </span>
                 </div>
 
