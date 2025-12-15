@@ -12,8 +12,9 @@ class BooleanIndexing(BaseIndexing):
     def index(self, tile, node):
         nodeid = str(node.nodeid)
         boolean_value = tile.data.get(nodeid, None)
+        search_items = []
         if boolean_value is not None:
-            boolean_search = BooleanSearch.objects.create(
+            boolean_search = BooleanSearch(
                 node_alias=node.alias,
                 tileid_id=tile.tileid,
                 resourceinstanceid_id=tile.resourceinstance_id,
@@ -21,4 +22,5 @@ class BooleanIndexing(BaseIndexing):
                 graph_slug=node.graph.slug,
                 value=boolean_value,
             )
-            boolean_search.save()
+            search_items.append(boolean_search)
+        return search_items
