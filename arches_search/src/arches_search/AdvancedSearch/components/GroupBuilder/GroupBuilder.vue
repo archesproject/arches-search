@@ -5,6 +5,7 @@ import { useGettext } from "vue3-gettext";
 
 import Card from "primevue/card";
 import Button from "primevue/button";
+import Drawer from "primevue/drawer";
 
 import GroupBracket from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupBracket.vue";
 import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader.vue";
@@ -52,6 +53,8 @@ const { modelValue, isRoot, parentGroupAnchorGraph, relationshipToParent } =
         parentGroupAnchorGraph?: GraphModel;
         relationshipToParent?: RelationshipState | null;
     }>();
+
+const isMapFilterDrawerVisible = ref<boolean>(false);
 
 const childGroupKeys = ref<string[]>([]);
 const clauseKeys = ref<string[]>([]);
@@ -486,6 +489,10 @@ function onUpdateInnerGraphSlug(nextInnerGraphSlugRaw: string): void {
 function onRequestRemoveGroup(): void {
     emit("remove");
 }
+
+function onOpenMapFilterDrawer(): void {
+    isMapFilterDrawerVisible.value = true;
+}
 </script>
 
 <template>
@@ -685,6 +692,13 @@ function onRequestRemoveGroup(): void {
                     :disabled="!visibleGroupAnchorGraph"
                     @click.stop="onAddRelationship"
                 />
+                <Button
+                    severity="secondary"
+                    icon="pi pi-map"
+                    :label="$gettext('Add map filter')"
+                    :disabled="!visibleGroupAnchorGraph"
+                    @click.stop="onOpenMapFilterDrawer"
+                />
 
                 <div
                     v-if="!isRoot"
@@ -702,6 +716,17 @@ function onRequestRemoveGroup(): void {
             </div>
         </template>
     </Card>
+
+    <Drawer
+        v-model:visible="isMapFilterDrawerVisible"
+        :header="$gettext('Map filter')"
+        position="right"
+        :style="{ width: '32rem', maxWidth: '100vw' }"
+    >
+        <div class="map-filter-drawer-content">
+            {{ $gettext("Map is TBD.") }}
+        </div>
+    </Drawer>
 </template>
 
 <style scoped>
@@ -731,11 +756,9 @@ function onRequestRemoveGroup(): void {
 .group-content {
     display: flex;
     flex-direction: column;
-    /* width: fit-content; */
 }
 
 .group-content-with-top-padding {
-    /* padding-top: 1rem; */
 }
 
 .group-grid {
@@ -762,21 +785,18 @@ function onRequestRemoveGroup(): void {
     flex-direction: column;
     gap: 1rem;
     min-width: 0;
-    /* margin-bottom: 1rem; */
 }
 
 .clauses {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    /* margin-inline-end: 2.5rem; */
 }
 
 .children {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    /* margin-inline-end: 2.5rem; */
 }
 
 .children .children > .group-card,
@@ -812,5 +832,11 @@ function onRequestRemoveGroup(): void {
     color: var(--p-text-muted-color);
     margin-bottom: 2rem;
     margin-inline-start: 1.5rem;
+}
+
+.map-filter-drawer-content {
+    font-size: 1.1rem;
+    color: var(--p-text-muted-color);
+    padding: 0.5rem 0;
 }
 </style>
