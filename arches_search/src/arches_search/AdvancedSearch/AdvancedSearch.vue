@@ -46,7 +46,7 @@ const MINIMUM_TOP_PANEL_HEIGHT_PIXELS = 160;
 const TOP_PANEL_PERCENT_FALLBACK = 40;
 const TOP_PANEL_PERCENT_CHANGE_EPSILON = 0.25;
 
-const AUTO_GROW_COOLDOWN_MILLISECONDS = 250;
+const AUTO_GROW_COOLDOWN_MILLISECONDS = 0;
 const TOP_PANEL_SCROLL_GUARD_PIXELS = 10;
 
 type CacheEntry<T> =
@@ -615,7 +615,10 @@ function onAnalyzePayloadButtonClick(): void {
                     class="search-splitter"
                     @resizeend="onSplitterResizeEnd"
                 >
-                    <SplitterPanel v-bind="topPanelSplitterProps">
+                    <SplitterPanel
+                        v-bind="topPanelSplitterProps"
+                        :min-size="24"
+                    >
                         <div class="query-panel">
                             <div
                                 ref="liveQueryPanelBodyElement"
@@ -666,7 +669,10 @@ function onAnalyzePayloadButtonClick(): void {
                         </div>
                     </SplitterPanel>
 
-                    <SplitterPanel v-bind="bottomPanelSplitterProps">
+                    <SplitterPanel
+                        v-bind="bottomPanelSplitterProps"
+                        :min-size="24"
+                    >
                         <div class="results-panel">
                             <SearchResults
                                 v-if="searchResults"
