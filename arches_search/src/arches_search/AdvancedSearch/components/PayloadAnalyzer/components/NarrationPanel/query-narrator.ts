@@ -111,7 +111,7 @@ export function describeAdvancedSearchQuery(
     );
 
     if (!conditionDescription) {
-        return gettext("Find all %{graph} models.", {
+        return gettext("Find all %{graph} instances.", {
             graph: graphLabel,
         });
     }
@@ -119,13 +119,13 @@ export function describeAdvancedSearchQuery(
     const shouldUseThatClause = startsWithPredicateFragment(payload);
 
     if (shouldUseThatClause) {
-        return gettext("Find all %{graph} models that %{conditions}.", {
+        return gettext("Find all %{graph} instances that %{conditions}.", {
             graph: graphLabel,
             conditions: conditionDescription,
         });
     }
 
-    return gettext("Find all %{graph} models where %{conditions}.", {
+    return gettext("Find all %{graph} instances where %{conditions}.", {
         graph: graphLabel,
         conditions: conditionDescription,
     });
@@ -863,7 +863,7 @@ function describeRelationshipCondition(
         if (traversalQuantifier === TRAVERSAL_ALL) {
             if (hasInnerConditions) {
                 return gettext(
-                    "are the %{field} of all %{graph} models where %{conditions}",
+                    "are the %{field} of all %{graph} instances where %{conditions}",
                     {
                         field: relationshipFieldLabel,
                         graph: relatedGraphLabel,
@@ -872,7 +872,7 @@ function describeRelationshipCondition(
                 );
             }
 
-            return gettext("are the %{field} of all %{graph} models", {
+            return gettext("are the %{field} of all %{graph} instances", {
                 field: relationshipFieldLabel,
                 graph: relatedGraphLabel,
             });
@@ -881,7 +881,7 @@ function describeRelationshipCondition(
         if (traversalQuantifier === TRAVERSAL_NONE) {
             if (hasInnerConditions) {
                 return gettext(
-                    "are the %{field} of no %{graph} models where %{conditions}",
+                    "are the %{field} of no %{graph} instances where %{conditions}",
                     {
                         field: relationshipFieldLabel,
                         graph: relatedGraphLabel,
@@ -890,7 +890,7 @@ function describeRelationshipCondition(
                 );
             }
 
-            return gettext("are the %{field} of no %{graph} models", {
+            return gettext("are the %{field} of no %{graph} instances", {
                 field: relationshipFieldLabel,
                 graph: relatedGraphLabel,
             });
@@ -898,7 +898,7 @@ function describeRelationshipCondition(
 
         if (hasInnerConditions) {
             return gettext(
-                "are the %{field} of any %{graph} models where %{conditions}",
+                "are the %{field} of any %{graph} instances where %{conditions}",
                 {
                     field: relationshipFieldLabel,
                     graph: relatedGraphLabel,
@@ -907,7 +907,7 @@ function describeRelationshipCondition(
             );
         }
 
-        return gettext("are the %{field} of any %{graph} models", {
+        return gettext("are the %{field} of any %{graph} instances", {
             field: relationshipFieldLabel,
             graph: relatedGraphLabel,
         });

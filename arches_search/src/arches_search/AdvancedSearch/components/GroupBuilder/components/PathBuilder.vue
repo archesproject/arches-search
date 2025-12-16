@@ -49,12 +49,20 @@ const {
     pathSequence,
     relationshipBetweenGraphs,
     shouldPrependGraphName,
-} = defineProps<{
-    graphSlugs: string[];
-    pathSequence?: PathSequence;
-    relationshipBetweenGraphs?: string[];
-    shouldPrependGraphName?: boolean;
-}>();
+    restrictToResourceInstanceDatatypes,
+} = withDefaults(
+    defineProps<{
+        graphSlugs: string[];
+        pathSequence?: PathSequence;
+        relationshipBetweenGraphs?: string[];
+        shouldPrependGraphName?: boolean;
+        restrictToResourceInstanceDatatypes?: boolean;
+    }>(),
+    {
+        shouldPrependGraphName: false,
+        restrictToResourceInstanceDatatypes: false,
+    },
+);
 
 const isLoading = ref(false);
 const configurationError = ref<Error | null>(null);
@@ -180,7 +188,10 @@ function isNodeSelectable(
     nodeSummary: NodeSummary,
     relationshipGraphPair: RelationshipGraphPair | undefined,
 ): boolean {
-    if (!isResourceInstanceDatatype(nodeSummary.datatype)) {
+    if (
+        restrictToResourceInstanceDatatypes &&
+        !isResourceInstanceDatatype(nodeSummary.datatype)
+    ) {
         return false;
     }
 
@@ -524,7 +535,7 @@ function getGraphLabelPrefixForNode(
             selection-mode="single"
             :model-value="selectedKeys"
             :disabled="nodeOptions.length === 0"
-            :filter="true"
+            filter
             :filter-placeholder="$gettext('Search nodes...')"
             :loading="isLoading"
             :placeholder="$gettext('Select node...')"

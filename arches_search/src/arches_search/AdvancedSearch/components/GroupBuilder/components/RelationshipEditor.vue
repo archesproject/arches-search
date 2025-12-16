@@ -260,6 +260,7 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
                     <PathBuilder
                         :graph-slugs="[anchorGraphSlug, innerGraphSlug]"
                         :path-sequence="pathSequenceForPathBuilder"
+                        :restrict-to-resource-instance-datatypes="true"
                         :relationship-between-graphs="[
                             anchorGraphSlug,
                             innerGraphSlug,
