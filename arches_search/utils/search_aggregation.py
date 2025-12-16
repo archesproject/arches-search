@@ -93,9 +93,8 @@ def build_value_subquery(
     if where:
         qs = qs.filter(**where)
     if fn:
-        if apply_agg_fn_per_tile == False:
-            if fn != "Count":
-                fn = "Sum"
+        if apply_agg_fn_per_tile == False and fn != "Count":
+            fn = "Sum"
         aggregate_fn = get_aggregate_function(fn)
         aggregated_value_field = f"{fn.lower()}_{node_alias}"
         qs = (
