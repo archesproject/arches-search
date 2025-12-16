@@ -56,6 +56,7 @@ def build_value_subquery(
     parent_ref_field: str = "resourceinstanceid",
     where: Optional[Dict[str, Any]] = None,
     fn: Optional[str] = None,
+    apply_agg_fn_per_tile: Optional[bool] = False,
     value_field: str = "value",
     annotations: Optional[Dict[str, Any]] = None,
 ) -> Subquery:
@@ -72,6 +73,8 @@ def build_value_subquery(
         where (dict, optional): Additional filter conditions to apply.
         fn (str, optional): An aggregate function name to apply (e.g., "Sum", "Avg").
             If provided, the subquery will return the aggregated value.
+        apply_agg_fn_per_tile (bool, optional): Whether to apply the aggregate function
+            per tile before aggregating at the resource level. Defaults to False.
         value_field (str, optional): The field to select as the subquery value.
             Defaults to "value".
         annotations (dict, optional): Extra annotations to apply before subquery selection.
@@ -90,6 +93,8 @@ def build_value_subquery(
     if where:
         qs = qs.filter(**where)
     if fn:
+        if apply_agg_fn_per_tile == False and fn != "Count":
+            fn = "Sum"
         aggregate_fn = get_aggregate_function(fn)
         aggregated_value_field = f"{fn.lower()}_{node_alias}"
         qs = (
@@ -123,6 +128,7 @@ def build_subquery(
         parent_ref_field=parent_ref_field,
         where=group_spec.get("where"),
         fn=group_spec.get("fn"),
+        apply_agg_fn_per_tile=group_spec.get("apply_agg_fn_per_tile"),
     )
 
     # Handle nested aggregations recursively
@@ -179,8 +185,16 @@ def build_aggregations(
         metric_annotations: Dict[str, Any] = {}
         for metric_spec in metrics:
             alias = metric_spec["alias"]
+            fn = metric_spec["fn"]
+            apply_agg_fn_per_tile = metric_spec.get("apply_agg_fn_per_tile", False)
+            # we need to handle Count differently because when we do counts per resource
+            # we want to sum the counts of each tile, not count the counts from each tile
+            # which would always be 1 per resource
+            if apply_agg_fn_per_tile == False and fn == "Count":
+                fn = "Sum"
+            aggregate_fn = get_aggregate_function(fn)
             subquery = build_subquery(metric_spec)
-            metric_annotations[alias] = subquery
+            metric_annotations[alias] = aggregate_fn(subquery)
 
         # Apply metric annotations and group-by fields
         if metric_annotations:
