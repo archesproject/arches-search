@@ -1,8 +1,18 @@
 <script setup lang="ts">
-import { provide, ref, watchEffect } from "vue";
+import {
+    provide,
+    ref,
+    watchEffect,
+    computed,
+    watch,
+    nextTick,
+    onBeforeUnmount,
+    type Ref,
+} from "vue";
 
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
 import Message from "primevue/message";
 import Skeleton from "primevue/skeleton";
 import Splitter from "primevue/splitter";
@@ -10,12 +20,14 @@ import SplitterPanel from "primevue/splitterpanel";
 
 import AdvancedSearchFooter from "@/arches_search/AdvancedSearch/components/AdvancedSearchFooter.vue";
 import GroupBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/GroupBuilder.vue";
+import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/PayloadAnalyzer.vue";
 import SearchResults from "@/arches_search/AdvancedSearch/components/SearchResults/SearchResults.vue";
 
 import {
     getAdvancedSearchFacets,
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
+    getRelatableNodesTreeForGraphId as fetchRelatableNodesTreeForGraphId,
     getSearchResults as fetchSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
 
@@ -28,9 +40,31 @@ import type {
 const PENDING = "pending";
 const READY = "ready";
 
-type NodeCacheEntry =
-    | { status: typeof PENDING; pending: Promise<Record<string, unknown>[]> }
-    | { status: typeof READY; nodes: Record<string, unknown>[] };
+const MINIMUM_BOTTOM_PANEL_HEIGHT_PIXELS = 0;
+const MINIMUM_TOP_PANEL_HEIGHT_PIXELS = 0;
+
+const TOP_PANEL_PERCENT_FALLBACK = 30;
+const TOP_PANEL_PERCENT_CHANGE_EPSILON = 0.25;
+
+const AUTO_GROW_COOLDOWN_MILLISECONDS = 0;
+const TOP_PANEL_SCROLL_GUARD_PIXELS = 25;
+
+type CacheEntry<T> =
+    | { status: typeof PENDING; pending: Promise<T> }
+    | { status: typeof READY; value: T };
+
+type TreeSelectNode = {
+    key: string;
+    label: string;
+    children?: TreeSelectNode[];
+    leaf?: boolean;
+    data?: Record<string, unknown>;
+};
+
+type RelatableNodesTreeResponse = {
+    target_graph_id: string;
+    options: TreeSelectNode[];
+};
 
 type GraphSummary = {
     graphid?: string;
@@ -57,21 +91,69 @@ const datatypesToAdvancedSearchFacets = ref<
 >({});
 
 const graphs = ref<GraphSummary[]>([]);
-const graphIdToNodeCache = ref<Record<string, NodeCacheEntry>>({});
+
+const graphIdToNodeCache = ref<
+    Record<string, CacheEntry<Record<string, unknown>[]>>
+>({});
+
+const graphIdToRelatableNodesTreeCache = ref<
+    Record<string, CacheEntry<RelatableNodesTreeResponse>>
+>({});
 
 const searchResults = ref<SearchResultsPayload | null>(null);
 const searchResultsInstanceKey = ref(0);
 const searchFilterText = ref("");
 
+const shouldShowPayloadAnalyzer = ref(false);
+
+const searchResultsMatchCountLabel = computed<string>(function () {
+    const totalResultsCount =
+        searchResults.value?.pagination.total_results ?? 0;
+
+    return $gettext("%{count} items match your filter", {
+        count: totalResultsCount.toLocaleString(),
+    });
+});
+
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
 provide("getNodesForGraphId", getNodesForGraphId);
+provide("getRelatableNodesTreeForGraphId", getRelatableNodesTreeForGraphId);
+
+const splitterHostElement = ref<HTMLElement | null>(null);
+const naturalQueryPanelElement = ref<HTMLElement | null>(null);
+
+const liveQueryPanelBodyElement = ref<HTMLElement | null>(null);
+const liveQueryPanelFooterElement = ref<HTMLElement | null>(null);
+const liveQueryPanelContentElement = ref<HTMLElement | null>(null);
+
+const shouldRenderSplitter = ref(false);
+const hasUserResizedSplitter = ref(false);
+
+const topPanelPercent = ref<number>(TOP_PANEL_PERCENT_FALLBACK);
+const bottomPanelPercent = computed<number>(() => 100 - topPanelPercent.value);
+
+const topPanelSplitterProps = computed<Record<string, unknown>>(() =>
+    hasUserResizedSplitter.value ? {} : { size: topPanelPercent.value },
+);
+
+const bottomPanelSplitterProps = computed<Record<string, unknown>>(() =>
+    hasUserResizedSplitter.value ? {} : { size: bottomPanelPercent.value },
+);
+
+const splitterInstanceKey = ref(0);
+
+let resizeObserver: ResizeObserver | null = null;
+let rafId: number | null = null;
+
+let cooldownUntilMs = 0;
+let trailingTimeoutId: number | null = null;
+let trailingTopPercent: number | null = null;
 
 watchEffect(async () => {
     try {
         isLoading.value = true;
         fetchError.value = null;
-
         await Promise.all([fetchGraphs(), fetchFacets()]);
     } catch (possibleError) {
         fetchError.value = possibleError as Error;
@@ -80,41 +162,286 @@ watchEffect(async () => {
     }
 });
 
-async function getNodesForGraphId(
-    graphId: string,
-): Promise<Record<string, unknown>[]> {
-    const existingEntry = graphIdToNodeCache.value[graphId];
+watch(
+    isLoading,
+    async (loading) => {
+        if (loading) {
+            return;
+        }
 
-    if (existingEntry?.status === PENDING) {
-        return await existingEntry.pending;
+        shouldRenderSplitter.value = false;
+
+        await nextTick();
+        await raf();
+
+        topPanelPercent.value = computeInitialTopPanelPercent();
+
+        shouldRenderSplitter.value = true;
+    },
+    { immediate: true },
+);
+
+watchEffect(() => {
+    teardownAutoGrow();
+
+    if (!shouldRenderSplitter.value) {
+        return;
     }
 
-    if (existingEntry?.status === READY) {
-        return existingEntry.nodes;
+    if (hasUserResizedSplitter.value) {
+        return;
     }
 
-    const pendingRequest = fetchNodesForGraphId(graphId)
-        .then((nodesMap: Record<string, Record<string, unknown>>) => {
-            const nodesArray = Object.values(nodesMap);
+    const el = liveQueryPanelContentElement.value;
+    if (!el) {
+        return;
+    }
 
-            graphIdToNodeCache.value = {
-                ...graphIdToNodeCache.value,
-                [graphId]: { status: READY, nodes: nodesArray },
+    resizeObserver = new ResizeObserver(() => requestAutoGrowTopPanel());
+    resizeObserver.observe(el);
+
+    requestAutoGrowTopPanel();
+});
+
+onBeforeUnmount(() => teardownAutoGrow());
+
+function teardownAutoGrow(): void {
+    resizeObserver?.disconnect();
+    resizeObserver = null;
+
+    if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+    }
+
+    if (trailingTimeoutId !== null) {
+        window.clearTimeout(trailingTimeoutId);
+        trailingTimeoutId = null;
+    }
+
+    trailingTopPercent = null;
+}
+
+function raf(): Promise<void> {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function clamp(min: number, max: number, value: number): number {
+    return Math.max(min, Math.min(max, value));
+}
+
+function requestAutoGrowTopPanel(): void {
+    if (!shouldRenderSplitter.value || hasUserResizedSplitter.value) {
+        return;
+    }
+
+    if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+    }
+
+    rafId = requestAnimationFrame(() => {
+        rafId = null;
+
+        if (hasUserResizedSplitter.value) {
+            return;
+        }
+
+        const desired = computeDesiredTopPanelPercentIfNeeded();
+        if (desired === null) {
+            return;
+        }
+
+        if (
+            desired <=
+            topPanelPercent.value + TOP_PANEL_PERCENT_CHANGE_EPSILON
+        ) {
+            return;
+        }
+
+        const now = Date.now();
+
+        if (now >= cooldownUntilMs) {
+            applyTopPanelGrow(desired);
+            cooldownUntilMs = now + AUTO_GROW_COOLDOWN_MILLISECONDS;
+            return;
+        }
+
+        trailingTopPercent =
+            trailingTopPercent === null
+                ? desired
+                : Math.max(trailingTopPercent, desired);
+
+        if (trailingTimeoutId !== null) {
+            return;
+        }
+
+        trailingTimeoutId = window.setTimeout(
+            () => {
+                trailingTimeoutId = null;
+
+                if (hasUserResizedSplitter.value) {
+                    trailingTopPercent = null;
+                    return;
+                }
+
+                const queued = trailingTopPercent;
+                trailingTopPercent = null;
+
+                if (queued === null) {
+                    return;
+                }
+
+                if (
+                    queued <=
+                    topPanelPercent.value + TOP_PANEL_PERCENT_CHANGE_EPSILON
+                ) {
+                    return;
+                }
+
+                applyTopPanelGrow(queued);
+                cooldownUntilMs = Date.now() + AUTO_GROW_COOLDOWN_MILLISECONDS;
+            },
+            Math.max(0, cooldownUntilMs - now),
+        );
+    });
+}
+
+function computeInitialTopPanelPercent(): number {
+    const host = splitterHostElement.value;
+    const natural = naturalQueryPanelElement.value;
+
+    if (!host || !natural) {
+        return TOP_PANEL_PERCENT_FALLBACK;
+    }
+
+    const available = host.getBoundingClientRect().height;
+    if (available <= 0) {
+        return TOP_PANEL_PERCENT_FALLBACK;
+    }
+
+    const maxTopPx = Math.max(
+        MINIMUM_TOP_PANEL_HEIGHT_PIXELS,
+        available - MINIMUM_BOTTOM_PANEL_HEIGHT_PIXELS,
+    );
+
+    const naturalTopPx = natural.scrollHeight + TOP_PANEL_SCROLL_GUARD_PIXELS;
+
+    const chosenTopPx = Math.min(
+        maxTopPx,
+        Math.max(MINIMUM_TOP_PANEL_HEIGHT_PIXELS, naturalTopPx),
+    );
+
+    return clamp(5, 95, (Math.ceil(chosenTopPx) / available) * 100);
+}
+
+function computeDesiredTopPanelPercentIfNeeded(): number | null {
+    const host = splitterHostElement.value;
+    const body = liveQueryPanelBodyElement.value;
+    const footer = liveQueryPanelFooterElement.value;
+    const content = liveQueryPanelContentElement.value;
+
+    if (!host || !body || !footer || !content) {
+        return null;
+    }
+
+    const available = host.getBoundingClientRect().height;
+    if (available <= 0) {
+        return null;
+    }
+
+    const bodyClientPx = body.clientHeight;
+    const contentScrollPx = content.scrollHeight;
+
+    if (contentScrollPx <= bodyClientPx + TOP_PANEL_SCROLL_GUARD_PIXELS) {
+        return null;
+    }
+
+    const footerPx = footer.getBoundingClientRect().height;
+
+    const desiredTopPx =
+        footerPx + contentScrollPx + TOP_PANEL_SCROLL_GUARD_PIXELS;
+
+    const maxTopPx = Math.max(
+        MINIMUM_TOP_PANEL_HEIGHT_PIXELS,
+        available - MINIMUM_BOTTOM_PANEL_HEIGHT_PIXELS,
+    );
+
+    const chosenTopPx = Math.min(
+        maxTopPx,
+        Math.max(MINIMUM_TOP_PANEL_HEIGHT_PIXELS, desiredTopPx),
+    );
+
+    return clamp(5, 95, (Math.ceil(chosenTopPx) / available) * 100);
+}
+
+function applyTopPanelGrow(desiredTopPercent: number): void {
+    topPanelPercent.value = desiredTopPercent;
+
+    teardownAutoGrow();
+    splitterInstanceKey.value += 1;
+}
+
+function onSplitterResizeEnd(): void {
+    hasUserResizedSplitter.value = true;
+    teardownAutoGrow();
+}
+
+async function getFromCache<T>(
+    cache: Ref<Record<string, CacheEntry<T>>>,
+    key: string,
+    loader: () => Promise<T>,
+): Promise<T> {
+    const existing = cache.value[key];
+
+    if (existing?.status === PENDING) {
+        return await existing.pending;
+    }
+
+    if (existing?.status === READY) {
+        return existing.value;
+    }
+
+    const pending = loader()
+        .then((value) => {
+            cache.value = {
+                ...cache.value,
+                [key]: { status: READY, value },
             };
-
-            return nodesArray;
+            return value;
         })
         .catch((error) => {
             fetchError.value = error as Error;
             throw error;
         });
 
-    graphIdToNodeCache.value = {
-        ...graphIdToNodeCache.value,
-        [graphId]: { status: PENDING, pending: pendingRequest },
+    cache.value = {
+        ...cache.value,
+        [key]: { status: PENDING, pending },
     };
 
-    return await pendingRequest;
+    return await pending;
+}
+
+async function getNodesForGraphId(
+    graphId: string,
+): Promise<Record<string, unknown>[]> {
+    return await getFromCache(graphIdToNodeCache, graphId, async () => {
+        const nodesMap: Record<
+            string,
+            Record<string, unknown>
+        > = await fetchNodesForGraphId(graphId);
+        return Object.values(nodesMap);
+    });
+}
+
+async function getRelatableNodesTreeForGraphId(
+    graphId: string,
+): Promise<RelatableNodesTreeResponse> {
+    return await getFromCache(
+        graphIdToRelatableNodesTreeCache,
+        graphId,
+        async () => await fetchRelatableNodesTreeForGraphId(graphId),
+    );
 }
 
 async function fetchFacets(): Promise<void> {
@@ -180,17 +507,27 @@ async function performSearch(pageNumberToLoad?: number): Promise<void> {
     }
 }
 
-async function searchAtPage(pageNumberToLoad: number): Promise<void> {
-    await performSearch(pageNumberToLoad);
-}
-
 function onRequestPage(nextPageNumber: number): void {
-    void searchAtPage(nextPageNumber);
+    void performSearch(nextPageNumber);
 }
 
 function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
     searchPayload.value = updatedGroupPayload;
     searchResults.value = null;
+
+    requestAutoGrowTopPanel();
+}
+
+function onSearchButtonClick(): void {
+    void performSearch();
+}
+
+function onAnalyzePayloadButtonClick(): void {
+    if (!searchPayload.value) {
+        return;
+    }
+
+    shouldShowPayloadAnalyzer.value = true;
 }
 </script>
 
@@ -212,45 +549,159 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
             v-else
             class="content"
         >
-            <Splitter
-                layout="vertical"
-                class="search-splitter"
+            <div
+                ref="splitterHostElement"
+                class="splitter-host"
             >
-                <SplitterPanel :size="10">
-                    <div class="query-panel">
-                        <GroupBuilder
-                            :model-value="searchPayload"
-                            :is-root="true"
-                            @update:model-value="onUpdateSearchPayload"
+                <div
+                    v-if="!shouldRenderSplitter"
+                    class="prelayout"
+                >
+                    <div
+                        ref="naturalQueryPanelElement"
+                        class="query-panel"
+                    >
+                        <div class="query-panel-body prelayout-body">
+                            <GroupBuilder
+                                :model-value="searchPayload"
+                                :is-root="true"
+                                @update:model-value="onUpdateSearchPayload"
+                            />
+                        </div>
+
+                        <div class="query-panel-footer">
+                            <Button
+                                icon="pi pi-search"
+                                size="large"
+                                :label="$gettext('Search')"
+                                :loading="isSearching"
+                                :disabled="!searchPayload || isSearching"
+                                @click="onSearchButtonClick"
+                            />
+
+                            <Button
+                                icon="pi pi-info-circle"
+                                size="large"
+                                :label="$gettext('Describe Query')"
+                                :disabled="!searchPayload"
+                                @click="onAnalyzePayloadButtonClick"
+                            />
+
+                            <div
+                                v-if="searchResults"
+                                style="margin-inline-start: 1rem"
+                            >
+                                {{ searchResultsMatchCountLabel }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="results-panel">
+                        <SearchResults
+                            v-if="searchResults"
+                            :key="searchResultsInstanceKey"
+                            :results="searchResults"
+                            :is-searching="isSearching"
+                            :filter-text="searchFilterText"
+                            @request-page="onRequestPage"
                         />
                     </div>
-                </SplitterPanel>
+                </div>
 
-                <SplitterPanel
-                    v-if="searchResults"
-                    :size="90"
+                <Splitter
+                    v-else
+                    :key="splitterInstanceKey"
+                    layout="vertical"
+                    class="search-splitter"
+                    @resizeend="onSplitterResizeEnd"
                 >
-                    <SearchResults
-                        :key="searchResultsInstanceKey"
-                        :results="searchResults"
-                        :is-searching="isSearching"
-                        :filter-text="searchFilterText"
-                        @request-page="onRequestPage"
-                    />
-                </SplitterPanel>
-            </Splitter>
+                    <SplitterPanel
+                        v-bind="topPanelSplitterProps"
+                        :min-size="10"
+                    >
+                        <div class="query-panel">
+                            <div
+                                ref="liveQueryPanelBodyElement"
+                                class="query-panel-body"
+                            >
+                                <div
+                                    ref="liveQueryPanelContentElement"
+                                    class="query-panel-content"
+                                >
+                                    <GroupBuilder
+                                        :model-value="searchPayload"
+                                        :is-root="true"
+                                        @update:model-value="
+                                            onUpdateSearchPayload
+                                        "
+                                    />
+                                </div>
+                            </div>
+
+                            <div
+                                ref="liveQueryPanelFooterElement"
+                                class="query-panel-footer"
+                            >
+                                <Button
+                                    icon="pi pi-search"
+                                    size="large"
+                                    :label="$gettext('Search')"
+                                    :loading="isSearching"
+                                    :disabled="!searchPayload || isSearching"
+                                    @click="onSearchButtonClick"
+                                />
+
+                                <Button
+                                    icon="pi pi-info-circle"
+                                    size="large"
+                                    :label="$gettext('Describe Query')"
+                                    :disabled="!searchPayload"
+                                    @click="onAnalyzePayloadButtonClick"
+                                />
+
+                                <div
+                                    v-if="searchResults"
+                                    style="margin-inline-start: 1rem"
+                                >
+                                    {{ searchResultsMatchCountLabel }}
+                                </div>
+                            </div>
+                        </div>
+                    </SplitterPanel>
+
+                    <SplitterPanel
+                        v-bind="bottomPanelSplitterProps"
+                        :min-size="10"
+                    >
+                        <div class="results-panel">
+                            <SearchResults
+                                v-if="searchResults"
+                                :key="searchResultsInstanceKey"
+                                :results="searchResults"
+                                :is-searching="isSearching"
+                                :filter-text="searchFilterText"
+                                @request-page="onRequestPage"
+                            />
+                        </div>
+                    </SplitterPanel>
+                </Splitter>
+            </div>
 
             <AdvancedSearchFooter
                 :filter-text="searchFilterText"
-                :is-searching="isSearching"
-                :search-payload="searchPayload"
                 :search-results="searchResults"
-                :graphs="graphs"
+                @update:filter-text="searchFilterText = $event"
+            />
+
+            <PayloadAnalyzer
+                v-if="searchPayload"
                 :datatypes-to-advanced-search-facets="
                     datatypesToAdvancedSearchFacets
                 "
-                @search="performSearch"
-                @update:filter-text="searchFilterText = $event"
+                :graphs="graphs"
+                :payload="searchPayload"
+                :visible="shouldShowPayloadAnalyzer"
+                @update:visible="shouldShowPayloadAnalyzer = $event"
             />
         </div>
     </div>
@@ -275,6 +726,20 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
     min-height: 0;
 }
 
+.splitter-host {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.prelayout {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    flex: 1;
+    min-height: 0;
+}
+
 .search-splitter {
     display: flex;
     flex-direction: column;
@@ -292,13 +757,52 @@ function onUpdateSearchPayload(updatedGroupPayload: GroupPayload): void {
 .query-panel {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
     flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.query-panel-body {
+    display: flex;
+    flex-direction: column;
+    margin-top: 1rem;
+    flex: 1;
+    gap: 1rem;
     min-height: 0;
     overflow: auto;
 }
 
-.search-splitter[data-p-resizing="true"] :deep(.query-panel),
+.query-panel-content {
+    display: block;
+}
+
+.query-panel-content > :first-child {
+    padding-inline: 3rem;
+    border: 0;
+}
+
+.prelayout-body {
+    overflow: visible;
+}
+
+.query-panel-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--p-content-hover-background);
+    border-top: 0.125rem solid var(--p-content-border-color);
+}
+
+.results-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.search-splitter[data-p-resizing="true"] :deep(.query-panel-body),
 .search-splitter[data-p-resizing="true"] :deep(.p-virtualscroller) {
     overflow: hidden !important;
 }

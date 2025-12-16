@@ -116,10 +116,48 @@ export function describeAdvancedSearchQuery(
         });
     }
 
+    const shouldUseThatClause = startsWithPredicateFragment(payload);
+
+    if (shouldUseThatClause) {
+        return gettext("Find all %{graph} models that %{conditions}.", {
+            graph: graphLabel,
+            conditions: conditionDescription,
+        });
+    }
+
     return gettext("Find all %{graph} models where %{conditions}.", {
         graph: graphLabel,
         conditions: conditionDescription,
     });
+}
+
+function startsWithPredicateFragment(groupPayload: GroupPayload): boolean {
+    const hasClauses =
+        Array.isArray(groupPayload.clauses) && groupPayload.clauses.length > 0;
+    if (hasClauses) {
+        return false;
+    }
+
+    const relationshipState = groupPayload.relationship as
+        | RelationshipState
+        | undefined;
+
+    const hasRelationshipPath =
+        relationshipState &&
+        Array.isArray(relationshipState.path) &&
+        relationshipState.path.length > 0;
+
+    if (hasRelationshipPath) {
+        return true;
+    }
+
+    const hasGroups =
+        Array.isArray(groupPayload.groups) && groupPayload.groups.length > 0;
+    if (!hasGroups) {
+        return false;
+    }
+
+    return startsWithPredicateFragment(groupPayload.groups[0] as GroupPayload);
 }
 
 function buildOperatorLabelMap(
@@ -428,7 +466,54 @@ function describeGroupConditions(
         }
     }
 
-    if (Array.isArray(groupPayload.groups)) {
+    const relationshipState = groupPayload.relationship as
+        | RelationshipState
+        | undefined;
+
+    const hasRelationshipPath =
+        relationshipState &&
+        Array.isArray(relationshipState.path) &&
+        relationshipState.path.length > 0;
+
+    if (hasRelationshipPath) {
+        const relatedGroup =
+            Array.isArray(groupPayload.groups) && groupPayload.groups.length > 0
+                ? (groupPayload.groups[0] as GroupPayload)
+                : undefined;
+
+        const relationshipDescription = describeRelationshipCondition(
+            relationshipState as RelationshipState,
+            relatedGroup,
+            graphs,
+            operatorLabelMap,
+            gettext,
+            getNodeLabel,
+            nodeMetadata,
+        );
+
+        if (relationshipDescription) {
+            partDescriptions.push(relationshipDescription);
+        }
+
+        if (
+            Array.isArray(groupPayload.groups) &&
+            groupPayload.groups.length > 1
+        ) {
+            for (const nestedGroupPayload of groupPayload.groups.slice(1)) {
+                const nestedDescription = describeGroupConditions(
+                    nestedGroupPayload as GroupPayload,
+                    graphs,
+                    operatorLabelMap,
+                    gettext,
+                    getNodeLabel,
+                    nodeMetadata,
+                );
+                if (nestedDescription) {
+                    partDescriptions.push(nestedDescription);
+                }
+            }
+        }
+    } else if (Array.isArray(groupPayload.groups)) {
         for (const nestedGroupPayload of groupPayload.groups) {
             const nestedDescription = describeGroupConditions(
                 nestedGroupPayload as GroupPayload,
@@ -534,7 +619,7 @@ function describeClause(
     const valuePhrase = formatValueList(operandDescriptions, gettext).trim();
 
     if (valuePhrase) {
-        return gettext("the %{field} node %{operator} %{value}", {
+        return gettext("the value of the %{field} node %{operator} %{value}", {
             field: fieldLabel,
             operator: operatorLabel,
             value: valuePhrase,

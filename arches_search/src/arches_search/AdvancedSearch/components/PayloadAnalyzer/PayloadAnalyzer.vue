@@ -43,7 +43,7 @@ const emit = defineEmits<{
     (event: "update:visible", value: boolean): void;
 }>();
 
-const activeTabValue = ref<string | number>(PAYLOAD);
+const activeTabValue = ref<string | number>(SQL);
 
 function onUpdateVisible(nextVisible: boolean): void {
     emit("update:visible", nextVisible);
@@ -64,7 +64,7 @@ function onUpdateActiveTab(nextTabValue: string | number): void {
         :style="{
             maxWidth: '100vw',
         }"
-        :header="$gettext('Analyze payload')"
+        :header="$gettext('Describe Query')"
         @update:visible="onUpdateVisible"
     >
         <div class="payload-analyzer">
@@ -74,14 +74,14 @@ function onUpdateActiveTab(nextTabValue: string | number): void {
                 @update:value="onUpdateActiveTab"
             >
                 <TabList>
-                    <Tab :value="PAYLOAD">
-                        {{ $gettext("Payload") }}
-                    </Tab>
                     <Tab :value="SQL">
                         {{ $gettext("SQL") }}
                     </Tab>
                     <Tab :value="NARRATION">
-                        {{ $gettext("Narration") }}
+                        {{ $gettext("Natural Language") }}
+                    </Tab>
+                    <Tab :value="PAYLOAD">
+                        {{ $gettext("Payload") }}
                     </Tab>
                 </TabList>
 

@@ -6,7 +6,9 @@ from arches.app.models import models as arches_models
 
 class GraphModelsAPI(APIBase):
     def get(self, request):
-        graphs = arches_models.GraphModel.objects.filter(isresource=True).order_by(
-            "name"
+        graphs = (
+            arches_models.GraphModel.objects.filter(isresource=True, is_active=True)
+            .exclude(slug="arches_system_settings")
+            .order_by("name")
         )
         return JSONResponse(list(graphs))
