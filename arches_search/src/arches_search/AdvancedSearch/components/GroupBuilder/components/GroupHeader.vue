@@ -71,11 +71,15 @@ const currentGraphLabel = computed<string>(function getCurrentGraphLabel() {
         },
     );
 
-    return (
-        matchingGraphSummary?.name ??
-        matchingGraphSummary?.slug ??
-        $gettext("Filtering by...")
-    );
+    let returnValue = $gettext("Filtering by...");
+
+    if (matchingGraphSummary?.name) {
+        returnValue = $gettext("Filtering by: %{graphName}", {
+            graphName: matchingGraphSummary.name,
+        });
+    }
+
+    return returnValue;
 });
 
 const showsRelationshipTag = computed<boolean>(

@@ -236,6 +236,7 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
                     v-if="hasCompatibleRelationshipGraphs"
                     :model-value="innerGraphSlug"
                     :options="relatableGraphOptions"
+                    :filter="true"
                     option-label="label"
                     option-value="value"
                     class="relationship-related-graph-select"

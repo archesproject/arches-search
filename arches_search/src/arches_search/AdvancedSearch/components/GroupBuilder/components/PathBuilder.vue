@@ -25,6 +25,7 @@ type TreeNodeOption = {
     label: string;
     data: NodeSummary;
     children: TreeNodeOption[];
+    selectable?: boolean;
 };
 
 type PathSequence = [string, string][];
@@ -120,15 +121,10 @@ function deriveRelationshipGraphPairFromSlugs(
 }
 
 function isResourceInstanceDatatype(datatype: string): boolean {
-    if (datatype === "resource-instance") {
-        return true;
-    }
-
-    if (datatype === "resource-instance-list") {
-        return true;
-    }
-
-    return false;
+    return (
+        datatype === "resource-instance" ||
+        datatype === "resource-instance-list"
+    );
 }
 
 function doesNodeBridgeRelationshipGraphPair(
@@ -184,12 +180,12 @@ function isNodeSelectable(
     nodeSummary: NodeSummary,
     relationshipGraphPair: RelationshipGraphPair | undefined,
 ): boolean {
-    if (!relationshipGraphPair) {
-        return true;
-    }
-
     if (!isResourceInstanceDatatype(nodeSummary.datatype)) {
         return false;
+    }
+
+    if (!relationshipGraphPair) {
+        return true;
     }
 
     return doesNodeBridgeRelationshipGraphPair(
@@ -224,6 +220,7 @@ function buildTreeFromFlatNodes(
             label,
             data: nodeSummary,
             children: [],
+            selectable: isNodeSelectable(nodeSummary, relationshipGraphPair),
         };
     }
 
@@ -232,8 +229,7 @@ function buildTreeFromFlatNodes(
         const semanticParentId = nodeSummary.semantic_parent_id;
 
         if (semanticParentId && treeNodesById[semanticParentId]) {
-            const parentTreeNode = treeNodesById[semanticParentId];
-            parentTreeNode.children.push(treeNode);
+            treeNodesById[semanticParentId].children.push(treeNode);
         } else {
             rootTreeNodes.push(treeNode);
         }
@@ -241,12 +237,11 @@ function buildTreeFromFlatNodes(
 
     sortTreeNodes(rootTreeNodes);
 
-    const filteredRootTreeNodes = pruneTreeToSelectableNodes(
-        rootTreeNodes,
-        relationshipGraphPair,
-    );
+    if (!relationshipGraphPair) {
+        return rootTreeNodes;
+    }
 
-    return filteredRootTreeNodes;
+    return pruneTreeToSelectableNodes(rootTreeNodes, relationshipGraphPair);
 }
 
 function sortTreeNodes(treeNodeList: TreeNodeOption[]): void {
@@ -270,7 +265,7 @@ function sortTreeNodes(treeNodeList: TreeNodeOption[]): void {
 
 function pruneTreeToSelectableNodes(
     treeNodeList: TreeNodeOption[],
-    relationshipGraphPair: RelationshipGraphPair | undefined,
+    relationshipGraphPair: RelationshipGraphPair,
 ): TreeNodeOption[] {
     const prunedTreeNodes: TreeNodeOption[] = [];
 
@@ -288,13 +283,13 @@ function pruneTreeToSelectableNodes(
         const shouldIncludeNode = nodeIsSelectable || prunedChildren.length > 0;
 
         if (shouldIncludeNode) {
-            const prunedTreeNode: TreeNodeOption = {
+            prunedTreeNodes.push({
                 key: treeNode.key,
                 label: treeNode.label,
                 data: treeNode.data,
                 children: prunedChildren,
-            };
-            prunedTreeNodes.push(prunedTreeNode);
+                selectable: treeNode.selectable,
+            });
         }
     }
 
@@ -383,8 +378,9 @@ async function loadNodesForGraphSlugs(graphSlugsList: string[]): Promise<void> {
             return;
         }
 
-        const uniqueGraphSlugSet = new Set<string>(graphSlugsToUse);
-        const uniqueGraphSlugsToUse = Array.from(uniqueGraphSlugSet);
+        const uniqueGraphSlugsToUse = Array.from(
+            new Set<string>(graphSlugsToUse),
+        );
 
         const relationshipGraphPair = deriveRelationshipGraphPairFromSlugs(
             relationshipBetweenGraphs,
@@ -392,9 +388,9 @@ async function loadNodesForGraphSlugs(graphSlugsList: string[]): Promise<void> {
 
         const treeNodesPerGraphPromises = uniqueGraphSlugsToUse.map(
             async (graphSlug) => {
-                const matchingGraph = graphs.value.find((graphSummary) => {
-                    return graphSummary.slug === graphSlug;
-                });
+                const matchingGraph = graphs.value.find(
+                    (graphSummary) => graphSummary.slug === graphSlug,
+                );
 
                 if (!matchingGraph) {
                     return [] as TreeNodeOption[];
@@ -405,17 +401,11 @@ async function loadNodesForGraphSlugs(graphSlugsList: string[]): Promise<void> {
                 );
 
                 const flatNodesWithGraphSlug: NodeSummary[] = flatNodes.map(
-                    (nodeSummary) => {
-                        let nodeGraphSlug = nodeSummary.graph_slug;
-                        if (!nodeGraphSlug) {
-                            nodeGraphSlug = matchingGraph.slug;
-                        }
-
-                        return {
-                            ...nodeSummary,
-                            graph_slug: nodeGraphSlug,
-                        };
-                    },
+                    (nodeSummary) => ({
+                        ...nodeSummary,
+                        graph_slug:
+                            nodeSummary.graph_slug || matchingGraph.slug,
+                    }),
                 );
 
                 return buildTreeFromFlatNodes(
@@ -429,9 +419,7 @@ async function loadNodesForGraphSlugs(graphSlugsList: string[]): Promise<void> {
         const mergedTreeNodes: TreeNodeOption[] = [];
 
         for (const treeNodesForGraph of treeNodesPerGraph) {
-            for (const treeNode of treeNodesForGraph) {
-                mergedTreeNodes.push(treeNode);
-            }
+            mergedTreeNodes.push(...treeNodesForGraph);
         }
 
         nodeOptions.value = mergedTreeNodes;
@@ -462,7 +450,7 @@ function seedSelectionFromPathSequence(): void {
         nodeAlias,
     );
 
-    if (!matchingNode) {
+    if (!matchingNode || matchingNode.selectable === false) {
         selectedKeys.value = {};
         return;
     }
@@ -480,44 +468,37 @@ function onUpdateModelValue(
     }
 
     const chosenKey = Object.keys(updatedValue)[0];
-
-    selectedKeys.value = { [chosenKey]: true };
-
     const matchingNode = findNodeByKey(nodeOptions.value, chosenKey);
-    if (!matchingNode || !matchingNode.data.graph_slug) {
+
+    if (
+        !matchingNode ||
+        matchingNode.selectable === false ||
+        !matchingNode.data.graph_slug
+    ) {
+        selectedKeys.value = {};
         emits("update:pathSequence", []);
         return;
     }
 
-    const nextPathSequence: PathSequence = [
-        [matchingNode.data.graph_slug, matchingNode.data.alias],
-    ];
+    selectedKeys.value = { [chosenKey]: true };
 
-    emits("update:pathSequence", nextPathSequence);
+    emits("update:pathSequence", [
+        [matchingNode.data.graph_slug, matchingNode.data.alias],
+    ]);
 }
 
 function getGraphLabelPrefixForNode(
     nodeSummary: NodeSummary | undefined,
 ): string {
-    if (!nodeSummary) {
+    if (!nodeSummary?.graph_slug) {
         return "";
     }
 
-    const nodeGraphSlug = nodeSummary.graph_slug;
-    if (!nodeGraphSlug) {
-        return "";
-    }
+    const matchingGraphSummary = graphs.value.find(
+        (graphSummary) => graphSummary.slug === nodeSummary.graph_slug,
+    );
 
-    const matchingGraphSummary = graphs.value.find((graphSummary) => {
-        return graphSummary.slug === nodeGraphSlug;
-    });
-
-    if (!matchingGraphSummary) {
-        return "";
-    }
-
-    const graphLabel = matchingGraphSummary.name ?? "";
-
+    const graphLabel = matchingGraphSummary?.name ?? "";
     if (!graphLabel) {
         return "";
     }
@@ -543,7 +524,7 @@ function getGraphLabelPrefixForNode(
             selection-mode="single"
             :model-value="selectedKeys"
             :disabled="nodeOptions.length === 0"
-            filter
+            :filter="true"
             :filter-placeholder="$gettext('Search nodes...')"
             :loading="isLoading"
             :placeholder="$gettext('Select node...')"
