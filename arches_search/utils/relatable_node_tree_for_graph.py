@@ -32,6 +32,7 @@ def build_relatable_nodes_tree_response(target_graph_uuid):
         for graph_row in arches_models.GraphModel.objects.filter(
             graphid__in=graph_ids_to_fetch,
             isresource=True,
+            is_active=True,
         ).values("graphid", "name", "slug")
     }
 
@@ -42,23 +43,23 @@ def build_relatable_nodes_tree_response(target_graph_uuid):
             "options": [],
         }
 
-    resource_graph_ids = set(graph_rows_by_id.keys())
+    active_resource_graph_ids = set(graph_rows_by_id.keys())
 
     relatable_node_rows = [
         (node_id, graph_id)
         for node_id, graph_id in relatable_node_rows
-        if graph_id in resource_graph_ids
+        if graph_id in active_resource_graph_ids
     ]
     relatable_node_graph_ids = sorted({graph_id for _, graph_id in relatable_node_rows})
 
     relatable_target_graph_ids = {
         graph_id
         for graph_id in relatable_target_graph_ids_all
-        if graph_id in resource_graph_ids
+        if graph_id in active_resource_graph_ids
     }
 
     relatable_graph_ids_for_options = sorted(
-        (set(relatable_node_graph_ids) | relatable_target_graph_ids)
+        set(relatable_node_graph_ids) | relatable_target_graph_ids
     )
 
     parent_by_child_id_by_graph_id = _build_semantic_parent_maps(
@@ -114,6 +115,7 @@ def _get_incoming_node_rows(target_graph_uuid):
         (node_id, str(graph_id))
         for node_id, graph_id in arches_models.Node.objects.filter(
             datatype__in=("resource-instance", "resource-instance-list"),
+            graph__is_active=True,
         )
         .annotate(config_jsonb=Cast(F("config"), output_field=models.JSONField()))
         .filter(config_jsonb__contains=config_contains_target_graph)
@@ -125,6 +127,7 @@ def _get_outgoing_node_rows_and_related_graphs(target_graph_uuid):
     outgoing_nodes = list(
         arches_models.Node.objects.filter(
             graph_id=target_graph_uuid,
+            graph__is_active=True,
             datatype__in=("resource-instance", "resource-instance-list"),
         )
         .annotate(config_jsonb=Cast(F("config"), output_field=models.JSONField()))
@@ -153,6 +156,7 @@ def _build_semantic_parent_maps(relatable_graph_ids):
 
     for graph_id, child_node_id, parent_node_id in arches_models.Edge.objects.filter(
         graph_id__in=relatable_graph_ids,
+        graph__is_active=True,
         rangenode_id__isnull=False,
         domainnode_id__isnull=False,
     ).values_list("graph_id", "rangenode_id", "domainnode_id"):
@@ -194,7 +198,10 @@ def _fetch_nodes_by_id_with_order(included_node_ids):
     ordered_node_ids = []
 
     for node_row in (
-        arches_models.Node.objects.filter(nodeid__in=included_node_ids)
+        arches_models.Node.objects.filter(
+            nodeid__in=included_node_ids,
+            graph__is_active=True,
+        )
         .order_by("sortorder", "name")
         .values(
             "nodeid",
@@ -217,7 +224,10 @@ def _fetch_primary_widget_labels(included_node_ids):
     widget_label_by_node_id = {}
 
     for node_id, widget_label in (
-        arches_models.CardXNodeXWidget.objects.filter(node_id__in=included_node_ids)
+        arches_models.CardXNodeXWidget.objects.filter(
+            node_id__in=included_node_ids,
+            node__graph__is_active=True,
+        )
         .order_by("node_id", "sortorder")
         .distinct("node_id")
         .values_list("node_id", "label")
