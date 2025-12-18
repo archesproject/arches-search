@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watchEffect, inject } from "vue";
+import { ref, computed, watch, inject } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
@@ -58,6 +58,16 @@ const isMapFilterDrawerVisible = ref<boolean>(false);
 
 const childGroupKeys = ref<string[]>([]);
 const clauseKeys = ref<string[]>([]);
+
+const clauseUpdateHandlersByIndex = ref<
+    Array<(updatedClause: unknown) => void>
+>([]);
+const clauseRemoveHandlersByIndex = ref<Array<() => void>>([]);
+
+const childGroupUpdateHandlersByIndex = ref<
+    Array<(updatedChildGroupPayload: GroupPayload) => void>
+>([]);
+const childGroupRemoveHandlersByIndex = ref<Array<() => void>>([]);
 
 const currentGroup = computed<GroupPayload>(function getCurrentGroup() {
     return modelValue ?? makeEmptyGroupPayload();
@@ -223,22 +233,79 @@ const footerMarginTop = computed<string>(function () {
     return "0";
 });
 
-watchEffect(function syncStableKeys() {
-    childGroupKeys.value = buildStableKeys(
-        childGroupKeys.value,
-        visibleGroup.value.groups.length,
-    );
-    clauseKeys.value = buildStableKeys(
-        clauseKeys.value,
-        visibleGroup.value.clauses.length,
-    );
-});
+watch(
+    () => visibleGroup.value.clauses.length,
+    (nextClauseCount) => {
+        clauseKeys.value = ensureStableStringKeys(
+            clauseKeys.value,
+            nextClauseCount,
+        );
+
+        clauseUpdateHandlersByIndex.value = ensureStableHandlerArray(
+            clauseUpdateHandlersByIndex.value,
+            nextClauseCount,
+            (clauseIndex) => {
+                return (updatedClause: unknown) => {
+                    onUpdateClauseAtIndex(updatedClause, clauseIndex);
+                };
+            },
+        );
+
+        clauseRemoveHandlersByIndex.value = ensureStableHandlerArray(
+            clauseRemoveHandlersByIndex.value,
+            nextClauseCount,
+            (clauseIndex) => {
+                return () => {
+                    onRemoveClause(clauseIndex);
+                };
+            },
+        );
+    },
+    { immediate: true },
+);
+
+watch(
+    () => visibleGroup.value.groups.length,
+    (nextChildGroupCount) => {
+        childGroupKeys.value = ensureStableStringKeys(
+            childGroupKeys.value,
+            nextChildGroupCount,
+        );
+
+        childGroupUpdateHandlersByIndex.value = ensureStableHandlerArray(
+            childGroupUpdateHandlersByIndex.value,
+            nextChildGroupCount,
+            (childIndex) => {
+                return (updatedChildGroupPayload: GroupPayload) => {
+                    onUpdateChildGroupModelValue(
+                        updatedChildGroupPayload,
+                        childIndex,
+                    );
+                };
+            },
+        );
+
+        childGroupRemoveHandlersByIndex.value = ensureStableHandlerArray(
+            childGroupRemoveHandlersByIndex.value,
+            nextChildGroupCount,
+            (childIndex) => {
+                return () => {
+                    onRemoveChildGroup(childIndex);
+                };
+            },
+        );
+    },
+    { immediate: true },
+);
 
 function createStableKey(): string {
     return crypto.randomUUID();
 }
 
-function buildStableKeys(existingKeys: string[], nextCount: number): string[] {
+function ensureStableStringKeys(
+    existingKeys: string[],
+    nextCount: number,
+): string[] {
     const nextKeys = existingKeys.slice(0, nextCount);
 
     while (nextKeys.length < nextCount) {
@@ -246,6 +313,20 @@ function buildStableKeys(existingKeys: string[], nextCount: number): string[] {
     }
 
     return nextKeys;
+}
+
+function ensureStableHandlerArray<HandlerType>(
+    existingHandlers: HandlerType[],
+    nextCount: number,
+    createHandlerAtIndex: (handlerIndex: number) => HandlerType,
+): HandlerType[] {
+    const nextHandlers = existingHandlers.slice(0, nextCount);
+
+    while (nextHandlers.length < nextCount) {
+        nextHandlers.push(createHandlerAtIndex(nextHandlers.length));
+    }
+
+    return nextHandlers;
 }
 
 function emitUpdatedGroupPayload(nextGroupPayload: GroupPayload): void {
@@ -320,6 +401,10 @@ function onAddGroup(): void {
 }
 
 function onRemoveChildGroup(childIndex: number): void {
+    childGroupKeys.value.splice(childIndex, 1);
+    childGroupUpdateHandlersByIndex.value.splice(childIndex, 1);
+    childGroupRemoveHandlersByIndex.value.splice(childIndex, 1);
+
     const updatedVisibleGroup = removeChildGroupAtIndexAndReconcile(
         visibleGroup.value,
         childIndex,
@@ -348,6 +433,10 @@ function onUpdateClauseAtIndex(
 }
 
 function onRemoveClause(clauseIndex: number): void {
+    clauseKeys.value.splice(clauseIndex, 1);
+    clauseUpdateHandlersByIndex.value.splice(clauseIndex, 1);
+    clauseRemoveHandlersByIndex.value.splice(clauseIndex, 1);
+
     const updatedVisibleGroup = removeClauseAtIndexFromPayload(
         visibleGroup.value,
         clauseIndex,
@@ -463,10 +552,19 @@ function onUpdateInnerGraphSlug(nextInnerGraphSlugRaw: string): void {
 
     const nextInnerGraphSlug = String(nextInnerGraphSlugRaw ?? "").trim();
 
-    const nextChildGroups = currentGroup.value.groups.slice();
-    nextChildGroups[0] = {
-        ...nextChildGroups[0],
+    const existingInnerGroup = currentGroup.value.groups[0];
+    const existingInnerGraphSlug = String(
+        existingInnerGroup.graph_slug ?? "",
+    ).trim();
+
+    if (existingInnerGraphSlug === nextInnerGraphSlug) {
+        return;
+    }
+
+    const resetInnerGroup: GroupPayload = {
+        ...makeEmptyGroupPayload(),
         graph_slug: nextInnerGraphSlug,
+        logic: existingInnerGroup.logic,
     };
 
     const existingRelationship = currentGroup.value.relationship;
@@ -478,7 +576,7 @@ function onUpdateInnerGraphSlug(nextInnerGraphSlugRaw: string): void {
     const updatedGroup = setRelationshipAndReconcileClauses(
         {
             ...currentGroup.value,
-            groups: nextChildGroups,
+            groups: [resetInnerGroup],
         },
         nextRelationship,
     );
@@ -614,13 +712,14 @@ function onOpenMapFilterDrawer(): void {
                                                       ?.graph_slug
                                         "
                                         @update:model-value="
-                                            onUpdateClauseAtIndex(
-                                                $event,
-                                                clauseIndex,
-                                            )
+                                            clauseUpdateHandlersByIndex[
+                                                clauseIndex
+                                            ]($event)
                                         "
                                         @request:remove="
-                                            onRemoveClause(clauseIndex)
+                                            clauseRemoveHandlersByIndex[
+                                                clauseIndex
+                                            ]()
                                         "
                                     />
                                 </template>
@@ -651,12 +750,15 @@ function onOpenMapFilterDrawer(): void {
                                     childGroup.relationship ?? null
                                 "
                                 @update:model-value="
-                                    onUpdateChildGroupModelValue(
+                                    childGroupUpdateHandlersByIndex[childIndex](
                                         $event,
-                                        childIndex,
                                     )
                                 "
-                                @remove="onRemoveChildGroup(childIndex)"
+                                @remove="
+                                    childGroupRemoveHandlersByIndex[
+                                        childIndex
+                                    ]()
+                                "
                             />
                         </div>
                     </div>
