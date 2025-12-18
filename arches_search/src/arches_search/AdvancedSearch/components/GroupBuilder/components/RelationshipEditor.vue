@@ -3,7 +3,6 @@ import { computed, inject, ref, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-// import Button from "primevue/button";
 import Card from "primevue/card";
 import Message from "primevue/message";
 import Select from "primevue/select";
@@ -52,7 +51,7 @@ const emit = defineEmits<{
     (event: "update:innerGraphSlug", value: string): void;
 }>();
 
-const { relationship, anchorGraphSlug, innerGraphSlug } = defineProps<{
+const props = defineProps<{
     relationship: RelationshipState;
     anchorGraphSlug: string;
     innerGraphSlug: string;
@@ -68,14 +67,20 @@ const hasLoadedRelatableTree = ref(false);
 const relatableTreeError = ref<Error | null>(null);
 const relatableNodesTreeResponse = ref<RelatableNodesTreeResponse | null>(null);
 
-const anchorGraph = computed(() => {
-    return graphs.value.find(
-        (graphModel) => graphModel.slug === anchorGraphSlug,
-    )!;
+const anchorGraph = computed<GraphModel | null>(() => {
+    return (
+        graphs.value.find(
+            (graphModel) => graphModel.slug === props.anchorGraphSlug,
+        ) ?? null
+    );
 });
 
 const relationshipLeadinText = computed(() => {
-    return $gettext("Relate %{outer} to", { outer: anchorGraph.value.name });
+    const anchorGraphName = anchorGraph.value?.name ?? "";
+    if (!anchorGraphName) {
+        return $gettext("Relate to");
+    }
+    return $gettext("Relate %{outer} to", { outer: anchorGraphName });
 });
 
 const relatableGraphOptions = computed(() => {
@@ -94,11 +99,11 @@ const hasCompatibleRelationshipGraphs = computed(() => {
 });
 
 const hasSelectedRelatedGraph = computed(() => {
-    return innerGraphSlug.length > 0;
+    return props.innerGraphSlug.length > 0;
 });
 
 const hasSelectedRelationshipPath = computed(() => {
-    return relationship.path.length > 0;
+    return props.relationship.path.length > 0;
 });
 
 const traversalQuantifierOptions = computed(() => {
@@ -119,11 +124,13 @@ const traversalQuantifierOptions = computed(() => {
 });
 
 const currentTraversalQuantifier = computed(() => {
-    return relationship.traversal_quantifiers[0] ?? TRAVERSAL_QUANTIFIER_ANY;
+    return (
+        props.relationship.traversal_quantifiers[0] ?? TRAVERSAL_QUANTIFIER_ANY
+    );
 });
 
 const pathSequenceForPathBuilder = computed<PathSequence>(() => {
-    const firstSegment = relationship.path[0];
+    const firstSegment = props.relationship.path[0];
     if (!firstSegment) {
         return [];
     }
@@ -131,17 +138,46 @@ const pathSequenceForPathBuilder = computed<PathSequence>(() => {
 });
 
 watch(
-    () => anchorGraph.value.graphid,
+    () => props.anchorGraphSlug,
+    (nextAnchorGraphSlug, previousAnchorGraphSlug) => {
+        if (!previousAnchorGraphSlug) {
+            return;
+        }
+
+        if (nextAnchorGraphSlug === previousAnchorGraphSlug) {
+            return;
+        }
+
+        if (props.innerGraphSlug) {
+            emit("update:innerGraphSlug", "");
+        }
+
+        if (props.relationship.path.length > 0) {
+            emit("update:relationship", { ...props.relationship, path: [] });
+        }
+    },
+);
+
+watch(
+    () => anchorGraph.value?.graphid ?? "",
     async (anchorGraphId) => {
         isLoadingRelatableTree.value = true;
         hasLoadedRelatableTree.value = false;
         relatableTreeError.value = null;
 
+        if (!anchorGraphId) {
+            relatableNodesTreeResponse.value = null;
+            isLoadingRelatableTree.value = false;
+            hasLoadedRelatableTree.value = true;
+            return;
+        }
+
         try {
-            relatableNodesTreeResponse.value =
+            const nextRelatableNodesTreeResponse =
                 await getRelatableNodesTreeForGraphId(anchorGraphId);
-        } catch (e) {
-            relatableTreeError.value = e as Error;
+            relatableNodesTreeResponse.value = nextRelatableNodesTreeResponse;
+        } catch (caughtError) {
+            relatableTreeError.value = caughtError as Error;
             relatableNodesTreeResponse.value = null;
         } finally {
             isLoadingRelatableTree.value = false;
@@ -152,23 +188,43 @@ watch(
 );
 
 watch(
-    () => relatableGraphOptions.value,
-    (options) => {
-        if (innerGraphSlug) {
+    () =>
+        [
+            relatableGraphOptions.value,
+            isLoadingRelatableTree.value,
+            hasLoadedRelatableTree.value,
+        ] as const,
+    ([options, isLoading, hasLoaded]) => {
+        if (isLoading || !hasLoaded) {
             return;
         }
 
-        if (options.length !== 1) {
+        if (!props.innerGraphSlug) {
+            if (options.length === 1) {
+                emit("update:innerGraphSlug", options[0]!.value);
+            }
             return;
         }
 
-        emit("update:innerGraphSlug", options[0]!.value);
+        const innerGraphSlugIsStillValid = options.some(
+            (option) => option.value === props.innerGraphSlug,
+        );
+
+        if (!innerGraphSlugIsStillValid) {
+            emit("update:innerGraphSlug", "");
+            if (props.relationship.path.length > 0) {
+                emit("update:relationship", {
+                    ...props.relationship,
+                    path: [],
+                });
+            }
+        }
     },
     { immediate: true },
 );
 
 watch(
-    () => innerGraphSlug,
+    () => props.innerGraphSlug,
     (nextInnerGraphSlug, previousInnerGraphSlug) => {
         if (!previousInnerGraphSlug) {
             return;
@@ -178,7 +234,7 @@ watch(
             return;
         }
 
-        emit("update:relationship", { ...relationship, path: [] });
+        emit("update:relationship", { ...props.relationship, path: [] });
     },
 );
 
@@ -188,29 +244,25 @@ function onChangeRelatedGraphSlug(nextGraphSlug: string): void {
 
 function onUpdatePathSequence(nextPathSequence: PathSequence): void {
     if (nextPathSequence.length === 0) {
-        emit("update:relationship", { ...relationship, path: [] });
+        emit("update:relationship", { ...props.relationship, path: [] });
         return;
     }
 
     const [firstGraphSlug, firstNodeAlias] = nextPathSequence[0]!;
 
     emit("update:relationship", {
-        ...relationship,
+        ...props.relationship,
         path: [[firstGraphSlug, firstNodeAlias]],
-        is_inverse: firstGraphSlug !== anchorGraphSlug,
+        is_inverse: firstGraphSlug !== props.anchorGraphSlug,
     });
 }
 
 function onChangeTraversalQuantifier(nextQuantifier: string): void {
     emit("update:relationship", {
-        ...relationship,
+        ...props.relationship,
         traversal_quantifiers: [nextQuantifier as TraversalQuantifier],
     });
 }
-
-// function onCloseClick(): void {
-//     emit("update:relationship", null);
-// }
 </script>
 
 <template>
@@ -234,8 +286,9 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
 
                 <Select
                     v-if="hasCompatibleRelationshipGraphs"
-                    :model-value="innerGraphSlug"
+                    :model-value="props.innerGraphSlug"
                     :options="relatableGraphOptions"
+                    :filter="true"
                     option-label="label"
                     option-value="value"
                     class="relationship-related-graph-select"
@@ -257,11 +310,15 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
                     class="relationship-path-builder"
                 >
                     <PathBuilder
-                        :graph-slugs="[anchorGraphSlug, innerGraphSlug]"
+                        :graph-slugs="[
+                            props.anchorGraphSlug,
+                            props.innerGraphSlug,
+                        ]"
                         :path-sequence="pathSequenceForPathBuilder"
+                        :restrict-to-resource-instance-datatypes="true"
                         :relationship-between-graphs="[
-                            anchorGraphSlug,
-                            innerGraphSlug,
+                            props.anchorGraphSlug,
+                            props.innerGraphSlug,
                         ]"
                         :should-prepend-graph-name="true"
                         @update:path-sequence="onUpdatePathSequence"
@@ -290,15 +347,6 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
                     :aria-label="$gettext('Relationship match requirement')"
                     @update:model-value="onChangeTraversalQuantifier"
                 />
-
-                <!-- <Button
-                    variant="text"
-                    severity="danger"
-                    icon="pi pi-times"
-                    class="relationship-inline-close"
-                    :aria-label="$gettext('Remove relationship')"
-                    @click="onCloseClick"
-                /> -->
             </div>
         </template>
     </Card>
@@ -310,8 +358,6 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
     border: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     box-shadow: none;
-    /* margin-inline-start: 5.5rem; */
-    /* margin-inline-end: 5.5rem; */
 }
 
 .relationship-inline-row {
@@ -327,10 +373,6 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
 
 .relationship-path-builder {
     display: flex;
-}
-
-.relationship-inline-close {
-    margin-inline-start: auto;
 }
 
 .relationship-message {
