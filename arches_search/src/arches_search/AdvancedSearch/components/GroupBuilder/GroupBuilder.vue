@@ -215,13 +215,45 @@ const relateButtonTitle = computed<string>(function getRelateButtonTitle() {
     return $gettext("Add a relationship filter as a nested group.");
 });
 
-const footerMarginTop = computed<string>(function () {
+const footerMarginTop = computed<string>(function getFooterMarginTop() {
     if (hasGroupBodyContent.value || hasRelationship.value) {
         return "0rem";
     }
 
     return "0";
 });
+
+const visibleGroupAnchorGraphId = computed<string>(
+    function getVisibleGroupAnchorGraphId() {
+        return String(visibleGroupAnchorGraph.value?.graphid ?? "");
+    },
+);
+
+const currentGroupAnchorGraphId = computed<string>(
+    function getCurrentGroupAnchorGraphId() {
+        return String(currentGroupAnchorGraph.value?.graphid ?? "");
+    },
+);
+
+const parentGroupAnchorGraphId = computed<string>(
+    function getParentGroupAnchorGraphId() {
+        return String(parentGroupAnchorGraph?.graphid ?? "");
+    },
+);
+
+const relationshipMemoKey = computed<string>(function getRelationshipMemoKey() {
+    return JSON.stringify(currentGroup.value.relationship ?? null);
+});
+
+const clauseInnerGroupGraphSlug = computed<string>(
+    function getClauseInnerGroupGraphSlug() {
+        if (isRelationshipContainer.value) {
+            return visibleGroup.value.graph_slug;
+        }
+
+        return currentGroup.value.groups[0]?.graph_slug ?? "";
+    },
+);
 
 watchEffect(function syncStableKeys() {
     childGroupKeys.value = buildStableKeys(
@@ -592,6 +624,14 @@ function onOpenMapFilterDrawer(): void {
                                     clause, clauseIndex
                                 ) in visibleGroup.clauses"
                                 :key="clauseKeys[clauseIndex]"
+                                v-memo="[
+                                    clause,
+                                    visibleGroupAnchorGraphId,
+                                    currentGroupAnchorGraphId,
+                                    parentGroupAnchorGraphId,
+                                    relationshipMemoKey,
+                                    clauseInnerGroupGraphSlug,
+                                ]"
                                 class="clause-card"
                                 :style="{}"
                             >
@@ -608,10 +648,7 @@ function onOpenMapFilterDrawer(): void {
                                             currentGroup.relationship
                                         "
                                         :inner-group-graph-slug="
-                                            isRelationshipContainer
-                                                ? visibleGroup.graph_slug
-                                                : currentGroup.groups[0]
-                                                      ?.graph_slug
+                                            clauseInnerGroupGraphSlug
                                         "
                                         @update:model-value="
                                             onUpdateClauseAtIndex(
@@ -643,6 +680,11 @@ function onOpenMapFilterDrawer(): void {
                                     childGroup, childIndex
                                 ) in visibleGroup.groups"
                                 :key="childGroupKeys[childIndex]"
+                                v-memo="[
+                                    childGroup,
+                                    visibleGroupAnchorGraphId,
+                                    relationshipMemoKey,
+                                ]"
                                 :model-value="childGroup"
                                 :parent-group-anchor-graph="
                                     visibleGroupAnchorGraph!

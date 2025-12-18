@@ -32,6 +32,11 @@ type PathSequence = [string, string][];
 
 type RelationshipGraphPair = readonly [string, string];
 
+type TreeSelectSelectionKeys = Record<
+    string,
+    boolean | { checked?: boolean; partialChecked?: boolean }
+>;
+
 const { $gettext } = useGettext();
 
 const getNodesForGraphId =
@@ -44,26 +49,20 @@ const emit = defineEmits<{
     (event: "compatibleRelationshipNodesChanged", value: boolean): void;
 }>();
 
-const props = withDefaults(
-    defineProps<{
-        graphSlugs: string[];
-        pathSequence?: PathSequence;
-        relationshipBetweenGraphs?: string[];
-        shouldPrependGraphName?: boolean;
-        restrictToResourceInstanceDatatypes?: boolean;
-    }>(),
-    {
-        shouldPrependGraphName: false,
-        restrictToResourceInstanceDatatypes: false,
-    },
-);
+const props = defineProps<{
+    graphSlugs: string[];
+    pathSequence?: PathSequence;
+    relationshipBetweenGraphs?: string[];
+    shouldPrependGraphName?: boolean;
+    restrictToResourceInstanceDatatypes?: boolean;
+}>();
 
 const isLoading = ref(false);
 const configurationError = ref<Error | null>(null);
 
 const nodeOptions = ref<TreeNodeOption[]>([]);
 const expandedKeys = ref<Record<string, boolean>>({});
-const selectedKeys = ref<Record<string, boolean>>({});
+const selectedSelectionKeys = ref<TreeSelectSelectionKeys>({});
 
 const latestNodeLoadRequestId = ref(0);
 
@@ -93,7 +92,7 @@ watch(
         if (!nextGraphSlugs || nextGraphSlugs.length === 0) {
             nodeOptions.value = [];
             expandedKeys.value = {};
-            selectedKeys.value = {};
+            selectedSelectionKeys.value = {};
             lastEmittedPathSequenceKey.value = null;
             lastEmittedSelectedTreeKey.value = null;
             return;
@@ -481,71 +480,6 @@ function uniqueGraphSlugsPreservingOrder(graphSlugsList: string[]): string[] {
     return uniqueGraphSlugs;
 }
 
-function getTruthySelectedKeys(
-    updatedValue: Record<string, boolean>,
-): string[] {
-    return Object.keys(updatedValue).filter((key) =>
-        Boolean(updatedValue[key]),
-    );
-}
-
-function findNodePathByKey(
-    treeNodes: TreeNodeOption[],
-    key: string,
-    currentPath: TreeNodeOption[] = [],
-): TreeNodeOption[] | null {
-    for (const treeNode of treeNodes) {
-        const nextPath = [...currentPath, treeNode];
-
-        if (treeNode.key === key) {
-            return nextPath;
-        }
-
-        if (treeNode.children.length > 0) {
-            const matchingPath = findNodePathByKey(
-                treeNode.children,
-                key,
-                nextPath,
-            );
-            if (matchingPath) {
-                return matchingPath;
-            }
-        }
-    }
-
-    return null;
-}
-
-function pickDeepestSelectableNodeKeyFromSelectedKeys(
-    updatedValue: Record<string, boolean>,
-    treeNodes: TreeNodeOption[],
-): string | null {
-    const truthySelectedKeys = getTruthySelectedKeys(updatedValue);
-
-    let deepestSelectableKey: string | null = null;
-    let deepestSelectableDepth = -1;
-
-    for (const candidateKey of truthySelectedKeys) {
-        const candidatePath = findNodePathByKey(treeNodes, candidateKey);
-        if (!candidatePath || candidatePath.length === 0) {
-            continue;
-        }
-
-        const candidateNode = candidatePath[candidatePath.length - 1];
-
-        if (candidateNode.selectable === false) {
-            continue;
-        }
-
-        if (candidatePath.length > deepestSelectableDepth) {
-            deepestSelectableDepth = candidatePath.length;
-            deepestSelectableKey = candidateKey;
-        }
-    }
-
-    return deepestSelectableKey;
-}
-
 async function loadNodesForGraphSlugs(graphSlugsList: string[]): Promise<void> {
     const nodeLoadRequestId = ++latestNodeLoadRequestId.value;
 
@@ -553,7 +487,7 @@ async function loadNodesForGraphSlugs(graphSlugsList: string[]): Promise<void> {
         isLoading.value = true;
         configurationError.value = null;
 
-        selectedKeys.value = {};
+        selectedSelectionKeys.value = {};
         nodeOptions.value = [];
         expandedKeys.value = {};
         lastEmittedPathSequenceKey.value = null;
@@ -607,7 +541,7 @@ async function loadNodesForGraphSlugs(graphSlugsList: string[]): Promise<void> {
         configurationError.value = caughtError as Error;
         nodeOptions.value = [];
         expandedKeys.value = {};
-        selectedKeys.value = {};
+        selectedSelectionKeys.value = {};
         lastEmittedPathSequenceKey.value = null;
         lastEmittedSelectedTreeKey.value = null;
     } finally {
@@ -630,12 +564,73 @@ function makePathSequenceKey(
     return `${graphSlug}::${nodeAlias}`;
 }
 
+function getSelectedKeyFromTreeSelectValue(
+    updatedValue: unknown,
+): string | null {
+    if (typeof updatedValue === "string") {
+        return updatedValue || null;
+    }
+
+    if (Array.isArray(updatedValue)) {
+        const firstArrayValue = updatedValue[0];
+        return typeof firstArrayValue === "string" && firstArrayValue
+            ? firstArrayValue
+            : null;
+    }
+
+    if (!updatedValue || typeof updatedValue !== "object") {
+        return null;
+    }
+
+    const selectionKeys = updatedValue as TreeSelectSelectionKeys;
+
+    const truthySelectedKeys = Object.entries(selectionKeys)
+        .filter(([, rawSelectionValue]) => {
+            if (rawSelectionValue === true) {
+                return true;
+            }
+
+            if (
+                rawSelectionValue &&
+                typeof rawSelectionValue === "object" &&
+                "checked" in rawSelectionValue
+            ) {
+                return (
+                    (rawSelectionValue as { checked?: boolean }).checked ===
+                    true
+                );
+            }
+
+            return false;
+        })
+        .map(([key]) => key);
+
+    if (truthySelectedKeys.length === 0) {
+        return null;
+    }
+
+    if (truthySelectedKeys.length === 1) {
+        return truthySelectedKeys[0];
+    }
+
+    if (lastEmittedSelectedTreeKey.value) {
+        const differentKey = truthySelectedKeys.find(
+            (candidateKey) => candidateKey !== lastEmittedSelectedTreeKey.value,
+        );
+        if (differentKey) {
+            return differentKey;
+        }
+    }
+
+    return truthySelectedKeys[truthySelectedKeys.length - 1] ?? null;
+}
+
 function seedSelectionFromPathSequence(): void {
     const initialSegment = props.pathSequence?.[0];
     const nextPathSequenceKey = makePathSequenceKey(props.pathSequence);
 
     if (!initialSegment || nodeOptions.value.length === 0) {
-        selectedKeys.value = {};
+        selectedSelectionKeys.value = {};
         return;
     }
 
@@ -653,7 +648,9 @@ function seedSelectionFromPathSequence(): void {
             matchingPreviouslySelectedNode &&
             matchingPreviouslySelectedNode.selectable !== false
         ) {
-            selectedKeys.value = { [lastEmittedSelectedTreeKey.value]: true };
+            selectedSelectionKeys.value = {
+                [lastEmittedSelectedTreeKey.value]: true,
+            };
             return;
         }
     }
@@ -666,62 +663,44 @@ function seedSelectionFromPathSequence(): void {
     );
 
     if (!matchingNode || matchingNode.selectable === false) {
-        selectedKeys.value = {};
+        selectedSelectionKeys.value = {};
         return;
     }
 
-    selectedKeys.value = { [matchingNode.key]: true };
+    selectedSelectionKeys.value = { [matchingNode.key]: true };
 }
 
-function onUpdateModelValue(
-    updatedValue: Record<string, boolean> | null,
-): void {
-    const normalizedUpdatedValue = updatedValue ?? {};
-    const truthySelectedKeys = getTruthySelectedKeys(normalizedUpdatedValue);
+function onUpdateModelValue(updatedValue: unknown): void {
+    const nextSelectedKey = getSelectedKeyFromTreeSelectValue(updatedValue);
 
-    if (truthySelectedKeys.length === 0) {
-        selectedKeys.value = {};
+    if (!nextSelectedKey) {
+        selectedSelectionKeys.value = {};
         emit("update:pathSequence", []);
         lastEmittedPathSequenceKey.value = null;
         lastEmittedSelectedTreeKey.value = null;
         return;
     }
 
-    const chosenKey = pickDeepestSelectableNodeKeyFromSelectedKeys(
-        normalizedUpdatedValue,
-        nodeOptions.value,
-    );
-
-    if (!chosenKey) {
-        selectedKeys.value = {};
-        emit("update:pathSequence", []);
-        lastEmittedPathSequenceKey.value = null;
-        lastEmittedSelectedTreeKey.value = null;
-        return;
-    }
-
-    const matchingNode = findNodeByKey(nodeOptions.value, chosenKey);
+    const matchingNode = findNodeByKey(nodeOptions.value, nextSelectedKey);
 
     if (
         !matchingNode ||
         matchingNode.selectable === false ||
         !matchingNode.data.graph_slug
     ) {
-        selectedKeys.value = {};
+        selectedSelectionKeys.value = {};
         emit("update:pathSequence", []);
         lastEmittedPathSequenceKey.value = null;
         lastEmittedSelectedTreeKey.value = null;
         return;
     }
 
-    selectedKeys.value = { [chosenKey]: true };
-
     const emittedPathSequence: PathSequence = [
         [matchingNode.data.graph_slug, matchingNode.data.alias],
     ];
 
     lastEmittedPathSequenceKey.value = makePathSequenceKey(emittedPathSequence);
-    lastEmittedSelectedTreeKey.value = chosenKey;
+    lastEmittedSelectedTreeKey.value = nextSelectedKey;
 
     emit("update:pathSequence", emittedPathSequence);
 }
@@ -770,9 +749,9 @@ function getSelectedNodeSummaryFromValueSlot(
     >
         <TreeSelect
             :key="graphSelectionKey"
-            style="font-size: 1.2rem"
+            v-model="selectedSelectionKeys"
             selection-mode="single"
-            :model-value="selectedKeys"
+            style="font-size: 1.2rem"
             :disabled="selectableNodeCount === 0"
             filter
             :filter-placeholder="$gettext('Search nodes...')"

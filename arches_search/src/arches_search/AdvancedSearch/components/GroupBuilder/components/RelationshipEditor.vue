@@ -164,17 +164,18 @@ watch(
         isLoadingRelatableTree.value = true;
         hasLoadedRelatableTree.value = false;
         relatableTreeError.value = null;
-        relatableNodesTreeResponse.value = null;
 
         if (!anchorGraphId) {
+            relatableNodesTreeResponse.value = null;
             isLoadingRelatableTree.value = false;
             hasLoadedRelatableTree.value = true;
             return;
         }
 
         try {
-            relatableNodesTreeResponse.value =
+            const nextRelatableNodesTreeResponse =
                 await getRelatableNodesTreeForGraphId(anchorGraphId);
+            relatableNodesTreeResponse.value = nextRelatableNodesTreeResponse;
         } catch (caughtError) {
             relatableTreeError.value = caughtError as Error;
             relatableNodesTreeResponse.value = null;
@@ -187,8 +188,17 @@ watch(
 );
 
 watch(
-    () => relatableGraphOptions.value,
-    (options) => {
+    () =>
+        [
+            relatableGraphOptions.value,
+            isLoadingRelatableTree.value,
+            hasLoadedRelatableTree.value,
+        ] as const,
+    ([options, isLoading, hasLoaded]) => {
+        if (isLoading || !hasLoaded) {
+            return;
+        }
+
         if (!props.innerGraphSlug) {
             if (options.length === 1) {
                 emit("update:innerGraphSlug", options[0]!.value);
