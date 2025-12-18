@@ -127,6 +127,8 @@ const liveQueryPanelBodyElement = ref<HTMLElement | null>(null);
 const liveQueryPanelFooterElement = ref<HTMLElement | null>(null);
 const liveQueryPanelContentElement = ref<HTMLElement | null>(null);
 
+const splitterComponentRef = ref<unknown>(null);
+
 const shouldRenderSplitter = ref(false);
 const hasUserResizedSplitter = ref(false);
 
@@ -141,14 +143,14 @@ const bottomPanelSplitterProps = computed<Record<string, unknown>>(() =>
     hasUserResizedSplitter.value ? {} : { size: bottomPanelPercent.value },
 );
 
-const splitterInstanceKey = ref(0);
-
 let resizeObserver: ResizeObserver | null = null;
 let rafId: number | null = null;
 
 let cooldownUntilMs = 0;
 let trailingTimeoutId: number | null = null;
 let trailingTopPercent: number | null = null;
+
+let isApplyingProgrammaticSplitterResize = false;
 
 watchEffect(async () => {
     try {
@@ -177,6 +179,9 @@ watch(
         topPanelPercent.value = computeInitialTopPanelPercent();
 
         shouldRenderSplitter.value = true;
+
+        await nextTick();
+        applySplitterSizingIfPossible(topPanelPercent.value);
     },
     { immediate: true },
 );
@@ -192,13 +197,19 @@ watchEffect(() => {
         return;
     }
 
-    const el = liveQueryPanelContentElement.value;
-    if (!el) {
+    const contentElement = liveQueryPanelContentElement.value;
+    if (!contentElement) {
         return;
     }
 
-    resizeObserver = new ResizeObserver(() => requestAutoGrowTopPanel());
-    resizeObserver.observe(el);
+    resizeObserver = new ResizeObserver(() => {
+        if (isApplyingProgrammaticSplitterResize) {
+            return;
+        }
+        requestAutoGrowTopPanel();
+    });
+
+    resizeObserver.observe(contentElement);
 
     requestAutoGrowTopPanel();
 });
@@ -220,14 +231,15 @@ function teardownAutoGrow(): void {
     }
 
     trailingTopPercent = null;
+    isApplyingProgrammaticSplitterResize = false;
 }
 
 function raf(): Promise<void> {
     return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-function clamp(min: number, max: number, value: number): number {
-    return Math.max(min, Math.min(max, value));
+function clamp(minimum: number, maximum: number, value: number): number {
+    return Math.max(minimum, Math.min(maximum, value));
 }
 
 function requestAutoGrowTopPanel(): void {
@@ -246,30 +258,30 @@ function requestAutoGrowTopPanel(): void {
             return;
         }
 
-        const desired = computeDesiredTopPanelPercentIfNeeded();
-        if (desired === null) {
+        const desiredTopPanelPercent = computeDesiredTopPanelPercentIfNeeded();
+        if (desiredTopPanelPercent === null) {
             return;
         }
 
         if (
-            desired <=
+            desiredTopPanelPercent <=
             topPanelPercent.value + TOP_PANEL_PERCENT_CHANGE_EPSILON
         ) {
             return;
         }
 
-        const now = Date.now();
+        const nowMs = Date.now();
 
-        if (now >= cooldownUntilMs) {
-            applyTopPanelGrow(desired);
-            cooldownUntilMs = now + AUTO_GROW_COOLDOWN_MILLISECONDS;
+        if (nowMs >= cooldownUntilMs) {
+            applyTopPanelGrow(desiredTopPanelPercent);
+            cooldownUntilMs = nowMs + AUTO_GROW_COOLDOWN_MILLISECONDS;
             return;
         }
 
         trailingTopPercent =
             trailingTopPercent === null
-                ? desired
-                : Math.max(trailingTopPercent, desired);
+                ? desiredTopPanelPercent
+                : Math.max(trailingTopPercent, desiredTopPanelPercent);
 
         if (trailingTimeoutId !== null) {
             return;
@@ -284,101 +296,178 @@ function requestAutoGrowTopPanel(): void {
                     return;
                 }
 
-                const queued = trailingTopPercent;
+                const queuedTopPercent = trailingTopPercent;
                 trailingTopPercent = null;
 
-                if (queued === null) {
+                if (queuedTopPercent === null) {
                     return;
                 }
 
                 if (
-                    queued <=
+                    queuedTopPercent <=
                     topPanelPercent.value + TOP_PANEL_PERCENT_CHANGE_EPSILON
                 ) {
                     return;
                 }
 
-                applyTopPanelGrow(queued);
+                applyTopPanelGrow(queuedTopPercent);
                 cooldownUntilMs = Date.now() + AUTO_GROW_COOLDOWN_MILLISECONDS;
             },
-            Math.max(0, cooldownUntilMs - now),
+            Math.max(0, cooldownUntilMs - nowMs),
         );
     });
 }
 
 function computeInitialTopPanelPercent(): number {
-    const host = splitterHostElement.value;
-    const natural = naturalQueryPanelElement.value;
+    const hostElement = splitterHostElement.value;
+    const naturalElement = naturalQueryPanelElement.value;
 
-    if (!host || !natural) {
+    if (!hostElement || !naturalElement) {
         return TOP_PANEL_PERCENT_FALLBACK;
     }
 
-    const available = host.getBoundingClientRect().height;
-    if (available <= 0) {
+    const availablePixels = hostElement.getBoundingClientRect().height;
+    if (availablePixels <= 0) {
         return TOP_PANEL_PERCENT_FALLBACK;
     }
 
-    const maxTopPx = Math.max(
+    const maxTopPixels = Math.max(
         MINIMUM_TOP_PANEL_HEIGHT_PIXELS,
-        available - MINIMUM_BOTTOM_PANEL_HEIGHT_PIXELS,
+        availablePixels - MINIMUM_BOTTOM_PANEL_HEIGHT_PIXELS,
     );
 
-    const naturalTopPx = natural.scrollHeight + TOP_PANEL_SCROLL_GUARD_PIXELS;
+    const naturalTopPixels =
+        naturalElement.scrollHeight + TOP_PANEL_SCROLL_GUARD_PIXELS;
 
-    const chosenTopPx = Math.min(
-        maxTopPx,
-        Math.max(MINIMUM_TOP_PANEL_HEIGHT_PIXELS, naturalTopPx),
+    const chosenTopPixels = Math.min(
+        maxTopPixels,
+        Math.max(MINIMUM_TOP_PANEL_HEIGHT_PIXELS, naturalTopPixels),
     );
 
-    return clamp(5, 95, (Math.ceil(chosenTopPx) / available) * 100);
+    return clamp(5, 95, (Math.ceil(chosenTopPixels) / availablePixels) * 100);
 }
 
 function computeDesiredTopPanelPercentIfNeeded(): number | null {
-    const host = splitterHostElement.value;
-    const body = liveQueryPanelBodyElement.value;
-    const footer = liveQueryPanelFooterElement.value;
-    const content = liveQueryPanelContentElement.value;
+    const hostElement = splitterHostElement.value;
+    const bodyElement = liveQueryPanelBodyElement.value;
+    const footerElement = liveQueryPanelFooterElement.value;
+    const contentElement = liveQueryPanelContentElement.value;
 
-    if (!host || !body || !footer || !content) {
+    if (!hostElement || !bodyElement || !footerElement || !contentElement) {
         return null;
     }
 
-    const available = host.getBoundingClientRect().height;
-    if (available <= 0) {
+    const availablePixels = hostElement.getBoundingClientRect().height;
+    if (availablePixels <= 0) {
         return null;
     }
 
-    const bodyClientPx = body.clientHeight;
-    const contentScrollPx = content.scrollHeight;
+    const bodyClientPixels = bodyElement.clientHeight;
+    const contentScrollPixels = contentElement.scrollHeight;
 
-    if (contentScrollPx <= bodyClientPx + TOP_PANEL_SCROLL_GUARD_PIXELS) {
+    if (
+        contentScrollPixels <=
+        bodyClientPixels + TOP_PANEL_SCROLL_GUARD_PIXELS
+    ) {
         return null;
     }
 
-    const footerPx = footer.getBoundingClientRect().height;
+    const footerPixels = footerElement.getBoundingClientRect().height;
 
-    const desiredTopPx =
-        footerPx + contentScrollPx + TOP_PANEL_SCROLL_GUARD_PIXELS;
+    const desiredTopPixels =
+        footerPixels + contentScrollPixels + TOP_PANEL_SCROLL_GUARD_PIXELS;
 
-    const maxTopPx = Math.max(
+    const maxTopPixels = Math.max(
         MINIMUM_TOP_PANEL_HEIGHT_PIXELS,
-        available - MINIMUM_BOTTOM_PANEL_HEIGHT_PIXELS,
+        availablePixels - MINIMUM_BOTTOM_PANEL_HEIGHT_PIXELS,
     );
 
-    const chosenTopPx = Math.min(
-        maxTopPx,
-        Math.max(MINIMUM_TOP_PANEL_HEIGHT_PIXELS, desiredTopPx),
+    const chosenTopPixels = Math.min(
+        maxTopPixels,
+        Math.max(MINIMUM_TOP_PANEL_HEIGHT_PIXELS, desiredTopPixels),
     );
 
-    return clamp(5, 95, (Math.ceil(chosenTopPx) / available) * 100);
+    return clamp(5, 95, (Math.ceil(chosenTopPixels) / availablePixels) * 100);
 }
 
 function applyTopPanelGrow(desiredTopPercent: number): void {
     topPanelPercent.value = desiredTopPercent;
 
-    teardownAutoGrow();
-    splitterInstanceKey.value += 1;
+    isApplyingProgrammaticSplitterResize = true;
+
+    void nextTick().then(() => {
+        applySplitterSizingIfPossible(desiredTopPercent);
+
+        requestAnimationFrame(() => {
+            isApplyingProgrammaticSplitterResize = false;
+        });
+    });
+}
+
+function applySplitterSizingIfPossible(desiredTopPercent: number): void {
+    const splitterInstance = splitterComponentRef.value as {
+        resetState?: () => void;
+        $el?: HTMLElement;
+        panelSizes?: number[];
+        saveState?: () => void;
+    } | null;
+
+    if (!splitterInstance) {
+        return;
+    }
+
+    if (typeof splitterInstance.resetState === "function") {
+        splitterInstance.resetState();
+        return;
+    }
+
+    applySplitterFlexBasisFallback(splitterInstance, desiredTopPercent);
+}
+
+function applySplitterFlexBasisFallback(
+    splitterInstance: {
+        $el?: HTMLElement;
+        panelSizes?: number[];
+        saveState?: () => void;
+    },
+    desiredTopPercent: number,
+): void {
+    const splitterRootElement: HTMLElement | null =
+        splitterInstance.$el ?? null;
+    if (!splitterRootElement) {
+        return;
+    }
+
+    const panelElements = splitterRootElement.querySelectorAll<HTMLElement>(
+        ":scope > .p-splitterpanel",
+    );
+    if (panelElements.length < 2) {
+        return;
+    }
+
+    const gutterElement =
+        splitterRootElement.querySelector<HTMLElement>(
+            ":scope > .p-splitter-gutter",
+        ) ?? null;
+
+    const gutterSizePixels = gutterElement?.getBoundingClientRect().height ?? 4;
+
+    const topFlexBasis = `calc(${desiredTopPercent}% - ${gutterSizePixels}px)`;
+    const bottomFlexBasis = `calc(${100 - desiredTopPercent}% - ${gutterSizePixels}px)`;
+
+    panelElements[0].style.flexBasis = topFlexBasis;
+    panelElements[1].style.flexBasis = bottomFlexBasis;
+
+    if (Array.isArray(splitterInstance.panelSizes)) {
+        splitterInstance.panelSizes = [
+            desiredTopPercent,
+            100 - desiredTopPercent,
+        ];
+
+        if (typeof splitterInstance.saveState === "function") {
+            splitterInstance.saveState();
+        }
+    }
 }
 
 function onSplitterResizeEnd(): void {
@@ -610,7 +699,7 @@ function onAnalyzePayloadButtonClick(): void {
 
                 <Splitter
                     v-else
-                    :key="splitterInstanceKey"
+                    ref="splitterComponentRef"
                     layout="vertical"
                     class="search-splitter"
                     @resizeend="onSplitterResizeEnd"
