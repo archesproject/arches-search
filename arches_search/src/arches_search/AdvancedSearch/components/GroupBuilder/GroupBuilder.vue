@@ -714,12 +714,12 @@ function onOpenMapFilterDrawer(): void {
                                         @update:model-value="
                                             clauseUpdateHandlersByIndex[
                                                 clauseIndex
-                                            ];
+                                            ]($event)
                                         "
                                         @request:remove="
                                             clauseRemoveHandlersByIndex[
                                                 clauseIndex
-                                            ];
+                                            ]()
                                         "
                                     />
                                 </template>
@@ -750,10 +750,14 @@ function onOpenMapFilterDrawer(): void {
                                     childGroup.relationship ?? null
                                 "
                                 @update:model-value="
-                                    childGroupUpdateHandlersByIndex[childIndex]
+                                    childGroupUpdateHandlersByIndex[childIndex](
+                                        $event,
+                                    )
                                 "
                                 @remove="
-                                    childGroupRemoveHandlersByIndex[childIndex]
+                                    childGroupRemoveHandlersByIndex[
+                                        childIndex
+                                    ]()
                                 "
                             />
                         </div>
