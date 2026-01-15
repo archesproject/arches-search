@@ -233,12 +233,6 @@ def build_aggregations(
                 **metric_annotations
             )
 
-        if name == "allocation_per_device_type":
-            formatted_sql = format(
-                str(local_queryset.query), reindent=True, keyword_case="upper"
-            )
-            print(formatted_sql)
-
         results[name] = list(local_queryset)
 
         # Handle "simple" aggregates on the current queryset level
