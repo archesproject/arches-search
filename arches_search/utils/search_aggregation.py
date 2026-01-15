@@ -3,8 +3,6 @@ Utility functions for building nested subqueries and aggregations
 used in advanced search queries within the Arches search system.
 """
 
-from sqlparse import format
-
 from arches.app.models.models import TileModel
 from django.apps import apps
 from django.db import models
@@ -59,7 +57,7 @@ def build_value_subquery(
     parent_ref_field: str = "tileid",
     where: Optional[Dict[str, Any]] = None,
     fn: Optional[str] = None,
-    apply_agg_fn_per_tile: Optional[bool] = False,
+    aggregate_by_tile: Optional[bool] = False,
     value_field: str = "value",
     annotations: Optional[Dict[str, Any]] = None,
 ) -> Subquery:
@@ -76,7 +74,7 @@ def build_value_subquery(
         where (dict, optional): Additional filter conditions to apply.
         fn (str, optional): An aggregate function name to apply (e.g., "Sum", "Avg").
             If provided, the subquery will return the aggregated value.
-        apply_agg_fn_per_tile (bool, optional): Whether to apply the aggregate function
+        aggregate_by_tile (bool, optional): Whether to apply the aggregate function
             per tile before aggregating at the resource level. Defaults to False.
         value_field (str, optional): The field to select as the subquery value.
             Defaults to "value".
@@ -86,23 +84,22 @@ def build_value_subquery(
         Subquery: A Django ORM Subquery returning the specified field value.
     """
     search_model = get_search_model(search_table_name)
-    if apply_agg_fn_per_tile:
-        filters = {
-            "node_alias": node_alias,
-            "tileid": OuterRef(parent_ref_field),
-        }
+
+    filters = {"node_alias": node_alias}
+    if aggregate_by_tile:
+        filters["tileid"] = OuterRef(parent_ref_field)
     else:
-        filters = {
-            "node_alias": node_alias,
-            "resourceinstanceid": OuterRef(parent_ref_field),
-        }
+        filters["resourceinstanceid"] = OuterRef(parent_ref_field)
     qs = search_model.objects.filter(**filters)
+
     if annotations:
         qs = qs.annotate(**annotations)
+
     if where:
         qs = qs.filter(**where)
+
     if fn:
-        if apply_agg_fn_per_tile == False and fn != "Count":
+        if aggregate_by_tile == False and fn != "Count":
             fn = "Sum"
         aggregate_fn = get_aggregate_function(fn)
         aggregated_value_field = f"{fn.lower()}_{node_alias}"
@@ -116,46 +113,49 @@ def build_value_subquery(
 
 
 def build_subquery(
-    group_spec: Dict[str, Any],
-    parent_ref_field: str = "tileid",
-    apply_agg_fn_per_tile: bool = False,
+    query_def: Dict[str, Any],
+    parent_ref_field: str = "resourceinstanceid",
+    aggregate_by_tile: bool = False,
 ) -> Subquery:
     """
     Recursively build nested subqueries for deeply linked nodes in group-by specifications.
 
     Args:
-        group_spec (dict): The group specification containing search table, node alias,
-            and potentially nested aggregations.
+        query_def (dict): The options that define the values to build the subquery.
         parent_ref_field (str, optional): The field in the parent queryset to reference.
             Defaults to "resourceinstanceid".
+        aggregate_by_tile (bool, optional): Whether to aggregate data per tile.
+            Set to True when your grouped fields are at the tile level and are cardinality n
+            and when your metrics are on the same tile. Defaults to False.
 
     Returns:
         Subquery: The constructed nested Subquery.
     """
     subquery = build_value_subquery(
-        search_table_name=group_spec["search_table"],
-        node_alias=group_spec["node_alias"],
+        search_table_name=query_def["search_table"],
+        node_alias=query_def["node_alias"],
         parent_ref_field=parent_ref_field,
-        where=group_spec.get("where"),
-        fn=group_spec.get("fn"),
-        apply_agg_fn_per_tile=apply_agg_fn_per_tile,
+        where=query_def.get("where"),
+        fn=query_def.get("fn"),
+        aggregate_by_tile=aggregate_by_tile,
     )
 
     # Handle nested aggregations recursively
-    for agg in group_spec.get("aggregations", []):
+    for agg in query_def.get("aggregations", []):
         for nested_group in agg.get("group_by", []):
             nested_subquery = build_subquery(
                 nested_group,
                 parent_ref_field="value",
-                apply_agg_fn_per_tile=apply_agg_fn_per_tile,
+                aggregate_by_tile=aggregate_by_tile,
             )
             subquery = build_value_subquery(
-                search_table_name=group_spec["search_table"],
-                node_alias=group_spec["node_alias"],
+                search_table_name=query_def["search_table"],
+                node_alias=query_def["node_alias"],
                 parent_ref_field=parent_ref_field,
-                where=group_spec.get("where"),
+                where=query_def.get("where"),
                 value_field=nested_group["alias"],
                 annotations={nested_group["alias"]: nested_subquery},
+                aggregate_by_tile=aggregate_by_tile,
             )
 
     return subquery
@@ -186,17 +186,14 @@ def build_aggregations(
 
         group_bys = agg.get("group_by", [])
         metrics = agg.get("metrics", [])
-        apply_agg_fn_per_tile = agg.get("apply_agg_fn_per_tile", False)
-        if apply_agg_fn_per_tile:
+
+        aggregate_by_tile = agg.get("aggregate_by_tile", False)
+        if aggregate_by_tile:
             parent_ref_field = "tileid"
             local_queryset = TileModel.objects.filter(resourceinstance_id__in=queryset)
         else:
             parent_ref_field = "resourceinstanceid"
             local_queryset = queryset
-        # local_queryset.filter(tilemodel__tileid__isnull=False)
-        # import ipdb
-
-        # ipdb.sset_trace()
 
         # Apply group-by subqueries
         for group_spec in group_bys:
@@ -206,7 +203,7 @@ def build_aggregations(
                     field_alias: build_subquery(
                         group_spec,
                         parent_ref_field=parent_ref_field,
-                        apply_agg_fn_per_tile=apply_agg_fn_per_tile,
+                        aggregate_by_tile=aggregate_by_tile,
                     )
                 }
             )
@@ -216,17 +213,16 @@ def build_aggregations(
         for metric_spec in metrics:
             alias = metric_spec["alias"]
             fn = metric_spec["fn"]
-            # apply_agg_fn_per_tile = metric_spec.get("apply_agg_fn_per_tile", False)
             # we need to handle Count differently because when we do counts per resource
             # we want to sum the counts of each tile, not count the counts from each tile
             # which would always be 1 per resource
-            if apply_agg_fn_per_tile == False and fn == "Count":
+            if aggregate_by_tile == False and fn == "Count":
                 fn = "Sum"
             aggregate_fn = get_aggregate_function(fn)
             subquery = build_subquery(
                 metric_spec,
                 parent_ref_field=parent_ref_field,
-                apply_agg_fn_per_tile=apply_agg_fn_per_tile,
+                aggregate_by_tile=aggregate_by_tile,
             )
             metric_annotations[alias] = aggregate_fn(subquery)
 
