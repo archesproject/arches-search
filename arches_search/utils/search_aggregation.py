@@ -54,7 +54,7 @@ def get_aggregate_function(fn_name: str) -> Callable[..., Any]:
 def build_value_subquery(
     search_table_name: str,
     node_alias: str,
-    parent_ref_field: str = "tileid",
+    parent_ref_field: str = "resourceinstanceid",
     where: Optional[Dict[str, Any]] = None,
     fn: Optional[str] = None,
     aggregate_by_tile: Optional[bool] = False,
@@ -69,7 +69,7 @@ def build_value_subquery(
     Args:
         search_table_name (str): The search table used to look up the model.
         node_alias (str): The node alias used to filter the queryset.
-        parent_ref_field (str, optional): The reference field in the parent queryset.
+        parent_ref_field (str, optional): The column name to join outer and subqueries on.
             Defaults to "resourceinstanceid".
         where (dict, optional): Additional filter conditions to apply.
         fn (str, optional): An aggregate function name to apply (e.g., "Sum", "Avg").
@@ -122,7 +122,7 @@ def build_subquery(
 
     Args:
         query_def (dict): The options that define the values to build the subquery.
-        parent_ref_field (str, optional): The field in the parent queryset to reference.
+        parent_ref_field (str, optional): The column name to join outer and subqueries on.
             Defaults to "resourceinstanceid".
         aggregate_by_tile (bool, optional): Whether to aggregate data per tile.
             Set to True when your grouped fields are at the tile level and are cardinality n
