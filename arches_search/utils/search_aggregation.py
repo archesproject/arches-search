@@ -60,6 +60,7 @@ def build_value_subquery(
     aggregate_by_tile: Optional[bool] = False,
     value_field: str = "value",
     annotations: Optional[Dict[str, Any]] = None,
+    override_outer_ref: bool = False,
 ) -> Subquery:
     """
     Build a base Subquery returning a single value from a search table.
@@ -89,7 +90,11 @@ def build_value_subquery(
     if aggregate_by_tile:
         filters["tileid"] = OuterRef(parent_ref_field)
     else:
-        filters["resourceinstanceid"] = OuterRef(parent_ref_field)
+        # parent_ref_field = "resourceinstanceid"
+        if override_outer_ref:
+            filters["resourceinstanceid"] = OuterRef("resourceinstance_id")
+        else:
+            filters["resourceinstanceid"] = OuterRef("resourceinstanceid")
     qs = search_model.objects.filter(**filters)
 
     if annotations:
@@ -131,13 +136,17 @@ def build_subquery(
     Returns:
         Subquery: The constructed nested Subquery.
     """
+
+    override_outer_ref = query_def.get("aggregate_by_tile", None) != None
+
     subquery = build_value_subquery(
         search_table_name=query_def["search_table"],
         node_alias=query_def["node_alias"],
         parent_ref_field=parent_ref_field,
         where=query_def.get("where"),
         fn=query_def.get("fn"),
-        aggregate_by_tile=aggregate_by_tile,
+        aggregate_by_tile=query_def.get("aggregate_by_tile", aggregate_by_tile),
+        override_outer_ref=override_outer_ref,
     )
 
     # Handle nested aggregations recursively
@@ -186,6 +195,7 @@ def build_aggregations(
 
         group_bys = agg.get("group_by", [])
         metrics = agg.get("metrics", [])
+        where_clause = agg.get("where", None)
 
         aggregate_by_tile = agg.get("aggregate_by_tile", False)
         if aggregate_by_tile:
@@ -232,6 +242,9 @@ def build_aggregations(
             local_queryset = local_queryset.values(*group_fields).annotate(
                 **metric_annotations
             )
+
+        if where_clause:
+            local_queryset = local_queryset.filter(**where_clause)
 
         results[name] = list(local_queryset)
 
