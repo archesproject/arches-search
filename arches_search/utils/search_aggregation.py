@@ -90,7 +90,6 @@ def build_value_subquery(
     if aggregate_by_tile:
         filters["tileid"] = OuterRef(parent_ref_field)
     else:
-        # parent_ref_field = "resourceinstanceid"
         if override_outer_ref:
             filters["resourceinstanceid"] = OuterRef("resourceinstance_id")
         else:
@@ -123,19 +122,49 @@ def build_subquery(
     aggregate_by_tile: bool = False,
 ) -> Subquery:
     """
-    Recursively build nested subqueries for deeply linked nodes in group-by specifications.
+    This function constructs a subquery that can be used to retrieve and aggregate data
+    from search tables. It supports nested aggregations and tile-level aggregation,
+    allowing for complex hierarchical data queries.
+
 
     Args:
-        query_def (dict): The options that define the values to build the subquery.
-        parent_ref_field (str, optional): The column name to join outer and subqueries on.
-            Defaults to "resourceinstanceid".
+        query_def (Dict[str, Any]): A dictionary defining the subquery structure with keys:
+            - search_table (str): The name of the search table to query
+            - node_alias (str): The alias for the node being queried
+            - where (optional): Filter conditions for the subquery
+            - fn (optional): Aggregation function to apply
+            - aggregate_by_tile (bool, optional): Whether to aggregate at tile level
+            - aggregations (list, optional): List of nested aggregation specifications
+
+        parent_ref_field (str, optional): The column name used to join the outer query
+            with this subquery. Defaults to "resourceinstanceid".
+            Should be set to True when grouped fields are at the tile level with
+            cardinality n and metrics are on the same tile. Defaults to False.
+
         aggregate_by_tile (bool, optional): Whether to aggregate data per tile.
             Set to True when your grouped fields are at the tile level and are cardinality n
             and when your metrics are on the same tile. Defaults to False.
 
     Returns:
-        Subquery: The constructed nested Subquery.
+        Subquery: A constructed nested Subquery object that can be used in Django ORM
+            queries or further nested in other subqueries.
+
+    Raises:
+        Exception: If attempting to build a tile-aggregated subquery when the parent
+            query is not aggregating by tile.
+
+    Notes:
+        - The function validates that tile-level aggregation is consistent between
+          parent and child queries
+        - Nested aggregations are processed recursively, with each level building
+          upon the previous subquery
+        - The parent_ref_field changes to "value" for nested recursive calls
     """
+
+    if aggregate_by_tile == False and query_def.get("aggregate_by_tile", None) == True:
+        raise Exception(
+            "Cannot build subquery that aggregates by tile when parent query is not aggregating by tile."
+        )
 
     override_outer_ref = query_def.get("aggregate_by_tile", None) != None
 
