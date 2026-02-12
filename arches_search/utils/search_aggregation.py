@@ -60,7 +60,7 @@ def build_value_subquery(
     aggregate_by_tile: Optional[bool] = False,
     value_field: str = "value",
     annotations: Optional[Dict[str, Any]] = None,
-    override_outer_ref: bool = False,
+    outer_aggregate_by_tile: Optional[bool] = False,
 ) -> Subquery:
     """
     Build a base Subquery returning a single value from a search table.
@@ -80,6 +80,8 @@ def build_value_subquery(
         value_field (str, optional): The field to select as the subquery value.
             Defaults to "value".
         annotations (dict, optional): Extra annotations to apply before subquery selection.
+        outer_aggregate_by_tile (bool, optional): Indicates if the parent query is aggregating by tile.
+            This affects how we join the subquery to the parent query.  Defaults to False.
 
     Returns:
         Subquery: A Django ORM Subquery returning the specified field value.
@@ -90,10 +92,12 @@ def build_value_subquery(
     if aggregate_by_tile:
         filters["tileid"] = OuterRef(parent_ref_field)
     else:
-        if override_outer_ref:
+        if outer_aggregate_by_tile == True and aggregate_by_tile == False:
+            # When "joining" the Tiles table to the ResourceInstances table we need
+            # to reference resources via resourceinstance_id rather than resourceinstanceid
             filters["resourceinstanceid"] = OuterRef("resourceinstance_id")
         else:
-            filters["resourceinstanceid"] = OuterRef("resourceinstanceid")
+            filters["resourceinstanceid"] = OuterRef(parent_ref_field)
     qs = search_model.objects.filter(**filters)
 
     if annotations:
@@ -166,8 +170,6 @@ def build_subquery(
             "Cannot build subquery that aggregates by tile when parent query is not aggregating by tile."
         )
 
-    override_outer_ref = query_def.get("aggregate_by_tile", None) != None
-
     subquery = build_value_subquery(
         search_table_name=query_def["search_table"],
         node_alias=query_def["node_alias"],
@@ -175,7 +177,7 @@ def build_subquery(
         where=query_def.get("where"),
         fn=query_def.get("fn"),
         aggregate_by_tile=query_def.get("aggregate_by_tile", aggregate_by_tile),
-        override_outer_ref=override_outer_ref,
+        outer_aggregate_by_tile=aggregate_by_tile,
     )
 
     # Handle nested aggregations recursively
