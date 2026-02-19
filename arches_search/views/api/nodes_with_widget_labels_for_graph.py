@@ -18,6 +18,7 @@ class NodesWithWidgetLabelsForGraphAPI(APIBase):
                 "name",
                 "sortorder",
                 "datatype",
+                "issearchable",
             )
         )
         if not node_rows:
@@ -26,32 +27,21 @@ class NodesWithWidgetLabelsForGraphAPI(APIBase):
         nodegroup_id_by_node_id = {}
         node_name_by_node_id = {}
         node_sortorder_by_node_id = {}
+        searchable_node_ids = set()
 
         for node_row in node_rows:
             node_id = node_row["nodeid"]
             nodegroup_id_by_node_id[node_id] = node_row["nodegroup_id"]
             node_name_by_node_id[node_id] = str(node_row["name"])
             node_sortorder_by_node_id[node_id] = node_row["sortorder"] or 0
+            if node_row.get("issearchable") is True:
+                searchable_node_ids.add(node_id)
 
-        all_node_ids_in_graph = set(nodegroup_id_by_node_id.keys())
         nodegroup_ids_in_graph = {
             nodegroup_id
             for nodegroup_id in nodegroup_id_by_node_id.values()
             if nodegroup_id is not None
         }
-
-        hidden_nodegroup_ids = set(
-            arches_models.Card.objects.filter(
-                nodegroup_id__in=nodegroup_ids_in_graph,
-                visible=False,
-            ).values_list("nodegroup_id", flat=True)
-        )
-
-        nodegroup_ids_with_any_card = set(
-            arches_models.Card.objects.filter(
-                nodegroup_id__in=nodegroup_ids_in_graph
-            ).values_list("nodegroup_id", flat=True)
-        )
 
         card_title_by_nodegroup_id = {}
         card_rows = (
@@ -64,36 +54,6 @@ class NodesWithWidgetLabelsForGraphAPI(APIBase):
             if nodegroup_id not in card_title_by_nodegroup_id:
                 card_title_by_nodegroup_id[nodegroup_id] = str(card_row["name"])
 
-        nodegroup_root_node_ids = {
-            node_row["nodeid"]
-            for node_row in node_rows
-            if node_row["nodegroup_id"] is not None
-            and node_row["nodeid"] == node_row["nodegroup_id"]
-        }
-
-        nodegroup_root_node_ids_without_any_card = {
-            nodegroup_root_node_id
-            for nodegroup_root_node_id in nodegroup_root_node_ids
-            if nodegroup_root_node_id not in nodegroup_ids_with_any_card
-        }
-
-        nodegroup_root_node_ids_with_visible_card = set(
-            arches_models.Card.objects.filter(nodegroup_id__in=nodegroup_root_node_ids)
-            .exclude(visible=False)
-            .values_list("nodegroup_id", flat=True)
-            .distinct()
-        )
-
-        hidden_node_ids_raw = set(
-            arches_models.CardXNodeXWidget.objects.filter(
-                node__graph_id=graph_id,
-                visible=False,
-            ).values_list("node_id", flat=True)
-        )
-        hidden_node_ids_for_exclusion = (
-            hidden_node_ids_raw - nodegroup_root_node_ids_with_visible_card
-        )
-
         parents_by_child_id = defaultdict(list)
         edge_pairs = arches_models.Edge.objects.filter(graph_id=graph_id).values_list(
             "domainnode_id",
@@ -105,20 +65,7 @@ class NodesWithWidgetLabelsForGraphAPI(APIBase):
             parents_by_child_id[child_node_id].append(parent_node_id)
 
         def is_node_filtered(candidate_node_id):
-            if candidate_node_id in hidden_node_ids_for_exclusion:
-                return True
-
-            if candidate_node_id in nodegroup_root_node_ids_without_any_card:
-                return True
-
-            candidate_nodegroup_id = nodegroup_id_by_node_id.get(candidate_node_id)
-            if (
-                candidate_nodegroup_id is not None
-                and candidate_nodegroup_id in hidden_nodegroup_ids
-            ):
-                return True
-
-            return False
+            return candidate_node_id not in searchable_node_ids
 
         def resolve_closest_unfiltered_parent_id(child_node_id):
             candidate_parent_node_ids = parents_by_child_id.get(child_node_id, [])
@@ -155,10 +102,9 @@ class NodesWithWidgetLabelsForGraphAPI(APIBase):
             return None
 
         nodes_queryset = (
-            arches_models.Node.objects.filter(graph_id=graph_id)
-            .exclude(nodeid__in=hidden_node_ids_for_exclusion)
-            .exclude(nodeid__in=nodegroup_root_node_ids_without_any_card)
-            .exclude(nodegroup_id__in=hidden_nodegroup_ids)
+            arches_models.Node.objects.filter(
+                graph_id=graph_id, nodeid__in=searchable_node_ids
+            )
             .order_by("sortorder", "name")
             .select_related("nodegroup")
             .prefetch_related(
