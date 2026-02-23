@@ -23,11 +23,22 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-dependencies = [ "arches<8.2.0,>=8.1.0a0", "arches-controlled-lists>=1.1.0a0",]
+dependencies = [ 
+    "arches<8.2.0,>=8.1.0a0", 
+    "arches-controlled-lists>=1.1.0a0", 
+    "arches-modular-reports>=1.0.0b4",
+]
 dynamic = []
 
 [tool.setuptools]
 packages = [ "arches_search",]
 
 [dependency-groups]
-dev = [ "black==24.4.2", "coverage", "django-silk==5.1.0", "livereload", "pre-commit==3.8.0", "sst",]
+dev = [ 
+    "black==24.4.2", 
+    "coverage", 
+    "django-silk==5.1.0", 
+    "livereload", 
+    "pre-commit==3.8.0", 
+    "sst",
+]
