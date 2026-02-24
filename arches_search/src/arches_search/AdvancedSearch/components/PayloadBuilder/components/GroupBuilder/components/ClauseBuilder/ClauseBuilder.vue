@@ -5,8 +5,8 @@ import { useGettext } from "vue3-gettext";
 import Select from "primevue/select";
 import Button from "primevue/button";
 
-import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/PathBuilder.vue";
-import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
+import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/PathBuilder.vue";
+import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
 
 import type { Ref } from "vue";
 import type {

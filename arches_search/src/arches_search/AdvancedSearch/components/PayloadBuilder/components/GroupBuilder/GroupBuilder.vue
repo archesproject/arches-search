@@ -7,10 +7,10 @@ import Card from "primevue/card";
 import Button from "primevue/button";
 import Drawer from "primevue/drawer";
 
-import GroupBracket from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupBracket.vue";
-import GroupHeader from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/GroupHeader.vue";
-import ClauseBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/ClauseBuilder/ClauseBuilder.vue";
-import RelationshipEditor from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/RelationshipEditor.vue";
+import GroupBracket from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupBracket.vue";
+import GroupHeader from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupHeader.vue";
+import ClauseBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/ClauseBuilder.vue";
+import RelationshipEditor from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/RelationshipEditor.vue";
 
 import {
     makeEmptyGroupPayload,
@@ -24,7 +24,7 @@ import {
     setClauseAtIndex,
     replaceChildGroupAtIndexAndReconcile,
     setRelationshipAndReconcileClauses,
-} from "@/arches_search/AdvancedSearch/advanced-search-payload-builder.ts";
+} from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 
 import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 

@@ -7,7 +7,7 @@ import Card from "primevue/card";
 import Message from "primevue/message";
 import Select from "primevue/select";
 
-import PathBuilder from "@/arches_search/AdvancedSearch/components/GroupBuilder/components/PathBuilder.vue";
+import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/PathBuilder.vue";
 
 import type {
     GraphModel,

@@ -6,50 +6,40 @@ const topPanelHeight = ref("auto");
 
 const isDragging = ref(false);
 
-let startClientY = 0;
-let startTopPanelHeightPixels = 0;
-let containerHeightPixels = 0;
-let maxTopPanelPercent = 100;
+let startY = 0;
+let startHeight = 0;
+let containerHeight = 0;
+let maxPercentage = 100;
 
 function onPointerDown(event: PointerEvent) {
-    const gutterElement = event.currentTarget as HTMLElement;
-    const topPanelElement = topPanelEl.value;
-    const containerElement = gutterElement.parentElement;
-    const bottomPanelElement = gutterElement.nextElementSibling;
+    const gutter = event.currentTarget as HTMLElement;
+    const topPanel = topPanelEl.value;
+    const container = gutter.parentElement;
+    if (!topPanel || !container) return;
 
-    if (!topPanelElement || !containerElement) return;
-
-    const bottomPanelMinHeightPixels =
+    const bottomMin =
         parseFloat(
-            bottomPanelElement
-                ? getComputedStyle(bottomPanelElement).minHeight
-                : "0",
+            getComputedStyle(gutter.nextElementSibling as HTMLElement)
+                .minHeight,
         ) || 0;
 
-    containerHeightPixels = containerElement.offsetHeight;
-    maxTopPanelPercent =
-        ((containerHeightPixels -
-            gutterElement.offsetHeight -
-            bottomPanelMinHeightPixels) /
-            containerHeightPixels) *
+    startY = event.clientY;
+    startHeight = topPanel.offsetHeight;
+    containerHeight = container.offsetHeight;
+    maxPercentage =
+        ((containerHeight - gutter.offsetHeight - bottomMin) /
+            containerHeight) *
         100;
 
-    startClientY = event.clientY;
-    startTopPanelHeightPixels = topPanelElement.offsetHeight;
-
-    gutterElement.setPointerCapture(event.pointerId);
+    gutter.setPointerCapture(event.pointerId);
     isDragging.value = true;
 }
 
 function onPointerMove(event: PointerEvent) {
     if (!isDragging.value) return;
-
-    const newTopPanelHeightPixels =
-        startTopPanelHeightPixels + (event.clientY - startClientY);
-    const newTopPanelPercent =
-        (newTopPanelHeightPixels / containerHeightPixels) * 100;
-
-    topPanelHeight.value = `${Math.max(0, Math.min(maxTopPanelPercent, newTopPanelPercent))}%`;
+    const heightPercentage =
+        ((startHeight + event.clientY - startY) / containerHeight) * 100;
+    topPanelHeight.value = `${Math.max(0, Math.min(maxPercentage, heightPercentage))}%`;
 }
 
 function onPointerUp() {
