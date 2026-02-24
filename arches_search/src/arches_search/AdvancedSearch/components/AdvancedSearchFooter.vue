@@ -15,62 +15,52 @@ const { filterText, searchResults } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: "update:filter-text", nextFilterText: string): void;
+    "update:filter-text": [nextFilterText: string];
 }>();
 
-const hasSearchResults = computed<boolean>(() => {
-    const loadedResultsCount = searchResults?.resources?.length ?? 0;
-    return loadedResultsCount > 0;
-});
+const hasSearchResults = computed(
+    () => (searchResults?.resources.length ?? 0) > 0,
+);
 
-const filteredResultsCount = computed<number>(() => {
-    const resources = searchResults?.resources ?? [];
-
-    if (!filterText) {
-        return resources.length;
-    }
-
-    return resources.filter((resource) => {
-        if (resource.name?.includes(filterText)) {
-            return true;
-        }
-    }).length;
-});
-
-const resultsSummaryLabelForFooter = computed<string>(() => {
+const summaryLabel = computed(() => {
     if (!hasSearchResults.value) {
-        return "";
+        return null;
     }
 
-    const totalResults = searchResults?.pagination.total_results ?? 0;
-    const loadedLabel = filteredResultsCount.value.toLocaleString();
-    const totalLabel = totalResults.toLocaleString();
+    const resources = searchResults!.resources;
+
+    let loadedResultsCount;
+    if (filterText) {
+        loadedResultsCount = resources.filter((resource) =>
+            resource.name?.includes(filterText),
+        ).length;
+    } else {
+        loadedResultsCount = resources.length;
+    }
+
+    const totalResultsCount = searchResults!.pagination.total_results;
 
     return $gettext("Showing %{loaded} of %{total} results", {
-        loaded: loadedLabel,
-        total: totalLabel,
+        loaded: loadedResultsCount.toLocaleString(),
+        total: totalResultsCount.toLocaleString(),
     });
 });
 
-function onFilterInputChange(nextFilterText: string | undefined): void {
-    emit("update:filter-text", nextFilterText ?? "");
+function onUpdateFilterText(value: string | undefined) {
+    emit("update:filter-text", value ?? "");
 }
 </script>
 
 <template>
     <div class="advanced-search-footer">
-        <div class="advanced-search-footer-controls">
-            <InputText
-                :model-value="filterText"
-                :placeholder="$gettext('Filter')"
-                :disabled="!hasSearchResults"
-                @update:model-value="onFilterInputChange"
-            />
+        <InputText
+            :model-value="filterText"
+            :placeholder="$gettext('Filter')"
+            :disabled="!hasSearchResults"
+            @update:model-value="onUpdateFilterText"
+        />
 
-            <div v-if="hasSearchResults">
-                {{ resultsSummaryLabelForFooter }}
-            </div>
-        </div>
+        <span v-if="summaryLabel">{{ summaryLabel }}</span>
     </div>
 </template>
 
@@ -78,16 +68,10 @@ function onFilterInputChange(nextFilterText: string | undefined): void {
 .advanced-search-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.5rem;
     padding: 0.75rem 1.5rem;
     border-top: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
     font-size: 1.2rem;
-}
-
-.advanced-search-footer-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
 }
 </style>

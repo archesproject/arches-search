@@ -44,8 +44,8 @@ const searchPayload = ref<GroupPayload | undefined>(query);
 const datatypesToAdvancedSearchFacets = ref<
     Record<string, AdvancedSearchFacet[]>
 >({});
-const graphs = ref([]);
 
+const graphs = ref([]);
 const graphIdToNodeCache = ref({});
 const graphIdToRelatableNodesTreeCache = ref({});
 
@@ -87,9 +87,12 @@ async function fetchFacets() {
     const facets: AdvancedSearchFacet[] = await getAdvancedSearchFacets();
     datatypesToAdvancedSearchFacets.value = facets.reduce<
         Record<string, AdvancedSearchFacet[]>
-    >((acc, facet) => {
-        acc[facet.datatype_id] = [...(acc[facet.datatype_id] ?? []), facet];
-        return acc;
+    >((facetsByDatatype, facet) => {
+        facetsByDatatype[facet.datatype_id] = [
+            ...(facetsByDatatype[facet.datatype_id] ?? []),
+            facet,
+        ];
+        return facetsByDatatype;
     }, {});
 }
 
