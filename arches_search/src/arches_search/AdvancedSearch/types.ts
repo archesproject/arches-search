@@ -108,6 +108,13 @@ export type GroupPayload = {
     relationship: RelationshipBlock | null;
 };
 
+export type NodeMetadataEntry = {
+    card_x_node_x_widget_label?: string;
+    datatype?: string;
+};
+
+export type NodeMetadataMap = Readonly<Record<string, NodeMetadataEntry>>;
+
 export type SearchResults = {
     resources: ResourceData[];
     aggregations: { [key: string]: unknown };

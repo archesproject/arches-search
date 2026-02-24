@@ -1,85 +1,86 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Textarea from "primevue/textarea";
 import Message from "primevue/message";
+import Skeleton from "primevue/skeleton";
+import Textarea from "primevue/textarea";
 
-import {
-    describeAdvancedSearchQuery,
-    type NodeMetadataMap,
-} from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/NarrationPanel/query-narrator.ts";
+import { describeAdvancedSearchQuery } from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/NarrationPanel/query-narrator.ts";
 import { getNodeMetadataForPayload } from "@/arches_search/AdvancedSearch/api.ts";
 
 import type {
     AdvancedSearchFacet,
+    GraphModel,
     GroupPayload,
+    NodeMetadataMap,
 } from "@/arches_search/AdvancedSearch/types.ts";
-
-type GraphSummary = {
-    graphid?: string;
-    slug?: string;
-    name?: string;
-    label?: string;
-    [key: string]: unknown;
-};
 
 const { $gettext } = useGettext();
 
 const { payload, graphs, datatypesToAdvancedSearchFacets } = defineProps<{
     payload: GroupPayload;
-    graphs: GraphSummary[];
+    graphs: GraphModel[];
     datatypesToAdvancedSearchFacets: Record<string, AdvancedSearchFacet[]>;
 }>();
 
-const nodeMetadata = ref<NodeMetadataMap>({} as NodeMetadataMap);
+const nodeMetadata = ref<NodeMetadataMap>({});
+const isLoading = ref(false);
 const fetchError = ref<Error | null>(null);
 
-const narration = computed<string>(() => {
-    return describeAdvancedSearchQuery({
-        payload: payload,
-        graphs: graphs,
-        datatypesToAdvancedSearchFacets: datatypesToAdvancedSearchFacets,
+const narration = computed(() =>
+    describeAdvancedSearchQuery({
+        payload,
+        graphs,
+        datatypesToAdvancedSearchFacets,
         gettext: $gettext,
         nodeMetadata: nodeMetadata.value,
-    });
+    }),
+);
+
+watchEffect(() => {
+    void fetchNodeMetadata(payload);
 });
 
-watch(
-    () => payload,
-    async (newPayload) => {
-        if (!newPayload) {
-            nodeMetadata.value = {} as NodeMetadataMap;
-            fetchError.value = null;
-            return;
-        }
+async function fetchNodeMetadata(currentPayload: GroupPayload) {
+    isLoading.value = true;
+    fetchError.value = null;
 
-        try {
-            fetchError.value = null;
-
-            const fetchedMetadata = await getNodeMetadataForPayload(
-                newPayload as unknown as { [key: string]: unknown },
+    try {
+        const fetchedMetadata = await getNodeMetadataForPayload(currentPayload);
+        nodeMetadata.value = (fetchedMetadata ?? {}) as NodeMetadataMap;
+    } catch (error) {
+        if (error instanceof Error) {
+            fetchError.value = error;
+        } else {
+            fetchError.value = new Error(
+                $gettext(
+                    "An unknown error occurred while fetching node metadata.",
+                ),
             );
-
-            nodeMetadata.value = (fetchedMetadata ?? {}) as NodeMetadataMap;
-        } catch (possibleError) {
-            fetchError.value = possibleError as Error;
-            nodeMetadata.value = {} as NodeMetadataMap;
         }
-    },
-    { deep: true, immediate: true },
-);
+        nodeMetadata.value = {};
+    } finally {
+        isLoading.value = false;
+    }
+}
 </script>
 
 <template>
+    <Skeleton
+        v-if="isLoading"
+        class="payload-analyzer-textarea"
+    />
+
     <Message
-        v-if="fetchError"
+        v-else-if="fetchError"
         severity="error"
     >
         {{ fetchError.message }}
     </Message>
 
     <Textarea
+        v-else
         class="payload-analyzer-textarea"
         :model-value="narration"
         rows="38"

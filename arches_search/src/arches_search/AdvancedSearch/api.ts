@@ -38,7 +38,7 @@ export async function getSearchResults(
     return parsed;
 }
 
-export async function getSearchSQL(searchQuery: { [key: string]: unknown }) {
+export async function getSearchSQL(searchQuery: GroupPayload) {
     const response = await fetch(
         generateArchesURL("arches_search:advanced_search_sql"),
         {
@@ -57,9 +57,7 @@ export async function getSearchSQL(searchQuery: { [key: string]: unknown }) {
     return parsed;
 }
 
-export async function getNodeMetadataForPayload(payload: {
-    [key: string]: unknown;
-}) {
+export async function getNodeMetadataForPayload(payload: GroupPayload) {
     const response = await fetch(
         generateArchesURL("arches_search:node_metadata_for_payload"),
         {

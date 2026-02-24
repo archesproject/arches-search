@@ -6,16 +6,10 @@ import Textarea from "primevue/textarea";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { payload } = defineProps<{
-    payload?: GroupPayload;
+    payload: GroupPayload;
 }>();
 
-const payloadText = computed<string>(() => {
-    if (!payload) {
-        return "";
-    }
-
-    return JSON.stringify(payload, null, 4);
-});
+const payloadText = computed(() => JSON.stringify(payload, null, 4));
 </script>
 
 <template>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import Message from "primevue/message";
+import Skeleton from "primevue/skeleton";
 import Textarea from "primevue/textarea";
 
 import { getSearchSQL } from "@/arches_search/AdvancedSearch/api.ts";
@@ -11,57 +13,57 @@ import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 const { $gettext } = useGettext();
 
 const { payload } = defineProps<{
-    payload?: GroupPayload;
+    payload: GroupPayload;
 }>();
 
-const sqlTextValue = ref<string>("");
-const isLoadingSQL = ref<boolean>(false);
-const sqlErrorMessage = ref<string | null>(null);
+const sqlText = ref("");
+const isLoading = ref(false);
+const errorMessage = ref<string | null>(null);
 
-watch(
-    () => payload,
-    () => {
-        void fetchSearchSQL();
-    },
-    { immediate: true },
-);
+watchEffect(() => {
+    void fetchSQL(payload);
+});
 
-async function fetchSearchSQL(): Promise<void> {
-    if (!payload) {
-        sqlTextValue.value = "";
-        sqlErrorMessage.value = null;
-        return;
-    }
-
-    isLoadingSQL.value = true;
-    sqlErrorMessage.value = null;
+async function fetchSQL(currentPayload: GroupPayload) {
+    isLoading.value = true;
+    errorMessage.value = null;
 
     try {
-        const responseData = await getSearchSQL(
-            payload as unknown as { [key: string]: unknown },
-        );
-
-        sqlTextValue.value = responseData.sql;
+        const response = await getSearchSQL(currentPayload);
+        sqlText.value = response.sql;
     } catch (error) {
         if (error instanceof Error) {
-            sqlErrorMessage.value = error.message;
+            errorMessage.value = error.message;
         } else {
-            sqlErrorMessage.value = $gettext(
+            errorMessage.value = $gettext(
                 "An unknown error occurred while fetching SQL.",
             );
         }
-        sqlTextValue.value = "";
+        sqlText.value = "";
     } finally {
-        isLoadingSQL.value = false;
+        isLoading.value = false;
     }
 }
 </script>
 
 <template>
-    <Textarea
-        v-model="sqlTextValue"
+    <Skeleton
+        v-if="isLoading"
         class="payload-analyzer-textarea"
-        :auto-resize="false"
+    />
+
+    <Message
+        v-else-if="errorMessage"
+        severity="error"
+    >
+        {{ errorMessage }}
+    </Message>
+
+    <Textarea
+        v-else
+        class="payload-analyzer-textarea"
+        :model-value="sqlText"
         rows="38"
+        readonly
     />
 </template>

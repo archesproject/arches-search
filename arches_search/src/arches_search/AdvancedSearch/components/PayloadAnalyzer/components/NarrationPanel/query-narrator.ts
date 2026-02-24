@@ -1,36 +1,28 @@
+import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     AdvancedSearchFacet,
+    GraphModel,
     GroupPayload,
+    LiteralClause,
+    LiteralOperand,
+    NodeMetadataEntry,
+    NodeMetadataMap,
+    RelationshipBlock,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-export type GettextFunction = (
+type GettextFunction = (
     messageId: string,
     interpolationValues?: Record<string, unknown>,
 ) => string;
-
-type GraphSummary = {
-    slug?: string;
-    name?: string;
-    label?: string;
-    [key: string]: unknown;
-};
 
 type NodeLabelResolver = (
     graphSlug: string,
     nodeAlias: string,
 ) => string | undefined;
 
-export type NodeMetadataEntry = {
-    card_x_node_x_widget_label?: string;
-    datatype?: string;
-    [key: string]: unknown;
-};
-
-export type NodeMetadataMap = Readonly<Record<string, NodeMetadataEntry>>;
-
 type DescribeQueryOptions = {
     payload: GroupPayload;
-    graphs: readonly GraphSummary[];
+    graphs: readonly GraphModel[];
     datatypesToAdvancedSearchFacets: Readonly<
         Record<string, AdvancedSearchFacet[]>
     >;
@@ -40,27 +32,19 @@ type DescribeQueryOptions = {
 };
 
 type OperatorLabelMap = Record<string, string>;
-type ClausePayload = GroupPayload["clauses"][number];
-type OperandPayload =
-    | ClausePayload["operands"][number]
-    | {
-          type: "PATH";
-          value: unknown;
-          [key: string]: unknown;
-      };
-type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 
-const LOGIC_AND = "AND" as const;
-const LOGIC_OR = "OR" as const;
-type LogicToken = typeof LOGIC_AND | typeof LOGIC_OR;
+type PathOperand = {
+    type: "PATH";
+    value: unknown;
+};
+
+type Operand = LiteralOperand | PathOperand;
+
+type TraversalQuantifier = "ANY" | "ALL" | "NONE";
 
 const TRAVERSAL_ANY = "ANY" as const;
 const TRAVERSAL_ALL = "ALL" as const;
 const TRAVERSAL_NONE = "NONE" as const;
-type TraversalQuantifier =
-    | typeof TRAVERSAL_ANY
-    | typeof TRAVERSAL_ALL
-    | typeof TRAVERSAL_NONE;
 
 const LESS_THAN_ALIASES: readonly string[] = ["<", "&lt;"];
 const GREATER_THAN_ALIASES: readonly string[] = [">", "&gt;"];
@@ -100,8 +84,7 @@ export function describeAdvancedSearchQuery(
         gettext,
     );
     const graphLabel = resolveGraphLabel(payload.graph_slug, graphs);
-
-    const conditionDescription = describeRootConditions(
+    const conditionDescription = describeGroupConditions(
         payload,
         graphs,
         operatorLabelMap,
@@ -111,14 +94,10 @@ export function describeAdvancedSearchQuery(
     );
 
     if (!conditionDescription) {
-        return gettext("Find all %{graph} instances.", {
-            graph: graphLabel,
-        });
+        return gettext("Find all %{graph} instances.", { graph: graphLabel });
     }
 
-    const shouldUseThatClause = startsWithPredicateFragment(payload);
-
-    if (shouldUseThatClause) {
+    if (startsWithPredicateFragment(payload)) {
         return gettext("Find all %{graph} instances that %{conditions}.", {
             graph: graphLabel,
             conditions: conditionDescription,
@@ -132,32 +111,22 @@ export function describeAdvancedSearchQuery(
 }
 
 function startsWithPredicateFragment(groupPayload: GroupPayload): boolean {
-    const hasClauses =
-        Array.isArray(groupPayload.clauses) && groupPayload.clauses.length > 0;
-    if (hasClauses) {
+    if (groupPayload.clauses.length > 0) {
         return false;
     }
 
-    const relationshipState = groupPayload.relationship as
-        | RelationshipState
-        | undefined;
-
-    const hasRelationshipPath =
-        relationshipState &&
-        Array.isArray(relationshipState.path) &&
-        relationshipState.path.length > 0;
-
-    if (hasRelationshipPath) {
+    if (
+        groupPayload.relationship !== null &&
+        groupPayload.relationship.path.length > 0
+    ) {
         return true;
     }
 
-    const hasGroups =
-        Array.isArray(groupPayload.groups) && groupPayload.groups.length > 0;
-    if (!hasGroups) {
+    if (groupPayload.groups.length === 0) {
         return false;
     }
 
-    return startsWithPredicateFragment(groupPayload.groups[0] as GroupPayload);
+    return startsWithPredicateFragment(groupPayload.groups[0]);
 }
 
 function buildOperatorLabelMap(
@@ -170,48 +139,19 @@ function buildOperatorLabelMap(
 
     for (const facetList of Object.values(datatypesToAdvancedSearchFacets)) {
         for (const facet of facetList) {
-            const facetWithOperator = facet as {
-                operator?: unknown;
-                label?: unknown;
-            };
-
-            const operatorKey =
-                typeof facetWithOperator.operator === "string"
-                    ? facetWithOperator.operator
-                    : "";
-
-            if (!operatorKey || operatorLabelMap[operatorKey]) {
+            if (!facet.operator || operatorLabelMap[facet.operator]) {
                 continue;
             }
-
-            const rawLabel = facetWithOperator.label;
-            const labelText = extractFacetLabelAsString(rawLabel).trim();
-            const normalizedLabel = normalizeOperatorLabel(labelText, gettext);
-
-            operatorLabelMap[operatorKey] =
-                normalizedLabel.length > 0 ? normalizedLabel : operatorKey;
+            const normalizedLabel = normalizeOperatorLabel(
+                facet.label.trim(),
+                gettext,
+            );
+            operatorLabelMap[facet.operator] =
+                normalizedLabel || facet.operator;
         }
     }
 
     return operatorLabelMap;
-}
-
-function extractFacetLabelAsString(rawLabel: unknown): string {
-    if (typeof rawLabel === "string") {
-        return rawLabel;
-    }
-
-    if (rawLabel && typeof rawLabel === "object") {
-        for (const candidateValue of Object.values(
-            rawLabel as Record<string, unknown>,
-        )) {
-            if (typeof candidateValue === "string") {
-                return candidateValue;
-            }
-        }
-    }
-
-    return "";
 }
 
 function normalizeOperatorLabel(
@@ -252,25 +192,9 @@ function normalizeOperatorLabel(
 
 function resolveGraphLabel(
     graphSlug: string,
-    graphs: readonly GraphSummary[],
+    graphs: readonly GraphModel[],
 ): string {
-    const matchingGraph = graphs.find((graphSummary) => {
-        return graphSummary.slug === graphSlug;
-    });
-
-    if (!matchingGraph) {
-        return graphSlug;
-    }
-
-    if (typeof matchingGraph.label === "string" && matchingGraph.label) {
-        return matchingGraph.label;
-    }
-
-    if (typeof matchingGraph.name === "string" && matchingGraph.name) {
-        return matchingGraph.name;
-    }
-
-    return graphSlug;
+    return graphs.find((graph) => graph.slug === graphSlug)?.name ?? graphSlug;
 }
 
 function getNodeMetadataForNode(
@@ -294,13 +218,12 @@ function resolveNodeLabel(
     getNodeLabel: NodeLabelResolver | undefined,
     nodeMetadata: NodeMetadataMap | undefined,
 ): string {
-    const nodeMetadataEntry = getNodeMetadataForNode(
+    const widgetLabel = getNodeMetadataForNode(
         graphSlug,
         nodeAlias,
         nodeMetadata,
-    );
+    )?.card_x_node_x_widget_label?.trim();
 
-    const widgetLabel = nodeMetadataEntry?.card_x_node_x_widget_label?.trim();
     if (widgetLabel) {
         return widgetLabel;
     }
@@ -317,10 +240,10 @@ function resolveNodeLabel(
 
 function formatValueList(values: string[], gettext: GettextFunction): string {
     const trimmedValues = values
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0);
-
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0);
     const count = trimmedValues.length;
+
     if (count === 0) {
         return "";
     }
@@ -345,9 +268,62 @@ function formatValueList(values: string[], gettext: GettextFunction): string {
     });
 }
 
-function describeRootConditions(
-    payload: GroupPayload,
-    graphs: readonly GraphSummary[],
+function joinManyWithLogic(
+    parts: string[],
+    logicToken: LogicToken,
+    gettext: GettextFunction,
+): string {
+    const trimmedParts = parts.map((p) => p.trim()).filter((p) => p.length > 0);
+    const count = trimmedParts.length;
+
+    if (count === 0) {
+        return "";
+    }
+
+    if (count === 1) {
+        return trimmedParts[0];
+    }
+
+    if (count === 2) {
+        const left = trimmedParts[0];
+        const right = trimmedParts[1];
+
+        if (logicToken === LogicToken.OR) {
+            return gettext("%{left}, or %{right}", { left, right });
+        }
+
+        return gettext("%{left}, and %{right}", { left, right });
+    }
+
+    const allButLast = trimmedParts.slice(0, -1).join(", ");
+    const lastPart = trimmedParts[count - 1];
+
+    if (logicToken === LogicToken.OR) {
+        return gettext("%{list}, or %{last}", {
+            list: allButLast,
+            last: lastPart,
+        });
+    }
+
+    return gettext("%{list}, and %{last}", {
+        list: allButLast,
+        last: lastPart,
+    });
+}
+
+function resolveTraversalQuantifier(
+    quantifiers: readonly string[],
+): TraversalQuantifier {
+    const first = quantifiers[0];
+    if (first === TRAVERSAL_ALL || first === TRAVERSAL_NONE) {
+        return first;
+    }
+    return TRAVERSAL_ANY;
+}
+
+function describeGroupConditions(
+    groupPayload: GroupPayload,
+    graphs: readonly GraphModel[],
     operatorLabelMap: OperatorLabelMap,
     gettext: GettextFunction,
     getNodeLabel: NodeLabelResolver | undefined,
@@ -355,38 +331,27 @@ function describeRootConditions(
 ): string {
     const conditionDescriptions: string[] = [];
 
-    if (Array.isArray(payload.clauses)) {
-        for (const clausePayload of payload.clauses) {
-            const clauseDescription = describeClause(
-                clausePayload as ClausePayload,
-                graphs,
-                operatorLabelMap,
-                gettext,
-                getNodeLabel,
-                nodeMetadata,
-            );
-            if (clauseDescription) {
-                conditionDescriptions.push(clauseDescription);
-            }
+    for (const clause of groupPayload.clauses) {
+        const description = describeClause(
+            clause,
+            graphs,
+            operatorLabelMap,
+            gettext,
+            getNodeLabel,
+            nodeMetadata,
+        );
+        if (description) {
+            conditionDescriptions.push(description);
         }
     }
 
-    const relationshipState = payload.relationship as
-        | RelationshipState
-        | undefined;
-    const hasRelationshipPath =
-        relationshipState &&
-        Array.isArray(relationshipState.path) &&
-        relationshipState.path.length > 0;
-
-    if (hasRelationshipPath) {
-        const relatedGroup =
-            Array.isArray(payload.groups) && payload.groups.length > 0
-                ? (payload.groups[0] as GroupPayload)
-                : undefined;
-
+    if (
+        groupPayload.relationship !== null &&
+        groupPayload.relationship.path.length > 0
+    ) {
+        const relatedGroup = groupPayload.groups[0];
         const relationshipDescription = describeRelationshipCondition(
-            relationshipState as RelationshipState,
+            groupPayload.relationship,
             relatedGroup,
             graphs,
             operatorLabelMap,
@@ -394,30 +359,27 @@ function describeRootConditions(
             getNodeLabel,
             nodeMetadata,
         );
-
         if (relationshipDescription) {
             conditionDescriptions.push(relationshipDescription);
         }
 
-        if (Array.isArray(payload.groups) && payload.groups.length > 1) {
-            for (const nestedGroupPayload of payload.groups.slice(1)) {
-                const nestedDescription = describeGroupConditions(
-                    nestedGroupPayload as GroupPayload,
-                    graphs,
-                    operatorLabelMap,
-                    gettext,
-                    getNodeLabel,
-                    nodeMetadata,
-                );
-                if (nestedDescription) {
-                    conditionDescriptions.push(nestedDescription);
-                }
+        for (const nestedGroup of groupPayload.groups.slice(1)) {
+            const nestedDescription = describeGroupConditions(
+                nestedGroup,
+                graphs,
+                operatorLabelMap,
+                gettext,
+                getNodeLabel,
+                nodeMetadata,
+            );
+            if (nestedDescription) {
+                conditionDescriptions.push(nestedDescription);
             }
         }
-    } else if (Array.isArray(payload.groups)) {
-        for (const nestedGroupPayload of payload.groups) {
+    } else {
+        for (const nestedGroup of groupPayload.groups) {
             const nestedDescription = describeGroupConditions(
-                nestedGroupPayload as GroupPayload,
+                nestedGroup,
                 graphs,
                 operatorLabelMap,
                 gettext,
@@ -434,135 +396,27 @@ function describeRootConditions(
         return "";
     }
 
-    const logicToken: LogicToken =
-        payload.logic === LOGIC_OR ? LOGIC_OR : LOGIC_AND;
-
-    return joinManyWithLogic(conditionDescriptions, logicToken, gettext);
-}
-
-function describeGroupConditions(
-    groupPayload: GroupPayload,
-    graphs: readonly GraphSummary[],
-    operatorLabelMap: OperatorLabelMap,
-    gettext: GettextFunction,
-    getNodeLabel: NodeLabelResolver | undefined,
-    nodeMetadata: NodeMetadataMap | undefined,
-): string {
-    const partDescriptions: string[] = [];
-
-    if (Array.isArray(groupPayload.clauses)) {
-        for (const clausePayload of groupPayload.clauses) {
-            const clauseDescription = describeClause(
-                clausePayload as ClausePayload,
-                graphs,
-                operatorLabelMap,
-                gettext,
-                getNodeLabel,
-                nodeMetadata,
-            );
-            if (clauseDescription) {
-                partDescriptions.push(clauseDescription);
-            }
-        }
-    }
-
-    const relationshipState = groupPayload.relationship as
-        | RelationshipState
-        | undefined;
-
-    const hasRelationshipPath =
-        relationshipState &&
-        Array.isArray(relationshipState.path) &&
-        relationshipState.path.length > 0;
-
-    if (hasRelationshipPath) {
-        const relatedGroup =
-            Array.isArray(groupPayload.groups) && groupPayload.groups.length > 0
-                ? (groupPayload.groups[0] as GroupPayload)
-                : undefined;
-
-        const relationshipDescription = describeRelationshipCondition(
-            relationshipState as RelationshipState,
-            relatedGroup,
-            graphs,
-            operatorLabelMap,
-            gettext,
-            getNodeLabel,
-            nodeMetadata,
-        );
-
-        if (relationshipDescription) {
-            partDescriptions.push(relationshipDescription);
-        }
-
-        if (
-            Array.isArray(groupPayload.groups) &&
-            groupPayload.groups.length > 1
-        ) {
-            for (const nestedGroupPayload of groupPayload.groups.slice(1)) {
-                const nestedDescription = describeGroupConditions(
-                    nestedGroupPayload as GroupPayload,
-                    graphs,
-                    operatorLabelMap,
-                    gettext,
-                    getNodeLabel,
-                    nodeMetadata,
-                );
-                if (nestedDescription) {
-                    partDescriptions.push(nestedDescription);
-                }
-            }
-        }
-    } else if (Array.isArray(groupPayload.groups)) {
-        for (const nestedGroupPayload of groupPayload.groups) {
-            const nestedDescription = describeGroupConditions(
-                nestedGroupPayload as GroupPayload,
-                graphs,
-                operatorLabelMap,
-                gettext,
-                getNodeLabel,
-                nodeMetadata,
-            );
-            if (nestedDescription) {
-                partDescriptions.push(nestedDescription);
-            }
-        }
-    }
-
-    if (partDescriptions.length === 0) {
-        return "";
-    }
-
-    const logicToken: LogicToken =
-        groupPayload.logic === LOGIC_OR ? LOGIC_OR : LOGIC_AND;
-
-    return joinManyWithLogic(partDescriptions, logicToken, gettext);
+    return joinManyWithLogic(
+        conditionDescriptions,
+        groupPayload.logic,
+        gettext,
+    );
 }
 
 function describeClause(
-    clausePayload: ClausePayload,
-    graphs: readonly GraphSummary[],
+    clause: LiteralClause,
+    graphs: readonly GraphModel[],
     operatorLabelMap: OperatorLabelMap,
     gettext: GettextFunction,
     getNodeLabel: NodeLabelResolver | undefined,
     nodeMetadata: NodeMetadataMap | undefined,
 ): string {
-    if (
-        !Array.isArray(clausePayload.subject) ||
-        clausePayload.subject.length === 0
-    ) {
+    if (clause.subject.length === 0) {
         return "";
     }
 
-    const lastSubjectEntry =
-        clausePayload.subject[clausePayload.subject.length - 1];
-
-    if (!Array.isArray(lastSubjectEntry) || lastSubjectEntry.length !== 2) {
-        return "";
-    }
-
-    const subjectGraphSlug = String(lastSubjectEntry[0]);
-    const subjectNodeAlias = String(lastSubjectEntry[1]);
+    const [subjectGraphSlug, subjectNodeAlias] =
+        clause.subject[clause.subject.length - 1];
 
     const fieldLabel = resolveNodeLabel(
         subjectGraphSlug,
@@ -571,82 +425,62 @@ function describeClause(
         nodeMetadata,
     ).trim();
 
-    const operatorKey =
-        typeof clausePayload.operator === "string"
-            ? clausePayload.operator
-            : "";
-
-    const operatorLabelRaw =
-        (operatorKey && operatorLabelMap[operatorKey]) || operatorKey;
-    const operatorLabel = operatorLabelRaw.trim();
+    const operatorLabel = (
+        (clause.operator && operatorLabelMap[clause.operator]) ||
+        clause.operator
+    ).trim();
 
     if (!fieldLabel || !operatorLabel) {
         return "";
     }
 
-    const operandsArray: OperandPayload[] = Array.isArray(
-        clausePayload.operands,
-    )
-        ? (clausePayload.operands as OperandPayload[])
-        : [];
-
-    const subjectNodeMetadata = getNodeMetadataForNode(
-        subjectGraphSlug,
-        subjectNodeAlias,
-        nodeMetadata,
-    );
     const subjectDatatype =
-        typeof subjectNodeMetadata?.datatype === "string"
-            ? subjectNodeMetadata.datatype
-            : "";
+        getNodeMetadataForNode(subjectGraphSlug, subjectNodeAlias, nodeMetadata)
+            ?.datatype ?? "";
 
     const operandDescriptions: string[] = [];
 
-    for (const operandPayload of operandsArray) {
-        const operandDescription = describeOperand(
-            operandPayload,
+    for (const operand of clause.operands as Operand[]) {
+        const description = describeOperand(
+            operand,
             graphs,
             gettext,
             getNodeLabel,
             subjectDatatype,
             nodeMetadata,
         );
-        if (operandDescription) {
-            operandDescriptions.push(operandDescription);
+        if (description) {
+            operandDescriptions.push(description);
         }
     }
 
     const valuePhrase = formatValueList(operandDescriptions, gettext).trim();
 
     if (valuePhrase) {
-        return gettext("the value of the %{field} node %{operator} %{value}", {
+        return gettext("%{field} %{operator} %{value}", {
             field: fieldLabel,
             operator: operatorLabel,
             value: valuePhrase,
         });
     }
 
-    return gettext("the %{field} node %{operator}", {
+    return gettext("%{field} %{operator}", {
         field: fieldLabel,
         operator: operatorLabel,
     });
 }
 
 function describeOperand(
-    operandPayload: OperandPayload,
-    graphs: readonly GraphSummary[],
+    operand: Operand,
+    graphs: readonly GraphModel[],
     gettext: GettextFunction,
     getNodeLabel: NodeLabelResolver | undefined,
     subjectDatatype: string,
     nodeMetadata: NodeMetadataMap | undefined,
 ): string {
-    if (!operandPayload) {
-        return "";
-    }
-
-    if (operandPayload.type === "PATH") {
+    if (operand.type === "PATH") {
         return describePathOperand(
-            operandPayload.value,
+            operand.value,
             graphs,
             gettext,
             getNodeLabel,
@@ -654,24 +488,20 @@ function describeOperand(
         );
     }
 
-    const typedOperand = operandPayload as {
+    const operandWithDisplay = operand as LiteralOperand & {
         display_value?: unknown;
-        value?: unknown;
     };
-
     const preferredValue =
-        "display_value" in typedOperand
-            ? typedOperand.display_value
-            : typedOperand.value;
+        "display_value" in operandWithDisplay
+            ? operandWithDisplay.display_value
+            : operand.value;
 
     if (preferredValue === null || typeof preferredValue === "undefined") {
         return "";
     }
 
-    const isStringDatatype = subjectDatatype === "string";
-
     if (
-        isStringDatatype &&
+        subjectDatatype === "string" &&
         preferredValue &&
         typeof preferredValue === "object" &&
         !Array.isArray(preferredValue)
@@ -681,16 +511,16 @@ function describeOperand(
         );
 
         if (entries.length === 1) {
-            const [languageCodeRaw, rawValue] = entries[0];
-            const languageCode = String(languageCodeRaw).trim();
+            const [languageCode, rawValue] = entries[0];
 
             if (typeof rawValue === "string") {
                 const trimmedValue = rawValue.trim();
+                const trimmedLanguageCode = languageCode.trim();
 
-                if (trimmedValue && languageCode) {
+                if (trimmedValue && trimmedLanguageCode) {
                     return gettext("%{value} (%{language})", {
                         value: trimmedValue,
-                        language: languageCode,
+                        language: trimmedLanguageCode,
                     }).trim();
                 }
 
@@ -706,7 +536,7 @@ function describeOperand(
 
 function describePathOperand(
     value: unknown,
-    graphs: readonly GraphSummary[],
+    graphs: readonly GraphModel[],
     gettext: GettextFunction,
     getNodeLabel: NodeLabelResolver | undefined,
     nodeMetadata: NodeMetadataMap | undefined,
@@ -721,8 +551,7 @@ function describePathOperand(
         return "";
     }
 
-    const graphSlug = String(lastPathEntry[0]);
-    const nodeAlias = String(lastPathEntry[1]);
+    const [graphSlug, nodeAlias] = lastPathEntry as [string, string];
 
     const graphLabel = resolveGraphLabel(graphSlug, graphs).trim();
     const fieldLabel = resolveNodeLabel(
@@ -732,105 +561,38 @@ function describePathOperand(
         nodeMetadata,
     ).trim();
 
-    const hasGraphLabel = graphLabel.length > 0;
-    const hasFieldLabel = fieldLabel.length > 0;
-
-    if (hasGraphLabel && hasFieldLabel) {
-        return gettext("the %{graph} %{field} node", {
-            graph: graphLabel,
+    if (graphLabel && fieldLabel) {
+        return gettext("the %{field} field in %{graph}", {
             field: fieldLabel,
+            graph: graphLabel,
         });
     }
 
-    if (hasGraphLabel) {
+    if (graphLabel) {
         return graphLabel;
     }
 
-    if (hasFieldLabel) {
-        return gettext("the %{field} node", {
-            field: fieldLabel,
-        });
+    if (fieldLabel) {
+        return gettext("the %{field} field", { field: fieldLabel });
     }
 
     return "";
 }
 
-function joinManyWithLogic(
-    parts: string[],
-    logicToken: LogicToken,
-    gettext: GettextFunction,
-): string {
-    const trimmedParts = parts
-        .map((part) => part.trim())
-        .filter((part) => part.length > 0);
-
-    const count = trimmedParts.length;
-    if (count === 0) {
-        return "";
-    }
-
-    if (count === 1) {
-        return trimmedParts[0];
-    }
-
-    if (count === 2) {
-        const left = trimmedParts[0];
-        const right = trimmedParts[1];
-
-        if (logicToken === LOGIC_OR) {
-            return gettext("%{left}, or %{right}", {
-                left,
-                right,
-            });
-        }
-
-        return gettext("%{left}, and %{right}", {
-            left,
-            right,
-        });
-    }
-
-    const allButLast = trimmedParts.slice(0, -1).join(", ");
-    const lastPart = trimmedParts[count - 1];
-
-    if (logicToken === LOGIC_OR) {
-        return gettext("%{list}, or %{last}", {
-            list: allButLast,
-            last: lastPart,
-        });
-    }
-
-    return gettext("%{list}, and %{last}", {
-        list: allButLast,
-        last: lastPart,
-    });
-}
-
 function describeRelationshipCondition(
-    relationshipState: RelationshipState,
+    relationship: RelationshipBlock,
     relatedGroup: GroupPayload | undefined,
-    graphs: readonly GraphSummary[],
+    graphs: readonly GraphModel[],
     operatorLabelMap: OperatorLabelMap,
     gettext: GettextFunction,
     getNodeLabel: NodeLabelResolver | undefined,
     nodeMetadata: NodeMetadataMap | undefined,
 ): string {
-    if (!Array.isArray(relationshipState.path)) {
+    if (relationship.path.length !== 1) {
         return "";
     }
 
-    if (relationshipState.path.length !== 1) {
-        return "";
-    }
-
-    const singleLeg = relationshipState.path[0];
-
-    if (!Array.isArray(singleLeg) || singleLeg.length !== 2) {
-        return "";
-    }
-
-    const relatedGraphSlug = String(singleLeg[0]);
-    const relatedNodeAlias = String(singleLeg[1]);
+    const [relatedGraphSlug, relatedNodeAlias] = relationship.path[0];
 
     const relatedGraphLabel = resolveGraphLabel(relatedGraphSlug, graphs);
     const relationshipFieldLabel = resolveNodeLabel(
@@ -841,23 +603,22 @@ function describeRelationshipCondition(
     );
 
     const traversalQuantifier = resolveTraversalQuantifier(
-        relationshipState.traversal_quantifiers,
+        relationship.traversal_quantifiers,
     );
 
-    let innerConditions = "";
-    if (relatedGroup) {
-        innerConditions = describeGroupConditions(
-            relatedGroup,
-            graphs,
-            operatorLabelMap,
-            gettext,
-            getNodeLabel,
-            nodeMetadata,
-        ).trim();
-    }
+    const innerConditions = relatedGroup
+        ? describeGroupConditions(
+              relatedGroup,
+              graphs,
+              operatorLabelMap,
+              gettext,
+              getNodeLabel,
+              nodeMetadata,
+          ).trim()
+        : "";
 
     const hasInnerConditions = innerConditions.length > 0;
-    const isInverse = Boolean(relationshipState.is_inverse);
+    const isInverse = relationship.is_inverse;
 
     if (isInverse) {
         if (traversalQuantifier === TRAVERSAL_ALL) {
@@ -921,9 +682,7 @@ function describeRelationshipCondition(
             });
         }
 
-        return gettext("have only %{field}", {
-            field: relationshipFieldLabel,
-        });
+        return gettext("have only %{field}", { field: relationshipFieldLabel });
     }
 
     if (traversalQuantifier === TRAVERSAL_NONE) {
@@ -934,9 +693,7 @@ function describeRelationshipCondition(
             });
         }
 
-        return gettext("have no %{field}", {
-            field: relationshipFieldLabel,
-        });
+        return gettext("have no %{field}", { field: relationshipFieldLabel });
     }
 
     if (hasInnerConditions) {
@@ -949,22 +706,4 @@ function describeRelationshipCondition(
     return gettext("have at least one %{field}", {
         field: relationshipFieldLabel,
     });
-}
-
-function resolveTraversalQuantifier(
-    rawQuantifiers: unknown,
-): TraversalQuantifier {
-    if (Array.isArray(rawQuantifiers) && rawQuantifiers.length > 0) {
-        const [firstQuantifier] = rawQuantifiers as TraversalQuantifier[];
-
-        if (
-            firstQuantifier === TRAVERSAL_ANY ||
-            firstQuantifier === TRAVERSAL_ALL ||
-            firstQuantifier === TRAVERSAL_NONE
-        ) {
-            return firstQuantifier;
-        }
-    }
-
-    return TRAVERSAL_ANY;
 }
