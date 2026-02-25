@@ -43,9 +43,10 @@ const { modelValue, isRoot, parentGroupAnchorGraph, relationshipToParent } =
     }>();
 
 const showMapDrawer = ref(false);
-const items = ref<{ id: string; type: "clause" | "group" }[]>([]);
 
 const group = computed(() => modelValue ?? makeEmptyGroupPayload());
+const items = ref<{ id: string; type: "clause" | "group" }[]>([]);
+
 const hasRelationship = computed(() => group.value.relationship !== null);
 const contentGroup = computed(
     () => (hasRelationship.value ? group.value.groups[0] : null) ?? group.value,
