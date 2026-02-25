@@ -1,23 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, watch, inject } from "vue";
-
+import { ref, computed, watchEffect, inject } from "vue";
 import { useGettext } from "vue3-gettext";
-
 import Card from "primevue/card";
-import Button from "primevue/button";
 import Drawer from "primevue/drawer";
-
 import GroupBracket from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupBracket.vue";
 import GroupHeader from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupHeader.vue";
-import ClauseBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/ClauseBuilder.vue";
+import GroupFooter from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupFooter.vue";
 import RelationshipEditor from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/RelationshipEditor.vue";
-
+import ClauseBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/ClauseBuilder.vue";
 import {
     makeEmptyGroupPayload,
     toggleLogic,
     addChildGroupLikeParent,
     addEmptyLiteralClauseToGroup,
-    removeClauseAtIndex as removeClauseAtIndexFromPayload,
+    removeClauseAtIndex,
     addRelationshipIfMissing,
     setGraphSlugAndResetIfChanged,
     removeChildGroupAtIndexAndReconcile,
@@ -25,624 +21,276 @@ import {
     replaceChildGroupAtIndexAndReconcile,
     setRelationshipAndReconcileClauses,
 } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
-
-import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
-
 import type {
     GraphModel,
     GroupPayload,
+    LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 defineOptions({ name: "GroupBuilder" });
 
 const { $gettext } = useGettext();
-
-type RelationshipState = NonNullable<GroupPayload["relationship"]>;
-
 const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs");
 
-const emit = defineEmits<{
-    (event: "update:modelValue", value: GroupPayload): void;
-    (event: "remove"): void;
-}>();
+const emit = defineEmits<{ "update:modelValue": [GroupPayload]; remove: [] }>();
 
 const { modelValue, isRoot, parentGroupAnchorGraph, relationshipToParent } =
     defineProps<{
         modelValue?: GroupPayload;
         isRoot?: boolean;
         parentGroupAnchorGraph?: GraphModel;
-        relationshipToParent?: RelationshipState | null;
+        relationshipToParent?: GroupPayload["relationship"];
     }>();
 
-const isMapFilterDrawerVisible = ref<boolean>(false);
+const showMapDrawer = ref(false);
+const items = ref<{ id: string; type: "clause" | "group" }[]>([]);
 
-const childGroupKeys = ref<string[]>([]);
-const clauseKeys = ref<string[]>([]);
-
-const clauseUpdateHandlersByIndex = ref<
-    Array<(updatedClause: unknown) => void>
->([]);
-const clauseRemoveHandlersByIndex = ref<Array<() => void>>([]);
-
-const childGroupUpdateHandlersByIndex = ref<
-    Array<(updatedChildGroupPayload: GroupPayload) => void>
->([]);
-const childGroupRemoveHandlersByIndex = ref<Array<() => void>>([]);
-
-const currentGroup = computed<GroupPayload>(function getCurrentGroup() {
-    return modelValue ?? makeEmptyGroupPayload();
-});
-
-const isRelationshipContainer = computed<boolean>(
-    function getIsRelationshipContainer() {
-        return currentGroup.value.relationship !== null;
-    },
+const group = computed(() => modelValue ?? makeEmptyGroupPayload());
+const hasRelationship = computed(() => group.value.relationship !== null);
+const contentGroup = computed(
+    () => (hasRelationship.value ? group.value.groups[0] : null) ?? group.value,
 );
 
-const relationshipInnerGroup = computed<GroupPayload | null>(
-    function getRelationshipInnerGroup() {
-        if (!isRelationshipContainer.value) {
-            return null;
-        }
-
-        const firstChild = currentGroup.value.groups[0];
-        if (!firstChild) {
-            return null;
-        }
-
-        return firstChild;
-    },
+const anchor = computed(
+    () =>
+        graphs?.value.find(
+            (graphModel) => graphModel.slug === group.value.graph_slug,
+        ) ?? null,
+);
+const contentAnchorGraph = computed(
+    () =>
+        graphs?.value.find(
+            (graphModel) => graphModel.slug === contentGroup.value.graph_slug,
+        ) ?? null,
+);
+const shouldShowBracket = computed(() => items.value.length >= 2);
+const hasContent = computed(() => items.value.length > 0);
+const clauseInnerGraphSlug = computed(() =>
+    hasRelationship.value
+        ? contentGroup.value.graph_slug
+        : group.value.groups[0]?.graph_slug ?? "",
+);
+const clauseParentAnchorGraph = computed(() =>
+    hasRelationship.value ? anchor.value : parentGroupAnchorGraph,
+);
+const rootStyle = computed(() =>
+    isRoot ? { borderRadius: 0, borderBottom: "none" } : undefined,
 );
 
-const visibleGroup = computed<GroupPayload>(function getVisibleGroup() {
-    return relationshipInnerGroup.value ?? currentGroup.value;
-});
-
-const groupHeaderPayload = computed<GroupPayload>(
-    function getGroupHeaderPayload() {
-        if (isRoot) {
-            return currentGroup.value;
-        }
-
-        return visibleGroup.value;
-    },
-);
-
-const currentGroupAnchorGraph = computed<GraphModel | null>(
-    function getCurrentGroupAnchorGraph() {
-        const allGraphs = graphs?.value ?? [];
-        const groupSlug = currentGroup.value.graph_slug;
-
-        if (!groupSlug) {
-            return null;
-        }
-
-        const matchingGraph = allGraphs.find(
-            function findMatchingGraph(candidateGraph) {
-                return candidateGraph.slug === groupSlug;
-            },
-        );
-
-        return matchingGraph ?? null;
-    },
-);
-
-const visibleGroupAnchorGraph = computed<GraphModel | null>(
-    function getVisibleGroupAnchorGraph() {
-        const allGraphs = graphs?.value ?? [];
-        const groupSlug = visibleGroup.value.graph_slug;
-
-        if (!groupSlug) {
-            return null;
-        }
-
-        const matchingGraph = allGraphs.find(
-            function findMatchingGraph(candidateGraph) {
-                return candidateGraph.slug === groupSlug;
-            },
-        );
-
-        return matchingGraph ?? null;
-    },
-);
-
-const shouldHaveBracket = computed<boolean>(function getShouldHaveBracket() {
-    return (
-        visibleGroup.value.groups.length + visibleGroup.value.clauses.length >=
-        2
-    );
-});
-
-const hasGroupBodyContent = computed<boolean>(
-    function getHasGroupBodyContent() {
-        return (
-            visibleGroup.value.clauses.length > 0 ||
-            visibleGroup.value.groups.length > 0
-        );
-    },
-);
-
-const isGraphSelected = computed<boolean>(function getIsGraphSelected() {
-    const graphSlug = currentGroup.value.graph_slug ?? "";
-    return graphSlug.trim().length > 0;
-});
-
-const hasNestedGroups = computed<boolean>(function getHasNestedGroups() {
-    return currentGroup.value.groups.length > 0;
-});
-
-const hasRelationship = computed<boolean>(function getHasRelationship() {
-    return currentGroup.value.relationship !== null;
-});
-
-const shouldRenderCardTitle = computed<boolean>(
-    function getShouldRenderCardTitle() {
-        return (
-            Boolean(isRoot) ||
-            relationshipToParent != null ||
-            hasRelationship.value
-        );
-    },
-);
-
-const shouldRenderGroupHeader = computed<boolean>(
-    function getShouldRenderGroupHeader() {
-        return Boolean(isRoot) || relationshipToParent != null;
-    },
-);
-
-const hasRelationshipInImmediateChildren = computed<boolean>(
-    function getHasRelationshipInImmediateChildren() {
-        return currentGroup.value.groups.some(
-            function doesChildHaveRelationship(childGroup) {
-                return childGroup.relationship !== null;
-            },
-        );
-    },
-);
-
-const innerGraphSlug = computed<string>(function getInnerGraphSlug() {
-    if (currentGroup.value.groups.length === 0) {
-        return "";
-    }
-
-    return currentGroup.value.groups[0].graph_slug;
-});
-
-const relateButtonTitle = computed<string>(function getRelateButtonTitle() {
-    if (!isGraphSelected.value) {
-        return $gettext("Select what this group filters before relating.");
-    }
-
-    if (!hasNestedGroups.value) {
-        return $gettext("Add a nested group below to enable relationships.");
-    }
-
-    if (hasRelationshipInImmediateChildren.value) {
-        return $gettext("A relationship filter already exists one level down.");
-    }
-
-    return $gettext("Add a relationship filter as a nested group.");
-});
-
-const footerMarginTop = computed<string>(function () {
-    if (hasGroupBodyContent.value || hasRelationship.value) {
-        return "0rem";
-    }
-
-    return "0";
-});
-
-watch(
-    () => visibleGroup.value.clauses.length,
-    (nextClauseCount) => {
-        clauseKeys.value = ensureStableStringKeys(
-            clauseKeys.value,
-            nextClauseCount,
-        );
-
-        clauseUpdateHandlersByIndex.value = ensureStableHandlerArray(
-            clauseUpdateHandlersByIndex.value,
-            nextClauseCount,
-            (clauseIndex) => {
-                return (updatedClause: unknown) => {
-                    onUpdateClauseAtIndex(updatedClause, clauseIndex);
-                };
-            },
-        );
-
-        clauseRemoveHandlersByIndex.value = ensureStableHandlerArray(
-            clauseRemoveHandlersByIndex.value,
-            nextClauseCount,
-            (clauseIndex) => {
-                return () => {
-                    onRemoveClause(clauseIndex);
-                };
-            },
-        );
-    },
-    { immediate: true },
-);
-
-watch(
-    () => visibleGroup.value.groups.length,
-    (nextChildGroupCount) => {
-        childGroupKeys.value = ensureStableStringKeys(
-            childGroupKeys.value,
-            nextChildGroupCount,
-        );
-
-        childGroupUpdateHandlersByIndex.value = ensureStableHandlerArray(
-            childGroupUpdateHandlersByIndex.value,
-            nextChildGroupCount,
-            (childIndex) => {
-                return (updatedChildGroupPayload: GroupPayload) => {
-                    onUpdateChildGroupModelValue(
-                        updatedChildGroupPayload,
-                        childIndex,
-                    );
-                };
-            },
-        );
-
-        childGroupRemoveHandlersByIndex.value = ensureStableHandlerArray(
-            childGroupRemoveHandlersByIndex.value,
-            nextChildGroupCount,
-            (childIndex) => {
-                return () => {
-                    onRemoveChildGroup(childIndex);
-                };
-            },
-        );
-    },
-    { immediate: true },
-);
-
-function createStableKey(): string {
-    return crypto.randomUUID();
-}
-
-function ensureStableStringKeys(
-    existingKeys: string[],
-    nextCount: number,
-): string[] {
-    const nextKeys = existingKeys.slice(0, nextCount);
-
-    while (nextKeys.length < nextCount) {
-        nextKeys.push(createStableKey());
-    }
-
-    return nextKeys;
-}
-
-function ensureStableHandlerArray<HandlerType>(
-    existingHandlers: HandlerType[],
-    nextCount: number,
-    createHandlerAtIndex: (handlerIndex: number) => HandlerType,
-): HandlerType[] {
-    const nextHandlers = existingHandlers.slice(0, nextCount);
-
-    while (nextHandlers.length < nextCount) {
-        nextHandlers.push(createHandlerAtIndex(nextHandlers.length));
-    }
-
-    return nextHandlers;
-}
-
-function emitUpdatedGroupPayload(nextGroupPayload: GroupPayload): void {
-    emit("update:modelValue", nextGroupPayload);
-}
-
-function setVisibleGroupOnCurrentGroup(
-    nextVisibleGroup: GroupPayload,
-): GroupPayload {
-    if (!isRelationshipContainer.value) {
-        return nextVisibleGroup;
-    }
-
-    const existingGroups = currentGroup.value.groups.slice();
-    const restGroups = existingGroups.slice(1);
-
-    return {
-        ...currentGroup.value,
-        groups: [nextVisibleGroup, ...restGroups],
-    };
-}
-
-function onSetGraphSlug(graphSlug: string): void {
-    const updatedGroup = setGraphSlugAndResetIfChanged(
-        currentGroup.value,
-        graphSlug,
-    );
-    emitUpdatedGroupPayload(updatedGroup);
-}
-
-function onSetLogicFromBracket(_logicToken: LogicToken): void {
-    const updatedVisibleGroup = toggleLogic(visibleGroup.value);
-    emitUpdatedGroupPayload(setVisibleGroupOnCurrentGroup(updatedVisibleGroup));
-}
-
-function onAddGroup(): void {
-    const baseGroup = visibleGroup.value;
-
-    const existingChildGroups = baseGroup.groups;
-    const updatedGroupWithNewChild = addChildGroupLikeParent(baseGroup);
-
-    if (existingChildGroups.length === 0) {
-        emitUpdatedGroupPayload(
-            setVisibleGroupOnCurrentGroup(updatedGroupWithNewChild),
-        );
+watchEffect(() => {
+    const currentContentGroup = contentGroup.value;
+    const clauseCount = items.value.filter(
+        (item) => item.type === "clause",
+    ).length;
+    const groupCount = items.value.filter(
+        (item) => item.type === "group",
+    ).length;
+    if (
+        clauseCount === currentContentGroup.clauses.length &&
+        groupCount === currentContentGroup.groups.length
+    ) {
         return;
     }
+    items.value = [
+        ...currentContentGroup.clauses.map(() => ({
+            id: crypto.randomUUID(),
+            type: "clause" as const,
+        })),
+        ...currentContentGroup.groups.map(() => ({
+            id: crypto.randomUUID(),
+            type: "group" as const,
+        })),
+    ];
+});
 
-    const referenceChildGroup = existingChildGroups[0];
-    const targetGraphSlug =
-        referenceChildGroup.graph_slug || baseGroup.graph_slug;
-
-    const nextChildGroups = updatedGroupWithNewChild.groups.slice();
-    const newChildIndex = nextChildGroups.length - 1;
-
-    if (newChildIndex >= 0) {
-        const newChildGroup = nextChildGroups[newChildIndex];
-        nextChildGroups[newChildIndex] = {
-            ...newChildGroup,
-            graph_slug: targetGraphSlug,
-        };
+function findItemIndex(id: string, type: "clause" | "group") {
+    let count = 0;
+    for (const item of items.value) {
+        if (item.id === id) {
+            return count;
+        }
+        if (item.type === type) {
+            count++;
+        }
     }
-
-    const normalizedUpdatedGroup: GroupPayload = {
-        ...updatedGroupWithNewChild,
-        groups: nextChildGroups,
-    };
-
-    emitUpdatedGroupPayload(
-        setVisibleGroupOnCurrentGroup(normalizedUpdatedGroup),
-    );
+    return -1;
 }
 
-function onRemoveChildGroup(childIndex: number): void {
-    childGroupKeys.value.splice(childIndex, 1);
-    childGroupUpdateHandlersByIndex.value.splice(childIndex, 1);
-    childGroupRemoveHandlersByIndex.value.splice(childIndex, 1);
-
-    const updatedVisibleGroup = removeChildGroupAtIndexAndReconcile(
-        visibleGroup.value,
-        childIndex,
-    );
-    emitUpdatedGroupPayload(setVisibleGroupOnCurrentGroup(updatedVisibleGroup));
-}
-
-function onAddClause(): void {
-    const updatedVisibleGroup = addEmptyLiteralClauseToGroup(
-        visibleGroup.value,
-    );
-    emitUpdatedGroupPayload(setVisibleGroupOnCurrentGroup(updatedVisibleGroup));
-}
-
-function onUpdateClauseAtIndex(
-    updatedClause: unknown,
-    clauseIndex: number,
-): void {
-    const safeUpdatedClause = updatedClause as GroupPayload["clauses"][number];
-    const updatedVisibleGroup = setClauseAtIndex(
-        visibleGroup.value,
-        clauseIndex,
-        safeUpdatedClause,
-    );
-    emitUpdatedGroupPayload(setVisibleGroupOnCurrentGroup(updatedVisibleGroup));
-}
-
-function onRemoveClause(clauseIndex: number): void {
-    clauseKeys.value.splice(clauseIndex, 1);
-    clauseUpdateHandlersByIndex.value.splice(clauseIndex, 1);
-    clauseRemoveHandlersByIndex.value.splice(clauseIndex, 1);
-
-    const updatedVisibleGroup = removeClauseAtIndexFromPayload(
-        visibleGroup.value,
-        clauseIndex,
-    );
-    emitUpdatedGroupPayload(setVisibleGroupOnCurrentGroup(updatedVisibleGroup));
-}
-
-function ensureRelationshipContainerHasNestedChild(
-    relationshipContainerGroup: GroupPayload,
-): GroupPayload {
-    if (relationshipContainerGroup.groups.length > 0) {
-        return relationshipContainerGroup;
+function emitUpdate(updatedContentGroup: GroupPayload) {
+    if (hasRelationship.value) {
+        emit("update:modelValue", {
+            ...group.value,
+            groups: [updatedContentGroup, ...group.value.groups.slice(1)],
+        });
+    } else {
+        emit("update:modelValue", updatedContentGroup);
     }
+}
 
-    const relationshipContainerWithChild = addChildGroupLikeParent(
-        relationshipContainerGroup,
-    );
-
-    if (relationshipContainerWithChild.groups.length === 0) {
-        return relationshipContainerWithChild;
+function ensureHasInnerGroup(container: GroupPayload) {
+    if (container.groups.length > 0) {
+        return container;
     }
-
-    const nestedChildGroups = relationshipContainerWithChild.groups.slice();
-    nestedChildGroups[0] = {
-        ...nestedChildGroups[0],
-        graph_slug: "",
-    };
-
+    const withInnerGroup = addChildGroupLikeParent(container);
     return {
-        ...relationshipContainerWithChild,
-        groups: nestedChildGroups,
+        ...withInnerGroup,
+        groups: [{ ...withInnerGroup.groups[0], graph_slug: "" }],
     };
 }
 
-function addRelationshipFilterChildGroup(
-    parentGroupPayload: GroupPayload,
-): GroupPayload {
-    const updatedParentGroupWithNewChild =
-        addChildGroupLikeParent(parentGroupPayload);
+function addChildGroup(transform: (child: GroupPayload) => GroupPayload) {
+    const withNewChild = addChildGroupLikeParent(contentGroup.value);
+    const childGroups = withNewChild.groups.slice();
+    const lastIndex = childGroups.length - 1;
+    childGroups[lastIndex] = transform(childGroups[lastIndex]);
+    items.value.push({ id: crypto.randomUUID(), type: "group" });
+    emitUpdate({ ...withNewChild, groups: childGroups });
+}
 
-    const newChildIndex = updatedParentGroupWithNewChild.groups.length - 1;
-    if (newChildIndex < 0) {
-        return updatedParentGroupWithNewChild;
+function onChangeGraph(slug: string) {
+    emit("update:modelValue", setGraphSlugAndResetIfChanged(group.value, slug));
+}
+
+function onToggleLogic() {
+    emitUpdate(toggleLogic(contentGroup.value));
+}
+
+function onAddClause() {
+    items.value.push({ id: crypto.randomUUID(), type: "clause" });
+    emitUpdate(addEmptyLiteralClauseToGroup(contentGroup.value));
+}
+
+function onUpdateClause(id: string, clause: LiteralClause) {
+    const index = findItemIndex(id, "clause");
+    if (index === -1) {
+        return;
     }
-
-    const newlyAddedChildGroup =
-        updatedParentGroupWithNewChild.groups[newChildIndex];
-
-    const relationshipContainerSeededToParentGraph: GroupPayload = {
-        ...newlyAddedChildGroup,
-        graph_slug: parentGroupPayload.graph_slug,
-    };
-
-    const relationshipContainerWithRelationship = addRelationshipIfMissing(
-        relationshipContainerSeededToParentGraph,
-    );
-
-    const relationshipContainerReady =
-        ensureRelationshipContainerHasNestedChild(
-            relationshipContainerWithRelationship,
-        );
-
-    const nextChildGroups = updatedParentGroupWithNewChild.groups.slice();
-    nextChildGroups[newChildIndex] = relationshipContainerReady;
-
-    return {
-        ...updatedParentGroupWithNewChild,
-        groups: nextChildGroups,
-    };
+    emitUpdate(setClauseAtIndex(contentGroup.value, index, clause));
 }
 
-function onAddRelationship(): void {
-    const updatedVisibleGroup = addRelationshipFilterChildGroup(
-        visibleGroup.value,
+function onRemoveClause(id: string) {
+    const index = findItemIndex(id, "clause");
+    if (index === -1) {
+        return;
+    }
+    items.value.splice(
+        items.value.findIndex((item) => item.id === id),
+        1,
     );
-    emitUpdatedGroupPayload(setVisibleGroupOnCurrentGroup(updatedVisibleGroup));
+    emitUpdate(removeClauseAtIndex(contentGroup.value, index));
 }
 
-function onUpdateChildGroupModelValue(
-    updatedChildGroupPayload: GroupPayload,
-    childIndex: number,
-): void {
-    const updatedVisibleGroup = replaceChildGroupAtIndexAndReconcile(
-        visibleGroup.value,
-        childIndex,
-        updatedChildGroupPayload,
-    );
-    emitUpdatedGroupPayload(setVisibleGroupOnCurrentGroup(updatedVisibleGroup));
+function onAddGroup() {
+    const inheritedSlug =
+        contentGroup.value.groups[0]?.graph_slug ||
+        contentGroup.value.graph_slug;
+    addChildGroup((child) => ({ ...child, graph_slug: inheritedSlug }));
 }
 
-function onUpdateRelationship(
-    nextRelationship: GroupPayload["relationship"],
-): void {
-    if (!nextRelationship) {
+function onUpdateGroup(id: string, updated: GroupPayload) {
+    const index = findItemIndex(id, "group");
+    if (index === -1) {
+        return;
+    }
+    emitUpdate(
+        replaceChildGroupAtIndexAndReconcile(
+            contentGroup.value,
+            index,
+            updated,
+        ),
+    );
+}
+
+function onRemoveGroup(id: string) {
+    const index = findItemIndex(id, "group");
+    if (index === -1) {
+        return;
+    }
+    items.value.splice(
+        items.value.findIndex((item) => item.id === id),
+        1,
+    );
+    emitUpdate(removeChildGroupAtIndexAndReconcile(contentGroup.value, index));
+}
+
+function onAddRelationship() {
+    const graphSlug = contentGroup.value.graph_slug;
+    addChildGroup((child) => {
+        const withSlug = { ...child, graph_slug: graphSlug };
+        return ensureHasInnerGroup(addRelationshipIfMissing(withSlug));
+    });
+}
+
+function onUpdateRelationship(relationship: GroupPayload["relationship"]) {
+    if (!relationship) {
         emit("remove");
         return;
     }
-
-    const updatedGroup = ensureRelationshipContainerHasNestedChild(
-        setRelationshipAndReconcileClauses(
-            currentGroup.value,
-            nextRelationship,
+    emit(
+        "update:modelValue",
+        ensureHasInnerGroup(
+            setRelationshipAndReconcileClauses(group.value, relationship),
         ),
     );
-
-    emitUpdatedGroupPayload(updatedGroup);
 }
 
-function onUpdateInnerGraphSlug(nextInnerGraphSlugRaw: string): void {
-    if (currentGroup.value.groups.length === 0) {
+function onUpdateInnerGraphSlug(slug: string) {
+    const existingInnerGroup = group.value.groups[0];
+    if (!existingInnerGroup || existingInnerGroup.graph_slug === slug) {
         return;
     }
-
-    const nextInnerGraphSlug = String(nextInnerGraphSlugRaw ?? "").trim();
-
-    const existingInnerGroup = currentGroup.value.groups[0];
-    const existingInnerGraphSlug = String(
-        existingInnerGroup.graph_slug ?? "",
-    ).trim();
-
-    if (existingInnerGraphSlug === nextInnerGraphSlug) {
-        return;
-    }
-
-    const resetInnerGroup: GroupPayload = {
+    const resetInnerGroup = {
         ...makeEmptyGroupPayload(),
-        graph_slug: nextInnerGraphSlug,
+        graph_slug: slug,
         logic: existingInnerGroup.logic,
     };
-
-    const existingRelationship = currentGroup.value.relationship;
-
-    const nextRelationship: GroupPayload["relationship"] = existingRelationship
-        ? { ...existingRelationship, path: [] }
-        : null;
-
-    const updatedGroup = setRelationshipAndReconcileClauses(
-        {
-            ...currentGroup.value,
-            groups: [resetInnerGroup],
-        },
-        nextRelationship,
+    let relationship = group.value.relationship;
+    if (relationship) {
+        relationship = { ...relationship, path: [] };
+    }
+    emit(
+        "update:modelValue",
+        setRelationshipAndReconcileClauses(
+            { ...group.value, groups: [resetInnerGroup] },
+            relationship,
+        ),
     );
-
-    emitUpdatedGroupPayload(updatedGroup);
-}
-
-function onRequestRemoveGroup(): void {
-    emit("remove");
-}
-
-function onOpenMapFilterDrawer(): void {
-    isMapFilterDrawerVisible.value = true;
 }
 </script>
 
 <template>
     <Card
         class="group-card"
-        :style="{
-            borderRadius: isRoot && 0,
-            borderBottom: isRoot && 'none',
-        }"
+        :style="rootStyle"
     >
         <template
-            v-if="shouldRenderCardTitle"
+            v-if="isRoot || relationshipToParent != null || hasRelationship"
             #title
         >
             <GroupHeader
-                v-if="shouldRenderGroupHeader"
-                :group-payload="groupHeaderPayload"
+                v-if="isRoot || relationshipToParent != null"
+                :group-payload="isRoot ? group : contentGroup"
                 :is-root="isRoot"
                 :relationship-to-parent="relationshipToParent ?? null"
-                @change-graph="onSetGraphSlug"
-                @remove-group="onRequestRemoveGroup"
+                @change-graph="onChangeGraph"
+                @remove-group="emit('remove')"
             />
-
             <RelationshipEditor
                 v-if="hasRelationship"
                 class="relationship-editor-inline"
-                :style="{
-                    marginBottom: !hasGroupBodyContent ? '1.5rem' : 0,
-                }"
-                :anchor-graph-slug="currentGroup.graph_slug"
-                :inner-graph-slug="innerGraphSlug"
-                :relationship="currentGroup.relationship!"
+                :style="{ marginBottom: !hasContent ? '1.5rem' : 0 }"
+                :anchor-graph-slug="group.graph_slug"
+                :inner-graph-slug="group.groups[0]?.graph_slug ?? ''"
+                :relationship="group.relationship!"
                 @update:relationship="onUpdateRelationship"
                 @update:inner-graph-slug="onUpdateInnerGraphSlug"
             />
         </template>
 
         <template #content>
-            <div
-                class="group-content"
-                :class="
-                    hasGroupBodyContent &&
-                    hasRelationship &&
-                    'group-content-with-top-padding'
-                "
-            >
+            <div class="group-content">
                 <div
-                    v-if="
-                        isRoot &&
-                        !hasGroupBodyContent &&
-                        !currentGroupAnchorGraph
-                    "
+                    v-if="isRoot && !hasContent && !anchor"
                     class="group-helper-note"
                 >
                     <div>
@@ -662,165 +310,96 @@ function onOpenMapFilterDrawer(): void {
                 </div>
 
                 <div
-                    v-if="hasGroupBodyContent"
+                    v-if="hasContent"
                     :class="[
                         'group-grid',
-                        shouldHaveBracket && 'group-grid-with-bracket',
+                        shouldShowBracket && 'group-grid-with-bracket',
                     ]"
                 >
                     <GroupBracket
-                        :show="shouldHaveBracket"
-                        :logic="visibleGroup.logic"
-                        @update:logic="onSetLogicFromBracket"
+                        :show="shouldShowBracket"
+                        :logic="contentGroup.logic"
+                        @update:logic="onToggleLogic"
                     />
 
                     <div class="group-body">
-                        <div
-                            v-if="visibleGroup.clauses.length > 0"
-                            :class="[
-                                'clauses',
-                                !shouldHaveBracket && 'clauses-without-bracket',
-                            ]"
-                            :style="{
-                                marginInlineEnd: '5.5rem',
-                            }"
+                        <template
+                            v-for="item in items"
+                            :key="item.id"
                         >
                             <Card
-                                v-for="(
-                                    clause, clauseIndex
-                                ) in visibleGroup.clauses"
-                                :key="clauseKeys[clauseIndex]"
+                                v-if="item.type === 'clause'"
                                 class="clause-card"
-                                :style="{}"
                             >
                                 <template #content>
                                     <ClauseBuilder
-                                        :model-value="clause"
-                                        :anchor-graph="visibleGroupAnchorGraph!"
+                                        :model-value="
+                                            contentGroup.clauses[
+                                                findItemIndex(item.id, 'clause')
+                                            ]
+                                        "
+                                        :anchor-graph="contentAnchorGraph!"
                                         :parent-group-anchor-graph="
-                                            isRelationshipContainer
-                                                ? currentGroupAnchorGraph!
-                                                : parentGroupAnchorGraph
+                                            clauseParentAnchorGraph ?? undefined
                                         "
-                                        :relationship="
-                                            currentGroup.relationship
-                                        "
+                                        :relationship="group.relationship"
                                         :inner-group-graph-slug="
-                                            isRelationshipContainer
-                                                ? visibleGroup.graph_slug
-                                                : currentGroup.groups[0]
-                                                      ?.graph_slug
+                                            clauseInnerGraphSlug
                                         "
                                         @update:model-value="
-                                            clauseUpdateHandlersByIndex[
-                                                clauseIndex
-                                            ]($event)
+                                            onUpdateClause(
+                                                item.id,
+                                                $event as LiteralClause,
+                                            )
                                         "
                                         @request:remove="
-                                            clauseRemoveHandlersByIndex[
-                                                clauseIndex
-                                            ]()
+                                            onRemoveClause(item.id)
                                         "
                                     />
                                 </template>
                             </Card>
-                        </div>
 
-                        <div
-                            v-if="visibleGroup.groups.length > 0"
-                            :class="[
-                                'children',
-                                !shouldHaveBracket &&
-                                    'children-without-bracket',
-                            ]"
-                            :style="{
-                                marginInlineEnd: '5.5rem',
-                            }"
-                        >
                             <GroupBuilder
-                                v-for="(
-                                    childGroup, childIndex
-                                ) in visibleGroup.groups"
-                                :key="childGroupKeys[childIndex]"
-                                :model-value="childGroup"
+                                v-else-if="item.type === 'group'"
+                                :model-value="
+                                    contentGroup.groups[
+                                        findItemIndex(item.id, 'group')
+                                    ]
+                                "
                                 :parent-group-anchor-graph="
-                                    visibleGroupAnchorGraph!
+                                    contentAnchorGraph ?? undefined
                                 "
                                 :relationship-to-parent="
-                                    childGroup.relationship ?? null
+                                    contentGroup.groups[
+                                        findItemIndex(item.id, 'group')
+                                    ]?.relationship ?? null
                                 "
                                 @update:model-value="
-                                    childGroupUpdateHandlersByIndex[childIndex](
-                                        $event,
-                                    )
+                                    onUpdateGroup(item.id, $event)
                                 "
-                                @remove="
-                                    childGroupRemoveHandlersByIndex[
-                                        childIndex
-                                    ]()
-                                "
+                                @remove="onRemoveGroup(item.id)"
                             />
-                        </div>
+                        </template>
                     </div>
                 </div>
             </div>
         </template>
 
         <template #footer>
-            <div
-                class="group-footer-actions"
-                :style="{ marginTop: footerMarginTop }"
-            >
-                <Button
-                    severity="secondary"
-                    icon="pi pi-table"
-                    :label="$gettext('Add group')"
-                    :disabled="!visibleGroupAnchorGraph"
-                    @click.stop="onAddGroup"
-                />
-                <Button
-                    severity="secondary"
-                    icon="pi pi-filter"
-                    :label="$gettext('Add filter')"
-                    :disabled="!visibleGroupAnchorGraph"
-                    @click.stop="onAddClause"
-                />
-                <Button
-                    class="group-relate-button"
-                    severity="secondary"
-                    icon="pi pi-link"
-                    :label="$gettext('Add relationship filter')"
-                    :title="relateButtonTitle"
-                    :disabled="!visibleGroupAnchorGraph"
-                    @click.stop="onAddRelationship"
-                />
-                <Button
-                    severity="secondary"
-                    icon="pi pi-map"
-                    :label="$gettext('Add map filter')"
-                    :disabled="!visibleGroupAnchorGraph"
-                    @click.stop="onOpenMapFilterDrawer"
-                />
-
-                <div
-                    v-if="!isRoot"
-                    class="group-footer-remove"
-                >
-                    <Button
-                        severity="danger"
-                        icon="pi pi-trash"
-                        variant="outlined"
-                        :label="$gettext('Remove group')"
-                        :aria-label="$gettext('Remove group')"
-                        @click.stop="onRequestRemoveGroup"
-                    />
-                </div>
-            </div>
+            <GroupFooter
+                :disabled="!contentAnchorGraph"
+                :is-root="isRoot"
+                @add-group="onAddGroup"
+                @add-filter="onAddClause"
+                @add-relationship="onAddRelationship"
+                @add-map-filter="showMapDrawer = true"
+                @remove="emit('remove')"
+            />
         </template>
     </Card>
 
     <Drawer
-        v-model:visible="isMapFilterDrawerVisible"
+        v-model:visible="showMapDrawer"
         :header="$gettext('Map filter')"
         position="right"
         :style="{ width: '32rem', maxWidth: '100vw' }"
@@ -832,11 +411,6 @@ function onOpenMapFilterDrawer(): void {
 </template>
 
 <style scoped>
-.group {
-    display: block;
-    margin-bottom: 1rem;
-}
-
 .group-card {
     border: 0.125rem solid var(--p-content-border-color);
     background: var(--p-content-background);
@@ -858,9 +432,6 @@ function onOpenMapFilterDrawer(): void {
 .group-content {
     display: flex;
     flex-direction: column;
-}
-
-.group-content-with-top-padding {
 }
 
 .group-grid {
@@ -887,46 +458,11 @@ function onOpenMapFilterDrawer(): void {
     flex-direction: column;
     gap: 1rem;
     min-width: 0;
-}
-
-.clauses {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.children {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.children .children > .group-card,
-.children .clauses > .clause-card {
-    margin-inline-end: 3rem;
-}
-
-.clauses-without-bracket,
-.children-without-bracket {
-    margin-inline-start: 5.5rem;
+    margin-inline-end: 5.5rem;
 }
 
 .relationship-editor-inline {
     align-self: stretch;
-}
-
-.group-footer-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    align-items: center;
-    margin-top: 0rem;
-}
-
-.group-footer-remove {
-    margin-inline-start: auto;
-    display: flex;
-    flex: 0 0 auto;
 }
 
 .group-helper-note {

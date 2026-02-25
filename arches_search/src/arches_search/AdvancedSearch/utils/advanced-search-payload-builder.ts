@@ -44,7 +44,7 @@ export function makeEmptyGroupPayload(): GroupPayload {
     };
 }
 
-export function setGraphSlug(
+function setGraphSlug(
     groupPayload: GroupPayload,
     graphSlug: string,
 ): GroupPayload {
@@ -81,12 +81,8 @@ export function setScope(
 }
 
 export function toggleLogic(groupPayload: GroupPayload): GroupPayload {
-    let nextLogic = LogicToken.AND;
-    if (groupPayload.logic === LogicToken.AND) {
-        nextLogic = LogicToken.OR;
-    } else {
-        nextLogic = LogicToken.AND;
-    }
+    const nextLogic =
+        groupPayload.logic === LogicToken.AND ? LogicToken.OR : LogicToken.AND;
     return { ...groupPayload, logic: nextLogic };
 }
 
