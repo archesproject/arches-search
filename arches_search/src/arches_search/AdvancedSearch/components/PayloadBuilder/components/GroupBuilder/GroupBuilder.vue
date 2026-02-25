@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, watchEffect, inject } from "vue";
 import { useGettext } from "vue3-gettext";
+
 import Card from "primevue/card";
 import Drawer from "primevue/drawer";
+
 import GroupBracket from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupBracket.vue";
 import GroupHeader from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupHeader.vue";
 import GroupFooter from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupFooter.vue";
 import RelationshipEditor from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/RelationshipEditor.vue";
 import ClauseBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/ClauseBuilder.vue";
+
 import {
     makeEmptyGroupPayload,
     toggleLogic,
@@ -21,6 +24,7 @@ import {
     replaceChildGroupAtIndexAndReconcile,
     setRelationshipAndReconcileClauses,
 } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
+
 import type {
     GraphModel,
     GroupPayload,
@@ -66,11 +70,12 @@ const contentAnchorGraph = computed(
 );
 const shouldShowBracket = computed(() => items.value.length >= 2);
 const hasContent = computed(() => items.value.length > 0);
-const clauseInnerGraphSlug = computed(() =>
-    hasRelationship.value
-        ? contentGroup.value.graph_slug
-        : group.value.groups[0]?.graph_slug ?? "",
-);
+const clauseInnerGraphSlug = computed(() => {
+    if (hasRelationship.value) {
+        return contentGroup.value.graph_slug;
+    }
+    return group.value.groups[0]?.graph_slug ?? "";
+});
 const clauseParentAnchorGraph = computed(() =>
     hasRelationship.value ? anchor.value : parentGroupAnchorGraph,
 );
