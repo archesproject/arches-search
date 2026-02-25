@@ -25,6 +25,7 @@ type OperandPayloadTypeToken = "LITERAL" | "PATH";
 type OperandPayload = {
     type: OperandPayloadTypeToken;
     value: unknown;
+    display_value?: string;
 };
 
 type ClausePayload = {

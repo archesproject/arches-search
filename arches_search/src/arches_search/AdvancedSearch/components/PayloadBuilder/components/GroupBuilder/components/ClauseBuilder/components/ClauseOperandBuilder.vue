@@ -12,6 +12,7 @@ type OperandPayloadTypeToken = typeof OPERAND_TYPE_LITERAL | "PATH";
 type OperandPayload = {
     type: OperandPayloadTypeToken;
     value: unknown;
+    display_value?: string;
 };
 
 const emit = defineEmits<{
@@ -27,6 +28,7 @@ const { modelValue, subjectTerminalNode, subjectTerminalGraph, operandType } =
     }>();
 
 const operandValue = ref<unknown>(null);
+const displayValue = ref<string | undefined>(undefined);
 const initialAliasedNodeData = ref<Record<string, unknown> | null>(null);
 const hasInitializedFromModel = ref(false);
 
@@ -39,8 +41,10 @@ watchEffect(() => {
 
     if (hasInitialValue) {
         operandValue.value = modelValue!.value;
+        displayValue.value = modelValue!.display_value;
     } else {
         operandValue.value = null;
+        displayValue.value = undefined;
     }
 
     if (operandType === OPERAND_TYPE_LITERAL && hasInitialValue) {
@@ -86,6 +90,7 @@ function handleOperandTypeChange(
 
     if (updatedOperandType === OPERAND_TYPE_LITERAL) {
         operandValue.value = null;
+        displayValue.value = undefined;
 
         if (hasValueInModel) {
             initialAliasedNodeData.value = modelValue!.value as Record<
@@ -100,6 +105,7 @@ function handleOperandTypeChange(
     }
 
     operandValue.value = [];
+    displayValue.value = undefined;
     initialAliasedNodeData.value = null;
 }
 
@@ -107,13 +113,26 @@ function emitUpdatedOperand(): void {
     emit("update:modelValue", {
         type: operandType,
         value: operandValue.value,
+        display_value: displayValue.value,
     });
 }
 
 function handleGenericWidgetUpdate(
-    updatedGenericWidgetValue: Record<string, unknown>,
+    updatedWidgetValue: Record<string, unknown>,
 ): void {
-    operandValue.value = updatedGenericWidgetValue;
+    if (
+        "node_value" in updatedWidgetValue &&
+        "display_value" in updatedWidgetValue
+    ) {
+        operandValue.value = updatedWidgetValue.node_value;
+        const rawDisplayValue = String(
+            updatedWidgetValue.display_value ?? "",
+        ).trim();
+        displayValue.value = rawDisplayValue || undefined;
+    } else {
+        operandValue.value = updatedWidgetValue;
+        displayValue.value = undefined;
+    }
     emitUpdatedOperand();
 }
 </script>
@@ -127,7 +146,7 @@ function handleGenericWidgetUpdate(
             :node-alias="subjectTerminalNode.alias"
             :should-show-label="false"
             :aliased-node-data="initialAliasedNodeData || undefined"
-            :should-emit-simplified-value="true"
+            :should-emit-simplified-value="false"
             @update:value="handleGenericWidgetUpdate"
         />
     </div>

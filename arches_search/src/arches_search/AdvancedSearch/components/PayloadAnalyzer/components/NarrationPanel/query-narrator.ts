@@ -268,13 +268,7 @@ export function describeAdvancedSearchQuery(
             return describePathValue(operand.value);
         }
 
-        const literalOperand = operand as LiteralOperand & {
-            display_value?: unknown;
-        };
-        const rawValue =
-            "display_value" in literalOperand
-                ? literalOperand.display_value
-                : operand.value;
+        const rawValue = operand.display_value ?? operand.value;
 
         if (rawValue === null || typeof rawValue === "undefined") {
             return "";

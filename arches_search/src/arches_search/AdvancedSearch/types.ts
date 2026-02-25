@@ -82,6 +82,7 @@ export type RelationshipPath = SubjectPair[];
 export type LiteralOperand = {
     type: "LITERAL";
     value: unknown;
+    display_value?: string;
 };
 
 export type LiteralClause = {
