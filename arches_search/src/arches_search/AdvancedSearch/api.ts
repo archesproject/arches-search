@@ -76,6 +76,25 @@ export async function getNodeMetadataForPayload(payload: GroupPayload) {
     return parsed;
 }
 
+export async function getResourceNamesForPayload(payload: GroupPayload) {
+    const response = await fetch(
+        generateArchesURL("arches_search:resource_names_for_payload"),
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify(payload),
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
 export async function getNodesForGraphId(graphId: string) {
     const response = await fetch(
         generateArchesURL("arches_search:nodes_with_widget_labels_for_graph", {

@@ -17,6 +17,7 @@ export type DescribeQueryOptions = {
     >;
     gettext: (msgid: string, params?: Record<string, unknown>) => string;
     nodeMetadata?: NodeMetadataMap;
+    resourceNames?: Readonly<Record<string, string>>;
 };
 
 const TRAVERSAL_ALL = "ALL" as const;
@@ -31,6 +32,7 @@ export function describeAdvancedSearchQuery(
         datatypesToAdvancedSearchFacets,
         gettext,
         nodeMetadata,
+        resourceNames,
     } = options;
 
     if (!payload?.graph_slug) {
@@ -272,6 +274,13 @@ export function describeAdvancedSearchQuery(
 
         if (rawValue === null || typeof rawValue === "undefined") {
             return "";
+        }
+
+        if (Array.isArray(rawValue)) {
+            const resolvedNames = (rawValue as unknown[])
+                .filter((item): item is string => typeof item === "string")
+                .map((resourceId) => resourceNames?.[resourceId] || resourceId);
+            return formatValueList(resolvedNames);
         }
 
         if (

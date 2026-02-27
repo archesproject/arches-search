@@ -100,24 +100,9 @@ function emitUpdatedOperand(): void {
     });
 }
 
-function handleGenericWidgetUpdate(
-    updatedWidgetValue: Record<string, unknown>,
-): void {
-    if (
-        "node_value" in updatedWidgetValue &&
-        "display_value" in updatedWidgetValue
-    ) {
-        operandValue.value = updatedWidgetValue.node_value;
-
-        const rawDisplayValue = String(
-            updatedWidgetValue.display_value ?? "",
-        ).trim();
-
-        displayValue.value = rawDisplayValue || undefined;
-    } else {
-        operandValue.value = updatedWidgetValue;
-        displayValue.value = undefined;
-    }
+function handleGenericWidgetUpdate(updatedWidgetValue: unknown): void {
+    operandValue.value = updatedWidgetValue;
+    displayValue.value = undefined;
 
     emitUpdatedOperand();
 }

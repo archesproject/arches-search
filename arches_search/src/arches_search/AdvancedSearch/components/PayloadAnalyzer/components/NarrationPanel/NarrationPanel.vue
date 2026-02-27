@@ -7,7 +7,10 @@ import Skeleton from "primevue/skeleton";
 import Textarea from "primevue/textarea";
 
 import { describeAdvancedSearchQuery } from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/NarrationPanel/query-narrator.ts";
-import { getNodeMetadataForPayload } from "@/arches_search/AdvancedSearch/api.ts";
+import {
+    getNodeMetadataForPayload,
+    getResourceNamesForPayload,
+} from "@/arches_search/AdvancedSearch/api.ts";
 
 import type {
     AdvancedSearchFacet,
@@ -25,6 +28,7 @@ const { payload, graphs, datatypesToAdvancedSearchFacets } = defineProps<{
 }>();
 
 const nodeMetadata = ref<NodeMetadataMap>({});
+const resourceNames = ref<Record<string, string>>({});
 const isLoading = ref(false);
 const fetchError = ref<Error | null>(null);
 
@@ -35,20 +39,31 @@ const narration = computed(() =>
         datatypesToAdvancedSearchFacets,
         gettext: $gettext,
         nodeMetadata: nodeMetadata.value,
+        resourceNames: resourceNames.value,
     }),
 );
 
 watchEffect(() => {
-    void fetchNodeMetadata(payload);
+    void fetchNarrationData(payload);
 });
 
-async function fetchNodeMetadata(currentPayload: GroupPayload) {
+async function fetchNarrationData(currentPayload: GroupPayload) {
     isLoading.value = true;
     fetchError.value = null;
 
     try {
-        const fetchedMetadata = await getNodeMetadataForPayload(currentPayload);
+        const [fetchedMetadata, fetchedResourceNames] = await Promise.all([
+            getNodeMetadataForPayload(currentPayload),
+            getResourceNamesForPayload(currentPayload),
+        ]);
+
+        console.log("Fetched node metadata:", fetchedMetadata);
+        console.log("Fetched resource names:", fetchedResourceNames);
         nodeMetadata.value = (fetchedMetadata ?? {}) as NodeMetadataMap;
+        resourceNames.value = (fetchedResourceNames ?? {}) as Record<
+            string,
+            string
+        >;
     } catch (error) {
         if (error instanceof Error) {
             fetchError.value = error;
@@ -60,6 +75,7 @@ async function fetchNodeMetadata(currentPayload: GroupPayload) {
             );
         }
         nodeMetadata.value = {};
+        resourceNames.value = {};
     } finally {
         isLoading.value = false;
     }
