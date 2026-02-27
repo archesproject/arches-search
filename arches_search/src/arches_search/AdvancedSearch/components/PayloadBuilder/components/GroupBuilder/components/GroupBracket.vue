@@ -15,7 +15,7 @@ const { show, logic } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: "update:logic", value: LogicToken): void;
+    "update:logic": [logic: LogicToken];
 }>();
 
 const currentLogicLabel = computed<string>(() => {

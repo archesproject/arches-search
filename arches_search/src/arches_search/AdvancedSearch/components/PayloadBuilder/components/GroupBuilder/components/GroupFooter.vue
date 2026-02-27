@@ -14,7 +14,7 @@ const emit = defineEmits<{
     "add-filter": [];
     "add-relationship": [];
     "add-map-filter": [];
-    remove: [];
+    "remove-group": [];
 }>();
 </script>
 
@@ -58,7 +58,7 @@ const emit = defineEmits<{
                 variant="outlined"
                 :label="$gettext('Remove group')"
                 :aria-label="$gettext('Remove group')"
-                @click.stop="emit('remove')"
+                @click.stop="emit('remove-group')"
             />
         </div>
     </div>

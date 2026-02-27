@@ -1,31 +1,18 @@
 <script setup lang="ts">
-import { inject, computed } from "vue";
-
+import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
-
 import Select from "primevue/select";
 import Tag from "primevue/tag";
-
 import type {
     GraphModel,
     GroupPayload,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-const { $gettext } = useGettext();
+const { $gettext, $pgettext } = useGettext();
 
 type RelationshipState = GroupPayload["relationship"];
 
 const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs");
-
-const emit = defineEmits<{
-    (event: "change-graph", graphSlug: string): void;
-    (event: "add-group"): void;
-    (event: "add-clause"): void;
-    (event: "add-relationship"): void;
-    (event: "remove-relationship"): void;
-    (event: "update-relationship", relationship: RelationshipState): void;
-    (event: "remove-group"): void;
-}>();
 
 const { groupPayload, isRoot, relationshipToParent } = defineProps<{
     groupPayload: GroupPayload;
@@ -33,16 +20,23 @@ const { groupPayload, isRoot, relationshipToParent } = defineProps<{
     relationshipToParent?: RelationshipState;
 }>();
 
-const shouldRenderHeader = computed<boolean>(function getShouldRenderHeader() {
-    return Boolean(isRoot) || relationshipToParent != null;
+const emit = defineEmits<{
+    "change-graph": [graphSlug: string];
+}>();
+
+const shouldRenderHeader = computed(() => {
+    return isRoot || relationshipToParent != null;
 });
 
-const graphOptions = computed(function getGraphOptions() {
+const showsRelationshipTag = computed(() => {
+    return !isRoot && relationshipToParent != null;
+});
+
+const graphOptions = computed(() => {
     if (!graphs?.value) {
         return [];
     }
-
-    return graphs.value.map(function mapGraphOption(graphSummary) {
+    return graphs.value.map((graphSummary) => {
         return {
             label: graphSummary.name ?? graphSummary.slug,
             value: graphSummary.slug,
@@ -50,43 +44,19 @@ const graphOptions = computed(function getGraphOptions() {
     });
 });
 
-const currentGraphSlug = computed<string>(function getCurrentGraphSlug() {
-    return groupPayload.graph_slug;
-});
+const currentGraphLabel = computed(() => {
+    const matchingGraph = graphs?.value.find((graph) => {
+        return graph.slug === groupPayload.graph_slug;
+    });
 
-const currentGraphLabel = computed<string>(function getCurrentGraphLabel() {
-    const graphSlug = currentGraphSlug.value;
-
-    if (!graphSlug) {
+    if (!matchingGraph?.name) {
         return $gettext("Filtering by...");
     }
 
-    if (!graphs?.value || graphs.value.length === 0) {
-        return $gettext("Filtering by...");
-    }
-
-    const matchingGraphSummary = graphs.value.find(
-        function findMatchingGraphSummary(graphSummary) {
-            return graphSummary.slug === graphSlug;
-        },
-    );
-
-    let returnValue = $gettext("Filtering by...");
-
-    if (matchingGraphSummary?.name) {
-        returnValue = $gettext("Filtering by: %{graphName}", {
-            graphName: matchingGraphSummary.name,
-        });
-    }
-
-    return returnValue;
+    return $gettext("Filtering by: %{graphName}", {
+        graphName: matchingGraph.name,
+    });
 });
-
-const showsRelationshipTag = computed<boolean>(
-    function getShowsRelationshipTag() {
-        return !isRoot && relationshipToParent != null;
-    },
-);
 
 function onSetGraphSlug(graphSlug: string): void {
     emit("change-graph", graphSlug);
@@ -105,11 +75,16 @@ function onSetGraphSlug(graphSlug: string): void {
             <div class="group-selectors">
                 <div class="group-action-text">
                     <span v-if="isRoot">
-                        {{ $gettext("I want to find") }}
+                        {{
+                            $pgettext(
+                                "Sentence: 'I want to find [resource dropdown] resources that...'",
+                                "I want to find",
+                            )
+                        }}
                     </span>
                     <Select
                         v-if="isRoot"
-                        :model-value="currentGraphSlug"
+                        :model-value="groupPayload.graph_slug"
                         :options="graphOptions"
                         option-label="label"
                         option-value="value"
@@ -120,7 +95,12 @@ function onSetGraphSlug(graphSlug: string): void {
                         @update:model-value="onSetGraphSlug"
                     />
                     <span v-if="isRoot">
-                        {{ $gettext("resources that...") }}
+                        {{
+                            $pgettext(
+                                "Sentence: 'I want to find [resource dropdown] resources that...'",
+                                "resources that...",
+                            )
+                        }}
                     </span>
                 </div>
 
