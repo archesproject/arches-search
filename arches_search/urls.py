@@ -17,6 +17,7 @@ from arches_search.views.api.nodes_with_widget_labels_for_graph import (
 from arches_search.views.api.relatable_node_tree_for_graph import (
     RelatableNodesTreeForGraphAPI,
 )
+from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 
 urlpatterns = [
     path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
@@ -54,6 +55,11 @@ urlpatterns = [
         "api/advanced-search/graph/<uuid:graph_id>/relatable-nodes-tree",
         RelatableNodesTreeForGraphAPI.as_view(),
         name="api-relatable-nodes-tree-for-graph",
+    ),
+    path(
+        "api/resource-descriptors",
+        ResourceDescriptorsAPI.as_view(),
+        name="api_resource_descriptors",
     ),
 ]
 
