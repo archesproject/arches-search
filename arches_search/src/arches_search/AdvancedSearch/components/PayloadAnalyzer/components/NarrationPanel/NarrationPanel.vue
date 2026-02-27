@@ -57,8 +57,6 @@ async function fetchNarrationData(currentPayload: GroupPayload) {
             getResourceNamesForPayload(currentPayload),
         ]);
 
-        console.log("Fetched node metadata:", fetchedMetadata);
-        console.log("Fetched resource names:", fetchedResourceNames);
         nodeMetadata.value = (fetchedMetadata ?? {}) as NodeMetadataMap;
         resourceNames.value = (fetchedResourceNames ?? {}) as Record<
             string,
