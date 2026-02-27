@@ -42,13 +42,11 @@ const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs");
 
 const emit = defineEmits<{ "update:modelValue": [GroupPayload]; remove: [] }>();
 
-const { modelValue, isRoot, parentGroupAnchorGraph, relationshipToParent } =
-    defineProps<{
-        modelValue?: GroupPayload;
-        isRoot?: boolean;
-        parentGroupAnchorGraph?: GraphModel;
-        relationshipToParent?: GroupPayload["relationship"];
-    }>();
+const { modelValue, isRoot, relationshipToParent } = defineProps<{
+    modelValue?: GroupPayload;
+    isRoot?: boolean;
+    relationshipToParent?: GroupPayload["relationship"];
+}>();
 
 const showMapDrawer = ref(false);
 
@@ -91,20 +89,6 @@ const shouldShowBracket = computed(() => {
 
 const hasContent = computed(() => {
     return items.value.length > 0;
-});
-
-const clauseInnerGraphSlug = computed(() => {
-    if (hasRelationship.value) {
-        return contentGroup.value.graph_slug;
-    }
-    return group.value.groups[0]?.graph_slug ?? "";
-});
-
-const clauseParentAnchorGraph = computed(() => {
-    if (hasRelationship.value) {
-        return anchor.value;
-    }
-    return parentGroupAnchorGraph;
 });
 
 const rootStyle = computed(() => {
@@ -385,13 +369,6 @@ function onUpdateInnerGraphSlug(slug: string) {
                                             ]
                                         "
                                         :anchor-graph="contentAnchorGraph!"
-                                        :parent-group-anchor-graph="
-                                            clauseParentAnchorGraph ?? undefined
-                                        "
-                                        :relationship="group.relationship"
-                                        :inner-group-graph-slug="
-                                            clauseInnerGraphSlug
-                                        "
                                         @update:model-value="
                                             onUpdateClause(
                                                 item.id,
@@ -411,9 +388,6 @@ function onUpdateInnerGraphSlug(slug: string) {
                                     contentGroup.groups[
                                         findItemIndex(item.id, ITEM_TYPE_GROUP)
                                     ]
-                                "
-                                :parent-group-anchor-graph="
-                                    contentAnchorGraph ?? undefined
                                 "
                                 :relationship-to-parent="
                                     contentGroup.groups[

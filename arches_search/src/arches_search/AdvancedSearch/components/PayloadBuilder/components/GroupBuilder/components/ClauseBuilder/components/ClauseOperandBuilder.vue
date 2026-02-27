@@ -16,7 +16,7 @@ type OperandPayload = {
 };
 
 const emit = defineEmits<{
-    (event: "update:modelValue", updatedOperand: OperandPayload): void;
+    "update:modelValue": [updatedOperand: OperandPayload];
 }>();
 
 const { modelValue, subjectTerminalNode, subjectTerminalGraph, operandType } =
@@ -37,18 +37,19 @@ watchEffect(() => {
         return;
     }
 
-    const hasInitialValue = hasInitialOperandValue();
-
-    if (hasInitialValue) {
-        operandValue.value = modelValue!.value;
-        displayValue.value = modelValue!.display_value;
-    } else {
+    if (modelValue === null || modelValue.value === undefined) {
         operandValue.value = null;
         displayValue.value = undefined;
+        initialAliasedNodeData.value = null;
+        hasInitializedFromModel.value = true;
+        return;
     }
 
-    if (operandType === OPERAND_TYPE_LITERAL && hasInitialValue) {
-        initialAliasedNodeData.value = modelValue!.value as Record<
+    operandValue.value = modelValue.value;
+    displayValue.value = modelValue.display_value;
+
+    if (operandType === OPERAND_TYPE_LITERAL) {
+        initialAliasedNodeData.value = modelValue.value as Record<
             string,
             unknown
         >;
@@ -61,39 +62,21 @@ watchEffect(() => {
 
 watch(
     () => operandType,
-    (updatedOperandType, previousOperandType) => {
-        if (previousOperandType === undefined) {
-            return;
-        }
-
+    (updatedOperandType) => {
         handleOperandTypeChange(updatedOperandType);
         emitUpdatedOperand();
     },
 );
 
-function hasInitialOperandValue(): boolean {
-    if (modelValue === null || modelValue === undefined) {
-        return false;
-    }
-
-    if (modelValue.value === undefined) {
-        return false;
-    }
-
-    return true;
-}
-
 function handleOperandTypeChange(
     updatedOperandType: OperandPayloadTypeToken,
 ): void {
-    const hasValueInModel = hasInitialOperandValue();
-
     if (updatedOperandType === OPERAND_TYPE_LITERAL) {
         operandValue.value = null;
         displayValue.value = undefined;
 
-        if (hasValueInModel) {
-            initialAliasedNodeData.value = modelValue!.value as Record<
+        if (modelValue !== null && modelValue.value !== undefined) {
+            initialAliasedNodeData.value = modelValue.value as Record<
                 string,
                 unknown
             >;
@@ -125,14 +108,17 @@ function handleGenericWidgetUpdate(
         "display_value" in updatedWidgetValue
     ) {
         operandValue.value = updatedWidgetValue.node_value;
+
         const rawDisplayValue = String(
             updatedWidgetValue.display_value ?? "",
         ).trim();
+
         displayValue.value = rawDisplayValue || undefined;
     } else {
         operandValue.value = updatedWidgetValue;
         displayValue.value = undefined;
     }
+
     emitUpdatedOperand();
 }
 </script>
@@ -146,7 +132,7 @@ function handleGenericWidgetUpdate(
             :node-alias="subjectTerminalNode.alias"
             :should-show-label="false"
             :aliased-node-data="initialAliasedNodeData || undefined"
-            :should-emit-simplified-value="false"
+            :should-emit-simplified-value="true"
             @update:value="handleGenericWidgetUpdate"
         />
     </div>
