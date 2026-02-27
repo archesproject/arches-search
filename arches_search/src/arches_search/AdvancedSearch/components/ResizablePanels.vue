@@ -88,8 +88,7 @@ function onPointerUp() {
 .top-panel {
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
-    overflow: hidden;
+    overflow: auto;
     height: v-bind(topPanelHeight);
 }
 
