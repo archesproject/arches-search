@@ -6,7 +6,7 @@ class ArchesSearchConfig(AppConfig):
     is_arches_application = True
 
     def ready(self):
-        from arches_modular_reports.config_generators import register
+        from arches_modular_reports.config_generator_registry import register
 
         register(
             "search",
