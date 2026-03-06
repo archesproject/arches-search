@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from "vue";
+import { ref, computed, watchEffect, nextTick } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
@@ -11,15 +11,7 @@ import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
 import type { ResourceData } from "@/arches_search/AdvancedSearch/types.ts";
 
-type ResourceDescriptor = {
-    name?: string;
-    description?: string;
-    [key: string]: unknown;
-};
-
 const { $gettext } = useGettext();
-
-const EDIT_BUTTON_LABEL = $gettext("Edit");
 
 const { result } = defineProps<{
     result: ResourceData;
@@ -29,72 +21,65 @@ const shouldShowMoreDetails = ref(false);
 const shouldShowThumbnailContainer = ref(false);
 const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
 
-const resourceDescriptorsForActiveLanguage = computed<
-    ResourceDescriptor | undefined
->(function () {
-    return result.descriptors?.[arches.activeLanguage];
-});
+const activeLanguageDescriptors = computed(
+    () => result.descriptors?.[arches.activeLanguage],
+);
 
-const resourceLink = computed<string>(function () {
-    return generateArchesURL("arches:resource_editor", {
+const resourceDisplayName = computed(
+    () => activeLanguageDescriptors.value?.name ?? "",
+);
+const resourceDescriptionText = computed(
+    () => activeLanguageDescriptors.value?.description ?? "",
+);
+
+const resourceEditUrl = computed(() =>
+    generateArchesURL("arches:resource_editor", {
         resourceid: result.resourceinstanceid,
-    });
-});
+    }),
+);
 
-const resourceDisplayName = computed<string>(function () {
-    return resourceDescriptorsForActiveLanguage.value?.name || "";
-});
-
-const resourceDescriptionText = computed<string>(function () {
-    return resourceDescriptorsForActiveLanguage.value?.description || "";
-});
-
-const showMoreButtonLabel = computed<string>(function () {
+const showMoreButtonLabel = computed(() => {
     if (shouldShowMoreDetails.value) {
         return $gettext("Show Less");
     }
-
     return $gettext("Show More");
 });
 
-const showMoreButtonIcon = computed<string>(function () {
+const showMoreButtonIcon = computed(() => {
     if (shouldShowMoreDetails.value) {
         return "pi pi-chevron-down";
     }
-
     return "pi pi-chevron-right";
 });
 
-function onToggleShowMoreDetails(): void {
+watchEffect(
+    () => {
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        const thumbnailImage = new window.Image();
+        thumbnailImage.alt = resourceDisplayName.value;
+        thumbnailImage.className = "search-result-thumbnail-image";
+
+        thumbnailImage.onload = async () => {
+            shouldShowThumbnailContainer.value = true;
+            await nextTick();
+            thumbnailContainerElement.value?.appendChild(thumbnailImage);
+        };
+
+        thumbnailImage.onerror = () => {
+            shouldShowThumbnailContainer.value = false;
+        };
+
+        thumbnailImage.src = `/thumbnail/${result.resourceinstanceid}`;
+    },
+    { flush: "post" },
+);
+
+function onToggleShowMoreDetails() {
     shouldShowMoreDetails.value = !shouldShowMoreDetails.value;
 }
-
-onMounted(function () {
-    if (typeof window === "undefined") {
-        return;
-    }
-
-    const thumbnailImageElement = new window.Image();
-
-    thumbnailImageElement.alt = resourceDisplayName.value;
-    thumbnailImageElement.className = "search-result-thumbnail-image";
-
-    thumbnailImageElement.onload = async function () {
-        shouldShowThumbnailContainer.value = true;
-
-        await nextTick();
-
-        if (thumbnailContainerElement.value) {
-            thumbnailContainerElement.value.appendChild(thumbnailImageElement);
-        }
-    };
-
-    thumbnailImageElement.onerror = function () {
-        shouldShowThumbnailContainer.value = false;
-    };
-
-    thumbnailImageElement.src = `/thumbnail/${result.resourceinstanceid}`;
-});
 </script>
 
 <template>
@@ -108,8 +93,8 @@ onMounted(function () {
         <div class="search-result-content">
             <h1 class="search-result-title">
                 <a
-                    v-if="resourceLink"
-                    :href="resourceLink"
+                    v-if="resourceEditUrl"
+                    :href="resourceEditUrl"
                     target="_blank"
                     rel="noreferrer"
                 >
@@ -141,8 +126,8 @@ onMounted(function () {
                     target="_blank"
                     size="large"
                     variant="link"
-                    :href="resourceLink"
-                    :label="EDIT_BUTTON_LABEL"
+                    :href="resourceEditUrl"
+                    :label="$gettext('Edit')"
                 />
             </div>
 

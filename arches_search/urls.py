@@ -14,6 +14,9 @@ from arches_search.views.api.node_metadata_for_payload import NodeMetadataForPay
 from arches_search.views.api.nodes_with_widget_labels_for_graph import (
     NodesWithWidgetLabelsForGraphAPI,
 )
+from arches_search.views.api.resource_names_for_payload import (
+    ResourceNamesForPayloadAPI,
+)
 from arches_search.views.api.relatable_node_tree_for_graph import (
     RelatableNodesTreeForGraphAPI,
 )
@@ -29,6 +32,11 @@ urlpatterns = [
         "api/advanced-search/node-metadata-for-payload",
         NodeMetadataForPayloadAPI.as_view(),
         name="node_metadata_for_payload",
+    ),
+    path(
+        "api/advanced-search/resource-names-for-payload",
+        ResourceNamesForPayloadAPI.as_view(),
+        name="resource_names_for_payload",
     ),
     path(
         "api/advanced-search/datatypes/<str:datatype>/facets",

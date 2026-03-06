@@ -15,42 +15,31 @@ import PayloadAnalyzerSQLPanel from "@/arches_search/AdvancedSearch/components/P
 
 import type {
     AdvancedSearchFacet,
+    GraphModel,
     GroupPayload,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-type GraphSummary = {
-    graphid?: string;
-    slug?: string;
-    name?: string;
-    label?: string;
-    [key: string]: unknown;
-};
-
 const { $gettext } = useGettext();
 
-const PAYLOAD = "payload";
 const SQL = "sql";
 const NARRATION = "narration";
+const PAYLOAD = "payload";
 
 defineProps<{
     visible: boolean;
     payload: GroupPayload;
-    graphs: GraphSummary[];
+    graphs: GraphModel[];
     datatypesToAdvancedSearchFacets: Record<string, AdvancedSearchFacet[]>;
 }>();
 
 const emit = defineEmits<{
-    (event: "update:visible", value: boolean): void;
+    "update:visible": [value: boolean];
 }>();
 
-const activeTabValue = ref<string | number>(SQL);
+const activeTabValue = ref(SQL);
 
-function onUpdateVisible(nextVisible: boolean): void {
+function onUpdateVisible(nextVisible: boolean) {
     emit("update:visible", nextVisible);
-}
-
-function onUpdateActiveTab(nextTabValue: string | number): void {
-    activeTabValue.value = nextTabValue;
 }
 </script>
 
@@ -61,17 +50,14 @@ function onUpdateActiveTab(nextTabValue: string | number): void {
         :draggable="false"
         :resizable="true"
         :dismissable-mask="true"
-        :style="{
-            maxWidth: '100vw',
-        }"
+        :style="{ maxWidth: '100vw' }"
         :header="$gettext('Describe Query')"
         @update:visible="onUpdateVisible"
     >
         <div class="payload-analyzer">
             <Tabs
-                :value="activeTabValue"
+                v-model:value="activeTabValue"
                 class="payload-analyzer-tabs"
-                @update:value="onUpdateActiveTab"
             >
                 <TabList>
                     <Tab :value="SQL">
@@ -86,15 +72,11 @@ function onUpdateActiveTab(nextTabValue: string | number): void {
                 </TabList>
 
                 <TabPanels class="payload-analyzer-tabpanels">
-                    <TabPanel value="payload">
-                        <PayloadAnalyzerPayloadPanel :payload="payload" />
-                    </TabPanel>
-
-                    <TabPanel value="sql">
+                    <TabPanel :value="SQL">
                         <PayloadAnalyzerSQLPanel :payload="payload" />
                     </TabPanel>
 
-                    <TabPanel value="narration">
+                    <TabPanel :value="NARRATION">
                         <PayloadAnalyzerNarrationPanel
                             :payload="payload"
                             :graphs="graphs"
@@ -102,6 +84,10 @@ function onUpdateActiveTab(nextTabValue: string | number): void {
                                 datatypesToAdvancedSearchFacets
                             "
                         />
+                    </TabPanel>
+
+                    <TabPanel :value="PAYLOAD">
+                        <PayloadAnalyzerPayloadPanel :payload="payload" />
                     </TabPanel>
                 </TabPanels>
             </Tabs>

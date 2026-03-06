@@ -12,10 +12,11 @@ type OperandPayloadTypeToken = typeof OPERAND_TYPE_LITERAL | "PATH";
 type OperandPayload = {
     type: OperandPayloadTypeToken;
     value: unknown;
+    display_value?: string;
 };
 
 const emit = defineEmits<{
-    (event: "update:modelValue", updatedOperand: OperandPayload): void;
+    "update:modelValue": [updatedOperand: OperandPayload];
 }>();
 
 const { modelValue, subjectTerminalNode, subjectTerminalGraph, operandType } =
@@ -27,6 +28,7 @@ const { modelValue, subjectTerminalNode, subjectTerminalGraph, operandType } =
     }>();
 
 const operandValue = ref<unknown>(null);
+const displayValue = ref<string | undefined>(undefined);
 const initialAliasedNodeData = ref<Record<string, unknown> | null>(null);
 const hasInitializedFromModel = ref(false);
 
@@ -35,16 +37,19 @@ watchEffect(() => {
         return;
     }
 
-    const hasInitialValue = hasInitialOperandValue();
-
-    if (hasInitialValue) {
-        operandValue.value = modelValue!.value;
-    } else {
+    if (modelValue === null || modelValue.value === undefined) {
         operandValue.value = null;
+        displayValue.value = undefined;
+        initialAliasedNodeData.value = null;
+        hasInitializedFromModel.value = true;
+        return;
     }
 
-    if (operandType === OPERAND_TYPE_LITERAL && hasInitialValue) {
-        initialAliasedNodeData.value = modelValue!.value as Record<
+    operandValue.value = modelValue.value;
+    displayValue.value = modelValue.display_value;
+
+    if (operandType === OPERAND_TYPE_LITERAL) {
+        initialAliasedNodeData.value = modelValue.value as Record<
             string,
             unknown
         >;
@@ -57,38 +62,21 @@ watchEffect(() => {
 
 watch(
     () => operandType,
-    (updatedOperandType, previousOperandType) => {
-        if (previousOperandType === undefined) {
-            return;
-        }
-
+    (updatedOperandType) => {
         handleOperandTypeChange(updatedOperandType);
         emitUpdatedOperand();
     },
 );
 
-function hasInitialOperandValue(): boolean {
-    if (modelValue === null || modelValue === undefined) {
-        return false;
-    }
-
-    if (modelValue.value === undefined) {
-        return false;
-    }
-
-    return true;
-}
-
 function handleOperandTypeChange(
     updatedOperandType: OperandPayloadTypeToken,
 ): void {
-    const hasValueInModel = hasInitialOperandValue();
-
     if (updatedOperandType === OPERAND_TYPE_LITERAL) {
         operandValue.value = null;
+        displayValue.value = undefined;
 
-        if (hasValueInModel) {
-            initialAliasedNodeData.value = modelValue!.value as Record<
+        if (modelValue !== null && modelValue.value !== undefined) {
+            initialAliasedNodeData.value = modelValue.value as Record<
                 string,
                 unknown
             >;
@@ -100,6 +88,7 @@ function handleOperandTypeChange(
     }
 
     operandValue.value = [];
+    displayValue.value = undefined;
     initialAliasedNodeData.value = null;
 }
 
@@ -107,13 +96,14 @@ function emitUpdatedOperand(): void {
     emit("update:modelValue", {
         type: operandType,
         value: operandValue.value,
+        display_value: displayValue.value,
     });
 }
 
-function handleGenericWidgetUpdate(
-    updatedGenericWidgetValue: Record<string, unknown>,
-): void {
-    operandValue.value = updatedGenericWidgetValue;
+function handleGenericWidgetUpdate(updatedWidgetValue: unknown): void {
+    operandValue.value = updatedWidgetValue;
+    displayValue.value = undefined;
+
     emitUpdatedOperand();
 }
 </script>

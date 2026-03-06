@@ -82,6 +82,7 @@ export type RelationshipPath = SubjectPair[];
 export type LiteralOperand = {
     type: "LITERAL";
     value: unknown;
+    display_value?: string;
 };
 
 export type LiteralClause = {
@@ -107,6 +108,13 @@ export type GroupPayload = {
     aggregations: unknown[];
     relationship: RelationshipBlock | null;
 };
+
+export type NodeMetadataEntry = {
+    card_x_node_x_widget_label?: string;
+    datatype?: string;
+};
+
+export type NodeMetadataMap = Readonly<Record<string, NodeMetadataEntry>>;
 
 export type SearchResults = {
     resources: ResourceData[];

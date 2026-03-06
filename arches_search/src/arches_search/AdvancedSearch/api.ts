@@ -38,7 +38,7 @@ export async function getSearchResults(
     return parsed;
 }
 
-export async function getSearchSQL(searchQuery: { [key: string]: unknown }) {
+export async function getSearchSQL(searchQuery: GroupPayload) {
     const response = await fetch(
         generateArchesURL("arches_search:advanced_search_sql"),
         {
@@ -57,11 +57,28 @@ export async function getSearchSQL(searchQuery: { [key: string]: unknown }) {
     return parsed;
 }
 
-export async function getNodeMetadataForPayload(payload: {
-    [key: string]: unknown;
-}) {
+export async function getNodeMetadataForPayload(payload: GroupPayload) {
     const response = await fetch(
         generateArchesURL("arches_search:node_metadata_for_payload"),
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify(payload),
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
+export async function getResourceNamesForPayload(payload: GroupPayload) {
+    const response = await fetch(
+        generateArchesURL("arches_search:resource_names_for_payload"),
         {
             method: "POST",
             headers: {
