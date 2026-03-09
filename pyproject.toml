@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arches-search"
-version = "0.1.0a1"
+version = "0.1.0a2"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
@@ -23,22 +23,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-dependencies = [ 
-    "arches<8.2.0,>=8.1.0a0", 
-    "arches-controlled-lists>=1.1.0a0", 
-    "arches-modular-reports>=1.0.0b6",
-]
+dependencies = [ "arches<8.2.0,>=8.1.0a0", "arches-controlled-lists>=1.1.0a0", "arches-modular-reports>=1.0.0b6",]
 dynamic = []
 
 [tool.setuptools]
 packages = [ "arches_search",]
 
 [dependency-groups]
-dev = [ 
-    "black==24.4.2", 
-    "coverage", 
-    "django-silk==5.1.0", 
-    "livereload", 
-    "pre-commit==3.8.0", 
-    "sst",
-]
+dev = [ "black==24.4.2", "coverage", "django-silk==5.1.0", "livereload", "pre-commit==3.8.0", "sst",]
