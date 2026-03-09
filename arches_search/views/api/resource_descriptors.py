@@ -1,4 +1,5 @@
 from arches.app.models.models import ResourceInstance
+from arches.app.utils.permission_backend import user_can_read_resource
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
@@ -37,5 +38,6 @@ class ResourceDescriptorsAPI(APIBase):
                     "graph_id": str(r.graph_id),
                 }
                 for r in instances
+                if user_can_read_resource(user=request.user, resource=r)
             }
         )
