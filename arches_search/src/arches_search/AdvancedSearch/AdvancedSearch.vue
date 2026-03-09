@@ -10,7 +10,7 @@ import AdvancedSearchFooter from "@/arches_search/AdvancedSearch/components/Adva
 import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/PayloadAnalyzer.vue";
 import PayloadBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/PayloadBuilder.vue";
 import ResizablePanels from "@/arches_search/AdvancedSearch/components/ResizablePanels.vue";
-import SearchResults from "@/arches_search/AdvancedSearch/components/SearchResults/SearchResults.vue";
+import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 
 import {
     getAdvancedSearchFacets,
