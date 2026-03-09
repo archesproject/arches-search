@@ -35,7 +35,7 @@ export async function fetchSearchReportConfig(
 ): Promise<SearchReportConfig | null> {
     const params = new URLSearchParams({
         resourceId,
-        slug: "search",
+        report_config_slug: "search",
     });
 
     const url = `${arches.urls.modular_report_config}?${params.toString()}`;
