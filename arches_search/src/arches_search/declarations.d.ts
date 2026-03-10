@@ -3,4 +3,4 @@
 
 import("@/arches/declarations.d.ts");
 
-declare module 'numeral';
+declare module "numeral";
