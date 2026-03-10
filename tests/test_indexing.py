@@ -8,11 +8,18 @@ have been removed so that null values ARE written to the search index.
 TermSearch.value (and equivalent fields on other search models) must have
 null=True / blank=True for those tests to pass.
 """
+
 import uuid
 
 from django.test import TestCase
 
-from arches.app.models.models import GraphModel, Node, NodeGroup, ResourceInstance, TileModel
+from arches.app.models.models import (
+    GraphModel,
+    Node,
+    NodeGroup,
+    ResourceInstance,
+    TileModel,
+)
 
 from arches_search.indexing.index_from_tile import index_from_tile
 
@@ -20,6 +27,7 @@ from arches_search.indexing.index_from_tile import index_from_tile
 # ---------------------------------------------------------------------------
 # Shared test fixture
 # ---------------------------------------------------------------------------
+
 
 class IndexingTestCase(TestCase):
     """
@@ -93,6 +101,7 @@ class IndexingTestCase(TestCase):
 # ---------------------------------------------------------------------------
 # All-datatypes null test
 # ---------------------------------------------------------------------------
+
 
 class AllDatatypesNullIndexingTest(IndexingTestCase):
     """
