@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, provide, toRef, watchEffect } from "vue";
+import { computed, provide, ref, toRef, watchEffect } from "vue";
 
 import { importComponents } from "@/arches_modular_reports/ModularReport/utils.ts";
+import ExpandedResultSection from "@/arches_search/SearchResults/components/ExpandedResultSection.vue";
 
 import type { ComponentLookup } from "@/arches_modular_reports/ModularReport/types.ts";
 import type { ResourceData } from "@/arches_search/AdvancedSearch/types.ts";
@@ -18,9 +19,48 @@ const props = defineProps<{
 
 const componentLookup: ComponentLookup = {};
 
-// Provide context for injected child components (DescriptorSection, future DataSection, etc.)
+const isExpanded = ref(false);
+
+// Provide context for injected child components (DescriptorSection, ExpandedResultSection, etc.)
 provide("resourceInstanceId", props.result.resourceinstanceid);
 provide("descriptorData", toRef(props, "descriptorData"));
+provide("searchResultExpanded", isExpanded);
+
+// Read-only stubs for DataSection edit-path injections.
+// DataSection destructures these without null guards, so they must be provided.
+provide("userCanEditResourceInstance", ref(false));
+provide("createTile", {
+    createTileRequestId: ref(0),
+    createTileRequestedNodegroupAlias: ref(null),
+    createTileRequestedTilePath: ref(null),
+    requestCreateTile: () => {},
+});
+provide("softDeleteTile", {
+    softDeleteTileRequestId: ref(0),
+    softDeleteRequestedNodegroupAlias: ref(null),
+    softDeleteRequestedTileId: ref(null),
+    requestSoftDeleteTile: () => {},
+});
+provide("selectedNodegroupAlias", {
+    selectedNodegroupAlias: ref(null),
+    setSelectedNodegroupAlias: () => {},
+});
+provide("selectedNodeAlias", {
+    selectedNodeAlias: ref(null),
+    setSelectedNodeAlias: () => {},
+});
+provide("selectedTileId", {
+    selectedTileId: ref(null),
+    setSelectedTileId: () => {},
+});
+provide("selectedTilePath", {
+    selectedTilePath: ref(null),
+    setSelectedTilePath: () => {},
+});
+provide("shouldShowEditor", {
+    shouldShowEditor: ref(false),
+    setShouldShowEditor: () => {},
+});
 
 const configAsNamedSection = computed(() => ({
     name: props.reportConfig?.name ?? "",
@@ -43,6 +83,7 @@ watchEffect(() => {
             :component
             :resource-instance-id="result.resourceinstanceid"
         />
+        <ExpandedResultSection />
     </div>
 </template>
 

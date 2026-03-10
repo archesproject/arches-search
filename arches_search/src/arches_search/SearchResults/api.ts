@@ -32,10 +32,11 @@ export async function fetchResourceDescriptors(
 
 export async function fetchSearchReportConfig(
     resourceId: string,
+    slug: string = "search",
 ): Promise<SearchReportConfig | null> {
     const params = new URLSearchParams({
         resourceId,
-        report_config_slug: "search",
+        report_config_slug: slug,
     });
 
     const url = `${arches.urls.modular_report_config}?${params.toString()}`;

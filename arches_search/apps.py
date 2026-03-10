@@ -21,3 +21,17 @@ class ArchesSearchConfig(AppConfig):
                 ],
             },
         )
+
+        def search_result_expanded_factory(graph):
+            from arches_modular_reports.models import ReportConfig
+
+            rc = ReportConfig(graph=graph)
+            sections = rc.generate_card_sections()[:1]
+            components = sections[0]["components"] if sections else []
+            return {
+                "name": "Search Result Expanded",
+                "theme": "",
+                "components": components,
+            }
+
+        register("search_result_expanded", search_result_expanded_factory)
