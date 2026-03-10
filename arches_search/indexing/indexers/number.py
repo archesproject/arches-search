@@ -17,14 +17,15 @@ class NumberIndexing(BaseIndexing):
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
         search_items = []
         for number_object in document["numbers"]:
-            numeric_search = NumericSearch(
-                node_alias=node.alias,
-                tileid_id=tile.tileid,
-                resourceinstanceid_id=tile.resourceinstance_id,
-                datatype=self.datatype.datatype_name,
-                graph_slug=node.graph.slug,
-                value=number_object["number"],
-            )
-            search_items.append(numeric_search)
+            if number_object["number"] is not None:
+                numeric_search = NumericSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    graph_slug=node.graph.slug,
+                    value=number_object["number"],
+                )
+                search_items.append(numeric_search)
 
         return search_items

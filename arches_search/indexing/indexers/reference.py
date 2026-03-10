@@ -24,26 +24,28 @@ class ReferenceIndexing(BaseIndexing):
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
         search_items = []
         for string in document["strings"]:
-            string_search = TermSearch(
-                node_alias=node.alias,
-                tileid_id=tile.tileid,
-                resourceinstanceid_id=tile.resourceinstance_id,
-                datatype=self.datatype.datatype_name,
-                graph_slug=node.graph.slug,
-                language=node.config.lang,
-                value=string["string"],
-            )
-            search_items.append(string_search)
+            if string["string"] is not None:
+                string_search = TermSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    graph_slug=node.graph.slug,
+                    language=node.config.lang,
+                    value=string["string"],
+                )
+                search_items.append(string_search)
 
         for reference in document["references"]:
-            uuid_search = UUIDSearch(
-                node_alias=node.alias,
-                tileid_id=tile.tileid,
-                resourceinstanceid_id=tile.resourceinstance_id,
-                datatype=self.datatype.datatype_name,
-                graph_slug=node.graph.slug,
-                value=reference["id"],
-            )
-            search_items.append(uuid_search)
+            if reference["id"] is not None:
+                uuid_search = UUIDSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    graph_slug=node.graph.slug,
+                    value=reference["id"],
+                )
+                search_items.append(uuid_search)
 
         return search_items

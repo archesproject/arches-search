@@ -23,38 +23,44 @@ class ConceptIndexing(BaseIndexing):
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
         search_items = []
         for string in document["strings"]:
-            string_search = TermSearch(
-                node_alias=node.alias,
-                tileid_id=tile.tileid,
-                resourceinstanceid_id=tile.resourceinstance_id,
-                datatype=self.datatype.datatype_name,
-                graph_slug=node.graph.slug,
-                value=string["string"],
-            )
-            search_items.append(string_search)
+            if string["string"] is not None:
+                string_search = TermSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    graph_slug=node.graph.slug,
+                    value=string["string"],
+                )
+                search_items.append(string_search)
 
         for concept in document["domains"]:
             for id in [concept["conceptid"], concept["valueid"]]:
-                uuid_search = UUIDSearch(
-                    node_alias=node.alias,
-                    tileid=tile.tileid,
-                    resourceinstanceid=tile.resourceinstance_id,
-                    datatype=self.datatype.datatype_name,
-                    graph_slug=node.graph.slug,
-                    value=id,
-                )
-                search_items.append(uuid_search)
+                if id is not None:
+                    uuid_search = UUIDSearch(
+                        node_alias=node.alias,
+                        tileid_id=tile.tileid,
+                        resourceinstanceid_id=tile.resourceinstance_id,
+                        datatype=self.datatype.datatype_name,
+                        graph_slug=node.graph.slug,
+                        value=id,
+                    )
+                    search_items.append(uuid_search)
 
         for concept in document["date_ranges"]:
-            date_range_search = DateRangeSearch(
-                node_alias=node.alias,
-                tileid=tile.tileid,
-                resourceinstanceid=tile.resourceinstance_id,
-                datatype=self.datatype.datatype_name,
-                graph_slug=node.graph.slug,
-                start_value=concept["date_range"]["gte"],
-                end_value=concept["date_range"]["lte"],
-            )
-            search_items.append(date_range_search)
+            if (
+                concept["date_range"]["gte"] is not None
+                and concept["date_range"]["lte"] is not None
+            ):
+                date_range_search = DateRangeSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    graph_slug=node.graph.slug,
+                    start_value=concept["date_range"]["gte"],
+                    end_value=concept["date_range"]["lte"],
+                )
+                search_items.append(date_range_search)
 
         return search_items
