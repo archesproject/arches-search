@@ -16,13 +16,14 @@ class NonLocalizedStringIndexing(BaseIndexing):
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
         search_items = []
         for string_object in document["strings"]:
-            term_search = TermSearch(
-                node_alias=node.alias,
-                tileid_id=tile.tileid,
-                resourceinstanceid_id=tile.resourceinstance_id,
-                datatype=self.datatype.datatype_name,
-                graph_slug=node.graph.slug,
-                value=string_object["string"],
-            )
-            search_items.append(term_search)
+            if string_object["string"] is not None:
+                term_search = TermSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    graph_slug=node.graph.slug,
+                    value=string_object["string"],
+                )
+                search_items.append(term_search)
         return search_items

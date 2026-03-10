@@ -24,15 +24,16 @@ class FileListIndexing(BaseIndexing):
         self.datatype.append_to_document(document, tile.data[nodeid], nodeid, tile)
         search_items = []
         for string in document["strings"]:
-            string_search = TermSearch(
-                node_alias=node.alias,
-                tileid_id=tile.tileid,
-                resourceinstanceid_id=tile.resourceinstance_id,
-                datatype=self.datatype.datatype_name,
-                language=string["language"] if "language" in string else "",
-                graph_slug=node.graph.slug,
-                value=string["string"],
-            )
-            search_items.append(string_search)
+            if string["string"] is not None:
+                string_search = TermSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    language=string["language"] if "language" in string else "",
+                    graph_slug=node.graph.slug,
+                    value=string["string"],
+                )
+                search_items.append(string_search)
 
         return search_items
