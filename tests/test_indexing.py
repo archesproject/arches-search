@@ -22,6 +22,8 @@ from arches.app.models.models import (
 )
 
 from arches_search.indexing.index_from_tile import index_from_tile
+from arches_search.indexing.indexers.string import StringIndexing
+from arches_search.models.models import TermSearch
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +105,7 @@ class IndexingTestCase(TestCase):
 # ---------------------------------------------------------------------------
 # Long string tests
 # ---------------------------------------------------------------------------
+
 
 class LongStringIndexingTests(IndexingTestCase):
     """

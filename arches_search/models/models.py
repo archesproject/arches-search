@@ -114,15 +114,34 @@ class TermSearch(models.Model):
             models.Index(fields=["datatype"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["language"]),
-            models.Index(fields=["value"]),
-            models.Index(fields=["graph_slug", "node_alias", "value"]),
-            models.Index(fields=["graph_slug", "node_alias", "language", "value"]),
             models.Index(
                 fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
             ),
-            models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
-            models.Index(
-                fields=["graph_slug", "node_alias", "tileid", "language", "value"]
+            GinIndex(
+                name="gslug_na_val",
+                fields=["graph_slug", "node_alias", "value"],
+                opclasses=["text_ops", "text_ops", "gin_trgm_ops"],
+            ),
+            GinIndex(
+                name="gslug_na_lang_val",
+                fields=["graph_slug", "node_alias", "language", "value"],
+                opclasses=["text_ops", "text_ops", "text_ops", "gin_trgm_ops"],
+            ),
+            GinIndex(
+                name="gslug_na_tile_val",
+                fields=["graph_slug", "node_alias", "tileid", "value"],
+                opclasses=["text_ops", "text_ops", "uuid_ops", "gin_trgm_ops"],
+            ),
+            GinIndex(
+                name="gslug_na_tile_lang_val",
+                fields=["graph_slug", "node_alias", "tileid", "language", "value"],
+                opclasses=[
+                    "text_ops",
+                    "text_ops",
+                    "uuid_ops",
+                    "text_ops",
+                    "gin_trgm_ops",
+                ],
             ),
             GinIndex(fields=["search_vector"]),
             GinIndex(
