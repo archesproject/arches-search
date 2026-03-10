@@ -9,18 +9,12 @@ TermSearch.value (and equivalent fields on other search models) must have
 null=True / blank=True for those tests to pass.
 """
 import uuid
-from unittest.mock import patch
 
 from django.test import TestCase
 
 from arches.app.models.models import GraphModel, Node, NodeGroup, ResourceInstance, TileModel
 
 from arches_search.indexing.index_from_tile import index_from_tile
-from arches_search.indexing.indexers.boolean import BooleanIndexing
-from arches_search.indexing.indexers.non_localized_string import NonLocalizedStringIndexing
-from arches_search.indexing.indexers.number import NumberIndexing
-from arches_search.indexing.indexers.string import StringIndexing
-from arches_search.models.models import TermSearch
 
 
 # ---------------------------------------------------------------------------
