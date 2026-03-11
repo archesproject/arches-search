@@ -49,6 +49,12 @@ const resourceEditorLink = computed<string>(function () {
     });
 });
 
+const resourceReportLink = computed<string>(function () {
+    return generateArchesURL("arches:resource_report", {
+        resourceid: resourceInstanceId,
+    });
+});
+
 onMounted(function () {
     if (typeof window === "undefined") {
         return;
@@ -94,7 +100,7 @@ onMounted(function () {
 
             <div class="descriptor-section-content">
                 <a
-                    :href="resourceEditorLink"
+                    :href="resourceReportLink"
                     target="_blank"
                     class="descriptor-section-title"
                 >
