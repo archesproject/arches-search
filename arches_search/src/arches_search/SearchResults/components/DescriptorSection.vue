@@ -22,10 +22,10 @@ const resourceInstanceId = inject("resourceInstanceId") as string;
 const descriptorData = inject("descriptorData") as Ref<
     ResourceDescriptorData | null | undefined
 >;
+const isExpanded = inject("searchResultExpanded") as Ref<boolean>;
 
 const shouldShowThumbnailContainer = ref(false);
 const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
-const isExpanded = ref(false);
 
 function toggleExpanded(): void {
     isExpanded.value = !isExpanded.value;
@@ -148,13 +148,6 @@ onMounted(function () {
                 </div>
             </div>
         </div>
-
-        <div
-            v-if="isExpanded"
-            class="descriptor-section-expanded"
-        >
-            <!-- Config-driven components from report config will render here -->
-        </div>
     </div>
 </template>
 
@@ -245,11 +238,5 @@ onMounted(function () {
     font-weight: 600;
     color: var(--p-text-color);
     margin-inline-end: 0.25rem;
-}
-
-.descriptor-section-expanded {
-    border-top: 0.125rem solid var(--p-content-border-color);
-    min-height: 8rem;
-    background-color: var(--p-content-hover-background);
 }
 </style>
