@@ -23,8 +23,7 @@
         "arches": "archesproject/arches#dev/8.1.x"
     },
     "devDependencies": {
-        "@types/numeral": "^2.0.5",
-        "arches-component-lab": "archesproject/arches-component-lab#main",
+"arches-component-lab": "archesproject/arches-component-lab#main",
         "arches-controlled-lists": "archesproject/arches-controlled-lists#dev/1.1.x",
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#dev/8.1.x",
         "arches-modular-reports": "archesproject/arches-modular-reports#main"
