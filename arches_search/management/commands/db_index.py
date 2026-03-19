@@ -19,7 +19,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 """This module contains commands for building Arches."""
 import datetime
 from django.core.management.base import BaseCommand
-from arches.app.models.models import TileModel
+from django.db import connection
 from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
@@ -30,6 +30,8 @@ from arches_search.models.models import (
     DateSearch,
     UUIDSearch,
 )
+
+SEARCH_MODELS = [TermSearch, NumericSearch, DateSearch, UUIDSearch, DateRangeSearch, BooleanSearch]
 
 
 class Command(BaseCommand):
@@ -95,10 +97,7 @@ class Command(BaseCommand):
             f"Value saving took {datetime.datetime.now() - value_saving_start} seconds"
         )
 
-    def delete_indexes(self, name=None):
-        TermSearch.objects.all().delete()
-        NumericSearch.objects.all().delete()
-        DateSearch.objects.all().delete()
-        DateRangeSearch.objects.all().delete()
-        BooleanSearch.objects.all().delete()
-        UUIDSearch.objects.all().delete()
+    def delete_indexes(self):
+        table_names = ", ".join(model._meta.db_table for model in SEARCH_MODELS)
+        with connection.cursor() as cursor:
+            cursor.execute(f"TRUNCATE {table_names}")
