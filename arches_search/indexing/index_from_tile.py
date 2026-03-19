@@ -41,7 +41,7 @@ def index_from_tile(
     result = []
     for node in nodes:
         nodeid = str(node.nodeid)
-        if nodeid in tile.data.keys():
+        if nodeid in tile.data:
             if tile.data[nodeid] is None:
                 continue
 
