@@ -18,10 +18,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """This module contains commands for building Arches."""
 import datetime
-from django.core.management.base import BaseCommand
-from arches.app.models.models import TileModel, Node
 from django.conf import settings
+from django.core.management.base import BaseCommand
 from django.db import connection
+from arches.app.models.models import TileModel, Node
 from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
