@@ -11,18 +11,20 @@ from arches_search.models.models import (
 )
 
 
-def _serialize_saved_search(saved_search):
-    return {
+def _serialize_saved_search(saved_search, include_created_at=True):
+    data = {
         "savedsearchid": str(saved_search.savedsearchid),
         "name": saved_search.name,
         "description": saved_search.description,
         "query_definition": saved_search.query_definition,
-        "created_at": saved_search.created_at.isoformat(),
         "creator": {
             "id": saved_search.creator_id,
             "username": saved_search.creator.username,
         },
     }
+    if include_created_at:
+        data["created_at"] = saved_search.created_at.isoformat()
+    return data
 
 
 class SavedSearchAPI(APIBase):
@@ -31,21 +33,25 @@ class SavedSearchAPI(APIBase):
         search = request.GET.get("search", "")
 
         if scope == "mine":
-            qs = SavedSearch.objects.filter(creator=request.user)
+            saved_searches = SavedSearch.objects.filter(creator=request.user)
 
         else:  # if not mine, get all shared searches
             user_shared = SavedSearch.objects.filter(shared_users__user=request.user)
             group_shared = SavedSearch.objects.filter(
                 shared_groups__group__in=request.user.groups.all()
             )
-            qs = (user_shared | group_shared).exclude(creator=request.user).distinct()
+            saved_searches = (
+                (user_shared | group_shared).exclude(creator=request.user).distinct()
+            )
 
         if search:
-            qs = qs.filter(Q(name__icontains=search) | Q(description__icontains=search))
+            saved_searches = saved_searches.filter(
+                Q(name__icontains=search) | Q(description__icontains=search)
+            )
 
-        qs = qs.select_related("creator").order_by("name")
+        saved_searches = saved_searches.select_related("creator").order_by("name")
 
-        return JSONResponse([_serialize_saved_search(s) for s in qs])
+        return JSONResponse([_serialize_saved_search(s) for s in saved_searches])
 
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
@@ -65,18 +71,23 @@ class SavedSearchAPI(APIBase):
             creator=request.user,
         )
 
-        SharedSearchXUser.objects.bulk_create([
-            SharedSearchXUser(saved_search=saved_search, user_id=uid)
-            for uid in body.get("users", [])
-        ])
+        SharedSearchXUser.objects.bulk_create(
+            [
+                SharedSearchXUser(saved_search=saved_search, user_id=uid)
+                for uid in body.get("users", [])
+            ]
+        )
 
-        SharedSearchXGroup.objects.bulk_create([
-            SharedSearchXGroup(saved_search=saved_search, group_id=gid)
-            for gid in body.get("groups", [])
-        ])
+        SharedSearchXGroup.objects.bulk_create(
+            [
+                SharedSearchXGroup(saved_search=saved_search, group_id=gid)
+                for gid in body.get("groups", [])
+            ]
+        )
 
-        saved_search.refresh_from_db()
-        return JSONResponse(_serialize_saved_search(saved_search), status=201)
+        return JSONResponse(
+            _serialize_saved_search(saved_search, include_created_at=False), status=201
+        )
 
     def delete(self, request, savedsearchid):
         try:
