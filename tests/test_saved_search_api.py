@@ -239,7 +239,7 @@ class SavedSearchAPITest(TestCase):
         data = response.json()
         self.assertEqual(data["name"], "New Search")
         self.assertIn("savedsearchid", data)
-        self.assertIn("created_at", data)
+        self.assertNotIn("created_at", data)
         self.assertEqual(data["creator"]["username"], "alice")
         self.assertTrue(
             SavedSearch.objects.filter(name="New Search", creator=self.alice).exists()
