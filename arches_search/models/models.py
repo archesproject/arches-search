@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.db.models import F
 from django.contrib.postgres.indexes import GinIndex
@@ -322,4 +324,67 @@ class BooleanSearch(models.Model):
                 fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
             ),
             models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
+        ]
+
+
+class SavedSearch(models.Model):
+    savedsearchid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    query_definition = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    creator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="saved_searches",
+    )
+
+    class Meta:
+        managed = True
+        db_table = "arches_search_saved_searches"
+
+
+class SharedSearchXUser(models.Model):
+    id = models.AutoField(primary_key=True)
+    saved_search = models.ForeignKey(
+        SavedSearch,
+        on_delete=models.CASCADE,
+        related_name="shared_users",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+    )
+
+    class Meta:
+        managed = True
+        db_table = "arches_search_shared_searches_x_users"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["saved_search", "user"],
+                name="unique_shared_search_user",
+            )
+        ]
+
+
+class SharedSearchXGroup(models.Model):
+    id = models.AutoField(primary_key=True)
+    saved_search = models.ForeignKey(
+        SavedSearch,
+        on_delete=models.CASCADE,
+        related_name="shared_groups",
+    )
+    group = models.ForeignKey(
+        "auth.Group",
+        on_delete=models.CASCADE,
+    )
+
+    class Meta:
+        managed = True
+        db_table = "arches_search_shared_searches_x_groups"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["saved_search", "group"],
+                name="unique_shared_search_group",
+            )
         ]
