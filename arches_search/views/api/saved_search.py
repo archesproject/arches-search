@@ -65,13 +65,15 @@ class SavedSearchAPI(APIBase):
             creator=request.user,
         )
 
-        for user_id in body.get("users", []):
-            SharedSearchXUser.objects.create(saved_search=saved_search, user_id=user_id)
+        SharedSearchXUser.objects.bulk_create([
+            SharedSearchXUser(saved_search=saved_search, user_id=uid)
+            for uid in body.get("users", [])
+        ])
 
-        for group_id in body.get("groups", []):
-            SharedSearchXGroup.objects.create(
-                saved_search=saved_search, group_id=group_id
-            )
+        SharedSearchXGroup.objects.bulk_create([
+            SharedSearchXGroup(saved_search=saved_search, group_id=gid)
+            for gid in body.get("groups", [])
+        ])
 
         saved_search.refresh_from_db()
         return JSONResponse(_serialize_saved_search(saved_search), status=201)
