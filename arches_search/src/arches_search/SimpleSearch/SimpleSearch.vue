@@ -29,7 +29,7 @@ import type {
 const { $gettext } = useGettext();
 const toast = useToast();
 
-const emit = defineEmits<{
+defineEmits<{
     (event: "switch-to-advanced"): void;
 }>();
 
