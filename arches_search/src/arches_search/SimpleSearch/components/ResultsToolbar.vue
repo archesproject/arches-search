@@ -47,7 +47,7 @@ defineEmits<{
                 icon="pi pi-filter"
                 icon-pos="left"
                 size="small"
-                :class="['toolbar-btn', { 'active': showFilters }]"
+                :class="['toolbar-btn', { active: showFilters }]"
                 @click="$emit('toggle-filters')"
             />
             <Button

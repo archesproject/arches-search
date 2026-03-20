@@ -124,7 +124,12 @@ async function performSearch() {
 
 function onSearch(term: string) {
     const trimmed = term.trim();
-    if (!trimmed || activeFilters.value.some((filter: ActiveFilter) => filter.id === trimmed)) {
+    if (
+        !trimmed ||
+        activeFilters.value.some(
+            (filter: ActiveFilter) => filter.id === trimmed,
+        )
+    ) {
         performSearch();
         return;
     }
@@ -140,7 +145,9 @@ function onSearch(term: string) {
 }
 
 function removeFilter(filterId: string) {
-    activeFilters.value = activeFilters.value.filter((filter: ActiveFilter) => filter.id !== filterId);
+    activeFilters.value = activeFilters.value.filter(
+        (filter: ActiveFilter) => filter.id !== filterId,
+    );
     if (searchText.value === filterId) searchText.value = "";
     currentPage.value = 1;
     performSearch();
@@ -275,7 +282,7 @@ onMounted(async () => {
 .filters-pane {
     width: 260px;
     flex-shrink: 0;
-    border-left: .125rem solid var(--p-content-border-color);
+    border-left: 0.125rem solid var(--p-content-border-color);
     overflow-y: auto;
 }
 </style>

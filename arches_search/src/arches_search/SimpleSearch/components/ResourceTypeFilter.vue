@@ -15,17 +15,17 @@ defineEmits<{
 
 <template>
     <div class="resource-type-filter">
-        <Button 
-            v-for="type in resourceTypes" 
-            :key="type.id ?? '__all__'" 
-            :label="type.label" 
+        <Button
+            v-for="type in resourceTypes"
+            :key="type.id ?? '__all__'"
+            :label="type.label"
             :icon="type.icon"
-            icon-pos="left" 
-            size="large" 
-            severity="secondary" 
+            icon-pos="left"
+            size="large"
+            severity="secondary"
             variant="outlined"
-            :class="['type-btn', { active: activeTypeId === type.id }]" 
-            @click="$emit('select', type.id)" 
+            :class="['type-btn', { active: activeTypeId === type.id }]"
+            @click="$emit('select', type.id)"
         />
     </div>
 </template>
@@ -34,10 +34,10 @@ defineEmits<{
 .resource-type-filter {
     display: flex;
     flex-wrap: wrap;
-    gap: .4rem;
+    gap: 0.4rem;
     padding: 0.8rem 1.6rem;
     background-color: var(--p-content-background);
-    border-bottom: .125rem solid var(--p-content-border-color);
+    border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .type-btn {

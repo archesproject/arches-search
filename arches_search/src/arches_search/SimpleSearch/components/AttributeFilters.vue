@@ -109,7 +109,7 @@ function toggleOption(sectionId: string, optionId: string) {
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-    padding: .4rem 0 .8rem 0;
+    padding: 0.4rem 0 0.8rem 0;
 }
 
 .filter-option {
@@ -133,6 +133,6 @@ function toggleOption(sectionId: string, optionId: string) {
 .no-options {
     font-size: var(--p-arches-search-font-size);
     color: var(--p-surface-400);
-    padding: .4rem 0 .8rem 0;
+    padding: 0.4rem 0 0.8rem 0;
 }
 </style>

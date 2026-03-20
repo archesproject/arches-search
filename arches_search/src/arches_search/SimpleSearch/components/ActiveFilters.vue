@@ -60,7 +60,7 @@ defineEmits<{
     flex-wrap: wrap;
     gap: 0.8rem;
     padding: 0.8rem 1.6rem;
-    border-bottom: .125rem solid var(--p-content-border-color);
+    border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .results-count {
@@ -75,7 +75,7 @@ defineEmits<{
 }
 
 .filter-chip {
-    border-radius: .4rem;
+    border-radius: 0.4rem;
 }
 
 .clear-all-btn {

@@ -81,16 +81,16 @@ function onKeydown(e: KeyboardEvent) {
     gap: 0.8rem;
     padding: 1.2rem 1.6rem;
     background-color: var(--p-content-background);
-    border-bottom: .125rem solid var(--p-content-border-color);
+    border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .search-bar-inner {
     display: flex;
     align-items: center;
     flex: 1;
-    border: .125rem solid var(--p-surface-300);
-    border-radius: .4rem;
-    padding: 0 1.0rem;
+    border: 0.125rem solid var(--p-surface-300);
+    border-radius: 0.4rem;
+    padding: 0 1rem;
 }
 
 .search-icon {
@@ -106,7 +106,7 @@ function onKeydown(e: KeyboardEvent) {
 :deep(.search-input .p-autocomplete-input) {
     border: none;
     box-shadow: none;
-    padding: 1.0rem 2rem;
+    padding: 1rem 2rem;
     font-size: var(--p-arches-search-font-size);
     width: 100%;
     background-color: var(--p-content-background);
@@ -119,9 +119,8 @@ function onKeydown(e: KeyboardEvent) {
 
 .search-button {
     font-size: var(--p-arches-search-font-size);
-    padding: 1.0rem 2.0rem;
-    border-radius: .4rem;
+    padding: 1rem 2rem;
+    border-radius: 0.4rem;
     white-space: nowrap;
 }
-
 </style>

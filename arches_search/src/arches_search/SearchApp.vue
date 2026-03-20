@@ -22,7 +22,8 @@ const activeView = ref<SearchView>(SIMPLE);
                 </h1>
                 <nav
                     v-if="activeView === SIMPLE"
-                    class="header-nav">
+                    class="header-nav"
+                >
                     <button
                         class="header-link"
                         @click="activeView = ADVANCED"
@@ -33,7 +34,8 @@ const activeView = ref<SearchView>(SIMPLE);
                 </nav>
                 <nav
                     v-if="activeView === ADVANCED"
-                    class="header-nav">
+                    class="header-nav"
+                >
                     <button
                         class="header-link"
                         @click="activeView = SIMPLE"
@@ -43,15 +45,10 @@ const activeView = ref<SearchView>(SIMPLE);
                     </button>
                 </nav>
             </header>
-
         </template>
         <template #content>
-            <SimpleSearch
-                v-if="activeView === SIMPLE"
-            />
-            <AdvancedSearch
-                v-else
-            />
+            <SimpleSearch v-if="activeView === SIMPLE" />
+            <AdvancedSearch v-else />
         </template>
     </Card>
 </template>
@@ -70,7 +67,7 @@ const activeView = ref<SearchView>(SIMPLE);
     justify-content: space-between;
     padding: 1rem 2rem;
     background-color: var(--p-content-background);
-    border-bottom: .125rem solid var(--p-content-border-color);
+    border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .search-title {
@@ -104,5 +101,4 @@ const activeView = ref<SearchView>(SIMPLE);
 .header-link:hover {
     text-decoration: underline;
 }
-
 </style>
