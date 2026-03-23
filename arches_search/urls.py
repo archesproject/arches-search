@@ -21,6 +21,7 @@ from arches_search.views.api.relatable_node_tree_for_graph import (
     RelatableNodesTreeForGraphAPI,
 )
 from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
+from arches_search.views.api.saved_search import SavedSearchAPI
 
 urlpatterns = [
     path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
@@ -68,6 +69,16 @@ urlpatterns = [
         "api/resource-descriptors",
         ResourceDescriptorsAPI.as_view(),
         name="api_resource_descriptors",
+    ),
+    path(
+        "api/saved-searches",
+        SavedSearchAPI.as_view(),
+        name="saved_searches",
+    ),
+    path(
+        "api/saved-searches/<uuid:savedsearchid>",
+        SavedSearchAPI.as_view(),
+        name="saved_search",
     ),
 ]
 
