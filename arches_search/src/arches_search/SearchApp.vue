@@ -59,6 +59,7 @@ const activeView = ref<SearchView>(SIMPLE);
     border: none;
     border-radius: 0;
     box-shadow: none;
+    height: 100%
 }
 
 .simple-search-header {
@@ -78,6 +79,11 @@ const activeView = ref<SearchView>(SIMPLE);
 
 :deep(.p-card-body) {
     padding: 0;
+    overflow-y: scroll;
+}
+
+:deep(.p-card-content) {
+    height: 100%;
 }
 
 .header-nav {
