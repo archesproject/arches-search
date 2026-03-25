@@ -33,7 +33,6 @@ defineEmits<{
     (event: "switch-to-advanced"): void;
 }>();
 
-// ── Search state ────────────────────────────────────────────────────────────
 const searchText = ref("");
 const activeTypeId = ref<string | null>(null);
 const activeFilters = ref<ActiveFilter[]>([]);
@@ -42,8 +41,6 @@ const showAttributeFilters = ref(false);
 const isSearching = ref(false);
 const currentPage = ref(1);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
-
-// ── Data ────────────────────────────────────────────────────────────────────
 const resourceTypes = ref<ResourceType[]>([]);
 
 const emptyResults: SearchResultsType = {
@@ -60,7 +57,6 @@ const emptyResults: SearchResultsType = {
 };
 const searchResults = ref<SearchResultsType>({ ...emptyResults });
 
-// ── Static config ────────────────────────────────────────────────────────────
 const sortOptions: SortOption[] = [
     { label: $gettext("A to Z"), value: "aToZ" },
     { label: $gettext("Z to A"), value: "zToA" },
@@ -87,14 +83,12 @@ const attributeFilterSections = ref<AttributeFilterSection[]>([
     { id: "materials", label: $gettext("Materials"), options: [] },
 ]);
 
-// ── Computed ─────────────────────────────────────────────────────────────────
 const activeTypeLabel = computed<string>(() => {
     if (!activeTypeId.value) return $gettext("Items");
     const match = resourceTypes.value.find((t) => t.id === activeTypeId.value);
     return match ? match.label : $gettext("Items");
 });
 
-// ── Search ───────────────────────────────────────────────────────────────────
 async function performSearch() {
     isSearching.value = true;
     try {
@@ -172,7 +166,6 @@ function onRequestPage(page: number) {
     performSearch();
 }
 
-// ── Lifecycle ────────────────────────────────────────────────────────────────
 async function loadResourceTypes() {
     try {
         const graphs: GraphModel[] = await getGraphs();
@@ -264,7 +257,6 @@ onMounted(async () => {
     font-size: var(--p-arches-search-font-size);
 }
 
-/* ── Body ───────────────────────────────────────────────────────────────── */
 .simple-search-body {
     display: flex;
     flex: 1;
