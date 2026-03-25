@@ -85,7 +85,7 @@ const attributeFilterSections = ref<AttributeFilterSection[]>([
 
 const activeTypeLabel = computed<string>(() => {
     if (!activeTypeId.value) return $gettext("Items");
-    const match = resourceTypes.value.find((t) => t.id === activeTypeId.value);
+    const match = resourceTypes.value.find((resourceType) => resourceType.id === activeTypeId.value);
     return match ? match.label : $gettext("Items");
 });
 
