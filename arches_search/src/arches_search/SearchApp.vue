@@ -79,7 +79,7 @@ const activeView = ref<SearchView>(SIMPLE);
 
 :deep(.p-card-body) {
     padding: 0;
-    overflow-y: scroll;
+    overflow-y: hidden;
 }
 
 :deep(.p-card-content) {
