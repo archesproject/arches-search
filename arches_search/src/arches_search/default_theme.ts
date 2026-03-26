@@ -51,7 +51,7 @@ const DEFAULT_THEME = {
 };
 
 // TODO: when dropping support for 7.6, extend ArchesPreset.
-const ModularReportPreset = definePreset(Aura, {
+const ArchesSearchPreset = definePreset(Aura, {
     extend: {
         archesSearch: {
             fontSize: "1.4rem",
@@ -109,6 +109,6 @@ const ModularReportPreset = definePreset(Aura, {
 export default {
     theme: {
         ...DEFAULT_THEME.theme,
-        preset: ModularReportPreset,
+        preset: ArchesSearchPreset,
     },
 };

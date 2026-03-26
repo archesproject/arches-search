@@ -54,7 +54,7 @@ const activeView = ref<SearchView>(SIMPLE);
 </template>
 
 <style scoped>
-/* ── Header ─────────────────────────────────────────────────────────────── */
+
 .search-card {
     border: none;
     border-radius: 0;
