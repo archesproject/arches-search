@@ -321,11 +321,15 @@ class GeometrySearch(models.Model):
         managed = True
         db_table = "arches_search_geometry"
         indexes = [
-            models.Index(fields=["resourceinstanceid"]),
-            models.Index(fields=["tileid"]),
-            models.Index(fields=["node_alias"]),
             models.Index(
-                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
+                fields=["resourceinstanceid"],
+                name="arches_sear_resourc_geo_idx",
+            ),
+            models.Index(fields=["tileid"], name="arches_sear_tileid_geo_idx"),
+            models.Index(fields=["node_alias"], name="arches_sear_nodeal_geo_idx"),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"],
+                name="arches_sear_subject_geo_idx",
             ),
         ]
 

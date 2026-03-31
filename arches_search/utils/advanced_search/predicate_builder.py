@@ -1,4 +1,5 @@
 import json
+from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
 from django.contrib.gis.geos import GEOSGeometry
 from django.db.models import Subquery, OuterRef, Q
@@ -7,6 +8,18 @@ from django.utils.translation import gettext as _
 TYPE_LITERAL = "LITERAL"
 TYPE_PATH = "PATH"
 TYPE_GEO_LITERAL = "GEO_LITERAL"
+
+AGGREGATE_KIND_SET_SUPERSET = "set_superset"
+AGGREGATE_KIND_SET_EQUAL = "set_equal"
+AGGREGATE_KIND_COUNT = "count"
+
+
+@dataclass(frozen=True)
+class AggregatePredicateSpec:
+    kind: str
+    field_name: str | None = None
+    values: tuple[Any, ...] = ()
+    lookup: str | None = None
 
 
 class PredicateBuilder:
@@ -21,7 +34,7 @@ class PredicateBuilder:
         operands: List[Any],
         anchor_resource_id_annotation: Optional[str] = None,
         facet=None,
-    ) -> Tuple[Q | dict, bool]:
+    ) -> Tuple[Q | dict | AggregatePredicateSpec, bool]:
         normalized_operands = self._normalize_operands(
             operands=operands,
             anchor_resource_id_annotation=anchor_resource_id_annotation,
@@ -37,15 +50,27 @@ class PredicateBuilder:
         )
 
         if is_template_negated:
+            if isinstance(predicate_expression, AggregatePredicateSpec):
+                return predicate_expression, True
             if isinstance(predicate_expression, Q):
                 return ~predicate_expression, True
             return ~Q(**predicate_expression), True
 
         return predicate_expression, False
 
-    def _build_expression_from_template(self, facet, operands: List[Any]) -> Q | dict:
+    def _build_expression_from_template(
+        self, facet, operands: List[Any]
+    ) -> Q | dict | AggregatePredicateSpec:
         orm_template = facet.orm_template
         target_model_class = facet.target_model_class
+
+        aggregate_spec = self._build_aggregate_spec(
+            orm_template=orm_template,
+            operands=operands,
+            target_model_class=target_model_class,
+        )
+        if aggregate_spec is not None:
+            return aggregate_spec
 
         if orm_template.startswith("AND:") or orm_template.startswith("OR:"):
             return self._build_compound_q(
@@ -67,6 +92,83 @@ class PredicateBuilder:
             value_for_lookup = operands
 
         return {lookup_key: value_for_lookup}
+
+    def _build_aggregate_spec(
+        self,
+        orm_template: str,
+        operands: List[Any],
+        target_model_class,
+    ) -> AggregatePredicateSpec | None:
+        if orm_template.startswith("AGG_SUPERSET:"):
+            _, field_template, operand_token = orm_template.split(":", 2)
+            return AggregatePredicateSpec(
+                kind=AGGREGATE_KIND_SET_SUPERSET,
+                field_name=self._resolve_lookup_key(
+                    template=field_template,
+                    target_model_class=target_model_class,
+                ),
+                values=self._coerce_aggregate_values(
+                    self._resolve_operand_token(operand_token, operands)
+                ),
+            )
+
+        if orm_template.startswith("AGG_SET_EQUAL:"):
+            _, field_template, operand_token = orm_template.split(":", 2)
+            return AggregatePredicateSpec(
+                kind=AGGREGATE_KIND_SET_EQUAL,
+                field_name=self._resolve_lookup_key(
+                    template=field_template,
+                    target_model_class=target_model_class,
+                ),
+                values=self._coerce_aggregate_values(
+                    self._resolve_operand_token(operand_token, operands)
+                ),
+            )
+
+        if orm_template.startswith("HAVING_ALL:"):
+            _, field_template, operand_token = orm_template.split(":", 2)
+            return AggregatePredicateSpec(
+                kind=AGGREGATE_KIND_SET_SUPERSET,
+                field_name=self._resolve_lookup_key(
+                    template=field_template,
+                    target_model_class=target_model_class,
+                ),
+                values=self._coerce_aggregate_values(
+                    self._resolve_operand_token(operand_token, operands)
+                ),
+            )
+
+        if orm_template.startswith("HAVING_ONLY:"):
+            _, field_template, operand_token = orm_template.split(":", 2)
+            return AggregatePredicateSpec(
+                kind=AGGREGATE_KIND_SET_EQUAL,
+                field_name=self._resolve_lookup_key(
+                    template=field_template,
+                    target_model_class=target_model_class,
+                ),
+                values=self._coerce_aggregate_values(
+                    self._resolve_operand_token(operand_token, operands)
+                ),
+            )
+
+        if orm_template.startswith("AGG_COUNT:"):
+            _, _, lookup_token, operand_token = orm_template.split(":", 3)
+            return AggregatePredicateSpec(
+                kind=AGGREGATE_KIND_COUNT,
+                values=self._coerce_aggregate_values(
+                    self._resolve_operand_token(operand_token, operands)
+                ),
+                lookup=lookup_token.strip(),
+            )
+
+        if orm_template.startswith("{col_count}__"):
+            return AggregatePredicateSpec(
+                kind=AGGREGATE_KIND_COUNT,
+                values=self._coerce_aggregate_values(operands[0]),
+                lookup=orm_template.split("__", 1)[1].strip(),
+            )
+
+        return None
 
     def _build_compound_q(
         self,
@@ -144,7 +246,7 @@ class PredicateBuilder:
     def _resolve_operand_token(self, operand_token: str, operands: List[Any]) -> Any:
         token = operand_token.strip()
 
-        if token in {"{value}", "{p0}", "{value0}"}:
+        if token in {"{value}", "{p0}", "{value0}", "{values}"}:
             return operands[0]
         if token in {"{p1}", "{value1}"}:
             return operands[1]
@@ -156,6 +258,17 @@ class PredicateBuilder:
                 token=token
             )
         )
+
+    def _coerce_aggregate_values(self, raw_value: Any) -> tuple[Any, ...]:
+        if raw_value is None:
+            return ()
+        if isinstance(raw_value, tuple):
+            return raw_value
+        if isinstance(raw_value, list):
+            return tuple(raw_value)
+        if isinstance(raw_value, set):
+            return tuple(raw_value)
+        return (raw_value,)
 
     def _normalize_operands(
         self,

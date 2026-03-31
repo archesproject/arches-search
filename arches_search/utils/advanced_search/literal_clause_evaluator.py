@@ -2,8 +2,15 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.db.models import Count, Exists, OuterRef, Q, QuerySet
 from django.utils.translation import get_language
+
+from arches_search.utils.advanced_search.predicate_builder import (
+    AGGREGATE_KIND_COUNT,
+    AGGREGATE_KIND_SET_EQUAL,
+    AGGREGATE_KIND_SET_SUPERSET,
+    AggregatePredicateSpec,
+)
 
 
 EVAL_MODE_ANCHOR = "anchor"
@@ -26,6 +33,53 @@ def _combine_exists(row_sets: List[QuerySet]):
     for rows in row_sets[1:]:
         combined = combined | Exists(rows)
     return combined
+
+
+def _dedupe_values(values: tuple[Any, ...]) -> tuple[Any, ...]:
+    return tuple(dict.fromkeys(values))
+
+
+def _build_aggregate_match_rows(
+    correlated_rows: QuerySet,
+    aggregate_spec: AggregatePredicateSpec,
+    group_field_name: str,
+) -> QuerySet:
+    grouped_rows = correlated_rows.values(group_field_name)
+
+    if aggregate_spec.kind == AGGREGATE_KIND_SET_SUPERSET:
+        requested_values = _dedupe_values(aggregate_spec.values)
+        field_name = aggregate_spec.field_name or "value"
+        return grouped_rows.annotate(
+            _matched_distinct_count=Count(
+                field_name,
+                filter=Q(**{f"{field_name}__in": list(requested_values)}),
+                distinct=True,
+            )
+        ).filter(_matched_distinct_count=len(requested_values))
+
+    if aggregate_spec.kind == AGGREGATE_KIND_SET_EQUAL:
+        requested_values = _dedupe_values(aggregate_spec.values)
+        field_name = aggregate_spec.field_name or "value"
+        return grouped_rows.annotate(
+            _matched_distinct_count=Count(
+                field_name,
+                filter=Q(**{f"{field_name}__in": list(requested_values)}),
+                distinct=True,
+            ),
+            _total_distinct_count=Count(field_name, distinct=True),
+        ).filter(
+            _matched_distinct_count=len(requested_values),
+            _total_distinct_count=len(requested_values),
+        )
+
+    if aggregate_spec.kind == AGGREGATE_KIND_COUNT:
+        lookup_token = aggregate_spec.lookup or "exact"
+        threshold = aggregate_spec.values[0]
+        return grouped_rows.annotate(_row_count=Count("pk")).filter(
+            **{f"_row_count__{lookup_token}": threshold}
+        )
+
+    raise ValueError(f"Unsupported aggregate predicate kind: {aggregate_spec.kind}")
 
 
 class LiteralClauseEvaluator:
@@ -195,6 +249,29 @@ class LiteralClauseEvaluator:
                 facet=facet,
             )
         )
+        if isinstance(predicate_expression, AggregatePredicateSpec):
+            aggregate_matches = _build_aggregate_match_rows(
+                correlated_rows=correlated_rows,
+                aggregate_spec=predicate_expression,
+                group_field_name="resourceinstanceid",
+            )
+
+            if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
+                return (
+                    ~Exists(aggregate_matches)
+                    if is_template_negated
+                    else Exists(aggregate_matches)
+                )
+
+            if quantifier_token == QUANTIFIER_NONE:
+                return (
+                    Exists(aggregate_matches)
+                    if is_template_negated
+                    else ~Exists(aggregate_matches)
+                )
+
+            raise ValueError(f"Unsupported quantifier: {quantifier_token}")
+
         predicate_q = (
             predicate_expression
             if isinstance(predicate_expression, Q)
@@ -277,6 +354,18 @@ class LiteralClauseEvaluator:
                 facet=facet,
             )
         )
+        if isinstance(predicate_expression, AggregatePredicateSpec):
+            aggregate_matches = _build_aggregate_match_rows(
+                correlated_rows=correlated_rows,
+                aggregate_spec=predicate_expression,
+                group_field_name="resourceinstanceid",
+            )
+            return (
+                ~Exists(aggregate_matches)
+                if is_template_negated
+                else Exists(aggregate_matches)
+            )
+
         predicate_q = (
             predicate_expression
             if isinstance(predicate_expression, Q)
@@ -392,25 +481,44 @@ class LiteralClauseEvaluator:
                         facet=facet,
                     )
                 )
-                predicate_q = (
-                    predicate_expression
-                    if isinstance(predicate_expression, Q)
-                    else Q(**predicate_expression)
-                )
-
-                if not is_template_negated:
-                    predicate_rows = correlated_rows.filter(predicate_q)
-                else:
-                    positive_rows = self._positive_rows_for_negated_template(
-                        operator_token=operator_token,
-                        datatype_name=datatype_name,
-                        operand_items=normalized_operand_items,
+                if isinstance(predicate_expression, AggregatePredicateSpec):
+                    positive_rows = _build_aggregate_match_rows(
                         correlated_rows=correlated_rows,
-                        predicate_expression=predicate_q,
+                        aggregate_spec=predicate_expression,
+                        group_field_name="resourceinstanceid",
                     )
-                    predicate_rows = correlated_rows.exclude(
-                        pk__in=positive_rows.values("pk")
+                    if not is_template_negated:
+                        predicate_rows = positive_rows
+                    else:
+                        predicate_rows = (
+                            correlated_rows.values("resourceinstanceid")
+                            .exclude(
+                                resourceinstanceid__in=positive_rows.values(
+                                    "resourceinstanceid"
+                                )
+                            )
+                            .distinct()
+                        )
+                else:
+                    predicate_q = (
+                        predicate_expression
+                        if isinstance(predicate_expression, Q)
+                        else Q(**predicate_expression)
                     )
+
+                    if not is_template_negated:
+                        predicate_rows = correlated_rows.filter(predicate_q)
+                    else:
+                        positive_rows = self._positive_rows_for_negated_template(
+                            operator_token=operator_token,
+                            datatype_name=datatype_name,
+                            operand_items=normalized_operand_items,
+                            correlated_rows=correlated_rows,
+                            predicate_expression=predicate_q,
+                        )
+                        predicate_rows = correlated_rows.exclude(
+                            pk__in=positive_rows.values("pk")
+                        )
 
             intersected_rows = (
                 predicate_rows
@@ -524,6 +632,48 @@ class LiteralClauseEvaluator:
                 facet=facet,
             )
         )
+        if isinstance(predicate_expression, AggregatePredicateSpec):
+            resource_level_matches = _build_aggregate_match_rows(
+                correlated_rows=resource_rows,
+                aggregate_spec=predicate_expression,
+                group_field_name="resourceinstanceid",
+            )
+            per_tile_matches = _build_aggregate_match_rows(
+                correlated_rows=tile_rows.filter(tileid=tile_id_outer_ref),
+                aggregate_spec=predicate_expression,
+                group_field_name="tileid",
+            )
+
+            if quantifier_token == QUANTIFIER_ANY:
+                per_tile_q = Q(Exists(per_tile_matches))
+                return (~per_tile_q if is_template_negated else per_tile_q), None
+
+            if quantifier_token == QUANTIFIER_NONE:
+                resource_level_q = Q(Exists(resource_level_matches))
+                return None, (
+                    resource_level_q if is_template_negated else ~resource_level_q
+                )
+
+            if quantifier_token == QUANTIFIER_ALL:
+                if not is_template_negated:
+                    tiles_missing_match = tiles_for_anchor_resource.filter(
+                        ~Exists(per_tile_matches)
+                    )
+                    return (
+                        None,
+                        Q(~Exists(tiles_missing_match)) & any_tile_for_resource_q,
+                    )
+
+                tiles_with_positive_match = tiles_for_anchor_resource.filter(
+                    Exists(per_tile_matches)
+                )
+                return (
+                    None,
+                    Q(~Exists(tiles_with_positive_match)) & any_tile_for_resource_q,
+                )
+
+            raise ValueError(f"Unsupported quantifier: {quantifier_token}")
+
         predicate_q = (
             predicate_expression
             if isinstance(predicate_expression, Q)

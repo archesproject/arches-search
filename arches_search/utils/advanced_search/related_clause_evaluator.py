@@ -1,7 +1,13 @@
 from typing import Any, Dict, Optional
 from django.db.models import Exists, OuterRef, Q
 from django.utils.translation import gettext as _
-from arches_search.utils.advanced_search.literal_clause_evaluator import _combine_exists
+from arches_search.utils.advanced_search.literal_clause_evaluator import (
+    _build_aggregate_match_rows,
+    _combine_exists,
+)
+from arches_search.utils.advanced_search.predicate_builder import (
+    AggregatePredicateSpec,
+)
 
 QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
@@ -116,13 +122,27 @@ class RelatedClauseEvaluator:
             resourceinstanceid=OuterRef(traversal_context["child_id_field"])
         ).annotate(_anchor_resource_id=OuterRef(traversal_context["anchor_id_field"]))
 
-        predicate_expression, _ = self.predicate_builder.build_predicate(
-            datatype_name=datatype_name,
-            operator_token=operator_token,
-            operands=operand_items,
-            anchor_resource_id_annotation="_anchor_resource_id",
-            facet=facet,
+        predicate_expression, is_template_negated = (
+            self.predicate_builder.build_predicate(
+                datatype_name=datatype_name,
+                operator_token=operator_token,
+                operands=operand_items,
+                anchor_resource_id_annotation="_anchor_resource_id",
+                facet=facet,
+            )
         )
+
+        if isinstance(predicate_expression, AggregatePredicateSpec):
+            aggregate_matches = _build_aggregate_match_rows(
+                correlated_rows=correlated_subject_rows,
+                aggregate_spec=predicate_expression,
+                group_field_name="resourceinstanceid",
+            )
+            return (
+                ~Exists(aggregate_matches)
+                if is_template_negated
+                else Exists(aggregate_matches)
+            )
 
         if isinstance(predicate_expression, Q):
             return Exists(correlated_subject_rows.filter(predicate_expression))

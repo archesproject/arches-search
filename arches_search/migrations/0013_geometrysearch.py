@@ -244,7 +244,7 @@ class Migration(migrations.Migration):
             model_name="geometrysearch",
             index=models.Index(
                 fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"],
-                name="arches_sear_gslug_na_res_tile_geo_idx",
+                name="arches_sear_subject_geo_idx",
             ),
         ),
         migrations.RunPython(migrate_geojson_facets, reverse_migrate_geojson_facets),
