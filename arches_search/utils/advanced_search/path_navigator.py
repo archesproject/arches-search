@@ -35,9 +35,18 @@ class PathNavigator:
                 terminal_graph_slug, terminal_node_alias
             )
         )
-        terminal_search_model = self.search_model_registry.get_model_for_datatype(
-            terminal_datatype_name
-        )
+        if terminal_datatype_name.lower() in TERMINAL_RESOURCE_TYPES:
+            terminal_search_model = (
+                self.search_model_registry.get_relationship_model_for_datatype(
+                    terminal_datatype_name
+                )
+            )
+        else:
+            terminal_search_model = (
+                self.search_model_registry.get_value_model_for_datatype(
+                    terminal_datatype_name
+                )
+            )
         terminal_queryset = terminal_search_model.objects.filter(
             graph_slug=terminal_graph_slug,
             node_alias=terminal_node_alias,

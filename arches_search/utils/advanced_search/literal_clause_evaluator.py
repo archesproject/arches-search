@@ -19,6 +19,15 @@ CLAUSE_TYPE_LITERAL = "LITERAL"
 CLAUSE_TYPE_RELATED = "RELATED"
 
 
+def _combine_exists(row_sets: List[QuerySet]):
+    if not row_sets:
+        raise ValueError("At least one row set is required.")
+    combined = Exists(row_sets[0])
+    for rows in row_sets[1:]:
+        combined = combined | Exists(rows)
+    return combined
+
+
 class LiteralClauseEvaluator:
     def __init__(
         self,
@@ -31,6 +40,34 @@ class LiteralClauseEvaluator:
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
         self.predicate_builder = predicate_builder
+
+    def _build_subject_rows(
+        self,
+        model_class,
+        subject_graph_slug: str,
+        subject_node_alias: str,
+    ) -> QuerySet:
+        return model_class.objects.filter(
+            graph_slug=subject_graph_slug,
+            node_alias=subject_node_alias,
+        )
+
+    def _build_presence_subject_row_sets(
+        self,
+        datatype_name: str,
+        subject_graph_slug: str,
+        subject_node_alias: str,
+    ) -> List[QuerySet]:
+        return [
+            self._build_subject_rows(
+                model_class=model_class,
+                subject_graph_slug=subject_graph_slug,
+                subject_node_alias=subject_node_alias,
+            )
+            for model_class in self.search_model_registry.get_all_models_for_datatype(
+                datatype_name
+            )
+        ]
 
     def evaluate(
         self,
@@ -89,44 +126,60 @@ class LiteralClauseEvaluator:
 
         raise ValueError(f"Unsupported evaluation mode: {mode}")
 
-    def _build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
-        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
-        operator_token = clause_payload["operator"]
-        quantifier_token = clause_payload["quantifier"]
-        operand_items = clause_payload["operands"]
-
+    def _resolve_facet_and_model(
+        self,
+        subject_graph_slug: str,
+        subject_node_alias: str,
+        operator_token: str,
+    ):
         datatype_name = (
             self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
                 subject_graph_slug,
                 subject_node_alias,
             )
         )
-        model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
+        facet = self.facet_registry.get_facet(datatype_name, operator_token)
+        model_class = facet.target_model_class
+        return datatype_name, facet, model_class
 
-        subject_rows = model_class.objects.filter(
-            graph_slug=subject_graph_slug,
-            node_alias=subject_node_alias,
-        )
-        correlated_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef("resourceinstanceid")
+    def _build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
+        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        operator_token = clause_payload["operator"]
+        quantifier_token = clause_payload["quantifier"]
+        operand_items = clause_payload["operands"]
+
+        datatype_name, facet, model_class = self._resolve_facet_and_model(
+            subject_graph_slug=subject_graph_slug,
+            subject_node_alias=subject_node_alias,
+            operator_token=operator_token,
         )
 
         if not operand_items:
+            correlated_row_sets = [
+                subject_rows.filter(resourceinstanceid=OuterRef("resourceinstanceid"))
+                for subject_rows in self._build_presence_subject_row_sets(
+                    datatype_name=datatype_name,
+                    subject_graph_slug=subject_graph_slug,
+                    subject_node_alias=subject_node_alias,
+                )
+            ]
+            any_value_exists = _combine_exists(correlated_row_sets)
             presence_implies_match = self.facet_registry.presence_implies_match(
                 datatype_name,
                 operator_token,
             )
             if quantifier_token == QUANTIFIER_NONE:
-                return (
-                    ~Exists(correlated_rows)
-                    if presence_implies_match
-                    else Exists(correlated_rows)
-                )
-            return (
-                Exists(correlated_rows)
-                if presence_implies_match
-                else ~Exists(correlated_rows)
-            )
+                return ~any_value_exists if presence_implies_match else any_value_exists
+            return any_value_exists if presence_implies_match else ~any_value_exists
+
+        subject_rows = self._build_subject_rows(
+            model_class=model_class,
+            subject_graph_slug=subject_graph_slug,
+            subject_node_alias=subject_node_alias,
+        )
+        correlated_rows = subject_rows.filter(
+            resourceinstanceid=OuterRef("resourceinstanceid")
+        )
 
         normalized_operand_items = self._normalize_operands(
             datatype_name=datatype_name,
@@ -139,6 +192,7 @@ class LiteralClauseEvaluator:
                 operator_token=operator_token,
                 operands=normalized_operand_items,
                 anchor_resource_id_annotation=None,
+                facet=facet,
             )
         )
         predicate_q = (
@@ -178,32 +232,36 @@ class LiteralClauseEvaluator:
         operator_token = clause_payload["operator"]
         operand_items = clause_payload["operands"]
 
-        datatype_name = (
-            self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                subject_graph_slug,
-                subject_node_alias,
-            )
-        )
-        model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
-
-        subject_rows = model_class.objects.filter(
-            graph_slug=subject_graph_slug,
-            node_alias=subject_node_alias,
-        )
-        correlated_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef(correlate_field)
+        datatype_name, facet, model_class = self._resolve_facet_and_model(
+            subject_graph_slug=subject_graph_slug,
+            subject_node_alias=subject_node_alias,
+            operator_token=operator_token,
         )
 
         if not operand_items:
+            correlated_row_sets = [
+                subject_rows.filter(resourceinstanceid=OuterRef(correlate_field))
+                for subject_rows in self._build_presence_subject_row_sets(
+                    datatype_name=datatype_name,
+                    subject_graph_slug=subject_graph_slug,
+                    subject_node_alias=subject_node_alias,
+                )
+            ]
+            any_value_exists = _combine_exists(correlated_row_sets)
             presence_implies_match = self.facet_registry.presence_implies_match(
                 datatype_name,
                 operator_token,
             )
-            return (
-                Exists(correlated_rows)
-                if presence_implies_match
-                else ~Exists(correlated_rows)
-            )
+            return any_value_exists if presence_implies_match else ~any_value_exists
+
+        subject_rows = self._build_subject_rows(
+            model_class=model_class,
+            subject_graph_slug=subject_graph_slug,
+            subject_node_alias=subject_node_alias,
+        )
+        correlated_rows = subject_rows.filter(
+            resourceinstanceid=OuterRef(correlate_field)
+        )
 
         normalized_operand_items = self._normalize_operands(
             datatype_name=datatype_name,
@@ -216,6 +274,7 @@ class LiteralClauseEvaluator:
                 operator_token=operator_token,
                 operands=normalized_operand_items,
                 anchor_resource_id_annotation=None,
+                facet=facet,
             )
         )
         predicate_q = (
@@ -278,22 +337,10 @@ class LiteralClauseEvaluator:
             operator_token = clause_payload["operator"]
             operand_items = clause_payload["operands"]
 
-            datatype_name = (
-                self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                    subject_graph_slug,
-                    subject_node_alias,
-                )
-            )
-            model_class = self.search_model_registry.get_model_for_datatype(
-                datatype_name
-            )
-
-            base_rows = model_class.objects.filter(
-                graph_slug=subject_graph_slug,
-                node_alias=subject_node_alias,
-            )
-            correlated_rows = base_rows.filter(
-                resourceinstanceid=OuterRef(correlate_field)
+            datatype_name, facet, model_class = self._resolve_facet_and_model(
+                subject_graph_slug=subject_graph_slug,
+                subject_node_alias=subject_node_alias,
+                operator_token=operator_token,
             )
 
             if not operand_items:
@@ -301,12 +348,36 @@ class LiteralClauseEvaluator:
                     datatype_name,
                     operator_token,
                 )
-                predicate_rows = (
-                    correlated_rows
-                    if presence_implies_match
-                    else correlated_rows.none()
+                base_row_sets = self._build_presence_subject_row_sets(
+                    datatype_name=datatype_name,
+                    subject_graph_slug=subject_graph_slug,
+                    subject_node_alias=subject_node_alias,
                 )
+                if presence_implies_match:
+                    predicate_rows = None
+                    for base_rows in base_row_sets:
+                        correlated_rows = base_rows.filter(
+                            resourceinstanceid=OuterRef(correlate_field)
+                        ).values("resourceinstanceid")
+                        predicate_rows = (
+                            correlated_rows
+                            if predicate_rows is None
+                            else predicate_rows.union(correlated_rows)
+                        )
+                else:
+                    first_model_class = base_row_sets[0].model
+                    predicate_rows = first_model_class.objects.none().values(
+                        "resourceinstanceid"
+                    )
             else:
+                base_rows = self._build_subject_rows(
+                    model_class=model_class,
+                    subject_graph_slug=subject_graph_slug,
+                    subject_node_alias=subject_node_alias,
+                )
+                correlated_rows = base_rows.filter(
+                    resourceinstanceid=OuterRef(correlate_field)
+                )
                 normalized_operand_items = self._normalize_operands(
                     datatype_name=datatype_name,
                     operand_items=operand_items,
@@ -318,6 +389,7 @@ class LiteralClauseEvaluator:
                         operator_token=operator_token,
                         operands=normalized_operand_items,
                         anchor_resource_id_annotation=None,
+                        facet=facet,
                     )
                 )
                 predicate_q = (
@@ -343,7 +415,9 @@ class LiteralClauseEvaluator:
             intersected_rows = (
                 predicate_rows
                 if intersected_rows is None
-                else intersected_rows.filter(pk__in=predicate_rows.values("pk"))
+                else intersected_rows.filter(
+                    resourceinstanceid__in=predicate_rows.values("resourceinstanceid")
+                )
             )
 
         return intersected_rows
@@ -359,41 +433,46 @@ class LiteralClauseEvaluator:
         quantifier_token = clause_payload["quantifier"]
         operand_items = clause_payload["operands"]
 
-        datatype_name = (
-            self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
-                subject_graph_slug,
-                subject_node_alias,
-            )
-        )
-        model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
-
-        subject_rows = model_class.objects.filter(
-            graph_slug=subject_graph_slug,
-            node_alias=subject_node_alias,
-        )
-
-        resource_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef("resourceinstanceid")
-        )
-        tile_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef("resourceinstance_id")
+        datatype_name, facet, model_class = self._resolve_facet_and_model(
+            subject_graph_slug=subject_graph_slug,
+            subject_node_alias=subject_node_alias,
+            operator_token=operator_token,
         )
 
         any_tile_for_resource_q = Q(Exists(tiles_for_anchor_resource))
 
         if not operand_items:
+            presence_subject_row_sets = self._build_presence_subject_row_sets(
+                datatype_name=datatype_name,
+                subject_graph_slug=subject_graph_slug,
+                subject_node_alias=subject_node_alias,
+            )
+            resource_row_sets = [
+                subject_rows.filter(resourceinstanceid=OuterRef("resourceinstanceid"))
+                for subject_rows in presence_subject_row_sets
+            ]
+            tile_row_sets = [
+                subject_rows.filter(resourceinstanceid=OuterRef("resourceinstance_id"))
+                for subject_rows in presence_subject_row_sets
+            ]
+            any_resource_row_exists = _combine_exists(resource_row_sets)
+            per_tile_presence = _combine_exists(
+                [
+                    tile_rows.filter(tileid=tile_id_outer_ref)
+                    for tile_rows in tile_row_sets
+                ]
+            )
             presence_implies_match = self.facet_registry.presence_implies_match(
                 datatype_name,
                 operator_token,
             )
 
             if quantifier_token == QUANTIFIER_ANY:
-                per_tile_presence = tile_rows.filter(tileid=tile_id_outer_ref)
                 return (
                     (
-                        Q(Exists(per_tile_presence))
+                        Q(per_tile_presence)
                         if presence_implies_match
-                        else ~Q(Exists(per_tile_presence))
+                        else ~Q(per_tile_presence)
                     ),
                     None,
                 )
@@ -402,14 +481,14 @@ class LiteralClauseEvaluator:
                 return (
                     None,
                     (
-                        Q(~Exists(resource_rows))
+                        Q(~any_resource_row_exists)
                         if presence_implies_match
-                        else Q(Exists(resource_rows))
+                        else Q(any_resource_row_exists)
                     ),
                 )
 
             tiles_missing_presence = tiles_for_anchor_resource.filter(
-                ~Exists(tile_rows.filter(tileid=tile_id_outer_ref))
+                ~per_tile_presence
             )
             resource_level_q = (
                 Q(~Exists(tiles_missing_presence)) & any_tile_for_resource_q
@@ -417,6 +496,19 @@ class LiteralClauseEvaluator:
                 else Q(~Exists(tiles_for_anchor_resource))
             )
             return None, resource_level_q
+
+        subject_rows = self._build_subject_rows(
+            model_class=model_class,
+            subject_graph_slug=subject_graph_slug,
+            subject_node_alias=subject_node_alias,
+        )
+
+        resource_rows = subject_rows.filter(
+            resourceinstanceid=OuterRef("resourceinstanceid")
+        )
+        tile_rows = subject_rows.filter(
+            resourceinstanceid=OuterRef("resourceinstance_id")
+        )
 
         normalized_operand_items = self._normalize_operands(
             datatype_name=datatype_name,
@@ -429,6 +521,7 @@ class LiteralClauseEvaluator:
                 operator_token=operator_token,
                 operands=normalized_operand_items,
                 anchor_resource_id_annotation=None,
+                facet=facet,
             )
         )
         predicate_q = (
@@ -491,11 +584,11 @@ class LiteralClauseEvaluator:
         )
 
         if positive_facet is not None:
-            positive_expression, _ = self.facet_registry.predicate(
+            positive_expression, _ = self.predicate_builder.build_predicate(
                 datatype_name,
                 positive_facet.operator,
-                "value",
-                [operand_item["value"] for operand_item in operand_items],
+                operand_items,
+                facet=positive_facet,
             )
             positive_q = (
                 positive_expression

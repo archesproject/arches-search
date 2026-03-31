@@ -4116,6 +4116,39 @@ class AdvancedSearchTestCase(TestCase):
         )
         self.assertEqual(result, {PERSON_A_ID, PERSON_B_ID})
 
+    def test_person_tile_scope_all_is_active_has_any_value_returns_nobody(self):
+        """
+        Exercises the ALL + presence_implies_match=True branch of _build_tile_scope_predicates
+        (lines 414-415). ALL + HAS_ANY_VALUE requires that every tile attached to the resource
+        has a corresponding is_active BooleanSearch row. No person satisfies this: even though
+        Persons A and B each have an is_active row, they also have fingernail, age, alias, and
+        other tiles that have no is_active row. Those land in tiles_missing_presence, so
+        ~Exists(tiles_missing_presence) is False for all persons and the result is empty.
+
+        Note: the ALL + HAS_NO_VALUE test below returns empty for a different reason
+        (~Exists(tiles_for_anchor_resource) requires the person to have no tiles at all).
+        """
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "TILE",
+                "logic": "AND",
+                "clauses": [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ALL",
+                        "subject": [["person", "is_active"]],
+                        "operator": "HAS_ANY_VALUE",
+                        "operands": [],
+                    }
+                ],
+                "groups": [],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, set())
+
     def test_person_tile_scope_all_is_active_has_no_value_returns_nobody(self):
         """
         Exercises the ALL fallthrough branch of _build_tile_scope_predicates for HAS_NO_VALUE

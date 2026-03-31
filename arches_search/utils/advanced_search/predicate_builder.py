@@ -17,29 +17,140 @@ class PredicateBuilder:
         operator_token: str,
         operands: List[Any],
         anchor_resource_id_annotation: Optional[str] = None,
+        facet=None,
     ) -> Tuple[Q | dict, bool]:
         normalized_operands = self._normalize_operands(
             operands=operands,
             anchor_resource_id_annotation=anchor_resource_id_annotation,
         )
 
-        facet = self.facet_registry.get_facet(datatype_name, operator_token)
-        lookup_key = facet.orm_template.replace("{col}", "value")
+        if facet is None:
+            facet = self.facet_registry.get_facet(datatype_name, operator_token)
+
         is_template_negated = bool(facet.is_orm_template_negated)
+        predicate_expression = self._build_expression_from_template(
+            facet=facet,
+            operands=normalized_operands,
+        )
+
+        if is_template_negated:
+            if isinstance(predicate_expression, Q):
+                return ~predicate_expression, True
+            return ~Q(**predicate_expression), True
+
+        return predicate_expression, False
+
+    def _build_expression_from_template(self, facet, operands: List[Any]) -> Q | dict:
+        orm_template = facet.orm_template
+        target_model_class = facet.target_model_class
+
+        if orm_template.startswith("AND:") or orm_template.startswith("OR:"):
+            return self._build_compound_q(
+                orm_template=orm_template,
+                operands=operands,
+                target_model_class=target_model_class,
+            )
+
+        lookup_key = self._resolve_lookup_key(
+            template=orm_template,
+            target_model_class=target_model_class,
+        )
 
         if facet.arity == 0:
             value_for_lookup = True
         elif facet.arity == 1:
-            value_for_lookup = normalized_operands[0]
+            value_for_lookup = operands[0]
         else:
-            value_for_lookup = normalized_operands
+            value_for_lookup = operands
 
-        predicate_kwargs = {lookup_key: value_for_lookup}
+        return {lookup_key: value_for_lookup}
 
-        if is_template_negated:
-            return ~Q(**predicate_kwargs), True
+    def _build_compound_q(
+        self,
+        orm_template: str,
+        operands: List[Any],
+        target_model_class,
+    ) -> Q:
+        logic_token, raw_conditions = orm_template.split(":", 1)
+        condition_expressions = []
 
-        return predicate_kwargs, False
+        for raw_condition in raw_conditions.split(";"):
+            lookup_template, operand_token = raw_condition.rsplit(":", 1)
+            lookup_key = self._resolve_lookup_key(
+                template=lookup_template,
+                target_model_class=target_model_class,
+            )
+            operand_value = self._resolve_operand_token(operand_token, operands)
+            condition_expressions.append(Q(**{lookup_key: operand_value}))
+
+        if logic_token == "AND":
+            combined_q = condition_expressions[0]
+            for condition_expression in condition_expressions[1:]:
+                combined_q &= condition_expression
+            return combined_q
+
+        if logic_token == "OR":
+            combined_q = condition_expressions[0]
+            for condition_expression in condition_expressions[1:]:
+                combined_q |= condition_expression
+            return combined_q
+
+        raise ValueError(
+            _("Unsupported logical template prefix: {prefix}").format(
+                prefix=logic_token
+            )
+        )
+
+    def _resolve_lookup_key(self, template: str, target_model_class) -> str:
+        resolved_template = template
+        field_aliases = self._get_field_aliases(target_model_class)
+
+        for placeholder, field_name in field_aliases.items():
+            resolved_template = resolved_template.replace(placeholder, field_name)
+
+        if "{" in resolved_template or "}" in resolved_template:
+            raise ValueError(
+                _("Unsupported field placeholder in ORM template: {template}").format(
+                    template=template
+                )
+            )
+
+        return resolved_template
+
+    def _get_field_aliases(self, target_model_class) -> dict[str, str]:
+        if target_model_class is None:
+            return {"{col}": "value"}
+
+        field_names = {
+            field.name
+            for field in target_model_class._meta.get_fields()
+            if getattr(field, "name", None)
+        }
+
+        aliases = {}
+        if "value" in field_names:
+            aliases["{col}"] = "value"
+        if "start_value" in field_names:
+            aliases["{col_start}"] = "start_value"
+        if "end_value" in field_names:
+            aliases["{col_end}"] = "end_value"
+        return aliases
+
+    def _resolve_operand_token(self, operand_token: str, operands: List[Any]) -> Any:
+        token = operand_token.strip()
+
+        if token in {"{value}", "{p0}", "{value0}"}:
+            return operands[0]
+        if token in {"{p1}", "{value1}"}:
+            return operands[1]
+        if token in {"{p2}", "{value2}"}:
+            return operands[2]
+
+        raise ValueError(
+            _("Unsupported operand placeholder in ORM template: {token}").format(
+                token=token
+            )
+        )
 
     def _normalize_operands(
         self,

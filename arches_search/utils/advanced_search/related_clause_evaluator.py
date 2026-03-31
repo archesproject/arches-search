@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 from django.db.models import Exists, OuterRef, Q
 from django.utils.translation import gettext as _
+from arches_search.utils.advanced_search.literal_clause_evaluator import _combine_exists
 
 QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
@@ -86,7 +87,27 @@ class RelatedClauseEvaluator:
                 subject_graph_slug, subject_node_alias
             )
         )
-        model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
+        facet = self.facet_registry.get_facet(datatype_name, operator_token)
+        if not operand_items:
+            correlated_subject_row_sets = [
+                model_class.objects.filter(
+                    graph_slug=subject_graph_slug,
+                    node_alias=subject_node_alias,
+                    resourceinstanceid=OuterRef(traversal_context["child_id_field"]),
+                ).annotate(
+                    _anchor_resource_id=OuterRef(traversal_context["anchor_id_field"])
+                )
+                for model_class in self.search_model_registry.get_all_models_for_datatype(
+                    datatype_name
+                )
+            ]
+            any_value_exists = _combine_exists(correlated_subject_row_sets)
+            presence_implies_match = self.facet_registry.presence_implies_match(
+                datatype_name, operator_token
+            )
+            return any_value_exists if presence_implies_match else ~any_value_exists
+
+        model_class = facet.target_model_class
         subject_rows = model_class.objects.filter(
             graph_slug=subject_graph_slug, node_alias=subject_node_alias
         )
@@ -95,21 +116,12 @@ class RelatedClauseEvaluator:
             resourceinstanceid=OuterRef(traversal_context["child_id_field"])
         ).annotate(_anchor_resource_id=OuterRef(traversal_context["anchor_id_field"]))
 
-        if not operand_items:
-            presence_implies_match = self.facet_registry.presence_implies_match(
-                datatype_name, operator_token
-            )
-            return (
-                Exists(correlated_subject_rows)
-                if presence_implies_match
-                else ~Exists(correlated_subject_rows)
-            )
-
         predicate_expression, _ = self.predicate_builder.build_predicate(
             datatype_name=datatype_name,
             operator_token=operator_token,
             operands=operand_items,
             anchor_resource_id_annotation="_anchor_resource_id",
+            facet=facet,
         )
 
         if isinstance(predicate_expression, Q):

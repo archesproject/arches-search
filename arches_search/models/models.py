@@ -12,44 +12,6 @@ from django.contrib.postgres.search import SearchVector
 from django.conf import settings
 
 
-class DDatatypeXAdvancedSearchModel(models.Model):
-    id = models.AutoField(primary_key=True)
-    datatype = models.OneToOneField(
-        "models.DDataType",
-        on_delete=models.CASCADE,
-        db_column="datatypeid",
-        verbose_name=_("Data Type"),
-        help_text=_("The data type this mapping applies to."),
-    )
-    content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.PROTECT,
-        verbose_name=_("Search Model"),
-        help_text=_("The concrete search-table model for this data type."),
-    )
-
-    class Meta:
-        managed = True
-        constraints = [
-            models.UniqueConstraint(
-                fields=["datatype"], name="unique_search_model_per_datatype"
-            )
-        ]
-        indexes = [
-            models.Index(fields=["datatype"]),
-            models.Index(fields=["content_type"]),
-        ]
-
-    @property
-    def model_class(self):
-        return self.content_type.model_class()
-
-    @property
-    def db_table_name(self):
-        model_class = self.model_class
-        return model_class._meta.db_table if model_class else None
-
-
 class AdvancedSearchFacet(models.Model):
     id = models.AutoField(primary_key=True)
     arity = models.PositiveSmallIntegerField(default=0)
@@ -66,6 +28,12 @@ class AdvancedSearchFacet(models.Model):
     sortorder = models.PositiveSmallIntegerField()
     orm_template = models.CharField(max_length=255, blank=True)
     is_orm_template_negated = models.BooleanField(default=False)
+    target_search_model = models.ForeignKey(
+        ContentType,
+        on_delete=models.PROTECT,
+        verbose_name=_("Target Search Model"),
+        help_text=_("The concrete search-table model this facet should query against."),
+    )
 
     class Meta:
         constraints = [
@@ -76,6 +44,12 @@ class AdvancedSearchFacet(models.Model):
                 fields=["datatype", "sortorder"], name="unique_sortorder_per_datatype"
             ),
         ]
+
+    @property
+    def target_model_class(self):
+        if self.target_search_model_id is None:
+            return None
+        return self.target_search_model.model_class()
 
 
 class TermSearch(models.Model):
