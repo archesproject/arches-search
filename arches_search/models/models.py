@@ -1,5 +1,6 @@
 import uuid
 
+from django.contrib.gis.db.models import GeometryField
 from django.db import models
 from django.db.models import F
 from django.contrib.postgres.indexes import GinIndex
@@ -298,6 +299,34 @@ class BooleanSearch(models.Model):
                 fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
             ),
             models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
+        ]
+
+
+class GeometrySearch(models.Model):
+    id = models.AutoField(primary_key=True)
+    tileid = models.ForeignKey(
+        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+    )
+    resourceinstanceid = models.ForeignKey(
+        "models.ResourceInstance",
+        on_delete=models.CASCADE,
+        db_column="resourceinstanceid",
+    )
+    graph_slug = models.TextField()
+    node_alias = models.TextField()
+    datatype = models.TextField()
+    geom = GeometryField(srid=4326)
+
+    class Meta:
+        managed = True
+        db_table = "arches_search_geometry"
+        indexes = [
+            models.Index(fields=["resourceinstanceid"]),
+            models.Index(fields=["tileid"]),
+            models.Index(fields=["node_alias"]),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
+            ),
         ]
 
 

@@ -7,6 +7,7 @@ from arches_search.models.models import (
     DateRangeSearch,
     BooleanSearch,
     NumericSearch,
+    GeometrySearch,
 )
 
 
@@ -33,6 +34,7 @@ def index_from_tile(
         DateRangeSearch.objects.filter(tileid=tile.tileid).delete()
         BooleanSearch.objects.filter(tileid=tile.tileid).delete()
         NumericSearch.objects.filter(tileid=tile.tileid).delete()
+        GeometrySearch.objects.filter(tileid=tile.tileid).delete()
 
     if indexing_factory is None:
         factory = IndexingFactory()

@@ -8,7 +8,7 @@ class PayloadValidator:
     ALLOW_GROUP_LOGIC = {"AND", "OR"}
     ALLOWED_CLAUSE_TYPE = {"LITERAL", "RELATED"}
     ALLOWED_QUANTIFIER = {"ANY", "ALL", "NONE"}
-    ALLOWED_OPERAND_TYPE = {"LITERAL", "PATH"}
+    ALLOWED_OPERAND_TYPE = {"LITERAL", "GEO_LITERAL", "PATH"}
 
     REQUIRED_GROUP_KEYS = {
         "graph_slug",

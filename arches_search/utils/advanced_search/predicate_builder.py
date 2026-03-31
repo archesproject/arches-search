@@ -1,9 +1,12 @@
+import json
 from typing import Any, List, Optional, Tuple
+from django.contrib.gis.geos import GEOSGeometry
 from django.db.models import Subquery, OuterRef, Q
 from django.utils.translation import gettext as _
 
 TYPE_LITERAL = "LITERAL"
 TYPE_PATH = "PATH"
+TYPE_GEO_LITERAL = "GEO_LITERAL"
 
 
 class PredicateBuilder:
@@ -130,6 +133,8 @@ class PredicateBuilder:
         aliases = {}
         if "value" in field_names:
             aliases["{col}"] = "value"
+        if "geom" in field_names:
+            aliases["{col}"] = "geom"
         if "start_value" in field_names:
             aliases["{col_start}"] = "start_value"
         if "end_value" in field_names:
@@ -174,6 +179,13 @@ class PredicateBuilder:
 
             if operand_type == TYPE_LITERAL:
                 normalized_values.append(operand_item["value"])
+                continue
+
+            if operand_type == TYPE_GEO_LITERAL:
+                value = operand_item["value"]
+                if isinstance(value, dict):
+                    value = json.dumps(value)
+                normalized_values.append(GEOSGeometry(value, srid=4326))
                 continue
 
             if operand_type == TYPE_PATH:
