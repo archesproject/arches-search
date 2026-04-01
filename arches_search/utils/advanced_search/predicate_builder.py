@@ -104,16 +104,6 @@ class PredicateBuilder:
                 ),
             )
 
-        if orm_template.startswith("AGG_COUNT:"):
-            _, _, lookup_token, operand_token = orm_template.split(":", 3)
-            return AggregatePredicateSpec(
-                kind=AGGREGATE_KIND_COUNT,
-                values=self._coerce_aggregate_values(
-                    self._resolve_operand_token(operand_token, operands)
-                ),
-                lookup=lookup_token.strip(),
-            )
-
         return None
 
     def _build_compound_q(

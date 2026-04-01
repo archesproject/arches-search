@@ -34,9 +34,9 @@ TEMPLATE_REPLACEMENTS_BY_MODEL = {
 # Templates that are identical across all remaining models
 # (all use a `value` column or are aggregate/structural templates).
 #
-# Note: migration 0014 converted {col_count}__gt → AGG_COUNT:{col}:gt:{p0}
-# and HAVING_ALL:{col}:{values} → AGG_SUPERSET:{col}:{p0}, so the inputs
-# here are the post-0014 forms.
+# Note: migration 0014 converted HAVING_ALL/HAVING_ONLY to the AGG_SUPERSET/
+# AGG_SET_EQUAL forms below. The AGG_COUNT inputs are also supported here if
+# any count facets already use that intermediate template form.
 TEMPLATE_REPLACEMENTS_UNIVERSAL = {
     "{col}": "value",
     "{col}__gt": "value__gt",
