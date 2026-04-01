@@ -2,6 +2,7 @@ import uuid
 
 from django.core.management import call_command
 from django.test import TestCase
+from django.urls import reverse
 
 from arches.app.models.models import (
     GraphModel,
@@ -577,3 +578,21 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
 
         self.assertEqual(result, {self.resource_with_file.resourceinstanceid})
+
+    def test_all_datatype_facets_api_serializes_file_list_facets(self):
+        response = self.client.get(reverse("all_datatype_facets"))
+
+        self.assertEqual(response.status_code, 200)
+
+        file_list_facets = [
+            facet
+            for facet in response.json()
+            if facet["datatype_id"] == self.presence_file_list_node.datatype
+        ]
+
+        self.assertTrue(
+            any(facet["operator"] == "FILE_NAME_LIKE" for facet in file_list_facets)
+        )
+        self.assertTrue(
+            all("target_model_class" not in facet for facet in file_list_facets)
+        )

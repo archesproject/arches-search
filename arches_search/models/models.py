@@ -46,6 +46,28 @@ class AdvancedSearchFacet(models.Model):
             ),
         ]
 
+    def serialize(self, fields=None, exclude=None, **kwargs):
+        data = {
+            "id": self.id,
+            "arity": self.arity,
+            "datatype_id": self.datatype_id,
+            "label": self.label,
+            "operator": self.operator,
+            "param_formats": self.param_formats,
+            "sortorder": self.sortorder,
+            "orm_template": self.orm_template,
+            "is_orm_template_negated": self.is_orm_template_negated,
+            "target_search_model_id": self.target_search_model_id,
+        }
+
+        if fields is not None:
+            data = {key: value for key, value in data.items() if key in fields}
+
+        if exclude is not None:
+            data = {key: value for key, value in data.items() if key not in exclude}
+
+        return data
+
     @property
     def target_model_class(self):
         if self.target_search_model_id is None:
