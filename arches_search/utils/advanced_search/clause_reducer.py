@@ -18,22 +18,19 @@ from arches_search.utils.advanced_search.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
 
-LOGIC_AND = "AND"
-LOGIC_OR = "OR"
-
-SCOPE_RESOURCE = "RESOURCE"
-SCOPE_TILE = "TILE"
-
-CLAUSE_TYPE_LITERAL = "LITERAL"
-CLAUSE_TYPE_RELATED = "RELATED"
-
-QUANTIFIER_ANY = "ANY"
-QUANTIFIER_NONE = "NONE"
+from arches_search.utils.advanced_search.constants import (
+    CLAUSE_TYPE_LITERAL,
+    CLAUSE_TYPE_RELATED,
+    LOGIC_AND,
+    LOGIC_OR,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
+    SCOPE_TILE,
+)
 
 
 class ReduceResult(NamedTuple):
     relationshipless_q: Optional[Q]
-    anchor_exists: List[Exists]
     constrained_child_rows: Optional[QuerySet]
     had_inner_filters: bool
     has_child_targeting_clause: bool
@@ -85,9 +82,8 @@ class ClauseReducer:
             if subject_graph_slug != anchor_graph_slug:
                 continue
 
-            exists_expression = self.literal_clause_evaluator.evaluate(
-                mode="anchor",
-                clause_payload=clause_payload,
+            exists_expression = self.literal_clause_evaluator.build_anchor_exists(
+                clause_payload
             )
             anchor_exists_expressions.append(exists_expression)
 
@@ -139,7 +135,6 @@ class ClauseReducer:
 
             return ReduceResult(
                 relationshipless_q=None,
-                anchor_exists=[],
                 constrained_child_rows=constrained_child_rows,
                 had_inner_filters=had_inner_filters,
                 has_child_targeting_clause=has_child_targeting_clause,
@@ -148,7 +143,6 @@ class ClauseReducer:
 
         return ReduceResult(
             relationshipless_q=None,
-            anchor_exists=[],
             constrained_child_rows=None,
             had_inner_filters=False,
             has_child_targeting_clause=False,
@@ -170,7 +164,6 @@ class ClauseReducer:
             )
             return ReduceResult(
                 relationshipless_q=relationshipless_q,
-                anchor_exists=[],
                 constrained_child_rows=None,
                 had_inner_filters=False,
                 has_child_targeting_clause=False,
@@ -181,27 +174,8 @@ class ClauseReducer:
             group_payload
         )
 
-        anchor_exists: List[Exists] = []
-        for clause_payload in group_payload["clauses"]:
-            clause_type_token = clause_payload["type"]
-            if clause_type_token == CLAUSE_TYPE_LITERAL:
-                anchor_exists.append(
-                    self.literal_clause_evaluator.evaluate(
-                        mode="anchor",
-                        clause_payload=clause_payload,
-                    )
-                )
-            elif clause_type_token == CLAUSE_TYPE_RELATED:
-                anchor_exists.append(
-                    self.related_clause_evaluator.evaluate(
-                        mode="anchor",
-                        clause_payload=clause_payload,
-                    )
-                )
-
         return ReduceResult(
             relationshipless_q=relationshipless_q,
-            anchor_exists=anchor_exists,
             constrained_child_rows=None,
             had_inner_filters=False,
             has_child_targeting_clause=False,
@@ -274,8 +248,7 @@ class ClauseReducer:
             traversal_context["is_inverse"]
             and len(traversal_context.get("path_segments") or []) == 1
         ):
-            literal_ok_rows = self.literal_clause_evaluator.evaluate(
-                mode="compute_child_rows",
+            literal_ok_rows = self.literal_clause_evaluator.compute_child_rows(
                 group_payload=group_payload,
                 correlate_field=traversal_context["child_id_field"],
                 terminal_graph_slug=traversal_context["terminal_graph_slug"],
@@ -307,10 +280,11 @@ class ClauseReducer:
                 for clause_payload in current_group_payload["clauses"]:
                     if clause_payload["type"] != CLAUSE_TYPE_LITERAL:
                         continue
-                    exists_expression = self.literal_clause_evaluator.evaluate(
-                        mode="child",
-                        clause_payload=clause_payload,
-                        correlate_field=traversal_context["child_id_field"],
+                    exists_expression = (
+                        self.literal_clause_evaluator.build_child_exists(
+                            clause_payload=clause_payload,
+                            correlate_field=traversal_context["child_id_field"],
+                        )
                     )
                     working_child_rows = working_child_rows.filter(exists_expression)
                     applied_any_filter = True
@@ -332,8 +306,7 @@ class ClauseReducer:
                 (current_group_payload.get("relationship") or {}).get("path")
             )
             if not has_path:
-                ok_rowset = self.literal_clause_evaluator.evaluate(
-                    mode="compute_child_rows",
+                ok_rowset = self.literal_clause_evaluator.compute_child_rows(
                     group_payload=current_group_payload,
                     correlate_field=traversal_context["child_id_field"],
                     terminal_graph_slug=traversal_context["terminal_graph_slug"],
@@ -390,10 +363,11 @@ class ClauseReducer:
                 for clause_payload in current_group_payload["clauses"]:
                     if clause_payload["type"] != CLAUSE_TYPE_LITERAL:
                         continue
-                    exists_expression = self.literal_clause_evaluator.evaluate(
-                        mode="child",
-                        clause_payload=clause_payload,
-                        correlate_field=nested_child_id_field_name,
+                    exists_expression = (
+                        self.literal_clause_evaluator.build_child_exists(
+                            clause_payload=clause_payload,
+                            correlate_field=nested_child_id_field_name,
+                        )
                     )
                     nested_ok_rows = nested_ok_rows.filter(exists_expression)
                 pending_group_payloads.extend(current_group_payload["groups"])

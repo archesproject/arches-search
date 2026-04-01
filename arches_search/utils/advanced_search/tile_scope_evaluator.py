@@ -1,10 +1,11 @@
 from typing import Any, Dict, List
 from django.db.models import Exists, Q, QuerySet, OuterRef
 
-LOGIC_AND = "AND"
-LOGIC_OR = "OR"
-
-CLAUSE_TYPE_LITERAL = "LITERAL"
+from arches_search.utils.advanced_search.constants import (
+    CLAUSE_TYPE_LITERAL,
+    LOGIC_AND,
+    LOGIC_OR,
+)
 
 
 class TileScopeEvaluator:
@@ -31,20 +32,19 @@ class TileScopeEvaluator:
             if clause_payload["type"] != CLAUSE_TYPE_LITERAL:
                 continue
 
-            per_tile_predicate, resource_scoped_predicate = (
-                self.literal_clause_evaluator.evaluate(
-                    mode="tile",
+            tile_scope_predicates = (
+                self.literal_clause_evaluator.build_tile_scope_predicates(
                     clause_payload=clause_payload,
                     tiles_for_anchor_resource=tiles_for_anchor_resource,
                     tile_id_outer_ref=tile_identifier_outer_ref,
                 )
             )
 
-            if per_tile_predicate is not None:
-                tile_scoped_predicates.append(per_tile_predicate)
+            if tile_scope_predicates.per_tile is not None:
+                tile_scoped_predicates.append(tile_scope_predicates.per_tile)
 
-            if resource_scoped_predicate is not None:
-                resource_scoped_predicates.append(resource_scoped_predicate)
+            if tile_scope_predicates.resource_level is not None:
+                resource_scoped_predicates.append(tile_scope_predicates.resource_level)
 
         combined_per_tile_predicate = self._combine_tile_scoped_predicates(
             logic_connector_token,

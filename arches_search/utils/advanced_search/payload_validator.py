@@ -221,7 +221,7 @@ class PayloadValidator:
         else:
             if operand_payload["value"] is None:
                 raise ValidationError(
-                    _("%(location)s value must not be null for type LITERAL."),
+                    _("%(location)s value must not be null."),
                     params={"location": location},
                 )
 

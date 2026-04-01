@@ -5,18 +5,15 @@ from django.db.models import Exists, OuterRef, Q
 from arches.app.models import models as arches_models
 from arches_search.utils.advanced_search.clause_reducer import ClauseReducer
 
-LOGIC_AND = "AND"
-LOGIC_OR = "OR"
-
-SCOPE_RESOURCE = "RESOURCE"
-SCOPE_TILE = "TILE"
-
-QUANTIFIER_ANY = "ANY"
-QUANTIFIER_ALL = "ALL"
-QUANTIFIER_NONE = "NONE"
-
-CONTEXT_ANCHOR = "ANCHOR"
-CONTEXT_CHILD = "CHILD"
+from arches_search.utils.advanced_search.constants import (
+    CONTEXT_ANCHOR,
+    CONTEXT_CHILD,
+    LOGIC_OR,
+    QUANTIFIER_ALL,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
+    SCOPE_TILE,
+)
 
 
 class GroupCompiler:
@@ -122,24 +119,12 @@ class GroupCompiler:
         )
 
         if group_logic_token == LOGIC_OR:
-            combined_or_q: Optional[Q] = None
-            combined_or_q = (
-                parent_q if combined_or_q is None else (combined_or_q | parent_q)
-            )
+            combined_or_q = parent_q
             if children_q is not None:
-                combined_or_q = (
-                    children_q
-                    if combined_or_q is None
-                    else (combined_or_q | children_q)
-                )
+                combined_or_q = combined_or_q | children_q
             for existence_expression in children_existence_predicates:
-                existence_q = Q(existence_expression)
-                combined_or_q = (
-                    existence_q
-                    if combined_or_q is None
-                    else (combined_or_q | existence_q)
-                )
-            return combined_or_q or Q(), []
+                combined_or_q = combined_or_q | Q(existence_expression)
+            return combined_or_q, []
 
         combined_and_q = parent_q & (children_q or Q())
         return combined_and_q, children_existence_predicates

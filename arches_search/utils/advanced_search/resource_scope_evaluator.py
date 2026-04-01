@@ -1,11 +1,12 @@
 from typing import Any, Dict, Optional
 from django.db.models import Q
 
-LOGIC_AND = "AND"
-LOGIC_OR = "OR"
-
-CLAUSE_TYPE_LITERAL = "LITERAL"
-CLAUSE_TYPE_RELATED = "RELATED"
+from arches_search.utils.advanced_search.constants import (
+    CLAUSE_TYPE_LITERAL,
+    CLAUSE_TYPE_RELATED,
+    LOGIC_AND,
+    LOGIC_OR,
+)
 
 
 class ResourceScopeEvaluator:
@@ -19,8 +20,8 @@ class ResourceScopeEvaluator:
         for clause_payload in group_payload["clauses"]:
             clause_type = clause_payload["type"]
             if clause_type == CLAUSE_TYPE_LITERAL:
-                exists_expr = self.literal_clause_evaluator.evaluate(
-                    mode="anchor", clause_payload=clause_payload
+                exists_expr = self.literal_clause_evaluator.build_anchor_exists(
+                    clause_payload
                 )
             else:
                 exists_expr = self.related_clause_evaluator.evaluate(

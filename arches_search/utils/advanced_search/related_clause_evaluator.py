@@ -9,9 +9,11 @@ from arches_search.utils.advanced_search.predicate_builder import (
     AggregatePredicateSpec,
 )
 
-QUANTIFIER_ANY = "ANY"
-QUANTIFIER_ALL = "ALL"
-QUANTIFIER_NONE = "NONE"
+from arches_search.utils.advanced_search.constants import (
+    QUANTIFIER_ALL,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
+)
 
 
 class RelatedClauseEvaluator:
@@ -79,7 +81,7 @@ class RelatedClauseEvaluator:
                 else Exists(child_row_set)
             )
 
-        return Exists(child_row_set.none())
+        raise ValueError(f"Unsupported quantifier: {quantifier_token}")
 
     def _build_child_presence_exists(
         self, clause_payload: Dict[str, Any], traversal_context: Dict[str, Any]
@@ -144,6 +146,4 @@ class RelatedClauseEvaluator:
                 else Exists(aggregate_matches)
             )
 
-        if isinstance(predicate_expression, Q):
-            return Exists(correlated_subject_rows.filter(predicate_expression))
-        return Exists(correlated_subject_rows.filter(**predicate_expression))
+        return Exists(correlated_subject_rows.filter(predicate_expression))

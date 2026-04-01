@@ -1,4 +1,5 @@
 from typing import Any, Dict, List
+from django.core.exceptions import FieldDoesNotExist
 from django.db.models import UUIDField
 from django.utils.translation import gettext as _
 from arches_search.models.models import AdvancedSearchFacet
@@ -108,7 +109,7 @@ class SearchModelRegistry:
 
         try:
             model_meta.get_field(field_name)
-        except Exception:
+        except FieldDoesNotExist:
             return False
 
         return True
