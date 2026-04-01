@@ -3,7 +3,7 @@ import uuid
 from django.contrib.gis.db.models import GeometryField
 from django.db import models
 from django.db.models import F
-from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.indexes import GinIndex, GistIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
@@ -315,7 +315,7 @@ class GeometrySearch(models.Model):
     graph_slug = models.TextField()
     node_alias = models.TextField()
     datatype = models.TextField()
-    geom = GeometryField(srid=4326)
+    geom = GeometryField(srid=4326, spatial_index=False)
 
     class Meta:
         managed = True
@@ -331,6 +331,7 @@ class GeometrySearch(models.Model):
                 fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"],
                 name="arches_sear_subject_geo_idx",
             ),
+            GistIndex(fields=["geom"], name="arches_sear_geom_gist_idx"),
         ]
 
 

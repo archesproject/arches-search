@@ -1,19 +1,16 @@
 from typing import Any, Dict, Optional
-from django.db.models import Exists, OuterRef, Q
-from django.utils.translation import gettext as _
-from arches_search.utils.advanced_search.literal_clause_evaluator import (
-    _build_aggregate_match_rows,
-    _combine_exists,
-)
-from arches_search.utils.advanced_search.predicate_builder import (
-    AggregatePredicateSpec,
-)
 
+from django.db.models import Exists, OuterRef
+
+from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
+    build_grouped_rows_matching_aggregate_predicate,
+)
 from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_ALL,
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
 )
+from arches_search.utils.advanced_search.specs import AggregatePredicateSpec
 
 
 class RelatedClauseEvaluator:
@@ -25,22 +22,21 @@ class RelatedClauseEvaluator:
         self.path_navigator = path_navigator
         self.predicate_builder = predicate_builder
 
-    def evaluate(
+    def evaluate_at_anchor(
         self,
-        mode: str,
         clause_payload: Dict[str, Any],
-        traversal_context: Optional[Dict[str, Any]] = None,
         terminal_datatype_name: Optional[str] = None,
     ):
-        if mode == "anchor":
-            return self._build_anchor_presence_exists(
-                clause_payload, terminal_datatype_name
-            )
-        if mode == "child":
-            if traversal_context is None:
-                raise ValueError(_("traversal_context is required for mode='child'"))
-            return self._build_child_presence_exists(clause_payload, traversal_context)
-        raise ValueError(_("Unsupported evaluation mode: {mode}").format(mode=mode))
+        return self._build_anchor_presence_exists(
+            clause_payload, terminal_datatype_name
+        )
+
+    def evaluate_at_child(
+        self,
+        clause_payload: Dict[str, Any],
+        traversal_context: Dict[str, Any],
+    ):
+        return self._build_child_presence_exists(clause_payload, traversal_context)
 
     def _build_anchor_presence_exists(
         self,
@@ -109,7 +105,9 @@ class RelatedClauseEvaluator:
                     datatype_name
                 )
             ]
-            any_value_exists = _combine_exists(correlated_subject_row_sets)
+            any_value_exists = Exists(correlated_subject_row_sets[0])
+            for current_row_set in correlated_subject_row_sets[1:]:
+                any_value_exists = any_value_exists | Exists(current_row_set)
             presence_implies_match = self.facet_registry.presence_implies_match(
                 datatype_name, operator_token
             )
@@ -135,10 +133,10 @@ class RelatedClauseEvaluator:
         )
 
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            aggregate_matches = _build_aggregate_match_rows(
+            aggregate_matches = build_grouped_rows_matching_aggregate_predicate(
                 correlated_rows=correlated_subject_rows,
-                aggregate_spec=predicate_expression,
-                group_field_name="resourceinstanceid",
+                aggregate_predicate_spec=predicate_expression,
+                grouping_field_name="resourceinstanceid",
             )
             return (
                 ~Exists(aggregate_matches)

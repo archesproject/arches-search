@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Set
 from django.utils.translation import gettext as _
 from arches.app.models import models as arches_models
 
-TYPE_PATH = "PATH"
+from arches_search.utils.advanced_search.constants import OPERAND_TYPE_PATH
 
 
 class NodeAliasDatatypeRegistry:
@@ -82,7 +82,7 @@ class NodeAliasDatatypeRegistry:
                 required_aliases_by_graph.setdefault(graph_slug, set()).add(node_alias)
 
             for operand_payload in clause_payload["operands"]:
-                if operand_payload["type"].upper() == TYPE_PATH:
+                if operand_payload["type"].upper() == OPERAND_TYPE_PATH:
                     for graph_slug, node_alias in operand_payload["value"]:
                         required_aliases_by_graph.setdefault(graph_slug, set()).add(
                             node_alias

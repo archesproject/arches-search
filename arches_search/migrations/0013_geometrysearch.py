@@ -1,5 +1,6 @@
 import django.contrib.gis.db.models.fields
 import django.db.models.deletion
+from django.contrib.postgres.indexes import GistIndex
 from django.db import migrations, models
 
 
@@ -211,7 +212,9 @@ class Migration(migrations.Migration):
                 ("datatype", models.TextField()),
                 (
                     "geom",
-                    django.contrib.gis.db.models.fields.GeometryField(srid=4326),
+                    django.contrib.gis.db.models.fields.GeometryField(
+                        srid=4326, spatial_index=False
+                    ),
                 ),
             ],
             options={
@@ -246,6 +249,10 @@ class Migration(migrations.Migration):
                 fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"],
                 name="arches_sear_subject_geo_idx",
             ),
+        ),
+        migrations.AddIndex(
+            model_name="geometrysearch",
+            index=GistIndex(fields=["geom"], name="arches_sear_geom_gist_idx"),
         ),
         migrations.RunPython(migrate_geojson_facets, reverse_migrate_geojson_facets),
     ]

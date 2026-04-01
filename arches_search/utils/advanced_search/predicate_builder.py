@@ -1,25 +1,21 @@
 import json
-from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
+
 from django.contrib.gis.geos import GEOSGeometry
-from django.db.models import Subquery, OuterRef, Q
+from django.db.models import OuterRef, Q, Subquery
 from django.utils.translation import gettext as _
 
-TYPE_LITERAL = "LITERAL"
-TYPE_PATH = "PATH"
-TYPE_GEO_LITERAL = "GEO_LITERAL"
-
-AGGREGATE_KIND_SET_SUPERSET = "set_superset"
-AGGREGATE_KIND_SET_EQUAL = "set_equal"
-AGGREGATE_KIND_COUNT = "count"
-
-
-@dataclass(frozen=True)
-class AggregatePredicateSpec:
-    kind: str
-    field_name: str | None = None
-    values: tuple[Any, ...] = ()
-    lookup: str | None = None
+from arches_search.utils.advanced_search.constants import (
+    AGGREGATE_KIND_COUNT,
+    AGGREGATE_KIND_SET_EQUAL,
+    AGGREGATE_KIND_SET_SUPERSET,
+    OPERAND_TYPE_GEO_LITERAL,
+    OPERAND_TYPE_LITERAL,
+    OPERAND_TYPE_PATH,
+)
+from arches_search.utils.advanced_search.specs import (
+    AggregatePredicateSpec,
+)
 
 
 class PredicateBuilder:
@@ -185,7 +181,8 @@ class PredicateBuilder:
             return []
 
         has_path_operand = any(
-            operand_item["type"].upper() == TYPE_PATH for operand_item in operands
+            operand_item["type"].upper() == OPERAND_TYPE_PATH
+            for operand_item in operands
         )
         if has_path_operand and anchor_resource_id_annotation is None:
             raise ValueError(
@@ -196,18 +193,18 @@ class PredicateBuilder:
         for operand_item in operands:
             operand_type = operand_item["type"].upper()
 
-            if operand_type == TYPE_LITERAL:
+            if operand_type == OPERAND_TYPE_LITERAL:
                 normalized_values.append(operand_item["value"])
                 continue
 
-            if operand_type == TYPE_GEO_LITERAL:
+            if operand_type == OPERAND_TYPE_GEO_LITERAL:
                 value = operand_item["value"]
                 if isinstance(value, dict):
                     value = json.dumps(value)
                 normalized_values.append(GEOSGeometry(value, srid=4326))
                 continue
 
-            if operand_type == TYPE_PATH:
+            if operand_type == OPERAND_TYPE_PATH:
                 _, _, related_rows = self.path_navigator.build_path_queryset(
                     operand_item["value"]
                 )

@@ -3,14 +3,16 @@ from typing import Tuple, Sequence, Dict, Any
 
 from django.db.models import QuerySet, OuterRef
 from django.utils.translation import gettext as _
+
+from arches_search.utils.advanced_search.constants import (
+    TERMINAL_RESOURCE_DATATYPES,
+)
 from arches_search.utils.advanced_search.search_model_registry import (
     SearchModelRegistry,
 )
 from arches_search.utils.advanced_search.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
-
-TERMINAL_RESOURCE_TYPES = {"resource-instance", "resource-instance-list"}
 
 
 class PathNavigator:
@@ -35,7 +37,7 @@ class PathNavigator:
                 terminal_graph_slug, terminal_node_alias
             )
         )
-        if terminal_datatype_name.lower() in TERMINAL_RESOURCE_TYPES:
+        if terminal_datatype_name.lower() in TERMINAL_RESOURCE_DATATYPES:
             terminal_search_model = (
                 self.search_model_registry.get_relationship_model_for_datatype(
                     terminal_datatype_name
@@ -63,7 +65,7 @@ class PathNavigator:
         terminal_datatype_name, terminal_graph_slug, base_pair_rows = (
             self.build_path_queryset(relationship_path)
         )
-        if terminal_datatype_name.lower() not in TERMINAL_RESOURCE_TYPES:
+        if terminal_datatype_name.lower() not in TERMINAL_RESOURCE_DATATYPES:
             raise ValueError(
                 _(
                     "Relationship must end on a resource-instance or resource-instance-list node."
@@ -102,7 +104,7 @@ class PathNavigator:
         terminal_datatype_name, terminal_graph_slug, base_pair_rows = (
             self.build_path_queryset(path_segments)
         )
-        if terminal_datatype_name.lower() not in TERMINAL_RESOURCE_TYPES:
+        if terminal_datatype_name.lower() not in TERMINAL_RESOURCE_DATATYPES:
             raise ValueError(
                 _(
                     "Nested relationship must end on a resource-instance or resource-instance-list node."

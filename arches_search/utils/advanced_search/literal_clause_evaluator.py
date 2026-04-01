@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, NamedTuple, Optional
+from typing import Any, Dict, List, Optional
 
-from django.db.models import Count, Exists, OuterRef, Q, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils.translation import get_language
 
-from arches_search.utils.advanced_search.predicate_builder import (
-    AGGREGATE_KIND_COUNT,
-    AGGREGATE_KIND_SET_EQUAL,
-    AGGREGATE_KIND_SET_SUPERSET,
-    AggregatePredicateSpec,
+from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
+    build_grouped_rows_matching_aggregate_predicate,
 )
-
-
 from arches_search.utils.advanced_search.constants import (
     CLAUSE_TYPE_LITERAL,
     CLAUSE_TYPE_RELATED,
@@ -20,67 +15,10 @@ from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
 )
-
-
-def _combine_exists(row_sets: List[QuerySet]):
-    if not row_sets:
-        raise ValueError("At least one row set is required.")
-    combined = Exists(row_sets[0])
-    for rows in row_sets[1:]:
-        combined = combined | Exists(rows)
-    return combined
-
-
-class TileScopePredicates(NamedTuple):
-    per_tile: Optional[Q]
-    resource_level: Optional[Q]
-
-
-def _dedupe_values(values: tuple[Any, ...]) -> tuple[Any, ...]:
-    return tuple(dict.fromkeys(values))
-
-
-def _build_aggregate_match_rows(
-    correlated_rows: QuerySet,
-    aggregate_spec: AggregatePredicateSpec,
-    group_field_name: str,
-) -> QuerySet:
-    grouped_rows = correlated_rows.values(group_field_name)
-
-    if aggregate_spec.kind == AGGREGATE_KIND_SET_SUPERSET:
-        requested_values = _dedupe_values(aggregate_spec.values)
-        field_name = aggregate_spec.field_name or "value"
-        return grouped_rows.annotate(
-            _matched_distinct_count=Count(
-                field_name,
-                filter=Q(**{f"{field_name}__in": list(requested_values)}),
-                distinct=True,
-            )
-        ).filter(_matched_distinct_count=len(requested_values))
-
-    if aggregate_spec.kind == AGGREGATE_KIND_SET_EQUAL:
-        requested_values = _dedupe_values(aggregate_spec.values)
-        field_name = aggregate_spec.field_name or "value"
-        return grouped_rows.annotate(
-            _matched_distinct_count=Count(
-                field_name,
-                filter=Q(**{f"{field_name}__in": list(requested_values)}),
-                distinct=True,
-            ),
-            _total_distinct_count=Count(field_name, distinct=True),
-        ).filter(
-            _matched_distinct_count=len(requested_values),
-            _total_distinct_count=len(requested_values),
-        )
-
-    if aggregate_spec.kind == AGGREGATE_KIND_COUNT:
-        lookup_token = aggregate_spec.lookup or "exact"
-        threshold = aggregate_spec.values[0]
-        return grouped_rows.annotate(_row_count=Count("pk")).filter(
-            **{f"_row_count__{lookup_token}": threshold}
-        )
-
-    raise ValueError(f"Unsupported aggregate predicate kind: {aggregate_spec.kind}")
+from arches_search.utils.advanced_search.specs import (
+    AggregatePredicateSpec,
+    CorrelatedLiteralClauseContext,
+)
 
 
 class LiteralClauseEvaluator:
@@ -140,10 +78,35 @@ class LiteralClauseEvaluator:
         model_class = facet.target_model_class
         return datatype_name, facet, model_class
 
-    def build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
+    def _build_any_value_exists_for_subject(
+        self,
+        datatype_name: str,
+        subject_graph_slug: str,
+        subject_node_alias: str,
+        correlate_field_name: str,
+    ):
+        correlated_row_sets = [
+            subject_rows.filter(resourceinstanceid=OuterRef(correlate_field_name))
+            for subject_rows in self._build_presence_subject_row_sets(
+                datatype_name=datatype_name,
+                subject_graph_slug=subject_graph_slug,
+                subject_node_alias=subject_node_alias,
+            )
+        ]
+
+        any_value_exists = Exists(correlated_row_sets[0])
+        for current_row_set in correlated_row_sets[1:]:
+            any_value_exists = any_value_exists | Exists(current_row_set)
+
+        return any_value_exists
+
+    def _build_correlated_literal_clause_predicate(
+        self,
+        clause_payload: Dict[str, Any],
+        correlate_field_name: str,
+    ) -> CorrelatedLiteralClauseContext:
         subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
         operator_token = clause_payload["operator"]
-        quantifier_token = clause_payload["quantifier"]
         operand_items = clause_payload["operands"]
 
         datatype_name, facet, model_class = self._resolve_facet_and_model(
@@ -152,38 +115,19 @@ class LiteralClauseEvaluator:
             operator_token=operator_token,
         )
 
-        if not operand_items:
-            correlated_row_sets = [
-                subject_rows.filter(resourceinstanceid=OuterRef("resourceinstanceid"))
-                for subject_rows in self._build_presence_subject_row_sets(
-                    datatype_name=datatype_name,
-                    subject_graph_slug=subject_graph_slug,
-                    subject_node_alias=subject_node_alias,
-                )
-            ]
-            any_value_exists = _combine_exists(correlated_row_sets)
-            presence_implies_match = self.facet_registry.presence_implies_match(
-                datatype_name,
-                operator_token,
-            )
-            if quantifier_token == QUANTIFIER_NONE:
-                return ~any_value_exists if presence_implies_match else any_value_exists
-            return any_value_exists if presence_implies_match else ~any_value_exists
-
         subject_rows = self._build_subject_rows(
             model_class=model_class,
             subject_graph_slug=subject_graph_slug,
             subject_node_alias=subject_node_alias,
         )
         correlated_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef("resourceinstanceid")
+            resourceinstanceid=OuterRef(correlate_field_name)
         )
 
         normalized_operand_items = self._localize_string_operands(
             datatype_name=datatype_name,
             operand_items=operand_items,
         )
-
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
                 datatype_name=datatype_name,
@@ -193,11 +137,57 @@ class LiteralClauseEvaluator:
                 facet=facet,
             )
         )
+
+        return CorrelatedLiteralClauseContext(
+            datatype_name=datatype_name,
+            correlated_rows=correlated_rows,
+            normalized_operand_items=normalized_operand_items,
+            predicate_expression=predicate_expression,
+            is_template_negated=is_template_negated,
+        )
+
+    def build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
+        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        operator_token = clause_payload["operator"]
+        quantifier_token = clause_payload["quantifier"]
+        operand_items = clause_payload["operands"]
+
+        if not operand_items:
+            datatype_name = (
+                self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+                    subject_graph_slug,
+                    subject_node_alias,
+                )
+            )
+            any_value_exists = self._build_any_value_exists_for_subject(
+                datatype_name=datatype_name,
+                subject_graph_slug=subject_graph_slug,
+                subject_node_alias=subject_node_alias,
+                correlate_field_name="resourceinstanceid",
+            )
+            presence_implies_match = self.facet_registry.presence_implies_match(
+                datatype_name,
+                operator_token,
+            )
+            if quantifier_token == QUANTIFIER_NONE:
+                return ~any_value_exists if presence_implies_match else any_value_exists
+            return any_value_exists if presence_implies_match else ~any_value_exists
+
+        correlated_clause_predicate = self._build_correlated_literal_clause_predicate(
+            clause_payload=clause_payload,
+            correlate_field_name="resourceinstanceid",
+        )
+        datatype_name = correlated_clause_predicate.datatype_name
+        correlated_rows = correlated_clause_predicate.correlated_rows
+        normalized_operand_items = correlated_clause_predicate.normalized_operand_items
+        predicate_expression = correlated_clause_predicate.predicate_expression
+        is_template_negated = correlated_clause_predicate.is_template_negated
+
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            aggregate_matches = _build_aggregate_match_rows(
+            aggregate_matches = build_grouped_rows_matching_aggregate_predicate(
                 correlated_rows=correlated_rows,
-                aggregate_spec=predicate_expression,
-                group_field_name="resourceinstanceid",
+                aggregate_predicate_spec=predicate_expression,
+                grouping_field_name="resourceinstanceid",
             )
 
             if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
@@ -247,56 +237,40 @@ class LiteralClauseEvaluator:
         operator_token = clause_payload["operator"]
         operand_items = clause_payload["operands"]
 
-        datatype_name, facet, model_class = self._resolve_facet_and_model(
-            subject_graph_slug=subject_graph_slug,
-            subject_node_alias=subject_node_alias,
-            operator_token=operator_token,
-        )
-
         if not operand_items:
-            correlated_row_sets = [
-                subject_rows.filter(resourceinstanceid=OuterRef(correlate_field))
-                for subject_rows in self._build_presence_subject_row_sets(
-                    datatype_name=datatype_name,
-                    subject_graph_slug=subject_graph_slug,
-                    subject_node_alias=subject_node_alias,
+            datatype_name = (
+                self.path_navigator.node_alias_datatype_registry.get_datatype_for_alias(
+                    subject_graph_slug,
+                    subject_node_alias,
                 )
-            ]
-            any_value_exists = _combine_exists(correlated_row_sets)
+            )
+            any_value_exists = self._build_any_value_exists_for_subject(
+                datatype_name=datatype_name,
+                subject_graph_slug=subject_graph_slug,
+                subject_node_alias=subject_node_alias,
+                correlate_field_name=correlate_field,
+            )
             presence_implies_match = self.facet_registry.presence_implies_match(
                 datatype_name,
                 operator_token,
             )
             return any_value_exists if presence_implies_match else ~any_value_exists
 
-        subject_rows = self._build_subject_rows(
-            model_class=model_class,
-            subject_graph_slug=subject_graph_slug,
-            subject_node_alias=subject_node_alias,
+        correlated_clause_predicate = self._build_correlated_literal_clause_predicate(
+            clause_payload=clause_payload,
+            correlate_field_name=correlate_field,
         )
-        correlated_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef(correlate_field)
-        )
+        datatype_name = correlated_clause_predicate.datatype_name
+        correlated_rows = correlated_clause_predicate.correlated_rows
+        normalized_operand_items = correlated_clause_predicate.normalized_operand_items
+        predicate_expression = correlated_clause_predicate.predicate_expression
+        is_template_negated = correlated_clause_predicate.is_template_negated
 
-        normalized_operand_items = self._localize_string_operands(
-            datatype_name=datatype_name,
-            operand_items=operand_items,
-        )
-
-        predicate_expression, is_template_negated = (
-            self.predicate_builder.build_predicate(
-                datatype_name=datatype_name,
-                operator_token=operator_token,
-                operands=normalized_operand_items,
-                anchor_resource_id_annotation=None,
-                facet=facet,
-            )
-        )
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            aggregate_matches = _build_aggregate_match_rows(
+            aggregate_matches = build_grouped_rows_matching_aggregate_predicate(
                 correlated_rows=correlated_rows,
-                aggregate_spec=predicate_expression,
-                group_field_name="resourceinstanceid",
+                aggregate_predicate_spec=predicate_expression,
+                grouping_field_name="resourceinstanceid",
             )
             return (
                 ~Exists(aggregate_matches)
@@ -414,10 +388,10 @@ class LiteralClauseEvaluator:
                     )
                 )
                 if isinstance(predicate_expression, AggregatePredicateSpec):
-                    positive_rows = _build_aggregate_match_rows(
+                    positive_rows = build_grouped_rows_matching_aggregate_predicate(
                         correlated_rows=correlated_rows,
-                        aggregate_spec=predicate_expression,
-                        group_field_name="resourceinstanceid",
+                        aggregate_predicate_spec=predicate_expression,
+                        grouping_field_name="resourceinstanceid",
                     )
                     if not is_template_negated:
                         predicate_rows = positive_rows
@@ -455,210 +429,6 @@ class LiteralClauseEvaluator:
             )
 
         return intersected_rows
-
-    def build_tile_scope_predicates(
-        self,
-        clause_payload: Dict[str, Any],
-        tiles_for_anchor_resource: QuerySet,
-        tile_id_outer_ref: Any,
-    ) -> TileScopePredicates:
-        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
-        operator_token = clause_payload["operator"]
-        quantifier_token = clause_payload["quantifier"]
-        operand_items = clause_payload["operands"]
-
-        datatype_name, facet, model_class = self._resolve_facet_and_model(
-            subject_graph_slug=subject_graph_slug,
-            subject_node_alias=subject_node_alias,
-            operator_token=operator_token,
-        )
-
-        any_tile_for_resource_q = Q(Exists(tiles_for_anchor_resource))
-
-        if not operand_items:
-            presence_subject_row_sets = self._build_presence_subject_row_sets(
-                datatype_name=datatype_name,
-                subject_graph_slug=subject_graph_slug,
-                subject_node_alias=subject_node_alias,
-            )
-            resource_row_sets = [
-                subject_rows.filter(resourceinstanceid=OuterRef("resourceinstanceid"))
-                for subject_rows in presence_subject_row_sets
-            ]
-            tile_row_sets = [
-                subject_rows.filter(resourceinstanceid=OuterRef("resourceinstance_id"))
-                for subject_rows in presence_subject_row_sets
-            ]
-            any_resource_row_exists = _combine_exists(resource_row_sets)
-            per_tile_presence = _combine_exists(
-                [
-                    tile_rows.filter(tileid=tile_id_outer_ref)
-                    for tile_rows in tile_row_sets
-                ]
-            )
-            presence_implies_match = self.facet_registry.presence_implies_match(
-                datatype_name,
-                operator_token,
-            )
-
-            if quantifier_token == QUANTIFIER_ANY:
-                return TileScopePredicates(
-                    per_tile=(
-                        Q(per_tile_presence)
-                        if presence_implies_match
-                        else ~Q(per_tile_presence)
-                    ),
-                    resource_level=None,
-                )
-
-            if quantifier_token == QUANTIFIER_NONE:
-                return TileScopePredicates(
-                    per_tile=None,
-                    resource_level=(
-                        Q(~any_resource_row_exists)
-                        if presence_implies_match
-                        else Q(any_resource_row_exists)
-                    ),
-                )
-
-            tiles_missing_presence = tiles_for_anchor_resource.filter(
-                ~per_tile_presence
-            )
-            resource_level_q = (
-                Q(~Exists(tiles_missing_presence)) & any_tile_for_resource_q
-                if presence_implies_match
-                else Q(~Exists(tiles_for_anchor_resource))
-            )
-            return TileScopePredicates(per_tile=None, resource_level=resource_level_q)
-
-        subject_rows = self._build_subject_rows(
-            model_class=model_class,
-            subject_graph_slug=subject_graph_slug,
-            subject_node_alias=subject_node_alias,
-        )
-
-        resource_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef("resourceinstanceid")
-        )
-        tile_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef("resourceinstance_id")
-        )
-
-        normalized_operand_items = self._localize_string_operands(
-            datatype_name=datatype_name,
-            operand_items=operand_items,
-        )
-
-        predicate_expression, is_template_negated = (
-            self.predicate_builder.build_predicate(
-                datatype_name=datatype_name,
-                operator_token=operator_token,
-                operands=normalized_operand_items,
-                anchor_resource_id_annotation=None,
-                facet=facet,
-            )
-        )
-        if isinstance(predicate_expression, AggregatePredicateSpec):
-            resource_level_matches = _build_aggregate_match_rows(
-                correlated_rows=resource_rows,
-                aggregate_spec=predicate_expression,
-                group_field_name="resourceinstanceid",
-            )
-            per_tile_matches = _build_aggregate_match_rows(
-                correlated_rows=tile_rows.filter(tileid=tile_id_outer_ref),
-                aggregate_spec=predicate_expression,
-                group_field_name="tileid",
-            )
-
-            if quantifier_token == QUANTIFIER_ANY:
-                per_tile_q = Q(Exists(per_tile_matches))
-                return TileScopePredicates(
-                    per_tile=(~per_tile_q if is_template_negated else per_tile_q),
-                    resource_level=None,
-                )
-
-            if quantifier_token == QUANTIFIER_NONE:
-                resource_level_q = Q(Exists(resource_level_matches))
-                return TileScopePredicates(
-                    per_tile=None,
-                    resource_level=(
-                        resource_level_q if is_template_negated else ~resource_level_q
-                    ),
-                )
-
-            if quantifier_token == QUANTIFIER_ALL:
-                if not is_template_negated:
-                    tiles_missing_match = tiles_for_anchor_resource.filter(
-                        ~Exists(per_tile_matches)
-                    )
-                    return TileScopePredicates(
-                        per_tile=None,
-                        resource_level=(
-                            Q(~Exists(tiles_missing_match)) & any_tile_for_resource_q
-                        ),
-                    )
-
-                tiles_with_positive_match = tiles_for_anchor_resource.filter(
-                    Exists(per_tile_matches)
-                )
-                return TileScopePredicates(
-                    per_tile=None,
-                    resource_level=(
-                        Q(~Exists(tiles_with_positive_match)) & any_tile_for_resource_q
-                    ),
-                )
-
-            raise ValueError(f"Unsupported quantifier: {quantifier_token}")
-
-        if quantifier_token == QUANTIFIER_ANY:
-            per_tile_matches = tile_rows.filter(predicate_expression).filter(
-                tileid=tile_id_outer_ref
-            )
-            return TileScopePredicates(
-                per_tile=Q(Exists(per_tile_matches)),
-                resource_level=None,
-            )
-
-        if quantifier_token == QUANTIFIER_NONE:
-            resource_level_matches = resource_rows.filter(predicate_expression)
-            return TileScopePredicates(
-                per_tile=None,
-                resource_level=Q(~Exists(resource_level_matches)),
-            )
-
-        if quantifier_token == QUANTIFIER_ALL:
-            if not is_template_negated:
-                per_tile_matches = tile_rows.filter(predicate_expression).filter(
-                    tileid=tile_id_outer_ref
-                )
-                tiles_missing_match = tiles_for_anchor_resource.filter(
-                    ~Exists(per_tile_matches)
-                )
-                return TileScopePredicates(
-                    per_tile=None,
-                    resource_level=(
-                        Q(~Exists(tiles_missing_match)) & any_tile_for_resource_q
-                    ),
-                )
-
-            positive_per_tile_rows = self._positive_rows_for_negated_template(
-                operator_token=operator_token,
-                datatype_name=datatype_name,
-                operand_items=normalized_operand_items,
-                correlated_rows=tile_rows.filter(tileid=tile_id_outer_ref),
-                predicate_expression=predicate_expression,
-            )
-            tiles_with_violations = tiles_for_anchor_resource.filter(
-                Exists(positive_per_tile_rows)
-            )
-            return TileScopePredicates(
-                per_tile=None,
-                resource_level=(
-                    Q(~Exists(tiles_with_violations)) & any_tile_for_resource_q
-                ),
-            )
-
-        raise ValueError(f"Unsupported quantifier: {quantifier_token}")
 
     def _positive_rows_for_negated_template(
         self,

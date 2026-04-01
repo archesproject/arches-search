@@ -1,15 +1,12 @@
-from typing import Any, Dict, List, Optional, Tuple, NamedTuple
+from typing import Any, Dict, List, Optional, Tuple
+
 from django.db.models import Exists, OuterRef, Q, QuerySet
-from arches.app.models import models as arches_models
 
 from arches_search.utils.advanced_search.literal_clause_evaluator import (
     LiteralClauseEvaluator,
 )
 from arches_search.utils.advanced_search.related_clause_evaluator import (
     RelatedClauseEvaluator,
-)
-from arches_search.utils.advanced_search.resource_scope_evaluator import (
-    ResourceScopeEvaluator,
 )
 from arches_search.utils.advanced_search.tile_scope_evaluator import (
     TileScopeEvaluator,
@@ -25,16 +22,8 @@ from arches_search.utils.advanced_search.constants import (
     LOGIC_OR,
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
-    SCOPE_TILE,
 )
-
-
-class ReduceResult(NamedTuple):
-    relationshipless_q: Optional[Q]
-    constrained_child_rows: Optional[QuerySet]
-    had_inner_filters: bool
-    has_child_targeting_clause: bool
-    literal_ok_rows: Optional[QuerySet]
+from arches_search.utils.advanced_search.specs import ClauseReductionResult
 
 
 class ClauseReducer:
@@ -42,24 +31,17 @@ class ClauseReducer:
         self,
         literal_clause_evaluator: LiteralClauseEvaluator,
         related_clause_evaluator: RelatedClauseEvaluator,
+        tile_scope_evaluator: TileScopeEvaluator,
         facet_registry,
         path_navigator,
         node_alias_datatype_registry: NodeAliasDatatypeRegistry,
     ) -> None:
         self.literal_clause_evaluator = literal_clause_evaluator
         self.related_clause_evaluator = related_clause_evaluator
+        self.tile_scope_evaluator = tile_scope_evaluator
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
         self.node_alias_datatype_registry = node_alias_datatype_registry
-        self.resource_scope_evaluator = ResourceScopeEvaluator(
-            literal_clause_evaluator=self.literal_clause_evaluator,
-            related_clause_evaluator=self.related_clause_evaluator,
-        )
-        self.tile_scope_evaluator = TileScopeEvaluator(
-            literal_clause_evaluator=self.literal_clause_evaluator,
-            facet_registry=self.facet_registry,
-            path_navigator=self.path_navigator,
-        )
 
     def build_anchor_literal_q(
         self,
@@ -110,76 +92,17 @@ class ClauseReducer:
     def reduce(
         self,
         group_payload: Dict[str, Any],
-        traversal_context: Optional[Dict[str, Any]] = None,
-        child_rows: Optional[QuerySet] = None,
+        traversal_context: Dict[str, Any],
+        child_rows: QuerySet,
         logic: str = LOGIC_AND,
-    ) -> ReduceResult:
-        relationship_path = (group_payload.get("relationship") or {}).get("path")
-
-        if (
-            not bool(relationship_path)
-            and child_rows is None
-            and traversal_context is None
-        ):
-            return self._reduce_top_level_no_relationship_clauses(group_payload)
-
-        if child_rows is not None and traversal_context is not None:
-            (
-                constrained_child_rows,
-                had_inner_filters,
-                has_child_targeting_clause,
-                literal_ok_rows,
-            ) = self._reduce_child_side(
-                group_payload, traversal_context, child_rows, logic
-            )
-
-            return ReduceResult(
-                relationshipless_q=None,
-                constrained_child_rows=constrained_child_rows,
-                had_inner_filters=had_inner_filters,
-                has_child_targeting_clause=has_child_targeting_clause,
-                literal_ok_rows=literal_ok_rows,
-            )
-
-        return ReduceResult(
+    ) -> ClauseReductionResult:
+        constrained_child_rows, had_inner_filters = self._reduce_child_side(
+            group_payload, traversal_context, child_rows, logic
+        )
+        return ClauseReductionResult(
             relationshipless_q=None,
-            constrained_child_rows=None,
-            had_inner_filters=False,
-            has_child_targeting_clause=False,
-            literal_ok_rows=None,
-        )
-
-    def _reduce_top_level_no_relationship_clauses(
-        self, group_payload: Dict[str, Any]
-    ) -> ReduceResult:
-        scope_for_group = group_payload["scope"]
-
-        if scope_for_group == SCOPE_TILE:
-            tiles_for_anchor_resource = arches_models.Tile.objects.filter(
-                resourceinstance_id=OuterRef("resourceinstanceid")
-            )
-            relationshipless_q = self.tile_scope_evaluator.compose_group_predicate(
-                group_payload=group_payload,
-                tiles_for_anchor_resource=tiles_for_anchor_resource,
-            )
-            return ReduceResult(
-                relationshipless_q=relationshipless_q,
-                constrained_child_rows=None,
-                had_inner_filters=False,
-                has_child_targeting_clause=False,
-                literal_ok_rows=None,
-            )
-
-        relationshipless_q = self.resource_scope_evaluator.compose_group_predicate(
-            group_payload
-        )
-
-        return ReduceResult(
-            relationshipless_q=relationshipless_q,
-            constrained_child_rows=None,
-            had_inner_filters=False,
-            has_child_targeting_clause=False,
-            literal_ok_rows=None,
+            constrained_child_rows=constrained_child_rows,
+            had_inner_filters=had_inner_filters,
         )
 
     def _reduce_child_side(
@@ -188,10 +111,9 @@ class ClauseReducer:
         traversal_context: Dict[str, Any],
         child_rows: QuerySet,
         logic: str,
-    ) -> Tuple[QuerySet, bool, bool, Optional[QuerySet]]:
+    ) -> Tuple[QuerySet, bool]:
         constrained_child_rows = child_rows
         had_inner_filters = False
-        literal_ok_rows: Optional[QuerySet] = None
 
         if logic == LOGIC_AND:
             constrained_child_rows, applied_and = self._apply_and_literals_to_children(
@@ -239,27 +161,7 @@ class ClauseReducer:
         if applied_related:
             had_inner_filters = True
 
-        has_child_targeting_clause = any(
-            clause_payload["type"] == CLAUSE_TYPE_RELATED
-            for clause_payload in group_payload["clauses"]
-        )
-
-        if (
-            traversal_context["is_inverse"]
-            and len(traversal_context.get("path_segments") or []) == 1
-        ):
-            literal_ok_rows = self.literal_clause_evaluator.compute_child_rows(
-                group_payload=group_payload,
-                correlate_field=traversal_context["child_id_field"],
-                terminal_graph_slug=traversal_context["terminal_graph_slug"],
-            )
-
-        return (
-            constrained_child_rows,
-            had_inner_filters,
-            has_child_targeting_clause,
-            literal_ok_rows,
-        )
+        return constrained_child_rows, had_inner_filters
 
     def _apply_and_literals_to_children(
         self,
@@ -427,8 +329,7 @@ class ClauseReducer:
                 ):
                     continue
 
-            presence_expression = self.related_clause_evaluator.evaluate(
-                mode="child",
+            presence_expression = self.related_clause_evaluator.evaluate_at_child(
                 clause_payload=clause_payload,
                 traversal_context=traversal_context,
             )
