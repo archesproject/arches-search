@@ -24,11 +24,12 @@ from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
     BooleanSearch,
+    DateRangeSearch,
+    DateSearch,
+    FileListSearch,
     GeometrySearch,
     NumericSearch,
     TermSearch,
-    DateRangeSearch,
-    DateSearch,
     UUIDSearch,
 )
 
@@ -66,6 +67,7 @@ class Command(BaseCommand):
             DateRangeSearch: [],
             BooleanSearch: [],
             GeometrySearch: [],
+            FileListSearch: [],
         }
 
         print("Calculating index values")
@@ -105,3 +107,4 @@ class Command(BaseCommand):
         BooleanSearch.objects.all().delete()
         UUIDSearch.objects.all().delete()
         GeometrySearch.objects.all().delete()
+        FileListSearch.objects.all().delete()

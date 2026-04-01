@@ -18,6 +18,11 @@ from arches_search.utils.advanced_search.advanced_search import (
 class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
+        cls.modified_2024_01_10 = 1704844800000
+        cls.modified_2024_01_15 = 1705276800000
+        cls.modified_2024_01_20 = 1705708800000
+        cls.modified_2024_01_31 = 1706659200000
+
         size_suffix = uuid.uuid4().hex[:8]
         cls.size_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
@@ -37,78 +42,44 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
             nodegroup=cls.size_nodegroup,
             istopnode=True,
         )
-        cls.larger_size_resource = ResourceInstance(
+        cls.larger_size_resource = ResourceInstance.objects.create(
             resourceinstanceid=uuid.uuid4(),
             graph=cls.size_graph,
         )
-        cls.larger_size_resource.save()
-        cls.smaller_size_resource = ResourceInstance(
+        cls.smaller_size_resource = ResourceInstance.objects.create(
             resourceinstanceid=uuid.uuid4(),
             graph=cls.size_graph,
         )
-        cls.smaller_size_resource.save()
-        cls.larger_size_tile = TileModel(
+        TileModel.objects.create(
             tileid=uuid.uuid4(),
             nodegroup=cls.size_nodegroup,
             resourceinstance=cls.larger_size_resource,
-            data={str(cls.size_file_list_node.nodeid): [{"name": "11"}]},
+            data={
+                str(cls.size_file_list_node.nodeid): [
+                    {
+                        "name": "large_invoice.pdf",
+                        "size": 11,
+                        "lastModified": cls.modified_2024_01_20,
+                    }
+                ]
+            },
             provisionaledits=None,
         )
-        cls.larger_size_tile.save()
-        cls.smaller_size_tile = TileModel(
+        TileModel.objects.create(
             tileid=uuid.uuid4(),
             nodegroup=cls.size_nodegroup,
             resourceinstance=cls.smaller_size_resource,
-            data={str(cls.size_file_list_node.nodeid): [{"name": "2"}]},
+            data={
+                str(cls.size_file_list_node.nodeid): [
+                    {
+                        "name": "small_note.txt",
+                        "size": 2,
+                        "lastModified": cls.modified_2024_01_10,
+                    }
+                ]
+            },
             provisionaledits=None,
         )
-        cls.smaller_size_tile.save()
-
-        count_suffix = uuid.uuid4().hex[:8]
-        cls.count_graph = GraphModel.objects.create(
-            graphid=uuid.uuid4(),
-            slug=f"facet_file_list_count_{count_suffix}",
-            isresource=True,
-        )
-        cls.count_nodegroup = NodeGroup.objects.create(
-            nodegroupid=uuid.uuid4(),
-            cardinality="1",
-        )
-        cls.count_file_list_node = Node.objects.create(
-            nodeid=uuid.uuid4(),
-            name=f"value_{count_suffix}",
-            alias=f"value_{count_suffix}",
-            datatype="file-list",
-            graph=cls.count_graph,
-            nodegroup=cls.count_nodegroup,
-            istopnode=True,
-        )
-        cls.larger_count_resource = ResourceInstance(
-            resourceinstanceid=uuid.uuid4(),
-            graph=cls.count_graph,
-        )
-        cls.larger_count_resource.save()
-        cls.smaller_count_resource = ResourceInstance(
-            resourceinstanceid=uuid.uuid4(),
-            graph=cls.count_graph,
-        )
-        cls.smaller_count_resource.save()
-        cls.larger_count_tile = TileModel(
-            tileid=uuid.uuid4(),
-            nodegroup=cls.count_nodegroup,
-            resourceinstance=cls.larger_count_resource,
-            data={str(cls.count_file_list_node.nodeid): [{"name": "10"}]},
-            provisionaledits=None,
-        )
-        cls.larger_count_tile.save()
-        cls.smaller_count_tile = TileModel(
-            tileid=uuid.uuid4(),
-            nodegroup=cls.count_nodegroup,
-            resourceinstance=cls.smaller_count_resource,
-            data={str(cls.count_file_list_node.nodeid): [{"name": "2"}]},
-            provisionaledits=None,
-        )
-        cls.smaller_count_tile.save()
 
         name_suffix = uuid.uuid4().hex[:8]
         cls.name_graph = GraphModel.objects.create(
@@ -129,32 +100,32 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
             nodegroup=cls.name_nodegroup,
             istopnode=True,
         )
-        cls.invoice_resource = ResourceInstance(
+        cls.invoice_resource = ResourceInstance.objects.create(
             resourceinstanceid=uuid.uuid4(),
             graph=cls.name_graph,
         )
-        cls.invoice_resource.save()
-        cls.notes_resource = ResourceInstance(
+        cls.notes_resource = ResourceInstance.objects.create(
             resourceinstanceid=uuid.uuid4(),
             graph=cls.name_graph,
         )
-        cls.notes_resource.save()
-        cls.invoice_tile = TileModel(
+        TileModel.objects.create(
             tileid=uuid.uuid4(),
             nodegroup=cls.name_nodegroup,
             resourceinstance=cls.invoice_resource,
-            data={str(cls.name_file_list_node.nodeid): [{"name": "invoice_2024.pdf"}]},
+            data={
+                str(cls.name_file_list_node.nodeid): [
+                    {"name": "invoice_2024.pdf", "size": 11}
+                ]
+            },
             provisionaledits=None,
         )
-        cls.invoice_tile.save()
-        cls.notes_tile = TileModel(
+        TileModel.objects.create(
             tileid=uuid.uuid4(),
             nodegroup=cls.name_nodegroup,
             resourceinstance=cls.notes_resource,
             data={str(cls.name_file_list_node.nodeid): [{"name": "notes.txt"}]},
             provisionaledits=None,
         )
-        cls.notes_tile.save()
 
         extension_suffix = uuid.uuid4().hex[:8]
         cls.extension_graph = GraphModel.objects.create(
@@ -175,32 +146,94 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
             nodegroup=cls.extension_nodegroup,
             istopnode=True,
         )
-        cls.pdf_extension_resource = ResourceInstance(
+        cls.pdf_extension_resource = ResourceInstance.objects.create(
             resourceinstanceid=uuid.uuid4(),
             graph=cls.extension_graph,
         )
-        cls.pdf_extension_resource.save()
-        cls.txt_extension_resource = ResourceInstance(
+        cls.txt_extension_resource = ResourceInstance.objects.create(
             resourceinstanceid=uuid.uuid4(),
             graph=cls.extension_graph,
         )
-        cls.txt_extension_resource.save()
-        cls.pdf_extension_tile = TileModel(
+        TileModel.objects.create(
             tileid=uuid.uuid4(),
             nodegroup=cls.extension_nodegroup,
             resourceinstance=cls.pdf_extension_resource,
-            data={str(cls.extension_file_list_node.nodeid): [{"name": "pdf"}]},
+            data={
+                str(cls.extension_file_list_node.nodeid): [
+                    {"name": "annual_report.pdf"}
+                ]
+            },
             provisionaledits=None,
         )
-        cls.pdf_extension_tile.save()
-        cls.txt_extension_tile = TileModel(
+        TileModel.objects.create(
             tileid=uuid.uuid4(),
             nodegroup=cls.extension_nodegroup,
             resourceinstance=cls.txt_extension_resource,
-            data={str(cls.extension_file_list_node.nodeid): [{"name": "txt"}]},
+            data={
+                str(cls.extension_file_list_node.nodeid): [
+                    {"name": "meeting_notes.txt"}
+                ]
+            },
             provisionaledits=None,
         )
-        cls.txt_extension_tile.save()
+
+        modified_suffix = uuid.uuid4().hex[:8]
+        cls.modified_graph = GraphModel.objects.create(
+            graphid=uuid.uuid4(),
+            slug=f"facet_file_list_modified_{modified_suffix}",
+            isresource=True,
+        )
+        cls.modified_nodegroup = NodeGroup.objects.create(
+            nodegroupid=uuid.uuid4(),
+            cardinality="1",
+        )
+        cls.modified_file_list_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name=f"value_{modified_suffix}",
+            alias=f"value_{modified_suffix}",
+            datatype="file-list",
+            graph=cls.modified_graph,
+            nodegroup=cls.modified_nodegroup,
+            istopnode=True,
+        )
+        cls.earlier_modified_resource = ResourceInstance.objects.create(
+            resourceinstanceid=uuid.uuid4(),
+            graph=cls.modified_graph,
+        )
+        cls.later_modified_resource = ResourceInstance.objects.create(
+            resourceinstanceid=uuid.uuid4(),
+            graph=cls.modified_graph,
+        )
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            nodegroup=cls.modified_nodegroup,
+            resourceinstance=cls.earlier_modified_resource,
+            data={
+                str(cls.modified_file_list_node.nodeid): [
+                    {
+                        "name": "field_photo.jpg",
+                        "size": 20,
+                        "lastModified": cls.modified_2024_01_15,
+                    }
+                ]
+            },
+            provisionaledits=None,
+        )
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            nodegroup=cls.modified_nodegroup,
+            resourceinstance=cls.later_modified_resource,
+            data={
+                str(cls.modified_file_list_node.nodeid): [
+                    {
+                        "name": "scan.tif",
+                        "size": 22,
+                        "lastModified": cls.modified_2024_01_31,
+                    }
+                ]
+            },
+            provisionaledits=None,
+        )
 
         presence_suffix = uuid.uuid4().hex[:8]
         cls.presence_graph = GraphModel.objects.create(
@@ -221,181 +254,123 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
             nodegroup=cls.presence_nodegroup,
             istopnode=True,
         )
-        cls.resource_with_file = ResourceInstance(
+        cls.resource_with_file = ResourceInstance.objects.create(
             resourceinstanceid=uuid.uuid4(),
             graph=cls.presence_graph,
         )
-        cls.resource_with_file.save()
-        cls.resource_without_file = ResourceInstance(
+        cls.resource_without_file = ResourceInstance.objects.create(
             resourceinstanceid=uuid.uuid4(),
             graph=cls.presence_graph,
         )
-        cls.resource_without_file.save()
-        cls.tile_with_file = TileModel(
+        TileModel.objects.create(
             tileid=uuid.uuid4(),
             nodegroup=cls.presence_nodegroup,
             resourceinstance=cls.resource_with_file,
             data={
-                str(cls.presence_file_list_node.nodeid): [{"name": "invoice_2024.pdf"}]
+                str(cls.presence_file_list_node.nodeid): [
+                    {
+                        "name": "invoice_2024.pdf",
+                        "lastModified": cls.modified_2024_01_20,
+                    }
+                ]
             },
             provisionaledits=None,
         )
-        cls.tile_with_file.save()
-        cls.tile_without_file = TileModel(
+        TileModel.objects.create(
             tileid=uuid.uuid4(),
             nodegroup=cls.presence_nodegroup,
             resourceinstance=cls.resource_without_file,
             data={},
             provisionaledits=None,
         )
-        cls.tile_without_file.save()
 
         call_command("db_index", "reindex_database")
 
-    # def test_file_size_greater_than_prefers_the_larger_indexed_value(self):
-    #     """This checks that the file size greater than facet returns only the resource whose indexed file-list value sits above the requested threshold."""
-    #     payload = {
-    #         "graph_slug": cls.size_graph.slug,
-    #         "scope": "RESOURCE",
-    #         "logic": "AND",
-    #         "clauses": [
-    #             {
-    #                 "type": "LITERAL",
-    #                 "quantifier": "ANY",
-    #                 "subject": [[cls.size_graph.slug, cls.size_file_list_node.alias]],
-    #                 "operator": "FILE_SIZE_GREATER_THAN",
-    #                 "operands": [{"type": "LITERAL", "value": 10}],
-    #             }
-    #         ],
-    #         "groups": [],
-    #         "aggregations": [],
-    #         "relationship": None,
-    #     }
-    #
-    #     result = set(
-    #         AdvancedSearchQueryCompiler(payload)
-    #         .compile()
-    #         .values_list("resourceinstanceid", flat=True)
-    #     )
-    #
-    #     cls.assertEqual(result, {cls.larger_size_resource.resourceinstanceid})
-    #
-    # def test_file_size_less_than_prefers_the_smaller_indexed_value(self):
-    #     """This checks that the file size less than facet returns only the resource whose indexed file-list value sits below the requested threshold."""
-    #     payload = {
-    #         "graph_slug": cls.size_graph.slug,
-    #         "scope": "RESOURCE",
-    #         "logic": "AND",
-    #         "clauses": [
-    #             {
-    #                 "type": "LITERAL",
-    #                 "quantifier": "ANY",
-    #                 "subject": [[cls.size_graph.slug, cls.size_file_list_node.alias]],
-    #                 "operator": "FILE_SIZE_LESS_THAN",
-    #                 "operands": [{"type": "LITERAL", "value": 10}],
-    #             }
-    #         ],
-    #         "groups": [],
-    #         "aggregations": [],
-    #         "relationship": None,
-    #     }
-    #
-    #     result = set(
-    #         AdvancedSearchQueryCompiler(payload)
-    #         .compile()
-    #         .values_list("resourceinstanceid", flat=True)
-    #     )
-    #
-    #     cls.assertEqual(result, {cls.smaller_size_resource.resourceinstanceid})
-    #
-    # def test_file_size_between_prefers_the_value_inside_the_requested_band(self):
-    #     """This checks that the file size between facet returns only the resource whose indexed file-list value lands inside the requested band."""
-    #     payload = {
-    #         "graph_slug": cls.size_graph.slug,
-    #         "scope": "RESOURCE",
-    #         "logic": "AND",
-    #         "clauses": [
-    #             {
-    #                 "type": "LITERAL",
-    #                 "quantifier": "ANY",
-    #                 "subject": [[cls.size_graph.slug, cls.size_file_list_node.alias]],
-    #                 "operator": "FILE_SIZE_BETWEEN",
-    #                 "operands": [
-    #                     {"type": "LITERAL", "value": 10},
-    #                     {"type": "LITERAL", "value": 30},
-    #                 ],
-    #             }
-    #         ],
-    #         "groups": [],
-    #         "aggregations": [],
-    #         "relationship": None,
-    #     }
-    #
-    #     result = set(
-    #         AdvancedSearchQueryCompiler(payload)
-    #         .compile()
-    #         .values_list("resourceinstanceid", flat=True)
-    #     )
-    #
-    #     cls.assertEqual(result, {cls.larger_size_resource.resourceinstanceid})
-    #
-    # def test_file_count_greater_than_prefers_the_larger_indexed_value(self):
-    #     """This checks that the file count greater than facet returns only the resource whose indexed file-list value sits above the requested threshold."""
-    #     payload = {
-    #         "graph_slug": cls.count_graph.slug,
-    #         "scope": "RESOURCE",
-    #         "logic": "AND",
-    #         "clauses": [
-    #             {
-    #                 "type": "LITERAL",
-    #                 "quantifier": "ANY",
-    #                 "subject": [[cls.count_graph.slug, cls.count_file_list_node.alias]],
-    #                 "operator": "FILE_COUNT_GREATER_THAN",
-    #                 "operands": [{"type": "LITERAL", "value": 9}],
-    #             }
-    #         ],
-    #         "groups": [],
-    #         "aggregations": [],
-    #         "relationship": None,
-    #     }
-    #
-    #     result = set(
-    #         AdvancedSearchQueryCompiler(payload)
-    #         .compile()
-    #         .values_list("resourceinstanceid", flat=True)
-    #     )
-    #
-    #     cls.assertEqual(result, {cls.larger_count_resource.resourceinstanceid})
-    #
-    # def test_file_count_less_than_prefers_the_smaller_indexed_value(self):
-    #     """This checks that the file count less than facet returns only the resource whose indexed file-list value sits below the requested threshold."""
-    #     payload = {
-    #         "graph_slug": cls.count_graph.slug,
-    #         "scope": "RESOURCE",
-    #         "logic": "AND",
-    #         "clauses": [
-    #             {
-    #                 "type": "LITERAL",
-    #                 "quantifier": "ANY",
-    #                 "subject": [[cls.count_graph.slug, cls.count_file_list_node.alias]],
-    #                 "operator": "FILE_COUNT_LESS_THAN",
-    #                 "operands": [{"type": "LITERAL", "value": 9}],
-    #             }
-    #         ],
-    #         "groups": [],
-    #         "aggregations": [],
-    #         "relationship": None,
-    #     }
-    #
-    #     result = set(
-    #         AdvancedSearchQueryCompiler(payload)
-    #         .compile()
-    #         .values_list("resourceinstanceid", flat=True)
-    #     )
-    #
-    #     cls.assertEqual(result, {cls.smaller_count_resource.resourceinstanceid})
+    def test_file_size_greater_than_prefers_the_larger_indexed_value(self):
+        payload = {
+            "graph_slug": self.size_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [[self.size_graph.slug, self.size_file_list_node.alias]],
+                    "operator": "FILE_SIZE_GREATER_THAN",
+                    "operands": [{"type": "LITERAL", "value": 10}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.larger_size_resource.resourceinstanceid})
+
+    def test_file_size_less_than_prefers_the_smaller_indexed_value(self):
+        payload = {
+            "graph_slug": self.size_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [[self.size_graph.slug, self.size_file_list_node.alias]],
+                    "operator": "FILE_SIZE_LESS_THAN",
+                    "operands": [{"type": "LITERAL", "value": 10}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.smaller_size_resource.resourceinstanceid})
+
+    def test_file_size_between_prefers_the_value_inside_the_requested_band(self):
+        payload = {
+            "graph_slug": self.size_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [[self.size_graph.slug, self.size_file_list_node.alias]],
+                    "operator": "FILE_SIZE_BETWEEN",
+                    "operands": [
+                        {"type": "LITERAL", "value": 10},
+                        {"type": "LITERAL", "value": 30},
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.larger_size_resource.resourceinstanceid})
+
     def test_file_name_like_matches_the_requested_filename_text(self):
-        """This checks that the file name like facet returns only the resource whose indexed file name contains the requested text."""
         payload = {
             "graph_slug": self.name_graph.slug,
             "scope": "RESOURCE",
@@ -423,7 +398,6 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
         self.assertEqual(result, {self.invoice_resource.resourceinstanceid})
 
     def test_file_extension_equals_matches_the_requested_extension_value(self):
-        """This checks that the file extension facet returns only the resource whose indexed file-list value exactly matches the requested extension text."""
         payload = {
             "graph_slug": self.extension_graph.slug,
             "scope": "RESOURCE",
@@ -452,8 +426,101 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.pdf_extension_resource.resourceinstanceid})
 
+    def test_file_modified_before_matches_the_earlier_file(self):
+        payload = {
+            "graph_slug": self.modified_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [
+                        [self.modified_graph.slug, self.modified_file_list_node.alias]
+                    ],
+                    "operator": "FILE_MODIFIED_BEFORE",
+                    "operands": [
+                        {"type": "LITERAL", "value": self.modified_2024_01_20}
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.earlier_modified_resource.resourceinstanceid})
+
+    def test_file_modified_after_matches_the_later_file(self):
+        payload = {
+            "graph_slug": self.modified_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [
+                        [self.modified_graph.slug, self.modified_file_list_node.alias]
+                    ],
+                    "operator": "FILE_MODIFIED_AFTER",
+                    "operands": [
+                        {"type": "LITERAL", "value": self.modified_2024_01_20}
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.later_modified_resource.resourceinstanceid})
+
+    def test_file_modified_between_matches_the_in_range_file(self):
+        payload = {
+            "graph_slug": self.modified_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [
+                        [self.modified_graph.slug, self.modified_file_list_node.alias]
+                    ],
+                    "operator": "FILE_MODIFIED_BETWEEN",
+                    "operands": [
+                        {"type": "LITERAL", "value": self.modified_2024_01_10},
+                        {"type": "LITERAL", "value": self.modified_2024_01_20},
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.earlier_modified_resource.resourceinstanceid})
+
     def test_has_no_value_matches_the_resource_without_a_file_list_row(self):
-        """This checks that the has no value facet returns only the resource whose file-list tile indexed no value at all."""
         payload = {
             "graph_slug": self.presence_graph.slug,
             "scope": "RESOURCE",
@@ -483,7 +550,6 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
         self.assertEqual(result, {self.resource_without_file.resourceinstanceid})
 
     def test_has_any_value_matches_the_resource_with_a_file_list_row(self):
-        """This checks that the has any value facet returns only the resource whose file-list tile indexed a real value."""
         payload = {
             "graph_slug": self.presence_graph.slug,
             "scope": "RESOURCE",

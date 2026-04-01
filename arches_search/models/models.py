@@ -335,6 +335,65 @@ class GeometrySearch(models.Model):
         ]
 
 
+class FileListSearch(models.Model):
+    id = models.AutoField(primary_key=True)
+    tileid = models.ForeignKey(
+        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+    )
+    resourceinstanceid = models.ForeignKey(
+        "models.ResourceInstance",
+        on_delete=models.CASCADE,
+        db_column="resourceinstanceid",
+    )
+    graph_slug = models.TextField()
+    node_alias = models.TextField()
+    datatype = models.TextField()
+    value = models.TextField(null=True, blank=True)
+    extension = models.TextField(null=True, blank=True)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    modified_at = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "arches_search_file_list"
+        constraints = []
+        indexes = [
+            models.Index(fields=["resourceinstanceid"], name="afls_resource_idx"),
+            models.Index(fields=["tileid"], name="afls_tile_idx"),
+            models.Index(fields=["datatype"], name="afls_datatype_idx"),
+            models.Index(fields=["node_alias"], name="afls_node_alias_idx"),
+            models.Index(fields=["extension"], name="afls_extension_idx"),
+            models.Index(fields=["file_size"], name="afls_file_size_idx"),
+            models.Index(fields=["modified_at"], name="afls_modified_at_idx"),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"],
+                name="afls_scope_idx",
+            ),
+            models.Index(
+                fields=["graph_slug", "node_alias", "extension"],
+                name="afls_subject_ext_idx",
+            ),
+            models.Index(
+                fields=["graph_slug", "node_alias", "file_size"],
+                name="afls_subject_size_idx",
+            ),
+            models.Index(
+                fields=["graph_slug", "node_alias", "modified_at"],
+                name="afls_subject_mod_idx",
+            ),
+            GinIndex(
+                fields=["value"],
+                name="afls_value_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["graph_slug", "node_alias", "value"],
+                name="afls_subject_name_trgm",
+                opclasses=["text_ops", "text_ops", "gin_trgm_ops"],
+            ),
+        ]
+
+
 class SavedSearch(models.Model):
     savedsearchid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     name = models.CharField(max_length=255)

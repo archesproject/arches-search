@@ -22,8 +22,9 @@ from arches.app.models.models import (
 )
 
 from arches_search.indexing.index_from_tile import index_from_tile
+from arches_search.indexing.indexers.file_list import FileListIndexing
 from arches_search.indexing.indexers.string import StringIndexing
-from arches_search.models.models import TermSearch
+from arches_search.models.models import FileListSearch, TermSearch
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +128,74 @@ class LongStringIndexingTests(IndexingTestCase):
         result[0].save()
         saved = TermSearch.objects.get(pk=result[0].pk)
         self.assertEqual(saved.value, self.long_string)
+
+
+# ---------------------------------------------------------------------------
+# File-list indexing tests
+# ---------------------------------------------------------------------------
+
+
+class FileListIndexingTests(IndexingTestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.file_list_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="test_file_list_node",
+            alias="test_file_list_node",
+            datatype="file-list",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+        )
+
+    def test_file_list_indexer_writes_file_specific_rows(self):
+        tile = self._make_tile(
+            self.file_list_node,
+            [
+                {
+                    "name": "invoice_2024.pdf",
+                    "size": 11,
+                    "lastModified": 1705708800000,
+                },
+                {
+                    "name": "meeting_notes.txt",
+                    "size": 2,
+                    "lastModified": 1704844800.0,
+                },
+            ],
+        )
+        indexer = FileListIndexing()
+        result = indexer.index(tile, self.file_list_node)
+
+        file_list_rows = [row for row in result if isinstance(row, FileListSearch)]
+        self.assertEqual(len(file_list_rows), 2)
+
+        for row in file_list_rows:
+            row.save()
+
+        saved = list(
+            FileListSearch.objects.filter(tileid=tile.tileid)
+            .order_by("value")
+            .values("value", "extension", "file_size", "modified_at")
+        )
+        self.assertEqual(
+            saved,
+            [
+                {
+                    "value": "invoice_2024.pdf",
+                    "extension": "pdf",
+                    "file_size": 11,
+                    "modified_at": 1705708800000,
+                },
+                {
+                    "value": "meeting_notes.txt",
+                    "extension": "txt",
+                    "file_size": 2,
+                    "modified_at": 1704844800.0,
+                },
+            ],
+        )
 
 
 # ---------------------------------------------------------------------------
