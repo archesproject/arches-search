@@ -19,7 +19,7 @@ const emit = defineEmits<{
     (event: "search", term: string): void;
 }>();
 
-const suggestions = ref<Array<{ text: string; type: string; value: string }>>(
+const suggestions = ref<Array<{ text: string; datatype: string; value: string }>>(
     [],
 );
 
@@ -35,9 +35,9 @@ function onSearch() {
     emit("search", props.modelValue);
 }
 
-function onSelect(event: { value: { text: string } }) {
-    emit("update:modelValue", event.value.text);
-    emit("search", event.value.text);
+function onSelect(event: { value: { text: string; datatype: string; value: string } }) {
+    emit("update:modelValue", event.value.value);
+    emit("search", event.value.value);
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -62,7 +62,7 @@ function onKeydown(e: KeyboardEvent) {
                 @keydown="onKeydown"
             >
                 <template #option="{ option }">
-                    <span>{{ option.text }}</span>
+                    <span>{{ option.value }}</span>
                 </template>
             </AutoComplete>
         </span>

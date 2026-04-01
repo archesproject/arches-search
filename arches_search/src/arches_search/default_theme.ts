@@ -74,10 +74,10 @@ const ArchesSearchPreset = definePreset(Aura, {
         colorScheme: {
             light: {
                 // primary: {
-                //     color: "{sky.700}",
+                //     color: "{amber.600}",
                 //     inverseColor: "#ffffff",
-                //     hoverColor: "{sky.900}",
-                //     activeColor: "{sky.800}",
+                //     hoverColor: "{amber.900}",
+                //     activeColor: "{amber.800}",
                 // },
                 // highlight: {
                 //     background: "{sky.300}",
@@ -88,10 +88,10 @@ const ArchesSearchPreset = definePreset(Aura, {
             },
             dark: {
                 // primary: {
-                //     color: "{sky.300}",
-                //     inverseColor: "{sky.950}",
-                //     hoverColor: "{sky.100}",
-                //     activeColor: "{sky.200}",
+                //     color: "{amber.400}",
+                //     inverseColor: "{amber.950}",
+                //     hoverColor: "{amber.100}",
+                //     activeColor: "{amber.200}",
                 // },
                 // highlight: {
                 //     background: "rgba(250, 250, 250, .16)",
