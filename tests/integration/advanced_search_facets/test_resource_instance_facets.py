@@ -16,309 +16,310 @@ from arches_search.utils.advanced_search.advanced_search import (
 
 
 class ResourceInstanceAdvancedSearchFacetIntegrationTestCase(TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpTestData(cls):
         target_suffix = uuid.uuid4().hex[:8]
-        self.target_graph = GraphModel.objects.create(
+        cls.target_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_resource_instance_targets_{target_suffix}",
             isresource=True,
         )
 
-        self.reference_a_resource = ResourceInstance(
+        cls.reference_a_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.target_graph,
+            graph=cls.target_graph,
         )
-        self.reference_a_resource.save()
-        self.reference_b_resource = ResourceInstance(
+        cls.reference_a_resource.save()
+        cls.reference_b_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.target_graph,
+            graph=cls.target_graph,
         )
-        self.reference_b_resource.save()
-        self.reference_c_resource = ResourceInstance(
+        cls.reference_b_resource.save()
+        cls.reference_c_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.target_graph,
+            graph=cls.target_graph,
         )
-        self.reference_c_resource.save()
+        cls.reference_c_resource.save()
 
-        self.link_to_a = {
-            "resourceId": str(self.reference_a_resource.resourceinstanceid),
+        cls.link_to_a = {
+            "resourceId": str(cls.reference_a_resource.resourceinstanceid),
             "ontologyProperty": "",
             "inverseOntologyProperty": "",
             "resourceXresourceId": str(uuid.uuid4()),
         }
-        self.link_to_b = {
-            "resourceId": str(self.reference_b_resource.resourceinstanceid),
+        cls.link_to_b = {
+            "resourceId": str(cls.reference_b_resource.resourceinstanceid),
             "ontologyProperty": "",
             "inverseOntologyProperty": "",
             "resourceXresourceId": str(uuid.uuid4()),
         }
-        self.link_to_c = {
-            "resourceId": str(self.reference_c_resource.resourceinstanceid),
+        cls.link_to_c = {
+            "resourceId": str(cls.reference_c_resource.resourceinstanceid),
             "ontologyProperty": "",
             "inverseOntologyProperty": "",
             "resourceXresourceId": str(uuid.uuid4()),
         }
 
         any_suffix = uuid.uuid4().hex[:8]
-        self.any_graph = GraphModel.objects.create(
+        cls.any_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_resource_instance_any_{any_suffix}",
             isresource=True,
         )
-        self.any_nodegroup = NodeGroup.objects.create(
+        cls.any_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.any_resource_instance_node = Node.objects.create(
+        cls.any_resource_instance_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{any_suffix}",
             alias=f"value_{any_suffix}",
             datatype="resource-instance",
-            graph=self.any_graph,
-            nodegroup=self.any_nodegroup,
+            graph=cls.any_graph,
+            nodegroup=cls.any_nodegroup,
             istopnode=True,
             config={},
         )
 
-        self.any_match_resource = ResourceInstance(
+        cls.any_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.any_graph,
+            graph=cls.any_graph,
         )
-        self.any_match_resource.save()
-        self.any_other_resource = ResourceInstance(
+        cls.any_match_resource.save()
+        cls.any_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.any_graph,
+            graph=cls.any_graph,
         )
-        self.any_other_resource.save()
+        cls.any_other_resource.save()
 
-        self.any_match_tile = TileModel(
+        cls.any_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.any_nodegroup,
-            resourceinstance=self.any_match_resource,
-            data={str(self.any_resource_instance_node.nodeid): [self.link_to_a]},
+            nodegroup=cls.any_nodegroup,
+            resourceinstance=cls.any_match_resource,
+            data={str(cls.any_resource_instance_node.nodeid): [cls.link_to_a]},
             provisionaledits=None,
         )
-        self.any_match_tile.save()
-        self.any_other_tile = TileModel(
+        cls.any_match_tile.save()
+        cls.any_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.any_nodegroup,
-            resourceinstance=self.any_other_resource,
-            data={str(self.any_resource_instance_node.nodeid): [self.link_to_c]},
+            nodegroup=cls.any_nodegroup,
+            resourceinstance=cls.any_other_resource,
+            data={str(cls.any_resource_instance_node.nodeid): [cls.link_to_c]},
             provisionaledits=None,
         )
-        self.any_other_tile.save()
+        cls.any_other_tile.save()
 
         all_suffix = uuid.uuid4().hex[:8]
-        self.all_graph = GraphModel.objects.create(
+        cls.all_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_resource_instance_all_{all_suffix}",
             isresource=True,
         )
-        self.all_nodegroup = NodeGroup.objects.create(
+        cls.all_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.all_resource_instance_node = Node.objects.create(
+        cls.all_resource_instance_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{all_suffix}",
             alias=f"value_{all_suffix}",
             datatype="resource-instance",
-            graph=self.all_graph,
-            nodegroup=self.all_nodegroup,
+            graph=cls.all_graph,
+            nodegroup=cls.all_nodegroup,
             istopnode=True,
             config={},
         )
 
-        self.all_match_resource = ResourceInstance(
+        cls.all_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.all_graph,
+            graph=cls.all_graph,
         )
-        self.all_match_resource.save()
-        self.all_other_resource = ResourceInstance(
+        cls.all_match_resource.save()
+        cls.all_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.all_graph,
+            graph=cls.all_graph,
         )
-        self.all_other_resource.save()
+        cls.all_other_resource.save()
 
-        self.all_match_tile = TileModel(
+        cls.all_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.all_nodegroup,
-            resourceinstance=self.all_match_resource,
+            nodegroup=cls.all_nodegroup,
+            resourceinstance=cls.all_match_resource,
             data={
-                str(self.all_resource_instance_node.nodeid): [
-                    self.link_to_a,
-                    self.link_to_b,
+                str(cls.all_resource_instance_node.nodeid): [
+                    cls.link_to_a,
+                    cls.link_to_b,
                 ]
             },
             provisionaledits=None,
         )
-        self.all_match_tile.save()
-        self.all_other_tile = TileModel(
+        cls.all_match_tile.save()
+        cls.all_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.all_nodegroup,
-            resourceinstance=self.all_other_resource,
-            data={str(self.all_resource_instance_node.nodeid): [self.link_to_a]},
+            nodegroup=cls.all_nodegroup,
+            resourceinstance=cls.all_other_resource,
+            data={str(cls.all_resource_instance_node.nodeid): [cls.link_to_a]},
             provisionaledits=None,
         )
-        self.all_other_tile.save()
+        cls.all_other_tile.save()
 
         only_suffix = uuid.uuid4().hex[:8]
-        self.only_graph = GraphModel.objects.create(
+        cls.only_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_resource_instance_only_{only_suffix}",
             isresource=True,
         )
-        self.only_nodegroup = NodeGroup.objects.create(
+        cls.only_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.only_resource_instance_node = Node.objects.create(
+        cls.only_resource_instance_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{only_suffix}",
             alias=f"value_{only_suffix}",
             datatype="resource-instance",
-            graph=self.only_graph,
-            nodegroup=self.only_nodegroup,
+            graph=cls.only_graph,
+            nodegroup=cls.only_nodegroup,
             istopnode=True,
             config={},
         )
 
-        self.only_match_resource = ResourceInstance(
+        cls.only_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.only_graph,
+            graph=cls.only_graph,
         )
-        self.only_match_resource.save()
-        self.only_other_resource = ResourceInstance(
+        cls.only_match_resource.save()
+        cls.only_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.only_graph,
+            graph=cls.only_graph,
         )
-        self.only_other_resource.save()
+        cls.only_other_resource.save()
 
-        self.only_match_tile = TileModel(
+        cls.only_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.only_nodegroup,
-            resourceinstance=self.only_match_resource,
+            nodegroup=cls.only_nodegroup,
+            resourceinstance=cls.only_match_resource,
             data={
-                str(self.only_resource_instance_node.nodeid): [
-                    self.link_to_a,
-                    self.link_to_b,
+                str(cls.only_resource_instance_node.nodeid): [
+                    cls.link_to_a,
+                    cls.link_to_b,
                 ]
             },
             provisionaledits=None,
         )
-        self.only_match_tile.save()
-        self.only_other_tile = TileModel(
+        cls.only_match_tile.save()
+        cls.only_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.only_nodegroup,
-            resourceinstance=self.only_other_resource,
+            nodegroup=cls.only_nodegroup,
+            resourceinstance=cls.only_other_resource,
             data={
-                str(self.only_resource_instance_node.nodeid): [
-                    self.link_to_a,
-                    self.link_to_b,
-                    self.link_to_c,
+                str(cls.only_resource_instance_node.nodeid): [
+                    cls.link_to_a,
+                    cls.link_to_b,
+                    cls.link_to_c,
                 ]
             },
             provisionaledits=None,
         )
-        self.only_other_tile.save()
+        cls.only_other_tile.save()
 
         none_suffix = uuid.uuid4().hex[:8]
-        self.none_graph = GraphModel.objects.create(
+        cls.none_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_resource_instance_none_{none_suffix}",
             isresource=True,
         )
-        self.none_nodegroup = NodeGroup.objects.create(
+        cls.none_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.none_resource_instance_node = Node.objects.create(
+        cls.none_resource_instance_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{none_suffix}",
             alias=f"value_{none_suffix}",
             datatype="resource-instance",
-            graph=self.none_graph,
-            nodegroup=self.none_nodegroup,
+            graph=cls.none_graph,
+            nodegroup=cls.none_nodegroup,
             istopnode=True,
             config={},
         )
 
-        self.none_match_resource = ResourceInstance(
+        cls.none_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.none_graph,
+            graph=cls.none_graph,
         )
-        self.none_match_resource.save()
-        self.none_other_resource = ResourceInstance(
+        cls.none_match_resource.save()
+        cls.none_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.none_graph,
+            graph=cls.none_graph,
         )
-        self.none_other_resource.save()
+        cls.none_other_resource.save()
 
-        self.none_match_tile = TileModel(
+        cls.none_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.none_nodegroup,
-            resourceinstance=self.none_match_resource,
-            data={str(self.none_resource_instance_node.nodeid): [self.link_to_c]},
+            nodegroup=cls.none_nodegroup,
+            resourceinstance=cls.none_match_resource,
+            data={str(cls.none_resource_instance_node.nodeid): [cls.link_to_c]},
             provisionaledits=None,
         )
-        self.none_match_tile.save()
-        self.none_other_tile = TileModel(
+        cls.none_match_tile.save()
+        cls.none_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.none_nodegroup,
-            resourceinstance=self.none_other_resource,
-            data={str(self.none_resource_instance_node.nodeid): [self.link_to_a]},
+            nodegroup=cls.none_nodegroup,
+            resourceinstance=cls.none_other_resource,
+            data={str(cls.none_resource_instance_node.nodeid): [cls.link_to_a]},
             provisionaledits=None,
         )
-        self.none_other_tile.save()
+        cls.none_other_tile.save()
 
         presence_suffix = uuid.uuid4().hex[:8]
-        self.presence_graph = GraphModel.objects.create(
+        cls.presence_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_resource_instance_presence_{presence_suffix}",
             isresource=True,
         )
-        self.presence_nodegroup = NodeGroup.objects.create(
+        cls.presence_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.presence_resource_instance_node = Node.objects.create(
+        cls.presence_resource_instance_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{presence_suffix}",
             alias=f"value_{presence_suffix}",
             datatype="resource-instance",
-            graph=self.presence_graph,
-            nodegroup=self.presence_nodegroup,
+            graph=cls.presence_graph,
+            nodegroup=cls.presence_nodegroup,
             istopnode=True,
             config={},
         )
 
-        self.resource_with_value = ResourceInstance(
+        cls.resource_with_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_with_value.save()
-        self.resource_without_value = ResourceInstance(
+        cls.resource_with_value.save()
+        cls.resource_without_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_without_value.save()
+        cls.resource_without_value.save()
 
-        self.tile_with_value = TileModel(
+        cls.tile_with_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_with_value,
-            data={str(self.presence_resource_instance_node.nodeid): [self.link_to_a]},
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_with_value,
+            data={str(cls.presence_resource_instance_node.nodeid): [cls.link_to_a]},
             provisionaledits=None,
         )
-        self.tile_with_value.save()
-        self.tile_without_value = TileModel(
+        cls.tile_with_value.save()
+        cls.tile_without_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_without_value,
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_without_value,
             data={},
             provisionaledits=None,
         )
-        self.tile_without_value.save()
+        cls.tile_without_value.save()
 
         call_command("db_index", "reindex_database")
 

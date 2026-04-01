@@ -16,102 +16,103 @@ from arches_search.utils.advanced_search.advanced_search import (
 
 
 class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpTestData(cls):
         ordered_suffix = uuid.uuid4().hex[:8]
-        self.ordered_graph = GraphModel.objects.create(
+        cls.ordered_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_number_ordered_{ordered_suffix}",
             isresource=True,
         )
-        self.ordered_nodegroup = NodeGroup.objects.create(
+        cls.ordered_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.ordered_number_node = Node.objects.create(
+        cls.ordered_number_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{ordered_suffix}",
             alias=f"value_{ordered_suffix}",
             datatype="number",
-            graph=self.ordered_graph,
-            nodegroup=self.ordered_nodegroup,
+            graph=cls.ordered_graph,
+            nodegroup=cls.ordered_nodegroup,
             istopnode=True,
         )
 
-        self.lower_resource = ResourceInstance(
+        cls.lower_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.ordered_graph,
+            graph=cls.ordered_graph,
         )
-        self.lower_resource.save()
-        self.higher_resource = ResourceInstance(
+        cls.lower_resource.save()
+        cls.higher_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.ordered_graph,
+            graph=cls.ordered_graph,
         )
-        self.higher_resource.save()
+        cls.higher_resource.save()
 
-        self.lower_tile = TileModel(
+        cls.lower_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.ordered_nodegroup,
-            resourceinstance=self.lower_resource,
-            data={str(self.ordered_number_node.nodeid): 20},
+            nodegroup=cls.ordered_nodegroup,
+            resourceinstance=cls.lower_resource,
+            data={str(cls.ordered_number_node.nodeid): 20},
             provisionaledits=None,
         )
-        self.lower_tile.save()
-        self.higher_tile = TileModel(
+        cls.lower_tile.save()
+        cls.higher_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.ordered_nodegroup,
-            resourceinstance=self.higher_resource,
-            data={str(self.ordered_number_node.nodeid): 31},
+            nodegroup=cls.ordered_nodegroup,
+            resourceinstance=cls.higher_resource,
+            data={str(cls.ordered_number_node.nodeid): 31},
             provisionaledits=None,
         )
-        self.higher_tile.save()
+        cls.higher_tile.save()
 
         presence_suffix = uuid.uuid4().hex[:8]
-        self.presence_graph = GraphModel.objects.create(
+        cls.presence_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_number_presence_{presence_suffix}",
             isresource=True,
         )
-        self.presence_nodegroup = NodeGroup.objects.create(
+        cls.presence_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.presence_number_node = Node.objects.create(
+        cls.presence_number_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{presence_suffix}",
             alias=f"value_{presence_suffix}",
             datatype="number",
-            graph=self.presence_graph,
-            nodegroup=self.presence_nodegroup,
+            graph=cls.presence_graph,
+            nodegroup=cls.presence_nodegroup,
             istopnode=True,
         )
 
-        self.resource_with_value = ResourceInstance(
+        cls.resource_with_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_with_value.save()
-        self.resource_without_value = ResourceInstance(
+        cls.resource_with_value.save()
+        cls.resource_without_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_without_value.save()
+        cls.resource_without_value.save()
 
-        self.tile_with_value = TileModel(
+        cls.tile_with_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_with_value,
-            data={str(self.presence_number_node.nodeid): 10},
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_with_value,
+            data={str(cls.presence_number_node.nodeid): 10},
             provisionaledits=None,
         )
-        self.tile_with_value.save()
-        self.tile_without_value = TileModel(
+        cls.tile_with_value.save()
+        cls.tile_without_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_without_value,
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_without_value,
             data={},
             provisionaledits=None,
         )
-        self.tile_without_value.save()
+        cls.tile_without_value.save()
 
         call_command("db_index", "reindex_database")
 

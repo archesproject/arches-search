@@ -46,102 +46,103 @@ NON_MATCHING_POLYGON_FC = {
 
 
 class GeojsonFeatureCollectionAdvancedSearchFacetIntegrationTestCase(TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpTestData(cls):
         suffix = uuid.uuid4().hex[:8]
-        self.spatial_graph = GraphModel.objects.create(
+        cls.spatial_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_geojson_{suffix}",
             isresource=True,
         )
-        self.spatial_nodegroup = NodeGroup.objects.create(
+        cls.spatial_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.spatial_geojson_node = Node.objects.create(
+        cls.spatial_geojson_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{suffix}",
             alias=f"value_{suffix}",
             datatype="geojson-feature-collection",
-            graph=self.spatial_graph,
-            nodegroup=self.spatial_nodegroup,
+            graph=cls.spatial_graph,
+            nodegroup=cls.spatial_nodegroup,
             istopnode=True,
         )
 
-        self.matching_resource = ResourceInstance(
+        cls.matching_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.spatial_graph,
+            graph=cls.spatial_graph,
         )
-        self.matching_resource.save()
-        self.non_matching_resource = ResourceInstance(
+        cls.matching_resource.save()
+        cls.non_matching_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.spatial_graph,
+            graph=cls.spatial_graph,
         )
-        self.non_matching_resource.save()
+        cls.non_matching_resource.save()
 
-        self.matching_tile = TileModel(
+        cls.matching_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.spatial_nodegroup,
-            resourceinstance=self.matching_resource,
-            data={str(self.spatial_geojson_node.nodeid): MATCHING_POLYGON_FC},
+            nodegroup=cls.spatial_nodegroup,
+            resourceinstance=cls.matching_resource,
+            data={str(cls.spatial_geojson_node.nodeid): MATCHING_POLYGON_FC},
             provisionaledits=None,
         )
-        self.matching_tile.save()
-        self.non_matching_tile = TileModel(
+        cls.matching_tile.save()
+        cls.non_matching_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.spatial_nodegroup,
-            resourceinstance=self.non_matching_resource,
-            data={str(self.spatial_geojson_node.nodeid): NON_MATCHING_POLYGON_FC},
+            nodegroup=cls.spatial_nodegroup,
+            resourceinstance=cls.non_matching_resource,
+            data={str(cls.spatial_geojson_node.nodeid): NON_MATCHING_POLYGON_FC},
             provisionaledits=None,
         )
-        self.non_matching_tile.save()
+        cls.non_matching_tile.save()
 
         presence_suffix = uuid.uuid4().hex[:8]
-        self.presence_graph = GraphModel.objects.create(
+        cls.presence_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_geojson_presence_{presence_suffix}",
             isresource=True,
         )
-        self.presence_nodegroup = NodeGroup.objects.create(
+        cls.presence_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.presence_geojson_node = Node.objects.create(
+        cls.presence_geojson_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{presence_suffix}",
             alias=f"value_{presence_suffix}",
             datatype="geojson-feature-collection",
-            graph=self.presence_graph,
-            nodegroup=self.presence_nodegroup,
+            graph=cls.presence_graph,
+            nodegroup=cls.presence_nodegroup,
             istopnode=True,
         )
 
-        self.resource_with_geojson = ResourceInstance(
+        cls.resource_with_geojson = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_with_geojson.save()
-        self.resource_without_geojson = ResourceInstance(
+        cls.resource_with_geojson.save()
+        cls.resource_without_geojson = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_without_geojson.save()
+        cls.resource_without_geojson.save()
 
-        self.tile_with_geojson = TileModel(
+        cls.tile_with_geojson = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_with_geojson,
-            data={str(self.presence_geojson_node.nodeid): MATCHING_POLYGON_FC},
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_with_geojson,
+            data={str(cls.presence_geojson_node.nodeid): MATCHING_POLYGON_FC},
             provisionaledits=None,
         )
-        self.tile_with_geojson.save()
-        self.tile_without_geojson = TileModel(
+        cls.tile_with_geojson.save()
+        cls.tile_without_geojson = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_without_geojson,
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_without_geojson,
             data={},
             provisionaledits=None,
         )
-        self.tile_without_geojson.save()
+        cls.tile_without_geojson.save()
 
         call_command("db_index", "reindex_database")
 

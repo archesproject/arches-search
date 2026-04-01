@@ -16,246 +16,247 @@ from arches_search.utils.advanced_search.advanced_search import (
 
 
 class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpTestData(cls):
         text_suffix = uuid.uuid4().hex[:8]
-        self.text_graph = GraphModel.objects.create(
+        cls.text_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_non_localized_string_text_{text_suffix}",
             isresource=True,
         )
-        self.text_nodegroup = NodeGroup.objects.create(
+        cls.text_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.text_node = Node.objects.create(
+        cls.text_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{text_suffix}",
             alias=f"value_{text_suffix}",
             datatype="non-localized-string",
-            graph=self.text_graph,
-            nodegroup=self.text_nodegroup,
+            graph=cls.text_graph,
+            nodegroup=cls.text_nodegroup,
             istopnode=True,
         )
 
-        self.needle_resource = ResourceInstance(
+        cls.needle_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.text_graph,
+            graph=cls.text_graph,
         )
-        self.needle_resource.save()
-        self.plain_resource = ResourceInstance(
+        cls.needle_resource.save()
+        cls.plain_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.text_graph,
+            graph=cls.text_graph,
         )
-        self.plain_resource.save()
+        cls.plain_resource.save()
 
-        self.needle_tile = TileModel(
+        cls.needle_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.text_nodegroup,
-            resourceinstance=self.needle_resource,
-            data={str(self.text_node.nodeid): "prefix needle suffix"},
+            nodegroup=cls.text_nodegroup,
+            resourceinstance=cls.needle_resource,
+            data={str(cls.text_node.nodeid): "prefix needle suffix"},
             provisionaledits=None,
         )
-        self.needle_tile.save()
-        self.plain_tile = TileModel(
+        cls.needle_tile.save()
+        cls.plain_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.text_nodegroup,
-            resourceinstance=self.plain_resource,
-            data={str(self.text_node.nodeid): "plain text"},
+            nodegroup=cls.text_nodegroup,
+            resourceinstance=cls.plain_resource,
+            data={str(cls.text_node.nodeid): "plain text"},
             provisionaledits=None,
         )
-        self.plain_tile.save()
+        cls.plain_tile.save()
 
         prefix_suffix = uuid.uuid4().hex[:8]
-        self.prefix_graph = GraphModel.objects.create(
+        cls.prefix_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_non_localized_string_prefix_{prefix_suffix}",
             isresource=True,
         )
-        self.prefix_nodegroup = NodeGroup.objects.create(
+        cls.prefix_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.prefix_node = Node.objects.create(
+        cls.prefix_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{prefix_suffix}",
             alias=f"value_{prefix_suffix}",
             datatype="non-localized-string",
-            graph=self.prefix_graph,
-            nodegroup=self.prefix_nodegroup,
+            graph=cls.prefix_graph,
+            nodegroup=cls.prefix_nodegroup,
             istopnode=True,
         )
 
-        self.prefix_match_resource = ResourceInstance(
+        cls.prefix_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.prefix_graph,
+            graph=cls.prefix_graph,
         )
-        self.prefix_match_resource.save()
-        self.prefix_other_resource = ResourceInstance(
+        cls.prefix_match_resource.save()
+        cls.prefix_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.prefix_graph,
+            graph=cls.prefix_graph,
         )
-        self.prefix_other_resource.save()
+        cls.prefix_other_resource.save()
 
-        self.prefix_match_tile = TileModel(
+        cls.prefix_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.prefix_nodegroup,
-            resourceinstance=self.prefix_match_resource,
-            data={str(self.prefix_node.nodeid): "needle suffix"},
+            nodegroup=cls.prefix_nodegroup,
+            resourceinstance=cls.prefix_match_resource,
+            data={str(cls.prefix_node.nodeid): "needle suffix"},
             provisionaledits=None,
         )
-        self.prefix_match_tile.save()
-        self.prefix_other_tile = TileModel(
+        cls.prefix_match_tile.save()
+        cls.prefix_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.prefix_nodegroup,
-            resourceinstance=self.prefix_other_resource,
-            data={str(self.prefix_node.nodeid): "prefix needle"},
+            nodegroup=cls.prefix_nodegroup,
+            resourceinstance=cls.prefix_other_resource,
+            data={str(cls.prefix_node.nodeid): "prefix needle"},
             provisionaledits=None,
         )
-        self.prefix_other_tile.save()
+        cls.prefix_other_tile.save()
 
         suffix_suffix = uuid.uuid4().hex[:8]
-        self.suffix_graph = GraphModel.objects.create(
+        cls.suffix_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_non_localized_string_suffix_{suffix_suffix}",
             isresource=True,
         )
-        self.suffix_nodegroup = NodeGroup.objects.create(
+        cls.suffix_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.suffix_node = Node.objects.create(
+        cls.suffix_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{suffix_suffix}",
             alias=f"value_{suffix_suffix}",
             datatype="non-localized-string",
-            graph=self.suffix_graph,
-            nodegroup=self.suffix_nodegroup,
+            graph=cls.suffix_graph,
+            nodegroup=cls.suffix_nodegroup,
             istopnode=True,
         )
 
-        self.suffix_match_resource = ResourceInstance(
+        cls.suffix_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.suffix_graph,
+            graph=cls.suffix_graph,
         )
-        self.suffix_match_resource.save()
-        self.suffix_other_resource = ResourceInstance(
+        cls.suffix_match_resource.save()
+        cls.suffix_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.suffix_graph,
+            graph=cls.suffix_graph,
         )
-        self.suffix_other_resource.save()
+        cls.suffix_other_resource.save()
 
-        self.suffix_match_tile = TileModel(
+        cls.suffix_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.suffix_nodegroup,
-            resourceinstance=self.suffix_match_resource,
-            data={str(self.suffix_node.nodeid): "prefix needle"},
+            nodegroup=cls.suffix_nodegroup,
+            resourceinstance=cls.suffix_match_resource,
+            data={str(cls.suffix_node.nodeid): "prefix needle"},
             provisionaledits=None,
         )
-        self.suffix_match_tile.save()
-        self.suffix_other_tile = TileModel(
+        cls.suffix_match_tile.save()
+        cls.suffix_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.suffix_nodegroup,
-            resourceinstance=self.suffix_other_resource,
-            data={str(self.suffix_node.nodeid): "needle prefix"},
+            nodegroup=cls.suffix_nodegroup,
+            resourceinstance=cls.suffix_other_resource,
+            data={str(cls.suffix_node.nodeid): "needle prefix"},
             provisionaledits=None,
         )
-        self.suffix_other_tile.save()
+        cls.suffix_other_tile.save()
 
         equality_suffix = uuid.uuid4().hex[:8]
-        self.equality_graph = GraphModel.objects.create(
+        cls.equality_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_non_localized_string_equality_{equality_suffix}",
             isresource=True,
         )
-        self.equality_nodegroup = NodeGroup.objects.create(
+        cls.equality_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.equality_node = Node.objects.create(
+        cls.equality_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{equality_suffix}",
             alias=f"value_{equality_suffix}",
             datatype="non-localized-string",
-            graph=self.equality_graph,
-            nodegroup=self.equality_nodegroup,
+            graph=cls.equality_graph,
+            nodegroup=cls.equality_nodegroup,
             istopnode=True,
         )
 
-        self.equal_resource = ResourceInstance(
+        cls.equal_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.equality_graph,
+            graph=cls.equality_graph,
         )
-        self.equal_resource.save()
-        self.other_resource = ResourceInstance(
+        cls.equal_resource.save()
+        cls.other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.equality_graph,
+            graph=cls.equality_graph,
         )
-        self.other_resource.save()
+        cls.other_resource.save()
 
-        self.equal_tile = TileModel(
+        cls.equal_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.equality_nodegroup,
-            resourceinstance=self.equal_resource,
-            data={str(self.equality_node.nodeid): "needle"},
+            nodegroup=cls.equality_nodegroup,
+            resourceinstance=cls.equal_resource,
+            data={str(cls.equality_node.nodeid): "needle"},
             provisionaledits=None,
         )
-        self.equal_tile.save()
-        self.other_tile = TileModel(
+        cls.equal_tile.save()
+        cls.other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.equality_nodegroup,
-            resourceinstance=self.other_resource,
-            data={str(self.equality_node.nodeid): "other"},
+            nodegroup=cls.equality_nodegroup,
+            resourceinstance=cls.other_resource,
+            data={str(cls.equality_node.nodeid): "other"},
             provisionaledits=None,
         )
-        self.other_tile.save()
+        cls.other_tile.save()
 
         presence_suffix = uuid.uuid4().hex[:8]
-        self.presence_graph = GraphModel.objects.create(
+        cls.presence_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_non_localized_string_presence_{presence_suffix}",
             isresource=True,
         )
-        self.presence_nodegroup = NodeGroup.objects.create(
+        cls.presence_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.presence_node = Node.objects.create(
+        cls.presence_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{presence_suffix}",
             alias=f"value_{presence_suffix}",
             datatype="non-localized-string",
-            graph=self.presence_graph,
-            nodegroup=self.presence_nodegroup,
+            graph=cls.presence_graph,
+            nodegroup=cls.presence_nodegroup,
             istopnode=True,
         )
 
-        self.resource_with_value = ResourceInstance(
+        cls.resource_with_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_with_value.save()
-        self.resource_without_value = ResourceInstance(
+        cls.resource_with_value.save()
+        cls.resource_without_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_without_value.save()
+        cls.resource_without_value.save()
 
-        self.tile_with_value = TileModel(
+        cls.tile_with_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_with_value,
-            data={str(self.presence_node.nodeid): "needle"},
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_with_value,
+            data={str(cls.presence_node.nodeid): "needle"},
             provisionaledits=None,
         )
-        self.tile_with_value.save()
-        self.tile_without_value = TileModel(
+        cls.tile_with_value.save()
+        cls.tile_without_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_without_value,
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_without_value,
             data={},
             provisionaledits=None,
         )
-        self.tile_without_value.save()
+        cls.tile_without_value.save()
 
         call_command("db_index", "reindex_database")
 

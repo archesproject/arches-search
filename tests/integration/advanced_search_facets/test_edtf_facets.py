@@ -17,342 +17,343 @@ from arches_search.utils.advanced_search.advanced_search import (
 
 
 class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpTestData(cls):
         edtf = ExtendedDateFormat()
 
-        self.date_2020_01_10 = edtf.to_sortable_date(2020, 1, 10)
-        self.date_2020_01_12 = edtf.to_sortable_date(2020, 1, 12)
-        self.date_2020_01_13 = edtf.to_sortable_date(2020, 1, 13)
-        self.date_2020_01_14 = edtf.to_sortable_date(2020, 1, 14)
-        self.date_2020_01_15 = edtf.to_sortable_date(2020, 1, 15)
-        self.date_2020_01_18 = edtf.to_sortable_date(2020, 1, 18)
-        self.date_2020_01_20 = edtf.to_sortable_date(2020, 1, 20)
-        self.date_2020_01_21 = edtf.to_sortable_date(2020, 1, 21)
-        self.date_2020_01_25 = edtf.to_sortable_date(2020, 1, 25)
-        self.date_2020_01_31 = edtf.to_sortable_date(2020, 1, 31)
-        self.date_2020_02_01 = edtf.to_sortable_date(2020, 2, 1)
+        cls.date_2020_01_10 = edtf.to_sortable_date(2020, 1, 10)
+        cls.date_2020_01_12 = edtf.to_sortable_date(2020, 1, 12)
+        cls.date_2020_01_13 = edtf.to_sortable_date(2020, 1, 13)
+        cls.date_2020_01_14 = edtf.to_sortable_date(2020, 1, 14)
+        cls.date_2020_01_15 = edtf.to_sortable_date(2020, 1, 15)
+        cls.date_2020_01_18 = edtf.to_sortable_date(2020, 1, 18)
+        cls.date_2020_01_20 = edtf.to_sortable_date(2020, 1, 20)
+        cls.date_2020_01_21 = edtf.to_sortable_date(2020, 1, 21)
+        cls.date_2020_01_25 = edtf.to_sortable_date(2020, 1, 25)
+        cls.date_2020_01_31 = edtf.to_sortable_date(2020, 1, 31)
+        cls.date_2020_02_01 = edtf.to_sortable_date(2020, 2, 1)
 
         ordered_suffix = uuid.uuid4().hex[:8]
-        self.ordered_graph = GraphModel.objects.create(
+        cls.ordered_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_edtf_ordered_{ordered_suffix}",
             isresource=True,
         )
-        self.ordered_nodegroup = NodeGroup.objects.create(
+        cls.ordered_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.ordered_edtf_node = Node.objects.create(
+        cls.ordered_edtf_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{ordered_suffix}",
             alias=f"value_{ordered_suffix}",
             datatype="edtf",
-            graph=self.ordered_graph,
-            nodegroup=self.ordered_nodegroup,
+            graph=cls.ordered_graph,
+            nodegroup=cls.ordered_nodegroup,
             istopnode=True,
         )
-        self.ordered_first_resource = ResourceInstance(
+        cls.ordered_first_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.ordered_graph,
+            graph=cls.ordered_graph,
         )
-        self.ordered_first_resource.save()
-        self.ordered_second_resource = ResourceInstance(
+        cls.ordered_first_resource.save()
+        cls.ordered_second_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.ordered_graph,
+            graph=cls.ordered_graph,
         )
-        self.ordered_second_resource.save()
-        self.ordered_first_tile = TileModel(
+        cls.ordered_second_resource.save()
+        cls.ordered_first_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.ordered_nodegroup,
-            resourceinstance=self.ordered_first_resource,
-            data={str(self.ordered_edtf_node.nodeid): "2020-01-20"},
+            nodegroup=cls.ordered_nodegroup,
+            resourceinstance=cls.ordered_first_resource,
+            data={str(cls.ordered_edtf_node.nodeid): "2020-01-20"},
             provisionaledits=None,
         )
-        self.ordered_first_tile.save()
-        self.ordered_second_tile = TileModel(
+        cls.ordered_first_tile.save()
+        cls.ordered_second_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.ordered_nodegroup,
-            resourceinstance=self.ordered_second_resource,
-            data={str(self.ordered_edtf_node.nodeid): "2020-01-31"},
+            nodegroup=cls.ordered_nodegroup,
+            resourceinstance=cls.ordered_second_resource,
+            data={str(cls.ordered_edtf_node.nodeid): "2020-01-31"},
             provisionaledits=None,
         )
-        self.ordered_second_tile.save()
+        cls.ordered_second_tile.save()
 
         overlap_suffix = uuid.uuid4().hex[:8]
-        self.overlap_graph = GraphModel.objects.create(
+        cls.overlap_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_edtf_overlap_{overlap_suffix}",
             isresource=True,
         )
-        self.overlap_nodegroup = NodeGroup.objects.create(
+        cls.overlap_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.overlap_edtf_node = Node.objects.create(
+        cls.overlap_edtf_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{overlap_suffix}",
             alias=f"value_{overlap_suffix}",
             datatype="edtf",
-            graph=self.overlap_graph,
-            nodegroup=self.overlap_nodegroup,
+            graph=cls.overlap_graph,
+            nodegroup=cls.overlap_nodegroup,
             istopnode=True,
         )
-        self.overlapping_resource = ResourceInstance(
+        cls.overlapping_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.overlap_graph,
+            graph=cls.overlap_graph,
         )
-        self.overlapping_resource.save()
-        self.non_overlapping_resource = ResourceInstance(
+        cls.overlapping_resource.save()
+        cls.non_overlapping_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.overlap_graph,
+            graph=cls.overlap_graph,
         )
-        self.non_overlapping_resource.save()
-        self.overlapping_tile = TileModel(
+        cls.non_overlapping_resource.save()
+        cls.overlapping_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.overlap_nodegroup,
-            resourceinstance=self.overlapping_resource,
-            data={str(self.overlap_edtf_node.nodeid): "2020-01-15/2020-01-25"},
+            nodegroup=cls.overlap_nodegroup,
+            resourceinstance=cls.overlapping_resource,
+            data={str(cls.overlap_edtf_node.nodeid): "2020-01-15/2020-01-25"},
             provisionaledits=None,
         )
-        self.overlapping_tile.save()
-        self.non_overlapping_tile = TileModel(
+        cls.overlapping_tile.save()
+        cls.non_overlapping_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.overlap_nodegroup,
-            resourceinstance=self.non_overlapping_resource,
-            data={str(self.overlap_edtf_node.nodeid): "2020-01-21/2020-01-31"},
+            nodegroup=cls.overlap_nodegroup,
+            resourceinstance=cls.non_overlapping_resource,
+            data={str(cls.overlap_edtf_node.nodeid): "2020-01-21/2020-01-31"},
             provisionaledits=None,
         )
-        self.non_overlapping_tile.save()
+        cls.non_overlapping_tile.save()
 
         during_suffix = uuid.uuid4().hex[:8]
-        self.during_graph = GraphModel.objects.create(
+        cls.during_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_edtf_during_{during_suffix}",
             isresource=True,
         )
-        self.during_nodegroup = NodeGroup.objects.create(
+        cls.during_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.during_edtf_node = Node.objects.create(
+        cls.during_edtf_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{during_suffix}",
             alias=f"value_{during_suffix}",
             datatype="edtf",
-            graph=self.during_graph,
-            nodegroup=self.during_nodegroup,
+            graph=cls.during_graph,
+            nodegroup=cls.during_nodegroup,
             istopnode=True,
         )
-        self.during_resource = ResourceInstance(
+        cls.during_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.during_graph,
+            graph=cls.during_graph,
         )
-        self.during_resource.save()
-        self.not_during_resource = ResourceInstance(
+        cls.during_resource.save()
+        cls.not_during_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.during_graph,
+            graph=cls.during_graph,
         )
-        self.not_during_resource.save()
-        self.during_tile = TileModel(
+        cls.not_during_resource.save()
+        cls.during_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.during_nodegroup,
-            resourceinstance=self.during_resource,
-            data={str(self.during_edtf_node.nodeid): "2020-01-12/2020-01-18"},
+            nodegroup=cls.during_nodegroup,
+            resourceinstance=cls.during_resource,
+            data={str(cls.during_edtf_node.nodeid): "2020-01-12/2020-01-18"},
             provisionaledits=None,
         )
-        self.during_tile.save()
-        self.not_during_tile = TileModel(
+        cls.during_tile.save()
+        cls.not_during_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.during_nodegroup,
-            resourceinstance=self.not_during_resource,
-            data={str(self.during_edtf_node.nodeid): "2020-01-10/2020-01-25"},
+            nodegroup=cls.during_nodegroup,
+            resourceinstance=cls.not_during_resource,
+            data={str(cls.during_edtf_node.nodeid): "2020-01-10/2020-01-25"},
             provisionaledits=None,
         )
-        self.not_during_tile.save()
+        cls.not_during_tile.save()
 
         contains_suffix = uuid.uuid4().hex[:8]
-        self.contains_graph = GraphModel.objects.create(
+        cls.contains_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_edtf_contains_{contains_suffix}",
             isresource=True,
         )
-        self.contains_nodegroup = NodeGroup.objects.create(
+        cls.contains_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.contains_edtf_node = Node.objects.create(
+        cls.contains_edtf_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{contains_suffix}",
             alias=f"value_{contains_suffix}",
             datatype="edtf",
-            graph=self.contains_graph,
-            nodegroup=self.contains_nodegroup,
+            graph=cls.contains_graph,
+            nodegroup=cls.contains_nodegroup,
             istopnode=True,
         )
-        self.contains_resource = ResourceInstance(
+        cls.contains_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.contains_graph,
+            graph=cls.contains_graph,
         )
-        self.contains_resource.save()
-        self.not_contains_resource = ResourceInstance(
+        cls.contains_resource.save()
+        cls.not_contains_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.contains_graph,
+            graph=cls.contains_graph,
         )
-        self.not_contains_resource.save()
-        self.contains_tile = TileModel(
+        cls.not_contains_resource.save()
+        cls.contains_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.contains_nodegroup,
-            resourceinstance=self.contains_resource,
-            data={str(self.contains_edtf_node.nodeid): "2020-01-10/2020-01-20"},
+            nodegroup=cls.contains_nodegroup,
+            resourceinstance=cls.contains_resource,
+            data={str(cls.contains_edtf_node.nodeid): "2020-01-10/2020-01-20"},
             provisionaledits=None,
         )
-        self.contains_tile.save()
-        self.not_contains_tile = TileModel(
+        cls.contains_tile.save()
+        cls.not_contains_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.contains_nodegroup,
-            resourceinstance=self.not_contains_resource,
-            data={str(self.contains_edtf_node.nodeid): "2020-01-13/2020-01-14"},
+            nodegroup=cls.contains_nodegroup,
+            resourceinstance=cls.not_contains_resource,
+            data={str(cls.contains_edtf_node.nodeid): "2020-01-13/2020-01-14"},
             provisionaledits=None,
         )
-        self.not_contains_tile.save()
+        cls.not_contains_tile.save()
 
         starts_suffix = uuid.uuid4().hex[:8]
-        self.starts_graph = GraphModel.objects.create(
+        cls.starts_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_edtf_starts_{starts_suffix}",
             isresource=True,
         )
-        self.starts_nodegroup = NodeGroup.objects.create(
+        cls.starts_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.starts_edtf_node = Node.objects.create(
+        cls.starts_edtf_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{starts_suffix}",
             alias=f"value_{starts_suffix}",
             datatype="edtf",
-            graph=self.starts_graph,
-            nodegroup=self.starts_nodegroup,
+            graph=cls.starts_graph,
+            nodegroup=cls.starts_nodegroup,
             istopnode=True,
         )
-        self.starts_match_resource = ResourceInstance(
+        cls.starts_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.starts_graph,
+            graph=cls.starts_graph,
         )
-        self.starts_match_resource.save()
-        self.starts_other_resource = ResourceInstance(
+        cls.starts_match_resource.save()
+        cls.starts_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.starts_graph,
+            graph=cls.starts_graph,
         )
-        self.starts_other_resource.save()
-        self.starts_match_tile = TileModel(
+        cls.starts_other_resource.save()
+        cls.starts_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.starts_nodegroup,
-            resourceinstance=self.starts_match_resource,
-            data={str(self.starts_edtf_node.nodeid): "2020-01-10/2020-01-20"},
+            nodegroup=cls.starts_nodegroup,
+            resourceinstance=cls.starts_match_resource,
+            data={str(cls.starts_edtf_node.nodeid): "2020-01-10/2020-01-20"},
             provisionaledits=None,
         )
-        self.starts_match_tile.save()
-        self.starts_other_tile = TileModel(
+        cls.starts_match_tile.save()
+        cls.starts_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.starts_nodegroup,
-            resourceinstance=self.starts_other_resource,
-            data={str(self.starts_edtf_node.nodeid): "2020-01-11/2020-01-20"},
+            nodegroup=cls.starts_nodegroup,
+            resourceinstance=cls.starts_other_resource,
+            data={str(cls.starts_edtf_node.nodeid): "2020-01-11/2020-01-20"},
             provisionaledits=None,
         )
-        self.starts_other_tile.save()
+        cls.starts_other_tile.save()
 
         finishes_suffix = uuid.uuid4().hex[:8]
-        self.finishes_graph = GraphModel.objects.create(
+        cls.finishes_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_edtf_finishes_{finishes_suffix}",
             isresource=True,
         )
-        self.finishes_nodegroup = NodeGroup.objects.create(
+        cls.finishes_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.finishes_edtf_node = Node.objects.create(
+        cls.finishes_edtf_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{finishes_suffix}",
             alias=f"value_{finishes_suffix}",
             datatype="edtf",
-            graph=self.finishes_graph,
-            nodegroup=self.finishes_nodegroup,
+            graph=cls.finishes_graph,
+            nodegroup=cls.finishes_nodegroup,
             istopnode=True,
         )
-        self.finishes_match_resource = ResourceInstance(
+        cls.finishes_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.finishes_graph,
+            graph=cls.finishes_graph,
         )
-        self.finishes_match_resource.save()
-        self.finishes_other_resource = ResourceInstance(
+        cls.finishes_match_resource.save()
+        cls.finishes_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.finishes_graph,
+            graph=cls.finishes_graph,
         )
-        self.finishes_other_resource.save()
-        self.finishes_match_tile = TileModel(
+        cls.finishes_other_resource.save()
+        cls.finishes_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.finishes_nodegroup,
-            resourceinstance=self.finishes_match_resource,
-            data={str(self.finishes_edtf_node.nodeid): "2020-01-10/2020-01-20"},
+            nodegroup=cls.finishes_nodegroup,
+            resourceinstance=cls.finishes_match_resource,
+            data={str(cls.finishes_edtf_node.nodeid): "2020-01-10/2020-01-20"},
             provisionaledits=None,
         )
-        self.finishes_match_tile.save()
-        self.finishes_other_tile = TileModel(
+        cls.finishes_match_tile.save()
+        cls.finishes_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.finishes_nodegroup,
-            resourceinstance=self.finishes_other_resource,
-            data={str(self.finishes_edtf_node.nodeid): "2020-01-10/2020-01-21"},
+            nodegroup=cls.finishes_nodegroup,
+            resourceinstance=cls.finishes_other_resource,
+            data={str(cls.finishes_edtf_node.nodeid): "2020-01-10/2020-01-21"},
             provisionaledits=None,
         )
-        self.finishes_other_tile.save()
+        cls.finishes_other_tile.save()
 
         presence_suffix = uuid.uuid4().hex[:8]
-        self.presence_graph = GraphModel.objects.create(
+        cls.presence_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_edtf_presence_{presence_suffix}",
             isresource=True,
         )
-        self.presence_nodegroup = NodeGroup.objects.create(
+        cls.presence_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.presence_edtf_node = Node.objects.create(
+        cls.presence_edtf_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{presence_suffix}",
             alias=f"value_{presence_suffix}",
             datatype="edtf",
-            graph=self.presence_graph,
-            nodegroup=self.presence_nodegroup,
+            graph=cls.presence_graph,
+            nodegroup=cls.presence_nodegroup,
             istopnode=True,
         )
-        self.resource_with_edtf = ResourceInstance(
+        cls.resource_with_edtf = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_with_edtf.save()
-        self.resource_without_edtf = ResourceInstance(
+        cls.resource_with_edtf.save()
+        cls.resource_without_edtf = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_without_edtf.save()
-        self.tile_with_edtf = TileModel(
+        cls.resource_without_edtf.save()
+        cls.tile_with_edtf = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_with_edtf,
-            data={str(self.presence_edtf_node.nodeid): "2020-01-20"},
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_with_edtf,
+            data={str(cls.presence_edtf_node.nodeid): "2020-01-20"},
             provisionaledits=None,
         )
-        self.tile_with_edtf.save()
-        self.tile_without_edtf = TileModel(
+        cls.tile_with_edtf.save()
+        cls.tile_without_edtf = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_without_edtf,
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_without_edtf,
             data={},
             provisionaledits=None,
         )
-        self.tile_without_edtf.save()
+        cls.tile_without_edtf.save()
 
         call_command("db_index", "reindex_database")
 

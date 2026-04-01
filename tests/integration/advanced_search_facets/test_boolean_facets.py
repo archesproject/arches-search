@@ -16,102 +16,103 @@ from arches_search.utils.advanced_search.advanced_search import (
 
 
 class BooleanAdvancedSearchFacetIntegrationTestCase(TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpTestData(cls):
         truth_suffix = uuid.uuid4().hex[:8]
-        self.truth_graph = GraphModel.objects.create(
+        cls.truth_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_boolean_truth_{truth_suffix}",
             isresource=True,
         )
-        self.truth_nodegroup = NodeGroup.objects.create(
+        cls.truth_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.truth_boolean_node = Node.objects.create(
+        cls.truth_boolean_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{truth_suffix}",
             alias=f"value_{truth_suffix}",
             datatype="boolean",
-            graph=self.truth_graph,
-            nodegroup=self.truth_nodegroup,
+            graph=cls.truth_graph,
+            nodegroup=cls.truth_nodegroup,
             istopnode=True,
         )
 
-        self.true_resource = ResourceInstance(
+        cls.true_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.truth_graph,
+            graph=cls.truth_graph,
         )
-        self.true_resource.save()
-        self.false_resource = ResourceInstance(
+        cls.true_resource.save()
+        cls.false_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.truth_graph,
+            graph=cls.truth_graph,
         )
-        self.false_resource.save()
+        cls.false_resource.save()
 
-        self.true_tile = TileModel(
+        cls.true_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.truth_nodegroup,
-            resourceinstance=self.true_resource,
-            data={str(self.truth_boolean_node.nodeid): True},
+            nodegroup=cls.truth_nodegroup,
+            resourceinstance=cls.true_resource,
+            data={str(cls.truth_boolean_node.nodeid): True},
             provisionaledits=None,
         )
-        self.true_tile.save()
-        self.false_tile = TileModel(
+        cls.true_tile.save()
+        cls.false_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.truth_nodegroup,
-            resourceinstance=self.false_resource,
-            data={str(self.truth_boolean_node.nodeid): False},
+            nodegroup=cls.truth_nodegroup,
+            resourceinstance=cls.false_resource,
+            data={str(cls.truth_boolean_node.nodeid): False},
             provisionaledits=None,
         )
-        self.false_tile.save()
+        cls.false_tile.save()
 
         presence_suffix = uuid.uuid4().hex[:8]
-        self.presence_graph = GraphModel.objects.create(
+        cls.presence_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_boolean_presence_{presence_suffix}",
             isresource=True,
         )
-        self.presence_nodegroup = NodeGroup.objects.create(
+        cls.presence_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.presence_boolean_node = Node.objects.create(
+        cls.presence_boolean_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{presence_suffix}",
             alias=f"value_{presence_suffix}",
             datatype="boolean",
-            graph=self.presence_graph,
-            nodegroup=self.presence_nodegroup,
+            graph=cls.presence_graph,
+            nodegroup=cls.presence_nodegroup,
             istopnode=True,
         )
 
-        self.resource_with_value = ResourceInstance(
+        cls.resource_with_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_with_value.save()
-        self.resource_without_value = ResourceInstance(
+        cls.resource_with_value.save()
+        cls.resource_without_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_without_value.save()
+        cls.resource_without_value.save()
 
-        self.tile_with_value = TileModel(
+        cls.tile_with_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_with_value,
-            data={str(self.presence_boolean_node.nodeid): True},
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_with_value,
+            data={str(cls.presence_boolean_node.nodeid): True},
             provisionaledits=None,
         )
-        self.tile_with_value.save()
-        self.tile_without_value = TileModel(
+        cls.tile_with_value.save()
+        cls.tile_without_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_without_value,
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_without_value,
             data={},
             provisionaledits=None,
         )
-        self.tile_without_value.save()
+        cls.tile_without_value.save()
 
         call_command("db_index", "reindex_database")
 

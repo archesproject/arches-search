@@ -17,111 +17,112 @@ from arches_search.utils.advanced_search.advanced_search import (
 
 
 class DateAdvancedSearchFacetIntegrationTestCase(TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpTestData(cls):
         edtf = ExtendedDateFormat()
 
-        self.date_2020_01_09 = edtf.to_sortable_date(2020, 1, 9)
-        self.date_2020_01_10 = edtf.to_sortable_date(2020, 1, 10)
-        self.date_2020_01_15 = edtf.to_sortable_date(2020, 1, 15)
-        self.date_2020_01_20 = edtf.to_sortable_date(2020, 1, 20)
-        self.date_2020_01_25 = edtf.to_sortable_date(2020, 1, 25)
-        self.date_2020_01_31 = edtf.to_sortable_date(2020, 1, 31)
+        cls.date_2020_01_09 = edtf.to_sortable_date(2020, 1, 9)
+        cls.date_2020_01_10 = edtf.to_sortable_date(2020, 1, 10)
+        cls.date_2020_01_15 = edtf.to_sortable_date(2020, 1, 15)
+        cls.date_2020_01_20 = edtf.to_sortable_date(2020, 1, 20)
+        cls.date_2020_01_25 = edtf.to_sortable_date(2020, 1, 25)
+        cls.date_2020_01_31 = edtf.to_sortable_date(2020, 1, 31)
 
         ordered_suffix = uuid.uuid4().hex[:8]
-        self.ordered_graph = GraphModel.objects.create(
+        cls.ordered_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_date_ordered_{ordered_suffix}",
             isresource=True,
         )
-        self.ordered_nodegroup = NodeGroup.objects.create(
+        cls.ordered_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.ordered_date_node = Node.objects.create(
+        cls.ordered_date_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{ordered_suffix}",
             alias=f"value_{ordered_suffix}",
             datatype="date",
-            graph=self.ordered_graph,
-            nodegroup=self.ordered_nodegroup,
+            graph=cls.ordered_graph,
+            nodegroup=cls.ordered_nodegroup,
             istopnode=True,
         )
 
-        self.earlier_resource = ResourceInstance(
+        cls.earlier_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.ordered_graph,
+            graph=cls.ordered_graph,
         )
-        self.earlier_resource.save()
-        self.later_resource = ResourceInstance(
+        cls.earlier_resource.save()
+        cls.later_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.ordered_graph,
+            graph=cls.ordered_graph,
         )
-        self.later_resource.save()
+        cls.later_resource.save()
 
-        self.earlier_tile = TileModel(
+        cls.earlier_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.ordered_nodegroup,
-            resourceinstance=self.earlier_resource,
-            data={str(self.ordered_date_node.nodeid): "2020-01-20"},
+            nodegroup=cls.ordered_nodegroup,
+            resourceinstance=cls.earlier_resource,
+            data={str(cls.ordered_date_node.nodeid): "2020-01-20"},
             provisionaledits=None,
         )
-        self.earlier_tile.save()
-        self.later_tile = TileModel(
+        cls.earlier_tile.save()
+        cls.later_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.ordered_nodegroup,
-            resourceinstance=self.later_resource,
-            data={str(self.ordered_date_node.nodeid): "2020-01-31"},
+            nodegroup=cls.ordered_nodegroup,
+            resourceinstance=cls.later_resource,
+            data={str(cls.ordered_date_node.nodeid): "2020-01-31"},
             provisionaledits=None,
         )
-        self.later_tile.save()
+        cls.later_tile.save()
 
         presence_suffix = uuid.uuid4().hex[:8]
-        self.presence_graph = GraphModel.objects.create(
+        cls.presence_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_date_presence_{presence_suffix}",
             isresource=True,
         )
-        self.presence_nodegroup = NodeGroup.objects.create(
+        cls.presence_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.presence_date_node = Node.objects.create(
+        cls.presence_date_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{presence_suffix}",
             alias=f"value_{presence_suffix}",
             datatype="date",
-            graph=self.presence_graph,
-            nodegroup=self.presence_nodegroup,
+            graph=cls.presence_graph,
+            nodegroup=cls.presence_nodegroup,
             istopnode=True,
         )
 
-        self.resource_with_date = ResourceInstance(
+        cls.resource_with_date = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_with_date.save()
-        self.resource_without_date = ResourceInstance(
+        cls.resource_with_date.save()
+        cls.resource_without_date = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_without_date.save()
+        cls.resource_without_date.save()
 
-        self.tile_with_date = TileModel(
+        cls.tile_with_date = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_with_date,
-            data={str(self.presence_date_node.nodeid): "2020-01-20"},
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_with_date,
+            data={str(cls.presence_date_node.nodeid): "2020-01-20"},
             provisionaledits=None,
         )
-        self.tile_with_date.save()
-        self.tile_without_date = TileModel(
+        cls.tile_with_date.save()
+        cls.tile_without_date = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_without_date,
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_without_date,
             data={},
             provisionaledits=None,
         )
-        self.tile_without_date.save()
+        cls.tile_without_date.save()
 
         call_command("db_index", "reindex_database")
 

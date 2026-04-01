@@ -16,12 +16,13 @@ from arches_search.utils.advanced_search.advanced_search import (
 
 
 class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
-    def setUp(self):
-        self.reference_list_id = str(uuid.uuid4())
+    @classmethod
+    def setUpTestData(cls):
+        cls.reference_list_id = str(uuid.uuid4())
 
-        self.reference_a = {
+        cls.reference_a = {
             "uri": f"urn:test:reference:{uuid.uuid4()}",
-            "list_id": self.reference_list_id,
+            "list_id": cls.reference_list_id,
             "labels": [
                 {
                     "id": str(uuid.uuid4()),
@@ -32,9 +33,9 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 }
             ],
         }
-        self.reference_b = {
+        cls.reference_b = {
             "uri": f"urn:test:reference:{uuid.uuid4()}",
-            "list_id": self.reference_list_id,
+            "list_id": cls.reference_list_id,
             "labels": [
                 {
                     "id": str(uuid.uuid4()),
@@ -45,9 +46,9 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 }
             ],
         }
-        self.reference_c = {
+        cls.reference_c = {
             "uri": f"urn:test:reference:{uuid.uuid4()}",
-            "list_id": self.reference_list_id,
+            "list_id": cls.reference_list_id,
             "labels": [
                 {
                     "id": str(uuid.uuid4()),
@@ -58,9 +59,9 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 }
             ],
         }
-        self.reference_child = {
+        cls.reference_child = {
             "uri": f"urn:test:reference:{uuid.uuid4()}",
-            "list_id": self.reference_list_id,
+            "list_id": cls.reference_list_id,
             "labels": [
                 {
                     "id": str(uuid.uuid4()),
@@ -71,9 +72,9 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 }
             ],
         }
-        self.reference_parent = {
+        cls.reference_parent = {
             "uri": f"urn:test:reference:{uuid.uuid4()}",
-            "list_id": self.reference_list_id,
+            "list_id": cls.reference_list_id,
             "labels": [
                 {
                     "id": str(uuid.uuid4()),
@@ -84,9 +85,9 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 }
             ],
         }
-        self.reference_other = {
+        cls.reference_other = {
             "uri": f"urn:test:reference:{uuid.uuid4()}",
-            "list_id": self.reference_list_id,
+            "list_id": cls.reference_list_id,
             "labels": [
                 {
                     "id": str(uuid.uuid4()),
@@ -99,363 +100,363 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
         }
 
         any_suffix = uuid.uuid4().hex[:8]
-        self.any_graph = GraphModel.objects.create(
+        cls.any_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_reference_any_{any_suffix}",
             isresource=True,
         )
-        self.any_nodegroup = NodeGroup.objects.create(
+        cls.any_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.any_reference_node = Node.objects.create(
+        cls.any_reference_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{any_suffix}",
             alias=f"value_{any_suffix}",
             datatype="reference",
-            graph=self.any_graph,
-            nodegroup=self.any_nodegroup,
+            graph=cls.any_graph,
+            nodegroup=cls.any_nodegroup,
             istopnode=True,
-            config={"controlledList": self.reference_list_id, "multiValue": True},
+            config={"controlledList": cls.reference_list_id, "multiValue": True},
         )
 
-        self.any_match_resource = ResourceInstance(
+        cls.any_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.any_graph,
+            graph=cls.any_graph,
         )
-        self.any_match_resource.save()
-        self.any_other_resource = ResourceInstance(
+        cls.any_match_resource.save()
+        cls.any_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.any_graph,
+            graph=cls.any_graph,
         )
-        self.any_other_resource.save()
+        cls.any_other_resource.save()
 
-        self.any_match_tile = TileModel(
+        cls.any_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.any_nodegroup,
-            resourceinstance=self.any_match_resource,
-            data={str(self.any_reference_node.nodeid): [self.reference_a]},
+            nodegroup=cls.any_nodegroup,
+            resourceinstance=cls.any_match_resource,
+            data={str(cls.any_reference_node.nodeid): [cls.reference_a]},
             provisionaledits=None,
         )
-        self.any_match_tile.save()
-        self.any_other_tile = TileModel(
+        cls.any_match_tile.save()
+        cls.any_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.any_nodegroup,
-            resourceinstance=self.any_other_resource,
-            data={str(self.any_reference_node.nodeid): [self.reference_c]},
+            nodegroup=cls.any_nodegroup,
+            resourceinstance=cls.any_other_resource,
+            data={str(cls.any_reference_node.nodeid): [cls.reference_c]},
             provisionaledits=None,
         )
-        self.any_other_tile.save()
+        cls.any_other_tile.save()
 
         all_suffix = uuid.uuid4().hex[:8]
-        self.all_graph = GraphModel.objects.create(
+        cls.all_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_reference_all_{all_suffix}",
             isresource=True,
         )
-        self.all_nodegroup = NodeGroup.objects.create(
+        cls.all_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.all_reference_node = Node.objects.create(
+        cls.all_reference_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{all_suffix}",
             alias=f"value_{all_suffix}",
             datatype="reference",
-            graph=self.all_graph,
-            nodegroup=self.all_nodegroup,
+            graph=cls.all_graph,
+            nodegroup=cls.all_nodegroup,
             istopnode=True,
-            config={"controlledList": self.reference_list_id, "multiValue": True},
+            config={"controlledList": cls.reference_list_id, "multiValue": True},
         )
 
-        self.all_match_resource = ResourceInstance(
+        cls.all_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.all_graph,
+            graph=cls.all_graph,
         )
-        self.all_match_resource.save()
-        self.all_other_resource = ResourceInstance(
+        cls.all_match_resource.save()
+        cls.all_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.all_graph,
+            graph=cls.all_graph,
         )
-        self.all_other_resource.save()
+        cls.all_other_resource.save()
 
-        self.all_match_tile = TileModel(
+        cls.all_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.all_nodegroup,
-            resourceinstance=self.all_match_resource,
+            nodegroup=cls.all_nodegroup,
+            resourceinstance=cls.all_match_resource,
             data={
-                str(self.all_reference_node.nodeid): [
-                    self.reference_a,
-                    self.reference_b,
+                str(cls.all_reference_node.nodeid): [
+                    cls.reference_a,
+                    cls.reference_b,
                 ]
             },
             provisionaledits=None,
         )
-        self.all_match_tile.save()
-        self.all_other_tile = TileModel(
+        cls.all_match_tile.save()
+        cls.all_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.all_nodegroup,
-            resourceinstance=self.all_other_resource,
-            data={str(self.all_reference_node.nodeid): [self.reference_a]},
+            nodegroup=cls.all_nodegroup,
+            resourceinstance=cls.all_other_resource,
+            data={str(cls.all_reference_node.nodeid): [cls.reference_a]},
             provisionaledits=None,
         )
-        self.all_other_tile.save()
+        cls.all_other_tile.save()
 
         only_suffix = uuid.uuid4().hex[:8]
-        self.only_graph = GraphModel.objects.create(
+        cls.only_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_reference_only_{only_suffix}",
             isresource=True,
         )
-        self.only_nodegroup = NodeGroup.objects.create(
+        cls.only_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.only_reference_node = Node.objects.create(
+        cls.only_reference_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{only_suffix}",
             alias=f"value_{only_suffix}",
             datatype="reference",
-            graph=self.only_graph,
-            nodegroup=self.only_nodegroup,
+            graph=cls.only_graph,
+            nodegroup=cls.only_nodegroup,
             istopnode=True,
-            config={"controlledList": self.reference_list_id, "multiValue": True},
+            config={"controlledList": cls.reference_list_id, "multiValue": True},
         )
 
-        self.only_match_resource = ResourceInstance(
+        cls.only_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.only_graph,
+            graph=cls.only_graph,
         )
-        self.only_match_resource.save()
-        self.only_other_resource = ResourceInstance(
+        cls.only_match_resource.save()
+        cls.only_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.only_graph,
+            graph=cls.only_graph,
         )
-        self.only_other_resource.save()
+        cls.only_other_resource.save()
 
-        self.only_match_tile = TileModel(
+        cls.only_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.only_nodegroup,
-            resourceinstance=self.only_match_resource,
+            nodegroup=cls.only_nodegroup,
+            resourceinstance=cls.only_match_resource,
             data={
-                str(self.only_reference_node.nodeid): [
-                    self.reference_a,
-                    self.reference_b,
+                str(cls.only_reference_node.nodeid): [
+                    cls.reference_a,
+                    cls.reference_b,
                 ]
             },
             provisionaledits=None,
         )
-        self.only_match_tile.save()
-        self.only_other_tile = TileModel(
+        cls.only_match_tile.save()
+        cls.only_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.only_nodegroup,
-            resourceinstance=self.only_other_resource,
+            nodegroup=cls.only_nodegroup,
+            resourceinstance=cls.only_other_resource,
             data={
-                str(self.only_reference_node.nodeid): [
-                    self.reference_a,
-                    self.reference_b,
-                    self.reference_c,
+                str(cls.only_reference_node.nodeid): [
+                    cls.reference_a,
+                    cls.reference_b,
+                    cls.reference_c,
                 ]
             },
             provisionaledits=None,
         )
-        self.only_other_tile.save()
+        cls.only_other_tile.save()
 
         none_suffix = uuid.uuid4().hex[:8]
-        self.none_graph = GraphModel.objects.create(
+        cls.none_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_reference_none_{none_suffix}",
             isresource=True,
         )
-        self.none_nodegroup = NodeGroup.objects.create(
+        cls.none_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.none_reference_node = Node.objects.create(
+        cls.none_reference_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{none_suffix}",
             alias=f"value_{none_suffix}",
             datatype="reference",
-            graph=self.none_graph,
-            nodegroup=self.none_nodegroup,
+            graph=cls.none_graph,
+            nodegroup=cls.none_nodegroup,
             istopnode=True,
-            config={"controlledList": self.reference_list_id, "multiValue": True},
+            config={"controlledList": cls.reference_list_id, "multiValue": True},
         )
 
-        self.none_match_resource = ResourceInstance(
+        cls.none_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.none_graph,
+            graph=cls.none_graph,
         )
-        self.none_match_resource.save()
-        self.none_other_resource = ResourceInstance(
+        cls.none_match_resource.save()
+        cls.none_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.none_graph,
+            graph=cls.none_graph,
         )
-        self.none_other_resource.save()
+        cls.none_other_resource.save()
 
-        self.none_match_tile = TileModel(
+        cls.none_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.none_nodegroup,
-            resourceinstance=self.none_match_resource,
-            data={str(self.none_reference_node.nodeid): [self.reference_c]},
+            nodegroup=cls.none_nodegroup,
+            resourceinstance=cls.none_match_resource,
+            data={str(cls.none_reference_node.nodeid): [cls.reference_c]},
             provisionaledits=None,
         )
-        self.none_match_tile.save()
-        self.none_other_tile = TileModel(
+        cls.none_match_tile.save()
+        cls.none_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.none_nodegroup,
-            resourceinstance=self.none_other_resource,
-            data={str(self.none_reference_node.nodeid): [self.reference_a]},
+            nodegroup=cls.none_nodegroup,
+            resourceinstance=cls.none_other_resource,
+            data={str(cls.none_reference_node.nodeid): [cls.reference_a]},
             provisionaledits=None,
         )
-        self.none_other_tile.save()
+        cls.none_other_tile.save()
 
         descendant_suffix = uuid.uuid4().hex[:8]
-        self.descendant_graph = GraphModel.objects.create(
+        cls.descendant_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_reference_descendant_{descendant_suffix}",
             isresource=True,
         )
-        self.descendant_nodegroup = NodeGroup.objects.create(
+        cls.descendant_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.descendant_reference_node = Node.objects.create(
+        cls.descendant_reference_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{descendant_suffix}",
             alias=f"value_{descendant_suffix}",
             datatype="reference",
-            graph=self.descendant_graph,
-            nodegroup=self.descendant_nodegroup,
+            graph=cls.descendant_graph,
+            nodegroup=cls.descendant_nodegroup,
             istopnode=True,
-            config={"controlledList": self.reference_list_id, "multiValue": True},
+            config={"controlledList": cls.reference_list_id, "multiValue": True},
         )
 
-        self.descendant_match_resource = ResourceInstance(
+        cls.descendant_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.descendant_graph,
+            graph=cls.descendant_graph,
         )
-        self.descendant_match_resource.save()
-        self.descendant_other_resource = ResourceInstance(
+        cls.descendant_match_resource.save()
+        cls.descendant_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.descendant_graph,
+            graph=cls.descendant_graph,
         )
-        self.descendant_other_resource.save()
+        cls.descendant_other_resource.save()
 
-        self.descendant_match_tile = TileModel(
+        cls.descendant_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.descendant_nodegroup,
-            resourceinstance=self.descendant_match_resource,
-            data={str(self.descendant_reference_node.nodeid): [self.reference_child]},
+            nodegroup=cls.descendant_nodegroup,
+            resourceinstance=cls.descendant_match_resource,
+            data={str(cls.descendant_reference_node.nodeid): [cls.reference_child]},
             provisionaledits=None,
         )
-        self.descendant_match_tile.save()
-        self.descendant_other_tile = TileModel(
+        cls.descendant_match_tile.save()
+        cls.descendant_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.descendant_nodegroup,
-            resourceinstance=self.descendant_other_resource,
-            data={str(self.descendant_reference_node.nodeid): [self.reference_other]},
+            nodegroup=cls.descendant_nodegroup,
+            resourceinstance=cls.descendant_other_resource,
+            data={str(cls.descendant_reference_node.nodeid): [cls.reference_other]},
             provisionaledits=None,
         )
-        self.descendant_other_tile.save()
+        cls.descendant_other_tile.save()
 
         ancestor_suffix = uuid.uuid4().hex[:8]
-        self.ancestor_graph = GraphModel.objects.create(
+        cls.ancestor_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_reference_ancestor_{ancestor_suffix}",
             isresource=True,
         )
-        self.ancestor_nodegroup = NodeGroup.objects.create(
+        cls.ancestor_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.ancestor_reference_node = Node.objects.create(
+        cls.ancestor_reference_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{ancestor_suffix}",
             alias=f"value_{ancestor_suffix}",
             datatype="reference",
-            graph=self.ancestor_graph,
-            nodegroup=self.ancestor_nodegroup,
+            graph=cls.ancestor_graph,
+            nodegroup=cls.ancestor_nodegroup,
             istopnode=True,
-            config={"controlledList": self.reference_list_id, "multiValue": True},
+            config={"controlledList": cls.reference_list_id, "multiValue": True},
         )
 
-        self.ancestor_match_resource = ResourceInstance(
+        cls.ancestor_match_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.ancestor_graph,
+            graph=cls.ancestor_graph,
         )
-        self.ancestor_match_resource.save()
-        self.ancestor_other_resource = ResourceInstance(
+        cls.ancestor_match_resource.save()
+        cls.ancestor_other_resource = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.ancestor_graph,
+            graph=cls.ancestor_graph,
         )
-        self.ancestor_other_resource.save()
+        cls.ancestor_other_resource.save()
 
-        self.ancestor_match_tile = TileModel(
+        cls.ancestor_match_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.ancestor_nodegroup,
-            resourceinstance=self.ancestor_match_resource,
-            data={str(self.ancestor_reference_node.nodeid): [self.reference_parent]},
+            nodegroup=cls.ancestor_nodegroup,
+            resourceinstance=cls.ancestor_match_resource,
+            data={str(cls.ancestor_reference_node.nodeid): [cls.reference_parent]},
             provisionaledits=None,
         )
-        self.ancestor_match_tile.save()
-        self.ancestor_other_tile = TileModel(
+        cls.ancestor_match_tile.save()
+        cls.ancestor_other_tile = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.ancestor_nodegroup,
-            resourceinstance=self.ancestor_other_resource,
-            data={str(self.ancestor_reference_node.nodeid): [self.reference_other]},
+            nodegroup=cls.ancestor_nodegroup,
+            resourceinstance=cls.ancestor_other_resource,
+            data={str(cls.ancestor_reference_node.nodeid): [cls.reference_other]},
             provisionaledits=None,
         )
-        self.ancestor_other_tile.save()
+        cls.ancestor_other_tile.save()
 
         presence_suffix = uuid.uuid4().hex[:8]
-        self.presence_graph = GraphModel.objects.create(
+        cls.presence_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             slug=f"facet_reference_presence_{presence_suffix}",
             isresource=True,
         )
-        self.presence_nodegroup = NodeGroup.objects.create(
+        cls.presence_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(),
             cardinality="1",
         )
-        self.presence_reference_node = Node.objects.create(
+        cls.presence_reference_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name=f"value_{presence_suffix}",
             alias=f"value_{presence_suffix}",
             datatype="reference",
-            graph=self.presence_graph,
-            nodegroup=self.presence_nodegroup,
+            graph=cls.presence_graph,
+            nodegroup=cls.presence_nodegroup,
             istopnode=True,
-            config={"controlledList": self.reference_list_id, "multiValue": True},
+            config={"controlledList": cls.reference_list_id, "multiValue": True},
         )
 
-        self.resource_with_value = ResourceInstance(
+        cls.resource_with_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_with_value.save()
-        self.resource_without_value = ResourceInstance(
+        cls.resource_with_value.save()
+        cls.resource_without_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(),
-            graph=self.presence_graph,
+            graph=cls.presence_graph,
         )
-        self.resource_without_value.save()
+        cls.resource_without_value.save()
 
-        self.tile_with_value = TileModel(
+        cls.tile_with_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_with_value,
-            data={str(self.presence_reference_node.nodeid): [self.reference_a]},
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_with_value,
+            data={str(cls.presence_reference_node.nodeid): [cls.reference_a]},
             provisionaledits=None,
         )
-        self.tile_with_value.save()
-        self.tile_without_value = TileModel(
+        cls.tile_with_value.save()
+        cls.tile_without_value = TileModel(
             tileid=uuid.uuid4(),
-            nodegroup=self.presence_nodegroup,
-            resourceinstance=self.resource_without_value,
+            nodegroup=cls.presence_nodegroup,
+            resourceinstance=cls.resource_without_value,
             data={},
             provisionaledits=None,
         )
-        self.tile_without_value.save()
+        cls.tile_without_value.save()
 
         call_command("db_index", "reindex_database")
 
