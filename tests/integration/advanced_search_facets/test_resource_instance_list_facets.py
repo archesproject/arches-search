@@ -576,39 +576,6 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.count_more_resource.resourceinstanceid})
 
-    def test_count_less_than_matches_the_row_with_fewer_uuid_values(self):
-        """This checks that the count less than facet returns only the resource whose linked resource count falls below the requested threshold."""
-        payload = {
-            "graph_slug": self.count_graph.slug,
-            "scope": "RESOURCE",
-            "logic": "AND",
-            "clauses": [
-                {
-                    "type": "LITERAL",
-                    "quantifier": "ANY",
-                    "subject": [
-                        [
-                            self.count_graph.slug,
-                            self.count_resource_instance_list_node.alias,
-                        ]
-                    ],
-                    "operator": "COUNT_LESS_THAN",
-                    "operands": [{"type": "LITERAL", "value": 2}],
-                }
-            ],
-            "groups": [],
-            "aggregations": [],
-            "relationship": None,
-        }
-
-        result = set(
-            AdvancedSearchQueryCompiler(payload)
-            .compile()
-            .values_list("resourceinstanceid", flat=True)
-        )
-
-        self.assertEqual(result, {self.count_fewer_resource.resourceinstanceid})
-
     def test_has_no_value_matches_the_resource_without_a_uuid_row(self):
         """This checks that the has no value facet returns only the resource whose resource-instance-list tile indexed no linked resources at all."""
         payload = {

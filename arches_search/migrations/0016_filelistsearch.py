@@ -115,22 +115,6 @@ LEGACY_FILE_LIST_FACET_SPECS = (
         "is_orm_template_negated": False,
     },
     {
-        "operator": "FILE_COUNT_GREATER_THAN",
-        "label": "count is greater than",
-        "arity": 1,
-        "param_formats": ["{value}"],
-        "orm_template": "value__gt",
-        "is_orm_template_negated": False,
-    },
-    {
-        "operator": "FILE_COUNT_LESS_THAN",
-        "label": "count is less than",
-        "arity": 1,
-        "param_formats": ["{value}"],
-        "orm_template": "value__lt",
-        "is_orm_template_negated": False,
-    },
-    {
         "operator": "FILE_NAME_LIKE",
         "label": "name is like",
         "arity": 1,
