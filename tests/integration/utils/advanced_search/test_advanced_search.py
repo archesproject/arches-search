@@ -1564,6 +1564,59 @@ class AdvancedSearchTestCase(TestCase):
         )
         self.assertEqual(result, {PERSON_B_ID, PERSON_D_ID})
 
+    def test_friends_any_friend_age_22_frontend_structure(self):
+        """
+        Tests that the frontend's relationship payload structure is handled correctly. The
+        frontend wraps the relationship group inside an outer group with relationship=None,
+        rather than placing the relationship on the root group directly. The filter clause
+        also lives in a further-nested inner group (not directly on the relationship group).
+        Expected result is the same as test_friends_any_friend_age_22.
+        """
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "AND",
+                "clauses": [],
+                "groups": [
+                    {
+                        "graph_slug": "person",
+                        "scope": "RESOURCE",
+                        "logic": "AND",
+                        "clauses": [],
+                        "groups": [
+                            {
+                                "graph_slug": "person",
+                                "scope": "RESOURCE",
+                                "logic": "AND",
+                                "clauses": [
+                                    {
+                                        "type": "LITERAL",
+                                        "quantifier": "ANY",
+                                        "subject": [["person", "age"]],
+                                        "operator": "EQUALS",
+                                        "operands": [{"type": "LITERAL", "value": 22}],
+                                    }
+                                ],
+                                "groups": [],
+                                "aggregations": [],
+                                "relationship": None,
+                            }
+                        ],
+                        "aggregations": [],
+                        "relationship": {
+                            "path": [["person", "friends"]],
+                            "is_inverse": False,
+                            "traversal_quantifiers": ["ANY"],
+                        },
+                    }
+                ],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, {PERSON_B_ID, PERSON_D_ID})
+
     def test_people_all_friends_have_any_pet_tail_gt_10(self):
         """
         Tests ALL+ANY nested traversal quantifiers across two relationship levels (friends then
