@@ -26,7 +26,6 @@ CONTEXT_CHILD = "CHILD"
 # Aggregate predicate kinds
 AGGREGATE_KIND_SET_SUPERSET = "set_superset"
 AGGREGATE_KIND_SET_EQUAL = "set_equal"
-AGGREGATE_KIND_COUNT = "count"
 
 # Datatypes that represent resource-to-resource links rather than scalar values.
 TERMINAL_RESOURCE_DATATYPES = {"resource-instance", "resource-instance-list"}

@@ -6,7 +6,6 @@ from django.db.models import OuterRef, Q, Subquery
 from django.utils.translation import gettext as _
 
 from arches_search.utils.advanced_search.constants import (
-    AGGREGATE_KIND_COUNT,
     AGGREGATE_KIND_SET_EQUAL,
     AGGREGATE_KIND_SET_SUPERSET,
     OPERAND_TYPE_GEO_LITERAL,
