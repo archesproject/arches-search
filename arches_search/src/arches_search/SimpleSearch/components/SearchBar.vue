@@ -62,7 +62,27 @@ function onKeydown(e: KeyboardEvent) {
                 @keydown="onKeydown"
             >
                 <template #option="{ option }">
-                    <span>{{ option.value }}</span>
+                    <div class="suggestion-option">
+                        <span
+                            v-if="option.datatype === 'reference'"
+                            class="suggestion-icon suggestion-icon--concept"
+                        >C</span>
+                        <i
+                            v-else-if="option.datatype === 'term'"
+                            class="pi pi-hashtag suggestion-icon suggestion-icon--term"
+                        />
+                        <i
+                            v-else
+                            class="pi pi-search suggestion-icon suggestion-icon--string"
+                        />
+                        <div class="suggestion-content">
+                            <span class="suggestion-label">{{ option.value }}</span>
+                            <span
+                                v-if="option.addtional_info && option.addtional_info.path && option.addtional_info.path.length > 0"
+                                class="suggestion-path"
+                            >{{ option.addtional_info.path.join(" > ") }}</span>
+                        </div>
+                    </div>
                 </template>
             </AutoComplete>
         </span>
@@ -122,5 +142,61 @@ function onKeydown(e: KeyboardEvent) {
     padding: 1rem 2rem;
     border-radius: 0.4rem;
     white-space: nowrap;
+}
+
+.suggestion-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.suggestion-icon {
+    flex-shrink: 0;
+    width: 1.75rem;
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-top: 0.1rem;
+}
+
+.suggestion-icon--concept {
+    background-color: var(--p-primary-color);
+    color: white;
+}
+
+.suggestion-icon--term {
+    background-color: var(--p-surface-200);
+    color: var(--p-surface-700);
+}
+
+.suggestion-icon--string {
+    background-color: var(--p-surface-200);
+    color: var(--p-surface-700);
+}
+
+.suggestion-content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.suggestion-label {
+    font-weight: 500;
+    color: var(--p-text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.suggestion-path {
+    font-size: 1.1rem;
+    color: var(--p-text-muted-color, var(--p-surface-500));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 </style>

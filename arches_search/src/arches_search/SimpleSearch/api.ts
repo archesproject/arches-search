@@ -79,7 +79,7 @@ export async function fetchSimpleSearchResults({
 export async function fetchSearchTermSuggestions(
     query: string,
 ): Promise<Array<{ text: string; datatype: string; value: string }>> {
-    const params = new URLSearchParams({ q: query, lang: "*" });
+    const params = new URLSearchParams({ q: query, lang: "*", flat: "true" });
     const response = await fetch(
         `${generateArchesURL("arches_search:term_suggestion_search")}?${params.toString()}`,
     );
