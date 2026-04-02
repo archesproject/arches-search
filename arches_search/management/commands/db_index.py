@@ -18,8 +18,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """This module contains commands for building Arches."""
 import datetime
+from django.conf import settings
 from django.core.management.base import BaseCommand
-from arches.app.models.models import TileModel
+from django.db import connection
+from arches.app.models.models import TileModel, Node
 from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
@@ -32,6 +34,17 @@ from arches_search.models.models import (
     TermSearch,
     UUIDSearch,
 )
+
+SEARCH_MODELS = [
+    TermSearch,
+    NumericSearch,
+    DateSearch,
+    UUIDSearch,
+    DateRangeSearch,
+    BooleanSearch,
+    GeometrySearch,
+    FileListSearch,
+]
 
 
 class Command(BaseCommand):
@@ -55,56 +68,50 @@ class Command(BaseCommand):
         if options["operation"] == "reindex_database":
             self.reindex_database()
 
+    def _flush(self, values_to_index, batch_size):
+        for index_type, values in values_to_index.items():
+            if values:
+                index_type.objects.bulk_create(values, batch_size=batch_size)
+                values.clear()
+
     def reindex_database(self):
         self.delete_indexes()
+        SYSTEM_SETTINGS_GRAPH = "ff623370-fa12-11e6-b98b-6c4008b05c4c"
+        BATCH_SIZE = 1000
         nodegroup_cache = {}
-        indexing_factory = IndexingFactory()
-        values_to_index = {
-            TermSearch: [],
-            NumericSearch: [],
-            DateSearch: [],
-            UUIDSearch: [],
-            DateRangeSearch: [],
-            BooleanSearch: [],
-            GeometrySearch: [],
-            FileListSearch: [],
-        }
-
-        print("Calculating index values")
-        value_calculation_start = datetime.datetime.now()
-        for tile in (
-            TileModel.objects.order_by("tileid").all().iterator(chunk_size=1000)
+        for node in Node.objects.exclude(graph_id=SYSTEM_SETTINGS_GRAPH).select_related(
+            "graph"
         ):
-            index_values = index_from_tile(
-                tile,
-                delete_existing=False,
-                indexing_factory=indexing_factory,
-                nodegroup_cache=nodegroup_cache,
-            )
-            if index_values:
-                for val in index_values:
-                    values_to_index[type(val)].append(val)
+            nodegroup_cache.setdefault(node.nodegroup_id, []).append(node)
 
-        print(
-            f"Value calculation took {datetime.datetime.now() - value_calculation_start} seconds"
-        )
+        values_to_index = {model: [] for model in SEARCH_MODELS}
+        indexing_factory = IndexingFactory()
+        indexing_start = datetime.datetime.now()
+        tile_count = 0
 
-        print("Saving index records")
-        value_saving_start = datetime.datetime.now()
-        for index_type, values in values_to_index.items():
-            print(f"Saving {len(values)} {index_type.__name__} values")
-            index_type.objects.bulk_create(values, batch_size=1000)
+        for tile in TileModel.objects.exclude(
+            resourceinstance_id=settings.SYSTEM_SETTINGS_RESOURCE_ID
+        ).iterator(chunk_size=BATCH_SIZE):
+            for val in (
+                index_from_tile(
+                    tile,
+                    delete_existing=False,
+                    indexing_factory=indexing_factory,
+                    nodegroup_cache=nodegroup_cache,
+                )
+                or []
+            ):
+                values_to_index[type(val)].append(val)
 
-        print(
-            f"Value saving took {datetime.datetime.now() - value_saving_start} seconds"
-        )
+            tile_count += 1
+            if tile_count % BATCH_SIZE == 0:
+                self._flush(values_to_index, BATCH_SIZE)
+                self.stdout.write(f"indexed {tile_count} tiles")
 
-    def delete_indexes(self, name=None):
-        TermSearch.objects.all().delete()
-        NumericSearch.objects.all().delete()
-        DateSearch.objects.all().delete()
-        DateRangeSearch.objects.all().delete()
-        BooleanSearch.objects.all().delete()
-        UUIDSearch.objects.all().delete()
-        GeometrySearch.objects.all().delete()
-        FileListSearch.objects.all().delete()
+        self._flush(values_to_index, BATCH_SIZE)
+        self.stdout.write(f"Indexing took {datetime.datetime.now() - indexing_start}")
+
+    def delete_indexes(self):
+        table_names = ", ".join(model._meta.db_table for model in SEARCH_MODELS)
+        with connection.cursor() as cursor:
+            cursor.execute(f"TRUNCATE {table_names}")
