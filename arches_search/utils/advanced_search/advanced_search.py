@@ -66,27 +66,38 @@ class AdvancedSearchQueryCompiler:
             path_navigator=self.path_navigator,
         )
 
-    def compile(self) -> QuerySet:
+    def compile(self, pre_filter=None) -> QuerySet:
+        """
+        Compiles the provided search query into a Django queryset.
+        :param pre_filter: An optional initial queryset to apply the compiled query on.
+        :return: A Django queryset representing the compiled search query.
+        """
+
         filter_predicate, existence_predicates = self.group_compiler.compile(
             group_payload=self.payload_query,
         )
 
-        anchor_graph_id = (
-            arches_models.Graph.objects.filter(slug=self.payload_query["graph_slug"])
-            .values_list("graphid", flat=True)
-            .first()
-        )
-        if anchor_graph_id is None:
-            raise ValueError(
-                _("Unknown graph slug: %(slug)s")
-                % {"slug": self.payload_query["graph_slug"]}
+        if pre_filter is not None:
+            queryset = pre_filter
+        else:
+            anchor_graph_id = (
+                arches_models.Graph.objects.filter(
+                    slug=self.payload_query["graph_slug"]
+                )
+                .values_list("graphid", flat=True)
+                .first()
             )
+            if anchor_graph_id is None:
+                raise ValueError(
+                    _("Unknown graph slug: %(slug)s")
+                    % {"slug": self.payload_query["graph_slug"]}
+                )
 
-        queryset = (
-            arches_models.ResourceInstance.objects.only("resourceinstanceid")
-            .filter(graph_id=anchor_graph_id)
-            .order_by()
-        )
+            queryset = (
+                arches_models.ResourceInstance.objects.only("resourceinstanceid")
+                .filter(graph_id=anchor_graph_id)
+                .order_by()
+            )
 
         for existence_predicate in existence_predicates:
             queryset = queryset.filter(existence_predicate)
