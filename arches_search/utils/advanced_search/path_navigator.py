@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import Tuple, Sequence, Dict, Any
 
 from django.db.models import QuerySet, OuterRef

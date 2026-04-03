@@ -77,6 +77,16 @@ def populate_target_search_models(apps, schema_editor):
         facet.save(update_fields=["target_search_model"])
 
 
+def default_target_search_model_pk():
+    from django.contrib.contenttypes.models import ContentType
+
+    content_type, _created = ContentType.objects.get_or_create(
+        app_label="arches_search",
+        model="termsearch",
+    )
+    return content_type.pk
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("arches_search", "0010_saved_searches"),
@@ -87,23 +97,13 @@ class Migration(migrations.Migration):
             model_name="advancedsearchfacet",
             name="target_search_model",
             field=models.ForeignKey(
-                blank=True,
+                default=default_target_search_model_pk,
                 help_text="The concrete search-table model this facet should query against.",
-                null=True,
                 on_delete=django.db.models.deletion.PROTECT,
                 to="contenttypes.contenttype",
                 verbose_name="Target Search Model",
             ),
+            preserve_default=False,
         ),
         migrations.RunPython(populate_target_search_models, migrations.RunPython.noop),
-        migrations.AlterField(
-            model_name="advancedsearchfacet",
-            name="target_search_model",
-            field=models.ForeignKey(
-                help_text="The concrete search-table model this facet should query against.",
-                on_delete=django.db.models.deletion.PROTECT,
-                to="contenttypes.contenttype",
-                verbose_name="Target Search Model",
-            ),
-        ),
     ]

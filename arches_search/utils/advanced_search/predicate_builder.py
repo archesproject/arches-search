@@ -151,15 +151,15 @@ class PredicateBuilder:
         )
 
     def _coerce_aggregate_values(self, raw_value: Any) -> tuple[Any, ...]:
-        if raw_value is None:
-            return ()
-        if isinstance(raw_value, tuple):
-            return raw_value
-        if isinstance(raw_value, list):
-            return tuple(raw_value)
-        if isinstance(raw_value, set):
-            return tuple(raw_value)
-        return (raw_value,)
+        match raw_value:
+            case None:
+                return ()
+            case tuple():
+                return raw_value
+            case list() | set():
+                return tuple(raw_value)
+            case _:
+                return (raw_value,)
 
     def _normalize_operands(
         self,
