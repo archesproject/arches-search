@@ -72,7 +72,6 @@ class TermSuggestionView(View):
 
                     selected_reference = None
                     for reference in tile.data[str(node.pk)]:
-                        print(reference)
                         for label in reference["labels"]:
                             if (
                                 label["value"] == result["value"]
