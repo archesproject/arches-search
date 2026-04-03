@@ -29,6 +29,17 @@ class AdvancedSearchFacet(models.Model):
     sortorder = models.PositiveSmallIntegerField()
     orm_template = models.CharField(max_length=255, blank=True)
     is_orm_template_negated = models.BooleanField(default=False)
+    filter_field = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name=_("Filter field"),
+        help_text=_(
+            "Name of a field on the target search model used to further filter rows "
+            "based on operand metadata (e.g. 'language' for locale-keyed string operands). "
+            "Empty means no additional filtering."
+        ),
+    )
     target_search_model = models.ForeignKey(
         ContentType,
         on_delete=models.PROTECT,
@@ -57,6 +68,7 @@ class AdvancedSearchFacet(models.Model):
             "sortorder": self.sortorder,
             "orm_template": self.orm_template,
             "is_orm_template_negated": self.is_orm_template_negated,
+            "filter_field": self.filter_field,
             "target_search_model_id": self.target_search_model_id,
         }
 

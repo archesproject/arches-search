@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from arches_search.models.models import AdvancedSearchFacet
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils.translation import get_language
@@ -34,7 +37,7 @@ class LiteralClauseEvaluator:
         self.path_navigator = path_navigator
         self.predicate_builder = predicate_builder
 
-    def _build_subject_rows(
+    def build_subject_rows(
         self,
         model_class,
         subject_graph_slug: str,
@@ -45,14 +48,14 @@ class LiteralClauseEvaluator:
             node_alias=subject_node_alias,
         )
 
-    def _build_presence_subject_row_sets(
+    def build_presence_subject_row_sets(
         self,
         datatype_name: str,
         subject_graph_slug: str,
         subject_node_alias: str,
     ) -> List[QuerySet]:
         return [
-            self._build_subject_rows(
+            self.build_subject_rows(
                 model_class=model_class,
                 subject_graph_slug=subject_graph_slug,
                 subject_node_alias=subject_node_alias,
@@ -62,7 +65,7 @@ class LiteralClauseEvaluator:
             )
         ]
 
-    def _resolve_facet_and_model(
+    def resolve_facet_and_model(
         self,
         subject_graph_slug: str,
         subject_node_alias: str,
@@ -87,7 +90,7 @@ class LiteralClauseEvaluator:
     ):
         correlated_row_sets = [
             subject_rows.filter(resourceinstanceid=OuterRef(correlate_field_name))
-            for subject_rows in self._build_presence_subject_row_sets(
+            for subject_rows in self.build_presence_subject_row_sets(
                 datatype_name=datatype_name,
                 subject_graph_slug=subject_graph_slug,
                 subject_node_alias=subject_node_alias,
@@ -109,24 +112,24 @@ class LiteralClauseEvaluator:
         operator_token = clause_payload["operator"]
         operand_items = clause_payload["operands"]
 
-        datatype_name, facet, model_class = self._resolve_facet_and_model(
+        datatype_name, facet, model_class = self.resolve_facet_and_model(
             subject_graph_slug=subject_graph_slug,
             subject_node_alias=subject_node_alias,
             operator_token=operator_token,
         )
 
-        subject_rows = self._build_subject_rows(
+        subject_rows = self.build_subject_rows(
             model_class=model_class,
             subject_graph_slug=subject_graph_slug,
             subject_node_alias=subject_node_alias,
         )
-        normalized_operand_items, localized_language = self._localize_string_operands(
-            datatype_name=datatype_name,
+        normalized_operand_items, localized_language = self.localize_string_operands(
+            facet=facet,
             operand_items=operand_items,
         )
-        correlated_rows = self._apply_localized_language_filter(
+        correlated_rows = self.apply_localized_language_filter(
             subject_rows.filter(resourceinstanceid=OuterRef(correlate_field_name)),
-            datatype_name=datatype_name,
+            facet=facet,
             localized_language=localized_language,
         )
         predicate_expression, is_template_negated = (
@@ -218,7 +221,7 @@ class LiteralClauseEvaluator:
                 violating_rows = correlated_rows.exclude(predicate_expression)
                 return Exists(correlated_rows) & ~Exists(violating_rows)
 
-            positive_per_row = self._positive_rows_for_negated_template(
+            positive_per_row = self.positive_rows_for_negated_template(
                 operator_token=operator_token,
                 datatype_name=datatype_name,
                 operand_items=normalized_operand_items,
@@ -282,7 +285,7 @@ class LiteralClauseEvaluator:
         if not is_template_negated:
             return Exists(correlated_rows.filter(predicate_expression))
 
-        positive_rows = self._positive_rows_for_negated_template(
+        positive_rows = self.positive_rows_for_negated_template(
             operator_token=operator_token,
             datatype_name=datatype_name,
             operand_items=normalized_operand_items,
@@ -333,7 +336,7 @@ class LiteralClauseEvaluator:
             operator_token = clause_payload["operator"]
             operand_items = clause_payload["operands"]
 
-            datatype_name, facet, model_class = self._resolve_facet_and_model(
+            datatype_name, facet, model_class = self.resolve_facet_and_model(
                 subject_graph_slug=subject_graph_slug,
                 subject_node_alias=subject_node_alias,
                 operator_token=operator_token,
@@ -344,7 +347,7 @@ class LiteralClauseEvaluator:
                     datatype_name,
                     operator_token,
                 )
-                base_row_sets = self._build_presence_subject_row_sets(
+                base_row_sets = self.build_presence_subject_row_sets(
                     datatype_name=datatype_name,
                     subject_graph_slug=subject_graph_slug,
                     subject_node_alias=subject_node_alias,
@@ -366,20 +369,20 @@ class LiteralClauseEvaluator:
                         "resourceinstanceid"
                     )
             else:
-                base_rows = self._build_subject_rows(
+                base_rows = self.build_subject_rows(
                     model_class=model_class,
                     subject_graph_slug=subject_graph_slug,
                     subject_node_alias=subject_node_alias,
                 )
                 normalized_operand_items, localized_language = (
-                    self._localize_string_operands(
-                        datatype_name=datatype_name,
+                    self.localize_string_operands(
+                        facet=facet,
                         operand_items=operand_items,
                     )
                 )
-                correlated_rows = self._apply_localized_language_filter(
+                correlated_rows = self.apply_localized_language_filter(
                     base_rows.filter(resourceinstanceid=OuterRef(correlate_field)),
-                    datatype_name=datatype_name,
+                    facet=facet,
                     localized_language=localized_language,
                 )
 
@@ -414,7 +417,7 @@ class LiteralClauseEvaluator:
                     if not is_template_negated:
                         predicate_rows = correlated_rows.filter(predicate_expression)
                     else:
-                        positive_rows = self._positive_rows_for_negated_template(
+                        positive_rows = self.positive_rows_for_negated_template(
                             operator_token=operator_token,
                             datatype_name=datatype_name,
                             operand_items=normalized_operand_items,
@@ -435,7 +438,7 @@ class LiteralClauseEvaluator:
 
         return intersected_rows
 
-    def _positive_rows_for_negated_template(
+    def positive_rows_for_negated_template(
         self,
         operator_token: str,
         datatype_name: str,
@@ -462,12 +465,12 @@ class LiteralClauseEvaluator:
 
         return correlated_rows.exclude(predicate_expression)
 
-    def _localize_string_operands(
+    def localize_string_operands(
         self,
-        datatype_name: str,
+        facet: AdvancedSearchFacet,
         operand_items: List[Dict[str, Any]],
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        if datatype_name.lower() != "string":
+        if not facet.filter_field:
             return operand_items, None
 
         language_code = get_language()
@@ -508,13 +511,13 @@ class LiteralClauseEvaluator:
 
         return normalized_items, localized_language
 
-    def _apply_localized_language_filter(
+    def apply_localized_language_filter(
         self,
         rows: QuerySet,
-        datatype_name: str,
+        facet: AdvancedSearchFacet,
         localized_language: Optional[str],
     ) -> QuerySet:
-        if datatype_name.lower() != "string" or localized_language is None:
+        if not facet.filter_field or localized_language is None:
             return rows
 
-        return rows.filter(language=localized_language)
+        return rows.filter(**{facet.filter_field: localized_language})

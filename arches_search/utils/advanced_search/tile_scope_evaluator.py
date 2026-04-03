@@ -35,7 +35,7 @@ class TileScopeEvaluator:
         operand_items = clause_payload["operands"]
 
         datatype_name, facet, model_class = (
-            self.literal_clause_evaluator._resolve_facet_and_model(
+            self.literal_clause_evaluator.resolve_facet_and_model(
                 subject_graph_slug=subject_graph_slug,
                 subject_node_alias=subject_node_alias,
                 operator_token=operator_token,
@@ -46,7 +46,7 @@ class TileScopeEvaluator:
 
         if not operand_items:
             presence_subject_row_sets = (
-                self.literal_clause_evaluator._build_presence_subject_row_sets(
+                self.literal_clause_evaluator.build_presence_subject_row_sets(
                     datatype_name=datatype_name,
                     subject_graph_slug=subject_graph_slug,
                     subject_node_alias=subject_node_alias,
@@ -113,26 +113,26 @@ class TileScopeEvaluator:
                 resource_level=resource_level_q,
             )
 
-        subject_rows = self.literal_clause_evaluator._build_subject_rows(
+        subject_rows = self.literal_clause_evaluator.build_subject_rows(
             model_class=model_class,
             subject_graph_slug=subject_graph_slug,
             subject_node_alias=subject_node_alias,
         )
 
         normalized_operand_items, localized_language = (
-            self.literal_clause_evaluator._localize_string_operands(
-                datatype_name=datatype_name,
+            self.literal_clause_evaluator.localize_string_operands(
+                facet=facet,
                 operand_items=operand_items,
             )
         )
-        resource_rows = self.literal_clause_evaluator._apply_localized_language_filter(
+        resource_rows = self.literal_clause_evaluator.apply_localized_language_filter(
             subject_rows.filter(resourceinstanceid=OuterRef("resourceinstanceid")),
-            datatype_name=datatype_name,
+            facet=facet,
             localized_language=localized_language,
         )
-        tile_rows = self.literal_clause_evaluator._apply_localized_language_filter(
+        tile_rows = self.literal_clause_evaluator.apply_localized_language_filter(
             subject_rows.filter(resourceinstanceid=OuterRef("resourceinstance_id")),
-            datatype_name=datatype_name,
+            facet=facet,
             localized_language=localized_language,
         )
 
@@ -229,7 +229,7 @@ class TileScopeEvaluator:
                 )
 
             positive_per_tile_rows = (
-                self.literal_clause_evaluator._positive_rows_for_negated_template(
+                self.literal_clause_evaluator.positive_rows_for_negated_template(
                     operator_token=operator_token,
                     datatype_name=datatype_name,
                     operand_items=normalized_operand_items,
@@ -286,21 +286,16 @@ class TileScopeEvaluator:
         if not resource_scoped_predicates:
             return combined_per_tile_predicate
 
-        combined_resource_scoped_predicate = Q()
         if logic_connector_token == LOGIC_AND:
+            combined_resource_scoped_predicate = Q()
             for predicate in resource_scoped_predicates:
                 combined_resource_scoped_predicate &= predicate
-        elif logic_connector_token == LOGIC_OR:
-            for predicate in resource_scoped_predicates:
-                combined_resource_scoped_predicate |= predicate
-
-        if logic_connector_token == LOGIC_AND:
             return combined_per_tile_predicate & combined_resource_scoped_predicate
 
-        if logic_connector_token == LOGIC_OR:
-            return combined_per_tile_predicate | combined_resource_scoped_predicate
-
-        return combined_per_tile_predicate
+        combined_resource_scoped_predicate = Q(pk__in=[])
+        for predicate in resource_scoped_predicates:
+            combined_resource_scoped_predicate |= predicate
+        return combined_per_tile_predicate | combined_resource_scoped_predicate
 
     def _combine_tile_scoped_predicates(
         self,
