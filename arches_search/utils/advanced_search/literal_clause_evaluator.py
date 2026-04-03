@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-if TYPE_CHECKING:
-    from arches_search.models.models import AdvancedSearchFacet
+from arches_search.models.models import AdvancedSearchFacet
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils.translation import get_language
