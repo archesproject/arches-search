@@ -19,9 +19,9 @@ const emit = defineEmits<{
     (event: "search", term: string): void;
 }>();
 
-const suggestions = ref<Array<{ text: string; datatype: string; value: string }>>(
-    [],
-);
+const suggestions = ref<
+    Array<{ text: string; datatype: string; value: string }>
+>([]);
 
 async function onComplete(event: AutoCompleteCompleteEvent) {
     if (!event.query.trim()) {
@@ -35,7 +35,9 @@ function onSearch() {
     emit("search", props.modelValue);
 }
 
-function onSelect(event: { value: { text: string; datatype: string; value: string } }) {
+function onSelect(event: {
+    value: { text: string; datatype: string; value: string };
+}) {
     emit("update:modelValue", event.value.value);
     emit("search", event.value.value);
 }
@@ -66,7 +68,8 @@ function onKeydown(e: KeyboardEvent) {
                         <span
                             v-if="option.datatype === 'reference'"
                             class="suggestion-icon suggestion-icon--concept"
-                        >C</span>
+                            >C</span
+                        >
                         <i
                             v-else-if="option.datatype === 'term'"
                             class="pi pi-hashtag suggestion-icon suggestion-icon--term"
@@ -76,11 +79,20 @@ function onKeydown(e: KeyboardEvent) {
                             class="pi pi-search suggestion-icon suggestion-icon--string"
                         />
                         <div class="suggestion-content">
-                            <span class="suggestion-label">{{ option.value }}</span>
+                            <span class="suggestion-label">{{
+                                option.value
+                            }}</span>
                             <span
-                                v-if="option.addtional_info && option.addtional_info.path && option.addtional_info.path.length > 0"
+                                v-if="
+                                    option.addtional_info &&
+                                    option.addtional_info.path &&
+                                    option.addtional_info.path.length > 0
+                                "
                                 class="suggestion-path"
-                            >{{ option.addtional_info.path.join(" > ") }}</span>
+                                >{{
+                                    option.addtional_info.path.join(" > ")
+                                }}</span
+                            >
                         </div>
                     </div>
                 </template>
