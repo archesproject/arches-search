@@ -22,8 +22,9 @@ from arches.app.models.models import (
 )
 
 from arches_search.indexing.index_from_tile import index_from_tile
+from arches_search.indexing.indexers.file_list import FileListIndexing
 from arches_search.indexing.indexers.string import StringIndexing
-from arches_search.models.models import TermSearch
+from arches_search.models.models import FileListSearch, TermSearch
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +102,22 @@ class IndexingTestCase(TestCase):
             provisionaledits=None,
         )
 
+    @staticmethod
+    def _localized_string_value(value: str, **translations: str):
+        localized_value = {
+            "de": {"value": "", "direction": "ltr"},
+            "en": {"value": value, "direction": "ltr"},
+            "en-US": {"value": "", "direction": "ltr"},
+            "fr": {"value": "", "direction": "ltr"},
+            "pt": {"value": "", "direction": "ltr"},
+        }
+        for language_code, translated_value in translations.items():
+            localized_value[language_code] = {
+                "value": translated_value,
+                "direction": "ltr",
+            }
+        return localized_value
+
 
 # ---------------------------------------------------------------------------
 # Long string tests
@@ -117,7 +134,7 @@ class LongStringIndexingTests(IndexingTestCase):
         """StringIndexing writes long French value to the TermSearch table."""
         tile = self._make_tile(
             self.string_node,
-            {"en": {"value": self.long_string, "direction": "ltr"}},
+            self._localized_string_value(self.long_string),
         )
         indexer = StringIndexing()
         result = indexer.index(tile, self.string_node)
@@ -127,6 +144,88 @@ class LongStringIndexingTests(IndexingTestCase):
         result[0].save()
         saved = TermSearch.objects.get(pk=result[0].pk)
         self.assertEqual(saved.value, self.long_string)
+
+    def test_string_indexer_skips_empty_localized_values(self):
+        """StringIndexing should not emit TermSearch rows for blank locale values."""
+        tile = self._make_tile(
+            self.string_node,
+            self._localized_string_value("REX"),
+        )
+        indexer = StringIndexing()
+
+        result = indexer.index(tile, self.string_node)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].language, "en")
+        self.assertEqual(result[0].value, "REX")
+
+
+# ---------------------------------------------------------------------------
+# File-list indexing tests
+# ---------------------------------------------------------------------------
+
+
+class FileListIndexingTests(IndexingTestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.file_list_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="test_file_list_node",
+            alias="test_file_list_node",
+            datatype="file-list",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+        )
+
+    def test_file_list_indexer_writes_file_specific_rows(self):
+        tile = self._make_tile(
+            self.file_list_node,
+            [
+                {
+                    "name": "invoice_2024.pdf",
+                    "size": 11,
+                    "lastModified": 1705708800000,
+                },
+                {
+                    "name": "meeting_notes.txt",
+                    "size": 2,
+                    "lastModified": 1704844800.0,
+                },
+            ],
+        )
+        indexer = FileListIndexing()
+        result = indexer.index(tile, self.file_list_node)
+
+        file_list_rows = [row for row in result if isinstance(row, FileListSearch)]
+        self.assertEqual(len(file_list_rows), 2)
+
+        for row in file_list_rows:
+            row.save()
+
+        saved = list(
+            FileListSearch.objects.filter(tileid=tile.tileid)
+            .order_by("value")
+            .values("value", "extension", "file_size", "modified_at")
+        )
+        self.assertEqual(
+            saved,
+            [
+                {
+                    "value": "invoice_2024.pdf",
+                    "extension": "pdf",
+                    "file_size": 11,
+                    "modified_at": 1705708800000,
+                },
+                {
+                    "value": "meeting_notes.txt",
+                    "extension": "txt",
+                    "file_size": 2,
+                    "modified_at": 1704844800.0,
+                },
+            ],
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -4,35 +4,43 @@ from django.db.models import Exists, OuterRef, Q
 
 from arches.app.models import models as arches_models
 from arches_search.utils.advanced_search.clause_reducer import ClauseReducer
+from arches_search.utils.advanced_search.literal_clause_evaluator import (
+    LiteralClauseEvaluator,
+)
+from arches_search.utils.advanced_search.related_clause_evaluator import (
+    RelatedClauseEvaluator,
+)
+from arches_search.utils.advanced_search.tile_scope_evaluator import TileScopeEvaluator
 
-LOGIC_AND = "AND"
-LOGIC_OR = "OR"
-
-SCOPE_RESOURCE = "RESOURCE"
-SCOPE_TILE = "TILE"
-
-QUANTIFIER_ANY = "ANY"
-QUANTIFIER_ALL = "ALL"
-QUANTIFIER_NONE = "NONE"
-
-CONTEXT_ANCHOR = "ANCHOR"
-CONTEXT_CHILD = "CHILD"
+from arches_search.utils.advanced_search.constants import (
+    CLAUSE_TYPE_LITERAL,
+    LOGIC_AND,
+    LOGIC_OR,
+    QUANTIFIER_ALL,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
+    SCOPE_TILE,
+)
 
 
 class GroupCompiler:
     def __init__(
         self,
         clause_reducer: ClauseReducer,
+        literal_clause_evaluator: LiteralClauseEvaluator,
+        related_clause_evaluator: RelatedClauseEvaluator,
+        tile_scope_evaluator: TileScopeEvaluator,
         path_navigator,
     ) -> None:
         self.clause_reducer = clause_reducer
+        self.literal_clause_evaluator = literal_clause_evaluator
+        self.related_clause_evaluator = related_clause_evaluator
+        self.tile_scope_evaluator = tile_scope_evaluator
         self.path_navigator = path_navigator
 
     def compile(
         self,
         group_payload: Dict[str, Any],
-        current_context_side: str = CONTEXT_ANCHOR,
-        traversal_context_for_parent: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Q, List[Any]]:
         scope_token = group_payload["scope"].upper()
         group_logic_token = group_payload["logic"].upper()
@@ -44,15 +52,12 @@ class GroupCompiler:
         if scope_token == SCOPE_TILE and not has_relationship:
             return self._compile_tile_scope_without_relationship(
                 group_payload=group_payload,
-                group_logic_token=group_logic_token,
             )
 
         if not has_relationship:
             return self._compile_resource_scope_without_relationship(
                 group_payload=group_payload,
                 group_logic_token=group_logic_token,
-                current_context_side=current_context_side,
-                traversal_context_for_parent=traversal_context_for_parent,
             )
 
         return self._compile_with_relationship(
@@ -74,75 +79,87 @@ class GroupCompiler:
     def _compile_tile_scope_without_relationship(
         self,
         group_payload: Dict[str, Any],
-        group_logic_token: str,
     ) -> Tuple[Q, List[Any]]:
-        reduce_result = self.clause_reducer.reduce(
-            group_payload=group_payload,
-            traversal_context=None,
-            child_rows=None,
-            logic=group_logic_token,
+        tiles_for_anchor_resource = arches_models.Tile.objects.filter(
+            resourceinstance_id=OuterRef("resourceinstanceid")
         )
-        return reduce_result.relationshipless_q or Q(), []
+        tile_q = self.tile_scope_evaluator.compose_group_predicate(
+            group_payload=group_payload,
+            tiles_for_anchor_resource=tiles_for_anchor_resource,
+        )
+        return tile_q, []
 
     def _compile_resource_scope_without_relationship(
         self,
         group_payload: Dict[str, Any],
         group_logic_token: str,
-        current_context_side: str,
-        traversal_context_for_parent: Optional[Dict[str, Any]],
     ) -> Tuple[Q, List[Any]]:
         group_has_any_relationship = self._group_has_any_relationship(
             group_payload=group_payload
         )
 
         if group_has_any_relationship:
-            group_payload_for_clause_reducer: Dict[str, Any] = {
+            group_payload_for_compose: Dict[str, Any] = {
                 **group_payload,
                 "groups": [],
             }
         else:
-            group_payload_for_clause_reducer = group_payload
+            group_payload_for_compose = group_payload
 
-        reduce_result = self.clause_reducer.reduce(
-            group_payload=group_payload_for_clause_reducer,
-            traversal_context=None,
-            child_rows=None,
-            logic=group_logic_token,
+        parent_q = self._compose_resource_scope_group_predicate(
+            group_payload_for_compose
         )
-        parent_q = reduce_result.relationshipless_q or Q()
 
         if not group_has_any_relationship:
             return parent_q, []
 
         children_q, children_existence_predicates = self._compile_children(
             subgroups=group_payload["groups"],
-            parent_has_relationship=False,
-            current_context_side=current_context_side,
-            traversal_context_for_parent=traversal_context_for_parent,
         )
 
         if group_logic_token == LOGIC_OR:
-            combined_or_q: Optional[Q] = None
-            combined_or_q = (
-                parent_q if combined_or_q is None else (combined_or_q | parent_q)
-            )
+            combined_or_q = parent_q
             if children_q is not None:
-                combined_or_q = (
-                    children_q
-                    if combined_or_q is None
-                    else (combined_or_q | children_q)
-                )
+                combined_or_q = combined_or_q | children_q
             for existence_expression in children_existence_predicates:
-                existence_q = Q(existence_expression)
-                combined_or_q = (
-                    existence_q
-                    if combined_or_q is None
-                    else (combined_or_q | existence_q)
-                )
-            return combined_or_q or Q(), []
+                combined_or_q = combined_or_q | Q(existence_expression)
+            return combined_or_q, []
 
         combined_and_q = parent_q & (children_q or Q())
         return combined_and_q, children_existence_predicates
+
+    def _compose_resource_scope_group_predicate(
+        self,
+        group_payload: Dict[str, Any],
+    ) -> Q:
+        predicate_fragments: List[Q] = []
+
+        for clause_payload in group_payload["clauses"]:
+            if clause_payload["type"] == CLAUSE_TYPE_LITERAL:
+                exists_expression = self.literal_clause_evaluator.build_anchor_exists(
+                    clause_payload
+                )
+            else:
+                exists_expression = self.related_clause_evaluator.evaluate_at_anchor(
+                    clause_payload=clause_payload,
+                )
+            predicate_fragments.append(Q(exists_expression))
+
+        for child_group_payload in group_payload["groups"]:
+            predicate_fragments.append(
+                self._compose_resource_scope_group_predicate(child_group_payload)
+            )
+
+        if group_payload["logic"] == LOGIC_AND:
+            combined_predicate = Q()
+            for predicate_fragment in predicate_fragments:
+                combined_predicate &= predicate_fragment
+            return combined_predicate
+
+        combined_predicate = Q(pk__in=[])
+        for predicate_fragment in predicate_fragments:
+            combined_predicate |= predicate_fragment
+        return combined_predicate
 
     def _compile_with_relationship(
         self,
@@ -257,8 +274,6 @@ class GroupCompiler:
         for subgroup_payload in subgroups:
             subgroup_q, subgroup_existence_predicates = self.compile(
                 group_payload=subgroup_payload,
-                current_context_side=CONTEXT_ANCHOR,
-                traversal_context_for_parent=None,
             )
 
             subgroup_has_q_children = bool(getattr(subgroup_q, "children", []))
@@ -328,38 +343,13 @@ class GroupCompiler:
     def _compile_children(
         self,
         subgroups: List[Dict[str, Any]],
-        parent_has_relationship: bool,
-        current_context_side: str,
-        traversal_context_for_parent: Optional[Dict[str, Any]],
     ) -> Tuple[Optional[Q], List[Any]]:
         combined_children_q: Optional[Q] = None
         accumulated_existence_predicates: List[Any] = []
 
         for subgroup_payload in subgroups:
-            subgroup_has_relationship = bool(
-                (subgroup_payload["relationship"] or {}).get("path")
-            )
-
-            if parent_has_relationship and subgroup_has_relationship:
-                continue
-
-            if (
-                parent_has_relationship
-                and not subgroup_has_relationship
-                and current_context_side == CONTEXT_CHILD
-            ):
-                continue
-
-            next_context_side = (
-                CONTEXT_CHILD
-                if parent_has_relationship and not subgroup_has_relationship
-                else current_context_side
-            )
-
             subgroup_q, subgroup_existence_predicates = self.compile(
                 group_payload=subgroup_payload,
-                current_context_side=next_context_side,
-                traversal_context_for_parent=traversal_context_for_parent,
             )
 
             combined_children_q = (

@@ -18,6 +18,7 @@ from arches_search.utils.advanced_search.literal_clause_evaluator import (
 from arches_search.utils.advanced_search.related_clause_evaluator import (
     RelatedClauseEvaluator,
 )
+from arches_search.utils.advanced_search.tile_scope_evaluator import TileScopeEvaluator
 from arches_search.utils.advanced_search.clause_reducer import ClauseReducer
 from arches_search.utils.advanced_search.group_compiler import GroupCompiler
 from arches_search.utils.advanced_search.payload_validator import PayloadValidator
@@ -53,9 +54,14 @@ class AdvancedSearchQueryCompiler:
             self.predicate_builder,
         )
 
+        self.tile_scope_evaluator = TileScopeEvaluator(
+            literal_clause_evaluator=self.literal_clause_evaluator,
+        )
+
         self.clause_reducer = ClauseReducer(
             literal_clause_evaluator=self.literal_clause_evaluator,
             related_clause_evaluator=self.related_clause_evaluator,
+            tile_scope_evaluator=self.tile_scope_evaluator,
             facet_registry=self.facet_registry,
             path_navigator=self.path_navigator,
             node_alias_datatype_registry=self.node_alias_registry,
@@ -63,6 +69,9 @@ class AdvancedSearchQueryCompiler:
 
         self.group_compiler = GroupCompiler(
             clause_reducer=self.clause_reducer,
+            literal_clause_evaluator=self.literal_clause_evaluator,
+            related_clause_evaluator=self.related_clause_evaluator,
+            tile_scope_evaluator=self.tile_scope_evaluator,
             path_navigator=self.path_navigator,
         )
 

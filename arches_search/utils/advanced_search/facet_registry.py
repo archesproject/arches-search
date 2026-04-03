@@ -10,12 +10,8 @@ class FacetRegistry:
             Tuple[str, str], AdvancedSearchFacet
         ] = {}
 
-        queryset = AdvancedSearchFacet.objects.select_related("datatype").only(
-            "arity",
-            "orm_template",
-            "is_orm_template_negated",
-            "operator",
-            "datatype__datatype",
+        queryset = AdvancedSearchFacet.objects.select_related(
+            "datatype", "target_search_model"
         )
 
         for facet in queryset:

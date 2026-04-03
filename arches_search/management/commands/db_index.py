@@ -26,10 +26,12 @@ from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
     BooleanSearch,
-    NumericSearch,
-    TermSearch,
     DateRangeSearch,
     DateSearch,
+    FileListSearch,
+    GeometrySearch,
+    NumericSearch,
+    TermSearch,
     UUIDSearch,
 )
 
@@ -40,6 +42,8 @@ SEARCH_MODELS = [
     UUIDSearch,
     DateRangeSearch,
     BooleanSearch,
+    GeometrySearch,
+    FileListSearch,
 ]
 
 

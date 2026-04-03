@@ -2,11 +2,13 @@ from django.db.models import Q
 from arches.app.models.models import Node
 from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
-    TermSearch,
-    DateSearch,
-    DateRangeSearch,
     BooleanSearch,
+    DateRangeSearch,
+    DateSearch,
+    FileListSearch,
+    GeometrySearch,
     NumericSearch,
+    TermSearch,
 )
 
 
@@ -20,6 +22,8 @@ def index_from_tile(
         DateRangeSearch.objects.filter(tileid=tile.tileid).delete()
         BooleanSearch.objects.filter(tileid=tile.tileid).delete()
         NumericSearch.objects.filter(tileid=tile.tileid).delete()
+        GeometrySearch.objects.filter(tileid=tile.tileid).delete()
+        FileListSearch.objects.filter(tileid=tile.tileid).delete()
 
     if indexing_factory is None:
         factory = IndexingFactory()

@@ -1,10 +1,16 @@
 from typing import Any, Dict, Optional
-from django.db.models import Exists, OuterRef, Q
-from django.utils.translation import gettext as _
 
-QUANTIFIER_ANY = "ANY"
-QUANTIFIER_ALL = "ALL"
-QUANTIFIER_NONE = "NONE"
+from django.db.models import Exists, OuterRef
+
+from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
+    build_grouped_rows_matching_aggregate_predicate,
+)
+from arches_search.utils.advanced_search.constants import (
+    QUANTIFIER_ALL,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
+)
+from arches_search.utils.advanced_search.specs import AggregatePredicateSpec
 
 
 class RelatedClauseEvaluator:
@@ -16,22 +22,21 @@ class RelatedClauseEvaluator:
         self.path_navigator = path_navigator
         self.predicate_builder = predicate_builder
 
-    def evaluate(
+    def evaluate_at_anchor(
         self,
-        mode: str,
         clause_payload: Dict[str, Any],
-        traversal_context: Optional[Dict[str, Any]] = None,
         terminal_datatype_name: Optional[str] = None,
     ):
-        if mode == "anchor":
-            return self._build_anchor_presence_exists(
-                clause_payload, terminal_datatype_name
-            )
-        if mode == "child":
-            if traversal_context is None:
-                raise ValueError(_("traversal_context is required for mode='child'"))
-            return self._build_child_presence_exists(clause_payload, traversal_context)
-        raise ValueError(_("Unsupported evaluation mode: {mode}").format(mode=mode))
+        return self._build_anchor_presence_exists(
+            clause_payload, terminal_datatype_name
+        )
+
+    def evaluate_at_child(
+        self,
+        clause_payload: Dict[str, Any],
+        traversal_context: Dict[str, Any],
+    ):
+        return self._build_child_presence_exists(clause_payload, traversal_context)
 
     def _build_anchor_presence_exists(
         self,
@@ -72,7 +77,7 @@ class RelatedClauseEvaluator:
                 else Exists(child_row_set)
             )
 
-        return Exists(child_row_set.none())
+        raise ValueError(f"Unsupported quantifier: {quantifier_token}")
 
     def _build_child_presence_exists(
         self, clause_payload: Dict[str, Any], traversal_context: Dict[str, Any]
@@ -86,7 +91,29 @@ class RelatedClauseEvaluator:
                 subject_graph_slug, subject_node_alias
             )
         )
-        model_class = self.search_model_registry.get_model_for_datatype(datatype_name)
+        facet = self.facet_registry.get_facet(datatype_name, operator_token)
+        if not operand_items:
+            correlated_subject_row_sets = [
+                model_class.objects.filter(
+                    graph_slug=subject_graph_slug,
+                    node_alias=subject_node_alias,
+                    resourceinstanceid=OuterRef(traversal_context["child_id_field"]),
+                ).annotate(
+                    _anchor_resource_id=OuterRef(traversal_context["anchor_id_field"])
+                )
+                for model_class in self.search_model_registry.get_all_models_for_datatype(
+                    datatype_name
+                )
+            ]
+            any_value_exists = Exists(correlated_subject_row_sets[0])
+            for current_row_set in correlated_subject_row_sets[1:]:
+                any_value_exists = any_value_exists | Exists(current_row_set)
+            presence_implies_match = self.facet_registry.presence_implies_match(
+                datatype_name, operator_token
+            )
+            return any_value_exists if presence_implies_match else ~any_value_exists
+
+        model_class = facet.target_model_class
         subject_rows = model_class.objects.filter(
             graph_slug=subject_graph_slug, node_alias=subject_node_alias
         )
@@ -95,23 +122,26 @@ class RelatedClauseEvaluator:
             resourceinstanceid=OuterRef(traversal_context["child_id_field"])
         ).annotate(_anchor_resource_id=OuterRef(traversal_context["anchor_id_field"]))
 
-        if not operand_items:
-            presence_implies_match = self.facet_registry.presence_implies_match(
-                datatype_name, operator_token
+        predicate_expression, is_template_negated = (
+            self.predicate_builder.build_predicate(
+                datatype_name=datatype_name,
+                operator_token=operator_token,
+                operands=operand_items,
+                anchor_resource_id_annotation="_anchor_resource_id",
+                facet=facet,
             )
-            return (
-                Exists(correlated_subject_rows)
-                if presence_implies_match
-                else ~Exists(correlated_subject_rows)
-            )
-
-        predicate_expression, _ = self.predicate_builder.build_predicate(
-            datatype_name=datatype_name,
-            operator_token=operator_token,
-            operands=operand_items,
-            anchor_resource_id_annotation="_anchor_resource_id",
         )
 
-        if isinstance(predicate_expression, Q):
-            return Exists(correlated_subject_rows.filter(predicate_expression))
-        return Exists(correlated_subject_rows.filter(**predicate_expression))
+        if isinstance(predicate_expression, AggregatePredicateSpec):
+            aggregate_matches = build_grouped_rows_matching_aggregate_predicate(
+                correlated_rows=correlated_subject_rows,
+                aggregate_predicate_spec=predicate_expression,
+                grouping_field_name="resourceinstanceid",
+            )
+            return (
+                ~Exists(aggregate_matches)
+                if is_template_negated
+                else Exists(aggregate_matches)
+            )
+
+        return Exists(correlated_subject_rows.filter(predicate_expression))

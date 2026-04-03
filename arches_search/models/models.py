@@ -1,8 +1,9 @@
 import uuid
 
+from django.contrib.gis.db.models import GeometryField
 from django.db import models
 from django.db.models import F
-from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.indexes import GinIndex, GistIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
@@ -10,44 +11,6 @@ from django.utils.translation import get_language, get_language_info
 from arches.app.models.fields.i18n import I18n_TextField
 from django.contrib.postgres.search import SearchVector
 from django.conf import settings
-
-
-class DDatatypeXAdvancedSearchModel(models.Model):
-    id = models.AutoField(primary_key=True)
-    datatype = models.OneToOneField(
-        "models.DDataType",
-        on_delete=models.CASCADE,
-        db_column="datatypeid",
-        verbose_name=_("Data Type"),
-        help_text=_("The data type this mapping applies to."),
-    )
-    content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.PROTECT,
-        verbose_name=_("Search Model"),
-        help_text=_("The concrete search-table model for this data type."),
-    )
-
-    class Meta:
-        managed = True
-        constraints = [
-            models.UniqueConstraint(
-                fields=["datatype"], name="unique_search_model_per_datatype"
-            )
-        ]
-        indexes = [
-            models.Index(fields=["datatype"]),
-            models.Index(fields=["content_type"]),
-        ]
-
-    @property
-    def model_class(self):
-        return self.content_type.model_class()
-
-    @property
-    def db_table_name(self):
-        model_class = self.model_class
-        return model_class._meta.db_table if model_class else None
 
 
 class AdvancedSearchFacet(models.Model):
@@ -66,6 +29,23 @@ class AdvancedSearchFacet(models.Model):
     sortorder = models.PositiveSmallIntegerField()
     orm_template = models.CharField(max_length=255, blank=True)
     is_orm_template_negated = models.BooleanField(default=False)
+    filter_field = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name=_("Filter field"),
+        help_text=_(
+            "Name of a field on the target search model used to further filter rows "
+            "based on operand metadata (e.g. 'language' for locale-keyed string operands). "
+            "Empty means no additional filtering."
+        ),
+    )
+    target_search_model = models.ForeignKey(
+        ContentType,
+        on_delete=models.PROTECT,
+        verbose_name=_("Target Search Model"),
+        help_text=_("The concrete search-table model this facet should query against."),
+    )
 
     class Meta:
         constraints = [
@@ -76,6 +56,35 @@ class AdvancedSearchFacet(models.Model):
                 fields=["datatype", "sortorder"], name="unique_sortorder_per_datatype"
             ),
         ]
+
+    def serialize(self, fields=None, exclude=None, **kwargs):
+        data = {
+            "id": self.id,
+            "arity": self.arity,
+            "datatype_id": self.datatype_id,
+            "label": self.label,
+            "operator": self.operator,
+            "param_formats": self.param_formats,
+            "sortorder": self.sortorder,
+            "orm_template": self.orm_template,
+            "is_orm_template_negated": self.is_orm_template_negated,
+            "filter_field": self.filter_field,
+            "target_search_model_id": self.target_search_model_id,
+        }
+
+        if fields is not None:
+            data = {key: value for key, value in data.items() if key in fields}
+
+        if exclude is not None:
+            data = {key: value for key, value in data.items() if key not in exclude}
+
+        return data
+
+    @property
+    def target_model_class(self):
+        if self.target_search_model_id is None:
+            return None
+        return self.target_search_model.model_class()
 
 
 class TermSearch(models.Model):
@@ -324,6 +333,98 @@ class BooleanSearch(models.Model):
                 fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
             ),
             models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
+        ]
+
+
+class GeometrySearch(models.Model):
+    id = models.AutoField(primary_key=True)
+    tileid = models.ForeignKey(
+        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+    )
+    resourceinstanceid = models.ForeignKey(
+        "models.ResourceInstance",
+        on_delete=models.CASCADE,
+        db_column="resourceinstanceid",
+    )
+    graph_slug = models.TextField()
+    node_alias = models.TextField()
+    datatype = models.TextField()
+    geom = GeometryField(srid=4326, spatial_index=False)
+
+    class Meta:
+        managed = True
+        db_table = "arches_search_geometry"
+        indexes = [
+            models.Index(
+                fields=["resourceinstanceid"],
+                name="arches_sear_resourc_geo_idx",
+            ),
+            models.Index(fields=["tileid"], name="arches_sear_tileid_geo_idx"),
+            models.Index(fields=["node_alias"], name="arches_sear_nodeal_geo_idx"),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"],
+                name="arches_sear_subject_geo_idx",
+            ),
+            GistIndex(fields=["geom"], name="arches_sear_geom_gist_idx"),
+        ]
+
+
+class FileListSearch(models.Model):
+    id = models.AutoField(primary_key=True)
+    tileid = models.ForeignKey(
+        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+    )
+    resourceinstanceid = models.ForeignKey(
+        "models.ResourceInstance",
+        on_delete=models.CASCADE,
+        db_column="resourceinstanceid",
+    )
+    graph_slug = models.TextField()
+    node_alias = models.TextField()
+    datatype = models.TextField()
+    value = models.TextField(null=True, blank=True)
+    extension = models.TextField(null=True, blank=True)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    modified_at = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "arches_search_file_list"
+        constraints = []
+        indexes = [
+            models.Index(fields=["resourceinstanceid"], name="afls_resource_idx"),
+            models.Index(fields=["tileid"], name="afls_tile_idx"),
+            models.Index(fields=["datatype"], name="afls_datatype_idx"),
+            models.Index(fields=["node_alias"], name="afls_node_alias_idx"),
+            models.Index(fields=["extension"], name="afls_extension_idx"),
+            models.Index(fields=["file_size"], name="afls_file_size_idx"),
+            models.Index(fields=["modified_at"], name="afls_modified_at_idx"),
+            models.Index(
+                fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"],
+                name="afls_scope_idx",
+            ),
+            models.Index(
+                fields=["graph_slug", "node_alias", "extension"],
+                name="afls_subject_ext_idx",
+            ),
+            models.Index(
+                fields=["graph_slug", "node_alias", "file_size"],
+                name="afls_subject_size_idx",
+            ),
+            models.Index(
+                fields=["graph_slug", "node_alias", "modified_at"],
+                name="afls_subject_mod_idx",
+            ),
+            GinIndex(
+                fields=["value"],
+                name="afls_value_trgm_idx",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["graph_slug", "node_alias", "value"],
+                name="afls_subject_name_trgm",
+                opclasses=["text_ops", "text_ops", "gin_trgm_ops"],
+            ),
         ]
 
 
