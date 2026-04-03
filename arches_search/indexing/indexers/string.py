@@ -17,7 +17,7 @@ class StringIndexing(BaseIndexing):
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
         search_items = []
         for string_object in document["strings"]:
-            if string_object["string"] is not None:
+            if string_object["string"] not in (None, ""):
                 term_search = TermSearch(
                     node_alias=node.alias,
                     tileid_id=tile.tileid,

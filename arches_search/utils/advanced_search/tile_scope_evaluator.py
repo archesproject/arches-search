@@ -119,18 +119,21 @@ class TileScopeEvaluator:
             subject_node_alias=subject_node_alias,
         )
 
-        resource_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef("resourceinstanceid")
-        )
-        tile_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef("resourceinstance_id")
-        )
-
-        normalized_operand_items = (
+        normalized_operand_items, localized_language = (
             self.literal_clause_evaluator._localize_string_operands(
                 datatype_name=datatype_name,
                 operand_items=operand_items,
             )
+        )
+        resource_rows = self.literal_clause_evaluator._apply_localized_language_filter(
+            subject_rows.filter(resourceinstanceid=OuterRef("resourceinstanceid")),
+            datatype_name=datatype_name,
+            localized_language=localized_language,
+        )
+        tile_rows = self.literal_clause_evaluator._apply_localized_language_filter(
+            subject_rows.filter(resourceinstanceid=OuterRef("resourceinstance_id")),
+            datatype_name=datatype_name,
+            localized_language=localized_language,
         )
 
         predicate_expression, is_template_negated = (

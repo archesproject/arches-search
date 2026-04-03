@@ -118,6 +118,22 @@ class AdvancedSearchTestCase(TestCase):
         cls._create_person_graph_nodes()
         cls._create_dog_graph_nodes()
 
+    @staticmethod
+    def _localized_string_value(value: str, **translations: str):
+        localized_value = {
+            "de": {"value": "", "direction": "ltr"},
+            "en": {"value": value, "direction": "ltr"},
+            "en-US": {"value": "", "direction": "ltr"},
+            "fr": {"value": "", "direction": "ltr"},
+            "pt": {"value": "", "direction": "ltr"},
+        }
+        for language_code, translated_value in translations.items():
+            localized_value[language_code] = {
+                "value": translated_value,
+                "direction": "ltr",
+            }
+        return localized_value
+
     @classmethod
     def _create_person_graph_nodes(cls):
         cls.fingernail_length_node = Node.objects.create(
@@ -272,12 +288,8 @@ class AdvancedSearchTestCase(TestCase):
             nodegroup=cls.alias,
             resourceinstance=cls.person_a,
             data={
-                str(cls.first_name_node.nodeid): {
-                    "en": {"value": "FOO", "direction": "ltr"}
-                },
-                str(cls.last_name_node.nodeid): {
-                    "en": {"value": "CHILD", "direction": "ltr"}
-                },
+                str(cls.first_name_node.nodeid): cls._localized_string_value("FOO"),
+                str(cls.last_name_node.nodeid): cls._localized_string_value("CHILD"),
             },
             provisionaledits=None,
         )
@@ -288,12 +300,8 @@ class AdvancedSearchTestCase(TestCase):
             nodegroup=cls.alias,
             resourceinstance=cls.person_a,
             data={
-                str(cls.first_name_node.nodeid): {
-                    "en": {"value": "bar", "direction": "ltr"}
-                },
-                str(cls.last_name_node.nodeid): {
-                    "en": {"value": "foo", "direction": "ltr"}
-                },
+                str(cls.first_name_node.nodeid): cls._localized_string_value("bar"),
+                str(cls.last_name_node.nodeid): cls._localized_string_value("foo"),
             },
             provisionaledits=None,
         )
@@ -339,11 +347,7 @@ class AdvancedSearchTestCase(TestCase):
             tileid=uuid.uuid4(),
             nodegroup=cls.nickname,
             resourceinstance=cls.person_a,
-            data={
-                str(cls.nickname_node.nodeid): {
-                    "en": {"value": "ALPHA", "direction": "ltr"}
-                }
-            },
+            data={str(cls.nickname_node.nodeid): cls._localized_string_value("ALPHA")},
             provisionaledits=None,
         )
         cls.person_a_nickname_tile.save()
@@ -406,12 +410,13 @@ class AdvancedSearchTestCase(TestCase):
             nodegroup=cls.alias,
             resourceinstance=cls.person_b,
             data={
-                str(cls.first_name_node.nodeid): {
-                    "en": {"value": "INCOGNITO", "direction": "ltr"}
-                },
-                str(cls.last_name_node.nodeid): {
-                    "en": {"value": "MOTHER", "direction": "ltr"}
-                },
+                str(cls.first_name_node.nodeid): cls._localized_string_value(
+                    "INCOGNITO"
+                ),
+                str(cls.last_name_node.nodeid): cls._localized_string_value(
+                    "MOTHER",
+                    fr="MERE",
+                ),
             },
             provisionaledits=None,
         )
@@ -422,12 +427,8 @@ class AdvancedSearchTestCase(TestCase):
             nodegroup=cls.alias,
             resourceinstance=cls.person_b,
             data={
-                str(cls.first_name_node.nodeid): {
-                    "en": {"value": "NAME", "direction": "ltr"}
-                },
-                str(cls.last_name_node.nodeid): {
-                    "en": {"value": "REAL", "direction": "ltr"}
-                },
+                str(cls.first_name_node.nodeid): cls._localized_string_value("NAME"),
+                str(cls.last_name_node.nodeid): cls._localized_string_value("REAL"),
             },
             provisionaledits=None,
         )
@@ -479,11 +480,7 @@ class AdvancedSearchTestCase(TestCase):
             tileid=uuid.uuid4(),
             nodegroup=cls.nickname,
             resourceinstance=cls.person_b,
-            data={
-                str(cls.nickname_node.nodeid): {
-                    "en": {"value": "BETA", "direction": "ltr"}
-                }
-            },
+            data={str(cls.nickname_node.nodeid): cls._localized_string_value("BETA")},
             provisionaledits=None,
         )
         cls.person_b_nickname_tile.save()
@@ -546,12 +543,8 @@ class AdvancedSearchTestCase(TestCase):
             nodegroup=cls.alias,
             resourceinstance=cls.person_c,
             data={
-                str(cls.first_name_node.nodeid): {
-                    "en": {"value": "FRIEND", "direction": "ltr"}
-                },
-                str(cls.last_name_node.nodeid): {
-                    "en": {"value": "FRIEND!", "direction": "ltr"}
-                },
+                str(cls.first_name_node.nodeid): cls._localized_string_value("FRIEND"),
+                str(cls.last_name_node.nodeid): cls._localized_string_value("FRIEND!"),
             },
             provisionaledits=None,
         )
@@ -580,9 +573,7 @@ class AdvancedSearchTestCase(TestCase):
             nodegroup=cls.nickname,
             resourceinstance=cls.person_c,
             data={
-                str(cls.nickname_node.nodeid): {
-                    "en": {"value": "CHARLIE", "direction": "ltr"}
-                }
+                str(cls.nickname_node.nodeid): cls._localized_string_value("CHARLIE")
             },
             provisionaledits=None,
         ).save()
@@ -686,12 +677,8 @@ class AdvancedSearchTestCase(TestCase):
             nodegroup=cls.alias,
             resourceinstance=cls.person_d,
             data={
-                str(cls.first_name_node.nodeid): {
-                    "en": {"value": "JUNIOR", "direction": "ltr"}
-                },
-                str(cls.last_name_node.nodeid): {
-                    "en": {"value": "PERSON", "direction": "ltr"}
-                },
+                str(cls.first_name_node.nodeid): cls._localized_string_value("JUNIOR"),
+                str(cls.last_name_node.nodeid): cls._localized_string_value("PERSON"),
             },
             provisionaledits=None,
         ).save()
@@ -723,11 +710,7 @@ class AdvancedSearchTestCase(TestCase):
             tileid=uuid.uuid4(),
             nodegroup=cls.nickname,
             resourceinstance=cls.person_d,
-            data={
-                str(cls.nickname_node.nodeid): {
-                    "en": {"value": "DELTA", "direction": "ltr"}
-                }
-            },
+            data={str(cls.nickname_node.nodeid): cls._localized_string_value("DELTA")},
             provisionaledits=None,
         ).save()
 
@@ -4079,6 +4062,34 @@ class AdvancedSearchTestCase(TestCase):
             }
         )
         self.assertEqual(result, {PERSON_A_ID})
+
+    def test_person_last_name_equals_with_language_dict_does_not_match_other_locale(
+        self,
+    ):
+        """
+        Exercises compiler-level language scoping for localized string operands. Person B has a
+        French last-name translation of MERE, but no person's English last name is MERE.
+        """
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "AND",
+                "clauses": [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ANY",
+                        "subject": [["person", "last_name"]],
+                        "operator": "EQUALS",
+                        "operands": [{"type": "LITERAL", "value": {"en": "MERE"}}],
+                    }
+                ],
+                "groups": [],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, set())
 
     # --- Tile scope with arity-0 operators ---
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils.translation import get_language
@@ -120,13 +120,14 @@ class LiteralClauseEvaluator:
             subject_graph_slug=subject_graph_slug,
             subject_node_alias=subject_node_alias,
         )
-        correlated_rows = subject_rows.filter(
-            resourceinstanceid=OuterRef(correlate_field_name)
-        )
-
-        normalized_operand_items = self._localize_string_operands(
+        normalized_operand_items, localized_language = self._localize_string_operands(
             datatype_name=datatype_name,
             operand_items=operand_items,
+        )
+        correlated_rows = self._apply_localized_language_filter(
+            subject_rows.filter(resourceinstanceid=OuterRef(correlate_field_name)),
+            datatype_name=datatype_name,
+            localized_language=localized_language,
         )
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
@@ -370,12 +371,16 @@ class LiteralClauseEvaluator:
                     subject_graph_slug=subject_graph_slug,
                     subject_node_alias=subject_node_alias,
                 )
-                correlated_rows = base_rows.filter(
-                    resourceinstanceid=OuterRef(correlate_field)
+                normalized_operand_items, localized_language = (
+                    self._localize_string_operands(
+                        datatype_name=datatype_name,
+                        operand_items=operand_items,
+                    )
                 )
-                normalized_operand_items = self._localize_string_operands(
+                correlated_rows = self._apply_localized_language_filter(
+                    base_rows.filter(resourceinstanceid=OuterRef(correlate_field)),
                     datatype_name=datatype_name,
-                    operand_items=operand_items,
+                    localized_language=localized_language,
                 )
 
                 predicate_expression, is_template_negated = (
@@ -461,9 +466,9 @@ class LiteralClauseEvaluator:
         self,
         datatype_name: str,
         operand_items: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         if datatype_name.lower() != "string":
-            return operand_items
+            return operand_items, None
 
         language_code = get_language()
         short_language_code = None
@@ -472,22 +477,44 @@ class LiteralClauseEvaluator:
             short_language_code = language_code.split("-")[0]
 
         normalized_items: List[Dict[str, Any]] = []
+        localized_language: Optional[str] = None
 
         for operand_item in operand_items:
             raw_value = operand_item.get("value")
 
             if isinstance(raw_value, dict) and raw_value:
                 chosen_value = None
+                chosen_language = None
 
                 if language_code and language_code in raw_value:
+                    chosen_language = language_code
                     chosen_value = raw_value[language_code]
                 elif short_language_code and short_language_code in raw_value:
+                    chosen_language = short_language_code
                     chosen_value = raw_value[short_language_code]
                 else:
-                    chosen_value = next(iter(raw_value.values()))
+                    chosen_language, chosen_value = next(iter(raw_value.items()))
 
                 normalized_items.append({**operand_item, "value": chosen_value})
+
+                if localized_language is None:
+                    localized_language = chosen_language
+                elif chosen_language != localized_language:
+                    raise ValueError(
+                        "Localized string operands resolved to different languages"
+                    )
             else:
                 normalized_items.append(operand_item)
 
-        return normalized_items
+        return normalized_items, localized_language
+
+    def _apply_localized_language_filter(
+        self,
+        rows: QuerySet,
+        datatype_name: str,
+        localized_language: Optional[str],
+    ) -> QuerySet:
+        if datatype_name.lower() != "string" or localized_language is None:
+            return rows
+
+        return rows.filter(language=localized_language)

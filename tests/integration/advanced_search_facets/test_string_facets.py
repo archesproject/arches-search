@@ -16,6 +16,22 @@ from arches_search.utils.advanced_search.advanced_search import (
 
 
 class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
+    @staticmethod
+    def _localized_string_value(value: str, **translations: str):
+        localized_value = {
+            "de": {"value": "", "direction": "ltr"},
+            "en": {"value": value, "direction": "ltr"},
+            "en-US": {"value": "", "direction": "ltr"},
+            "fr": {"value": "", "direction": "ltr"},
+            "pt": {"value": "", "direction": "ltr"},
+        }
+        for language_code, translated_value in translations.items():
+            localized_value[language_code] = {
+                "value": translated_value,
+                "direction": "ltr",
+            }
+        return localized_value
+
     @classmethod
     def setUpTestData(cls):
         text_suffix = uuid.uuid4().hex[:8]
@@ -54,9 +70,9 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
             nodegroup=cls.text_nodegroup,
             resourceinstance=cls.needle_resource,
             data={
-                str(cls.text_node.nodeid): {
-                    "en": {"value": "prefix needle suffix", "direction": "ltr"}
-                }
+                str(cls.text_node.nodeid): cls._localized_string_value(
+                    "prefix needle suffix"
+                )
             },
             provisionaledits=None,
         )
@@ -65,11 +81,7 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
             tileid=uuid.uuid4(),
             nodegroup=cls.text_nodegroup,
             resourceinstance=cls.plain_resource,
-            data={
-                str(cls.text_node.nodeid): {
-                    "en": {"value": "plain text", "direction": "ltr"}
-                }
-            },
+            data={str(cls.text_node.nodeid): cls._localized_string_value("plain text")},
             provisionaledits=None,
         )
         cls.plain_tile.save()
@@ -110,9 +122,9 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
             nodegroup=cls.prefix_nodegroup,
             resourceinstance=cls.prefix_match_resource,
             data={
-                str(cls.prefix_node.nodeid): {
-                    "en": {"value": "needle suffix", "direction": "ltr"}
-                }
+                str(cls.prefix_node.nodeid): cls._localized_string_value(
+                    "needle suffix"
+                )
             },
             provisionaledits=None,
         )
@@ -122,9 +134,9 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
             nodegroup=cls.prefix_nodegroup,
             resourceinstance=cls.prefix_other_resource,
             data={
-                str(cls.prefix_node.nodeid): {
-                    "en": {"value": "prefix needle", "direction": "ltr"}
-                }
+                str(cls.prefix_node.nodeid): cls._localized_string_value(
+                    "prefix needle"
+                )
             },
             provisionaledits=None,
         )
@@ -166,9 +178,9 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
             nodegroup=cls.suffix_nodegroup,
             resourceinstance=cls.suffix_match_resource,
             data={
-                str(cls.suffix_node.nodeid): {
-                    "en": {"value": "prefix needle", "direction": "ltr"}
-                }
+                str(cls.suffix_node.nodeid): cls._localized_string_value(
+                    "prefix needle"
+                )
             },
             provisionaledits=None,
         )
@@ -178,9 +190,9 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
             nodegroup=cls.suffix_nodegroup,
             resourceinstance=cls.suffix_other_resource,
             data={
-                str(cls.suffix_node.nodeid): {
-                    "en": {"value": "needle prefix", "direction": "ltr"}
-                }
+                str(cls.suffix_node.nodeid): cls._localized_string_value(
+                    "needle prefix"
+                )
             },
             provisionaledits=None,
         )
@@ -221,11 +233,7 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
             tileid=uuid.uuid4(),
             nodegroup=cls.equality_nodegroup,
             resourceinstance=cls.equal_resource,
-            data={
-                str(cls.equality_node.nodeid): {
-                    "en": {"value": "needle", "direction": "ltr"}
-                }
-            },
+            data={str(cls.equality_node.nodeid): cls._localized_string_value("needle")},
             provisionaledits=None,
         )
         cls.equal_tile.save()
@@ -233,14 +241,68 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
             tileid=uuid.uuid4(),
             nodegroup=cls.equality_nodegroup,
             resourceinstance=cls.other_resource,
-            data={
-                str(cls.equality_node.nodeid): {
-                    "en": {"value": "other", "direction": "ltr"}
-                }
-            },
+            data={str(cls.equality_node.nodeid): cls._localized_string_value("other")},
             provisionaledits=None,
         )
         cls.other_tile.save()
+
+        multilingual_suffix = uuid.uuid4().hex[:8]
+        cls.multilingual_graph = GraphModel.objects.create(
+            graphid=uuid.uuid4(),
+            slug=f"facet_string_multilingual_{multilingual_suffix}",
+            isresource=True,
+        )
+        cls.multilingual_nodegroup = NodeGroup.objects.create(
+            nodegroupid=uuid.uuid4(),
+            cardinality="1",
+        )
+        cls.multilingual_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name=f"value_{multilingual_suffix}",
+            alias=f"value_{multilingual_suffix}",
+            datatype="string",
+            graph=cls.multilingual_graph,
+            nodegroup=cls.multilingual_nodegroup,
+            istopnode=True,
+        )
+
+        cls.translated_resource = ResourceInstance(
+            resourceinstanceid=uuid.uuid4(),
+            graph=cls.multilingual_graph,
+        )
+        cls.translated_resource.save()
+        cls.alt_translated_resource = ResourceInstance(
+            resourceinstanceid=uuid.uuid4(),
+            graph=cls.multilingual_graph,
+        )
+        cls.alt_translated_resource.save()
+
+        cls.translated_tile = TileModel(
+            tileid=uuid.uuid4(),
+            nodegroup=cls.multilingual_nodegroup,
+            resourceinstance=cls.translated_resource,
+            data={
+                str(cls.multilingual_node.nodeid): cls._localized_string_value(
+                    "REX",
+                    fr="MEDOR",
+                )
+            },
+            provisionaledits=None,
+        )
+        cls.translated_tile.save()
+        cls.alt_translated_tile = TileModel(
+            tileid=uuid.uuid4(),
+            nodegroup=cls.multilingual_nodegroup,
+            resourceinstance=cls.alt_translated_resource,
+            data={
+                str(cls.multilingual_node.nodeid): cls._localized_string_value(
+                    "MEDOR",
+                    fr="FIFI",
+                )
+            },
+            provisionaledits=None,
+        )
+        cls.alt_translated_tile.save()
 
         presence_suffix = uuid.uuid4().hex[:8]
         cls.presence_graph = GraphModel.objects.create(
@@ -277,11 +339,7 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
             tileid=uuid.uuid4(),
             nodegroup=cls.presence_nodegroup,
             resourceinstance=cls.resource_with_value,
-            data={
-                str(cls.presence_node.nodeid): {
-                    "en": {"value": "needle", "direction": "ltr"}
-                }
-            },
+            data={str(cls.presence_node.nodeid): cls._localized_string_value("needle")},
             provisionaledits=None,
         )
         cls.tile_with_value.save()
@@ -463,6 +521,126 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
 
         self.assertEqual(result, {self.other_resource.resourceinstanceid})
+
+    def test_not_equals_with_language_dict_ignores_blank_other_locales(self):
+        """A localized operand should not match a resource only because other locales are blank."""
+        payload = {
+            "graph_slug": self.equality_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [[self.equality_graph.slug, self.equality_node.alias]],
+                    "operator": "NOT_EQUALS",
+                    "operands": [{"type": "LITERAL", "value": {"en": "needle"}}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.other_resource.resourceinstanceid})
+
+    def test_equals_with_language_dict_matches_only_the_selected_locale(self):
+        """A localized operand should match against the requested locale, not any translated row."""
+        payload = {
+            "graph_slug": self.multilingual_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [
+                        [self.multilingual_graph.slug, self.multilingual_node.alias]
+                    ],
+                    "operator": "EQUALS",
+                    "operands": [{"type": "LITERAL", "value": {"en": "MEDOR"}}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.alt_translated_resource.resourceinstanceid})
+
+    def test_not_equals_with_language_dict_ignores_different_translated_values(self):
+        """A localized NOT_EQUALS should only consider values in the selected locale."""
+        payload = {
+            "graph_slug": self.multilingual_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [
+                        [self.multilingual_graph.slug, self.multilingual_node.alias]
+                    ],
+                    "operator": "NOT_EQUALS",
+                    "operands": [{"type": "LITERAL", "value": {"en": "REX"}}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.alt_translated_resource.resourceinstanceid})
+
+    def test_tile_scope_equals_with_language_dict_matches_only_the_selected_locale(
+        self,
+    ):
+        """Tile-scope string filters should honor the selected locale too."""
+        payload = {
+            "graph_slug": self.multilingual_graph.slug,
+            "scope": "TILE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": [
+                        [self.multilingual_graph.slug, self.multilingual_node.alias]
+                    ],
+                    "operator": "EQUALS",
+                    "operands": [{"type": "LITERAL", "value": {"fr": "MEDOR"}}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.translated_resource.resourceinstanceid})
 
     def test_has_no_value_matches_the_resource_without_a_text_row(self):
         """This checks that the has no value facet returns only the resource whose string tile indexed no text at all."""
