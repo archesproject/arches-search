@@ -22,6 +22,7 @@ from arches_search.views.api.relatable_node_tree_for_graph import (
 )
 from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 from arches_search.views.api.saved_search import SavedSearchAPI
+from arches_search.views.api.term_suggestions import TermSuggestionView
 
 urlpatterns = [
     path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
@@ -79,6 +80,11 @@ urlpatterns = [
         "api/saved-searches/<uuid:savedsearchid>",
         SavedSearchAPI.as_view(),
         name="saved_search",
+    ),
+    path(
+        "api/term-suggestions",
+        TermSuggestionView.as_view(),
+        name="term_suggestion_search",
     ),
 ]
 

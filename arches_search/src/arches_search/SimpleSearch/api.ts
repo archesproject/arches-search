@@ -1,6 +1,7 @@
 import arches from "arches";
 
 import type { SearchResults } from "@/arches_search/AdvancedSearch/types.ts";
+import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
 interface TermFilter {
     type: "term" | "concept" | "string";
@@ -77,19 +78,20 @@ export async function fetchSimpleSearchResults({
 
 export async function fetchSearchTermSuggestions(
     query: string,
-): Promise<Array<{ text: string; type: string; value: string }>> {
-    const params = new URLSearchParams({ q: query, lang: "*" });
+): Promise<Array<{ text: string; datatype: string; value: string }>> {
+    const params = new URLSearchParams({ q: query, lang: "*", flat: "true" });
     const response = await fetch(
-        `${arches.urls.search_terms}?${params.toString()}`,
+        `${generateArchesURL("arches_search:term_suggestion_search")}?${params.toString()}`,
     );
-    const data = await response.json();
-    const suggestions = [
-        ...(data.terms || []),
-        ...(data.concepts || []),
-    ] as Array<{ text: string; type: string; value: string }>;
+    const results = await response.json();
+    const suggestions = results.results as Array<{
+        text: string;
+        datatype: string;
+        value: string;
+    }>;
 
     // Prepend a literal term entry for the raw query string
-    suggestions.unshift({ text: query, type: "term", value: query });
+    suggestions.unshift({ text: query, datatype: "term", value: query });
 
     return suggestions;
 }
