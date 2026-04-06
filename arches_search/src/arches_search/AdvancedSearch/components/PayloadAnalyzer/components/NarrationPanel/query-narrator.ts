@@ -220,24 +220,31 @@ export function describeAdvancedSearchQuery(
             return "";
         }
 
-        const subjectNodeAlias =
-            clause.subject.type === ClauseSubjectTypeToken.NODE
-                ? clause.subject.node_alias
-                : "";
+        let subjectNodeAlias = "";
+        if (clause.subject.type === ClauseSubjectTypeToken.NODE) {
+            subjectNodeAlias = clause.subject.node_alias;
+        }
+
         const rawOperator = clause.operator?.trim();
         const fieldLabel = resolveClauseFieldLabel(clause).trim();
-        const operatorLabel = rawOperator
-            ? (operatorLabelMap[rawOperator] ?? rawOperator).trim()
-            : "";
+
+        let operatorLabel = "";
+        if (rawOperator) {
+            operatorLabel = (
+                operatorLabelMap[rawOperator] ?? rawOperator
+            ).trim();
+        }
 
         if (!fieldLabel || !operatorLabel) {
             return "";
         }
 
-        const subjectDatatype = subjectNodeAlias
-            ? getNodeMetadata(subjectGraphSlug, subjectNodeAlias)?.datatype ??
-              ""
-            : "";
+        let subjectDatatype = "";
+        if (subjectNodeAlias) {
+            subjectDatatype =
+                getNodeMetadata(subjectGraphSlug, subjectNodeAlias)?.datatype ??
+                "";
+        }
         const operandDescriptions: string[] = [];
 
         for (const operand of clause.operands as (
