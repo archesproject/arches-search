@@ -17,8 +17,6 @@ from arches_search.utils.advanced_search.node_alias_datatype_registry import (
 from arches_search.utils.advanced_search.relationship_utils import (
     has_relationship_path,
 )
-from arches_search.utils.advanced_search.subject_utils import is_node_subject
-
 from arches_search.utils.advanced_search.constants import (
     CLAUSE_TYPE_LITERAL,
     CLAUSE_TYPE_RELATED,
@@ -26,6 +24,7 @@ from arches_search.utils.advanced_search.constants import (
     LOGIC_OR,
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
+    SUBJECT_TYPE_NODE,
 )
 from arches_search.utils.advanced_search.specs import ClauseReductionResult
 
@@ -239,15 +238,12 @@ class ClauseReducer:
             "traversal_quantifier", QUANTIFIER_ANY
         )
 
-        (
-            _anchor_slug,
-            _nested_terminal_graph_slug,
-            nested_child_rows,
-            nested_child_id_field_name,
-        ) = self.path_navigator.build_scoped_pairs_for_relationship_path(
-            relationship_path=nested_relationship["path"],
-            is_inverse_relationship=bool(nested_relationship["is_inverse"]),
-            correlate_on_field=parent_child_id_field_name,
+        *_, nested_child_rows, nested_child_id_field_name = (
+            self.path_navigator.build_scoped_pairs_for_relationship_path(
+                relationship_path=nested_relationship["path"],
+                is_inverse_relationship=bool(nested_relationship["is_inverse"]),
+                correlate_on_field=parent_child_id_field_name,
+            )
         )
 
         nested_ok_rows = nested_child_rows
@@ -307,7 +303,7 @@ class ClauseReducer:
                 continue
 
             subject = clause_payload["subject"]
-            if not is_node_subject(subject):
+            if subject.get("type") != SUBJECT_TYPE_NODE:
                 raise ValueError("RELATED clauses require a node subject.")
 
             subject_graph_slug = subject["graph_slug"]

@@ -23,7 +23,7 @@ from arches_search.utils.advanced_search.specs import (
     AggregatePredicateSpec,
     CorrelatedLiteralClauseContext,
 )
-from arches_search.utils.advanced_search.subject_utils import is_search_models_subject
+from arches_search.utils.advanced_search.constants import SUBJECT_TYPE_SEARCH_MODELS
 
 
 class LiteralClauseEvaluator:
@@ -260,7 +260,7 @@ class LiteralClauseEvaluator:
         )
 
     def build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
-        if is_search_models_subject(clause_payload["subject"]):
+        if clause_payload["subject"].get("type") == SUBJECT_TYPE_SEARCH_MODELS:
             return self._build_exists_for_search_models(
                 clause_payload=clause_payload,
                 correlate_field_name="resourceinstanceid",
@@ -353,7 +353,7 @@ class LiteralClauseEvaluator:
         clause_payload: Dict[str, Any],
         correlate_field: str,
     ) -> Exists:
-        if is_search_models_subject(clause_payload["subject"]):
+        if clause_payload["subject"].get("type") == SUBJECT_TYPE_SEARCH_MODELS:
             return self._build_exists_for_search_models(
                 clause_payload=clause_payload,
                 correlate_field_name=correlate_field,
@@ -439,7 +439,7 @@ class LiteralClauseEvaluator:
                     clause_type_token = clause_payload["type"]
                     if clause_type_token == CLAUSE_TYPE_LITERAL:
                         subject = clause_payload["subject"]
-                        if is_search_models_subject(subject):
+                        if subject.get("type") == SUBJECT_TYPE_SEARCH_MODELS:
                             continue
                         clause_graph_slug = subject["graph_slug"]
                         if clause_graph_slug != terminal_graph_slug:

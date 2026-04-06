@@ -3,12 +3,14 @@ from typing import Any, Dict, Optional, Set
 from django.utils.translation import gettext as _
 from arches.app.models import models as arches_models
 
-from arches_search.utils.advanced_search.constants import OPERAND_TYPE_PATH
+from arches_search.utils.advanced_search.constants import (
+    OPERAND_TYPE_PATH,
+    SUBJECT_TYPE_NODE,
+)
 from arches_search.utils.advanced_search.relationship_utils import (
     has_relationship_path,
     relationship_path_to_pair,
 )
-from arches_search.utils.advanced_search.subject_utils import is_node_subject
 
 
 class NodeAliasDatatypeRegistry:
@@ -86,7 +88,7 @@ class NodeAliasDatatypeRegistry:
 
         for clause_payload in group_payload["clauses"]:
             subject = clause_payload["subject"]
-            if is_node_subject(subject) and subject["node_alias"]:
+            if subject.get("type") == SUBJECT_TYPE_NODE and subject["node_alias"]:
                 graph_slug = subject["graph_slug"]
                 required_aliases_by_graph.setdefault(graph_slug, set()).add(
                     subject["node_alias"]
