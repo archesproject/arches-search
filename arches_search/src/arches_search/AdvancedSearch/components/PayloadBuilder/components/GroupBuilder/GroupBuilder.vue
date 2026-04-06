@@ -16,6 +16,7 @@ import {
     toggleLogic,
     addChildGroupLikeParent,
     addEmptyLiteralClauseToGroup,
+    addEmptySearchModelsClauseToGroup,
     removeClauseAtIndex,
     addRelationshipIfMissing,
     setGraphSlugAndResetIfChanged,
@@ -179,6 +180,11 @@ function onAddClause() {
     emitUpdate(addEmptyLiteralClauseToGroup(contentGroup.value));
 }
 
+function onAddStringSearch() {
+    items.value.push({ id: crypto.randomUUID(), type: ITEM_TYPE_CLAUSE });
+    emitUpdate(addEmptySearchModelsClauseToGroup(contentGroup.value));
+}
+
 function onUpdateClause(itemId: string, clause: LiteralClause) {
     const clauseIndex = findItemIndex(itemId, ITEM_TYPE_CLAUSE);
     if (clauseIndex === -1) {
@@ -273,7 +279,14 @@ function onUpdateInnerGraphSlug(slug: string) {
     };
     let relationship = group.value.relationship;
     if (relationship) {
-        relationship = { ...relationship, path: [] };
+        relationship = {
+            ...relationship,
+            path: {
+                type: relationship.path.type,
+                graph_slug: "",
+                node_alias: "",
+            },
+        };
     }
     emit(
         "update:modelValue",
@@ -411,6 +424,7 @@ function onUpdateInnerGraphSlug(slug: string) {
                 :is-root="isRoot"
                 @add-group="onAddGroup"
                 @add-filter="onAddClause"
+                @add-string-search="onAddStringSearch"
                 @add-relationship="onAddRelationship"
                 @add-map-filter="showMapDrawer = true"
                 @remove-group="emit('remove')"

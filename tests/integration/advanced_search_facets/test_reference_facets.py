@@ -470,7 +470,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.any_graph.slug, self.any_reference_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.any_graph.slug,
+                        "node_alias": self.any_reference_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "REFERENCES_ANY",
                     "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
                 }
@@ -498,7 +503,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.all_graph.slug, self.all_reference_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.all_graph.slug,
+                        "node_alias": self.all_reference_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "REFERENCES_ALL",
                     "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
                 }
@@ -526,7 +536,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.only_graph.slug, self.only_reference_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.only_graph.slug,
+                        "node_alias": self.only_reference_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "REFERENCES_ONLY",
                     "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
                 }
@@ -554,7 +569,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.none_graph.slug, self.none_reference_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.none_graph.slug,
+                        "node_alias": self.none_reference_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "REFERENCES_NONE_OF",
                     "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
                 }
@@ -582,12 +602,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [
-                            self.descendant_graph.slug,
-                            self.descendant_reference_node.alias,
-                        ]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.descendant_graph.slug,
+                        "node_alias": self.descendant_reference_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "DESCENDANT_OF",
                     "operands": [{"type": "LITERAL", "value": ["ref-child"]}],
                 }
@@ -615,9 +635,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ancestor_graph.slug, self.ancestor_reference_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ancestor_graph.slug,
+                        "node_alias": self.ancestor_reference_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "ANCESTOR_OF",
                     "operands": [{"type": "LITERAL", "value": ["ref-parent"]}],
                 }
@@ -645,9 +668,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_reference_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_reference_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_NO_VALUE",
                     "operands": [],
                 }
@@ -675,9 +701,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_reference_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_reference_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_ANY_VALUE",
                     "operands": [],
                 }

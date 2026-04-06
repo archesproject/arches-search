@@ -70,14 +70,33 @@ export enum LogicToken {
     OR = "OR",
 }
 
+export enum ClauseSubjectTypeToken {
+    NODE = "NODE",
+    SEARCH_MODELS = "SEARCH_MODELS",
+}
+
 type ClauseTypeToken = "LITERAL";
-type QuantifierToken = "ANY";
+type QuantifierToken = "ANY" | "ALL" | "NONE";
 
 export type OperatorString = string;
 
 export type SubjectPair = [graphSlug: string, nodeAlias: string];
 export type SubjectPath = SubjectPair[];
-export type RelationshipPath = SubjectPair[];
+export type PathSelection = {
+    graph_slug: string;
+    node_alias: string;
+};
+export type ClauseSubject = {
+    type: ClauseSubjectTypeToken;
+    graph_slug: string;
+    node_alias: string;
+    search_models: string[];
+};
+export type RelationshipPath = {
+    type: ClauseSubjectTypeToken.NODE;
+    graph_slug: string;
+    node_alias: string;
+};
 
 export type LiteralOperand = {
     type: "LITERAL";
@@ -88,15 +107,15 @@ export type LiteralOperand = {
 export type LiteralClause = {
     type: ClauseTypeToken;
     quantifier: QuantifierToken;
-    subject: SubjectPath;
-    operator: OperatorString;
+    subject: ClauseSubject;
+    operator: OperatorString | null;
     operands: LiteralOperand[];
 };
 
 export type RelationshipBlock = {
     path: RelationshipPath;
     is_inverse: boolean;
-    traversal_quantifiers: QuantifierToken[];
+    traversal_quantifier: QuantifierToken;
 };
 
 export type GroupPayload = {

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import UUIDField
 from django.utils.translation import gettext as _
@@ -11,6 +11,8 @@ class SearchModelRegistry:
         self._datatype_to_unambiguous_model_class: Dict[str, Any] = {}
         self._datatype_to_value_model_class: Dict[str, Any] = {}
         self._datatype_to_relationship_model_class: Dict[str, Any] = {}
+        self._model_class_name_to_datatype_and_class: Dict[str, Tuple[str, Any]] = {}
+        self._model_class_name_to_all_entries: Dict[str, List[Tuple[str, Any]]] = {}
 
         facets_by_datatype: Dict[str, Dict[str, Any]] = {}
 
@@ -29,6 +31,17 @@ class SearchModelRegistry:
         for datatype_name, model_map in facets_by_datatype.items():
             model_classes = list(model_map.values())
             self._datatype_to_model_classes[datatype_name] = model_classes
+
+            for model_class in model_classes:
+                class_name = model_class.__name__
+                self._model_class_name_to_all_entries.setdefault(class_name, []).append(
+                    (datatype_name, model_class)
+                )
+                if class_name not in self._model_class_name_to_datatype_and_class:
+                    self._model_class_name_to_datatype_and_class[class_name] = (
+                        datatype_name,
+                        model_class,
+                    )
 
             if len(model_classes) == 1:
                 self._datatype_to_unambiguous_model_class[datatype_name] = (
@@ -52,6 +65,32 @@ class SearchModelRegistry:
                 self._datatype_to_relationship_model_class[datatype_name] = (
                     relationship_models[0]
                 )
+
+    def get_model_and_datatype_for_class_name(self, class_name: str) -> Tuple[Any, str]:
+        entry = self._model_class_name_to_datatype_and_class.get(class_name)
+        if entry is None:
+            raise ValueError(
+                _("Unknown search table class name: '{name}'").format(name=class_name)
+            )
+        datatype_name, model_class = entry
+        return model_class, datatype_name
+
+    def get_all_entries_for_class_name(self, class_name: str) -> List[Tuple[Any, str]]:
+        """Return all (model_class, datatype_name) pairs for the given model class name.
+
+        A single model class (e.g. TermSearch) may be shared by several datatypes
+        (string, non_localized_string, reference, url, …). This method returns all
+        of those pairings so callers can find the first one that supports a given
+        operator.
+        """
+        entries = self._model_class_name_to_all_entries.get(class_name)
+        if not entries:
+            raise ValueError(
+                _("Unknown search table class name: '{name}'").format(name=class_name)
+            )
+        return [
+            (model_class, datatype_name) for (datatype_name, model_class) in entries
+        ]
 
     def get_model_for_datatype(self, datatype_name: str) -> Any:
         model_class = self._datatype_to_unambiguous_model_class.get(datatype_name)

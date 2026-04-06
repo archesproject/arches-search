@@ -4,15 +4,19 @@ import { useGettext } from "vue3-gettext";
 
 import Select from "primevue/select";
 import Button from "primevue/button";
+import InputText from "primevue/inputtext";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/PathBuilder.vue";
 import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
+import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Ref } from "vue";
 import type {
     GraphModel,
     AdvancedSearchFacet,
+    ClauseSubject,
     Node,
+    PathSelection,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
@@ -30,7 +34,7 @@ type OperandPayload = {
 type ClausePayload = {
     type: "LITERAL";
     quantifier: "ANY" | "ALL" | "NONE";
-    subject: [string, string][];
+    subject: ClauseSubject;
     operator: string | null;
     operands: OperandPayload[];
 };
@@ -75,12 +79,11 @@ const subjectGraph = ref<GraphModel | null>(null);
 const operandKeysByIndex = ref<string[]>([]);
 
 const subjectAnchorGraph = computed<GraphModel>(() => {
-    if (modelValue.subject.length === 0) {
+    if (!modelValue.subject.graph_slug) {
         return anchorGraph;
     }
-    const [firstSubjectGraphSlug] = modelValue.subject[0];
     const graphAtFirstSubjectSlug = graphs.value.find((graphModel) => {
-        return graphModel.slug === firstSubjectGraphSlug;
+        return graphModel.slug === modelValue.subject.graph_slug;
     });
     if (graphAtFirstSubjectSlug) {
         return graphAtFirstSubjectSlug;
@@ -88,7 +91,24 @@ const subjectAnchorGraph = computed<GraphModel>(() => {
     return anchorGraph;
 });
 
+const selectedSubjectNode = computed<PathSelection | null>(() => {
+    if (
+        modelValue.subject.type !== ClauseSubjectTypeToken.NODE ||
+        !modelValue.subject.node_alias
+    ) {
+        return null;
+    }
+
+    return {
+        graph_slug: modelValue.subject.graph_slug,
+        node_alias: modelValue.subject.node_alias,
+    };
+});
+
 const availableOperatorOptions = computed<AdvancedSearchFacet[]>(() => {
+    if (modelValue.subject.type === ClauseSubjectTypeToken.SEARCH_MODELS) {
+        return datatypesToAdvancedSearchFacets.value["string"] ?? [];
+    }
     if (!subjectNode.value?.datatype) {
         return [];
     }
@@ -111,21 +131,22 @@ const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(() => {
 });
 
 watch(
-    () => {
-        if (modelValue.subject.length === 0) {
-            return null;
-        }
-        return modelValue.subject[modelValue.subject.length - 1];
-    },
-    async (updatedTerminal) => {
+    [
+        () => modelValue.subject.type,
+        () => modelValue.subject.graph_slug,
+        () => modelValue.subject.node_alias,
+    ],
+    async ([subjectType, terminalGraphSlug, terminalNodeAlias]) => {
         subjectNode.value = null;
         subjectGraph.value = null;
 
-        if (!updatedTerminal) {
+        if (
+            subjectType !== ClauseSubjectTypeToken.NODE ||
+            !terminalGraphSlug ||
+            !terminalNodeAlias
+        ) {
             return;
         }
-
-        const [terminalGraphSlug, terminalNodeAlias] = updatedTerminal;
         const graphMatchingTerminalSlug = graphs.value.find((graphModel) => {
             return graphModel.slug === terminalGraphSlug;
         });
@@ -134,6 +155,8 @@ watch(
             return;
         }
 
+        subjectGraph.value = graphMatchingTerminalSlug;
+
         const allNodesForGraph = await getNodesForGraphId(
             graphMatchingTerminalSlug.graphid,
         );
@@ -141,7 +164,6 @@ watch(
             return graphNode.alias === terminalNodeAlias;
         });
 
-        subjectGraph.value = graphMatchingTerminalSlug;
         subjectNode.value = nodeMatchingTerminalAlias ?? null;
     },
     { immediate: true },
@@ -172,11 +194,15 @@ function ensureOperandKey(parameterIndex: number): string {
     return operandKeysByIndex.value[parameterIndex];
 }
 
-function handleSubjectUpdate(
-    updatedSubjectPathSequence: [string, string][],
-): void {
+function handleSubjectUpdate(updatedSubject: PathSelection | null): void {
     patchClause({
-        subject: updatedSubjectPathSequence,
+        subject: {
+            type: ClauseSubjectTypeToken.NODE,
+            graph_slug:
+                updatedSubject?.graph_slug ?? subjectAnchorGraph.value.slug,
+            node_alias: updatedSubject?.node_alias ?? "",
+            search_models: [],
+        },
         operator: null,
         operands: [],
     });
@@ -235,11 +261,21 @@ function handleQuantifierChange(
         <div class="clause-main">
             <div class="clause-core-row">
                 <PathBuilder
+                    v-if="
+                        modelValue.subject.type !==
+                        ClauseSubjectTypeToken.SEARCH_MODELS
+                    "
                     class="clause-subject-path"
-                    :path-sequence="modelValue.subject"
+                    :selected-node="selectedSubjectNode"
                     :graph-slugs="[subjectAnchorGraph.slug]"
-                    @update:path-sequence="handleSubjectUpdate"
+                    @update:selected-node="handleSubjectUpdate"
                 />
+                <span
+                    v-else
+                    class="clause-subject-path clause-subject-all-text"
+                >
+                    {{ $gettext("All text nodes") }}
+                </span>
 
                 <Select
                     v-if="subjectNode?.nodegroup_has_cardinality_n"
@@ -264,6 +300,31 @@ function handleQuantifierChange(
 
                 <div
                     v-if="
+                        modelValue.subject.type ===
+                            ClauseSubjectTypeToken.SEARCH_MODELS &&
+                        selectedAdvancedSearchFacet &&
+                        selectedAdvancedSearchFacet.arity > 0
+                    "
+                    class="clause-operands-row"
+                >
+                    <InputText
+                        v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
+                        :key="ensureOperandKey(parameterIndex - 1)"
+                        :model-value="
+                            (modelValue.operands[parameterIndex - 1]
+                                ?.value as string) ?? ''
+                        "
+                        :placeholder="$gettext('Search text...')"
+                        @update:model-value="
+                            handleOperandUpdate(parameterIndex - 1, {
+                                type: OPERAND_TYPE_LITERAL,
+                                value: $event,
+                            })
+                        "
+                    />
+                </div>
+                <div
+                    v-else-if="
                         selectedAdvancedSearchFacet &&
                         selectedAdvancedSearchFacet.arity > 0 &&
                         subjectNode &&

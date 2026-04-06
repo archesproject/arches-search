@@ -4,6 +4,11 @@ from django.utils.translation import gettext as _
 from arches.app.models import models as arches_models
 
 from arches_search.utils.advanced_search.constants import OPERAND_TYPE_PATH
+from arches_search.utils.advanced_search.relationship_utils import (
+    has_relationship_path,
+    relationship_path_to_pair,
+)
+from arches_search.utils.advanced_search.subject_utils import is_node_subject
 
 
 class NodeAliasDatatypeRegistry:
@@ -73,13 +78,19 @@ class NodeAliasDatatypeRegistry:
         required_aliases_by_graph: Dict[str, Set[str]] = {}
 
         relationship_payload = group_payload["relationship"]
-        if relationship_payload is not None:
-            for graph_slug, node_alias in relationship_payload["path"]:
-                required_aliases_by_graph.setdefault(graph_slug, set()).add(node_alias)
+        if has_relationship_path(relationship_payload):
+            graph_slug, node_alias = relationship_path_to_pair(
+                relationship_payload["path"]
+            )
+            required_aliases_by_graph.setdefault(graph_slug, set()).add(node_alias)
 
         for clause_payload in group_payload["clauses"]:
-            for graph_slug, node_alias in clause_payload["subject"]:
-                required_aliases_by_graph.setdefault(graph_slug, set()).add(node_alias)
+            subject = clause_payload["subject"]
+            if is_node_subject(subject) and subject["node_alias"]:
+                graph_slug = subject["graph_slug"]
+                required_aliases_by_graph.setdefault(graph_slug, set()).add(
+                    subject["node_alias"]
+                )
 
             for operand_payload in clause_payload["operands"]:
                 if operand_payload["type"].upper() == OPERAND_TYPE_PATH:

@@ -126,9 +126,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "EQUALS",
                     "operands": [{"type": "LITERAL", "value": 20}],
                 }
@@ -156,9 +159,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "NOT_EQUALS",
                     "operands": [{"type": "LITERAL", "value": 20}],
                 }
@@ -186,9 +192,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "LESS_THAN",
                     "operands": [{"type": "LITERAL", "value": 31}],
                 }
@@ -216,9 +225,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "GREATER_THAN",
                     "operands": [{"type": "LITERAL", "value": 20}],
                 }
@@ -246,9 +258,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "LESS_THAN_OR_EQUALS",
                     "operands": [{"type": "LITERAL", "value": 20}],
                 }
@@ -276,9 +291,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "GREATER_THAN_OR_EQUALS",
                     "operands": [{"type": "LITERAL", "value": 31}],
                 }
@@ -306,9 +324,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "BETWEEN",
                     "operands": [
                         {"type": "LITERAL", "value": 10},
@@ -339,9 +360,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "NOT_BETWEEN",
                     "operands": [
                         {"type": "LITERAL", "value": 10},
@@ -372,9 +396,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_NO_VALUE",
                     "operands": [],
                 }
@@ -402,9 +429,12 @@ class NumberAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_number_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_number_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_ANY_VALUE",
                     "operands": [],
                 }

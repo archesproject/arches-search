@@ -270,7 +270,12 @@ class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.text_graph.slug, self.text_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.text_graph.slug,
+                        "node_alias": self.text_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "LIKE",
                     "operands": [{"type": "LITERAL", "value": "needle"}],
                 }
@@ -298,7 +303,12 @@ class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.text_graph.slug, self.text_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.text_graph.slug,
+                        "node_alias": self.text_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "NOT_LIKE",
                     "operands": [{"type": "LITERAL", "value": "needle"}],
                 }
@@ -326,7 +336,12 @@ class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.prefix_graph.slug, self.prefix_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.prefix_graph.slug,
+                        "node_alias": self.prefix_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "STARTS_WITH",
                     "operands": [{"type": "LITERAL", "value": "needle"}],
                 }
@@ -354,7 +369,12 @@ class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.suffix_graph.slug, self.suffix_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.suffix_graph.slug,
+                        "node_alias": self.suffix_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "ENDS_WITH",
                     "operands": [{"type": "LITERAL", "value": "needle"}],
                 }
@@ -382,7 +402,12 @@ class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.equality_graph.slug, self.equality_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.equality_graph.slug,
+                        "node_alias": self.equality_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "EQUALS",
                     "operands": [{"type": "LITERAL", "value": "needle"}],
                 }
@@ -410,7 +435,12 @@ class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.equality_graph.slug, self.equality_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.equality_graph.slug,
+                        "node_alias": self.equality_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "NOT_EQUALS",
                     "operands": [{"type": "LITERAL", "value": "needle"}],
                 }
@@ -438,7 +468,12 @@ class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.presence_graph.slug, self.presence_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_NO_VALUE",
                     "operands": [],
                 }
@@ -466,7 +501,12 @@ class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.presence_graph.slug, self.presence_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_ANY_VALUE",
                     "operands": [],
                 }
