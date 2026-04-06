@@ -21,11 +21,6 @@ QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
 QUANTIFIER_NONE = "NONE"
 
-# Internal context used by GroupCompiler to distinguish the anchor side from
-# the child side when compiling nested groups that contain no relationship.
-CONTEXT_ANCHOR = "ANCHOR"
-CONTEXT_CHILD = "CHILD"
-
 # Aggregate predicate kinds
 AGGREGATE_KIND_SET_SUPERSET = "set_superset"
 AGGREGATE_KIND_SET_EQUAL = "set_equal"
