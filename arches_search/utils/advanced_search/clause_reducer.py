@@ -228,7 +228,7 @@ class ClauseReducer:
         traversal_context: Dict[str, Any],
         nested_group_payload: Dict[str, Any],
     ) -> Tuple[QuerySet, bool]:
-        nested_relationship = nested_group_payload.get("relationship") or {}
+        nested_relationship = nested_group_payload.get("relationship")
         if not has_relationship_path(nested_relationship):
             return base_child_rows, False
 

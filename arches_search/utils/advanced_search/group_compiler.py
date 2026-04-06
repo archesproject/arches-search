@@ -68,8 +68,7 @@ class GroupCompiler:
         )
 
     def _group_has_any_relationship(self, group_payload: Dict[str, Any]) -> bool:
-        relationship_block = group_payload.get("relationship") or {}
-        if has_relationship_path(relationship_block):
+        if has_relationship_path(group_payload.get("relationship")):
             return True
 
         for subgroup_payload in group_payload.get("groups") or []:
