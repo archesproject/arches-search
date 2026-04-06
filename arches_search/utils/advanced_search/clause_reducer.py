@@ -103,7 +103,6 @@ class ClauseReducer:
             group_payload, traversal_context, child_rows, logic
         )
         return ClauseReductionResult(
-            relationshipless_q=None,
             constrained_child_rows=constrained_child_rows,
             had_inner_filters=had_inner_filters,
         )

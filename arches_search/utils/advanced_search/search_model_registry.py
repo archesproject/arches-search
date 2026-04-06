@@ -141,27 +141,15 @@ class SearchModelRegistry:
         return model_class
 
     def _model_has_field(self, model_class: Any, field_name: str) -> bool:
-        model_meta = getattr(model_class, "_meta", None)
-
-        if not model_meta:
-            return False
-
         try:
-            model_meta.get_field(field_name)
+            model_class._meta.get_field(field_name)
         except FieldDoesNotExist:
             return False
-
         return True
 
     def _value_field_is_uuid(self, model_class: Any) -> bool:
-        model_meta = getattr(model_class, "_meta", None)
-
-        if not model_meta:
-            return False
-
         try:
-            value_field = model_meta.get_field("value")
-        except Exception:
+            value_field = model_class._meta.get_field("value")
+        except FieldDoesNotExist:
             return False
-
         return isinstance(value_field, UUIDField)
