@@ -278,10 +278,7 @@ class GroupCompiler:
                 group_payload=subgroup_payload,
             )
 
-            subgroup_has_q_children = bool(getattr(subgroup_q, "children", []))
-            subgroup_has_existence_predicates = bool(subgroup_existence_predicates)
-
-            if not subgroup_has_q_children and not subgroup_has_existence_predicates:
+            if not subgroup_q and not subgroup_existence_predicates:
                 continue
 
             child_resource_queryset = arches_models.ResourceInstance.objects.filter(
