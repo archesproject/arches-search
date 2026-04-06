@@ -156,9 +156,12 @@ class GeojsonFeatureCollectionAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.spatial_graph.slug, self.spatial_geojson_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.spatial_graph.slug,
+                        "node_alias": self.spatial_geojson_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "GEO_CONTAINS",
                     "operands": [
                         {
@@ -191,9 +194,12 @@ class GeojsonFeatureCollectionAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.spatial_graph.slug, self.spatial_geojson_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.spatial_graph.slug,
+                        "node_alias": self.spatial_geojson_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "GEO_CONTAINS",
                     "operands": [
                         {
@@ -231,9 +237,12 @@ class GeojsonFeatureCollectionAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.spatial_graph.slug, self.spatial_geojson_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.spatial_graph.slug,
+                        "node_alias": self.spatial_geojson_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "GEO_CONTAINS",
                     "operands": [
                         {
@@ -271,9 +280,12 @@ class GeojsonFeatureCollectionAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.spatial_graph.slug, self.spatial_geojson_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.spatial_graph.slug,
+                        "node_alias": self.spatial_geojson_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "GEO_INTERSECTS",
                     "operands": [
                         {
@@ -311,9 +323,12 @@ class GeojsonFeatureCollectionAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.spatial_graph.slug, self.spatial_geojson_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.spatial_graph.slug,
+                        "node_alias": self.spatial_geojson_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "GEO_WITHIN",
                     "operands": [
                         {
@@ -351,9 +366,12 @@ class GeojsonFeatureCollectionAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_geojson_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_geojson_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_NO_VALUE",
                     "operands": [],
                 }
@@ -381,9 +399,12 @@ class GeojsonFeatureCollectionAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_geojson_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_geojson_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_ANY_VALUE",
                     "operands": [],
                 }

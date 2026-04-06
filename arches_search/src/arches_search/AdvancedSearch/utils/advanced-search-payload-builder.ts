@@ -1,8 +1,7 @@
 import {
     type GroupPayload,
-    type RelationshipPath,
     type LiteralOperand,
-    type SubjectPath,
+    ClauseSubjectTypeToken,
     LogicToken,
     GraphScopeToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
@@ -13,7 +12,6 @@ type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 const CLAUSE_TYPE_LITERAL = "LITERAL";
 const QUANTIFIER_ANY = "ANY";
 const OPERATOR_HAS_ANY_VALUE = "HAS_ANY_VALUE";
-const RELATIONSHIP_TRAVERSAL_ANY = "ANY";
 
 function filterLiteralClauses(
     clauses: ReadonlyArray<ClausePayload>,
@@ -186,8 +184,31 @@ export function addEmptyLiteralClauseToGroup(
     const emptyClause: ClausePayload = {
         type: CLAUSE_TYPE_LITERAL,
         quantifier: QUANTIFIER_ANY,
-        subject: [] as SubjectPath,
+        subject: {
+            type: ClauseSubjectTypeToken.NODE,
+            graph_slug: groupPayload.graph_slug,
+            node_alias: "",
+            search_models: [],
+        },
         operator: OPERATOR_HAS_ANY_VALUE,
+        operands: [] as LiteralOperand[],
+    };
+    return { ...groupPayload, clauses: [...groupPayload.clauses, emptyClause] };
+}
+
+export function addEmptySearchModelsClauseToGroup(
+    groupPayload: GroupPayload,
+): GroupPayload {
+    const emptyClause: ClausePayload = {
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
+        subject: {
+            type: ClauseSubjectTypeToken.SEARCH_MODELS,
+            graph_slug: groupPayload.graph_slug,
+            node_alias: "",
+            search_models: ["TermSearch"],
+        },
+        operator: "LIKE",
         operands: [] as LiteralOperand[],
     };
     return { ...groupPayload, clauses: [...groupPayload.clauses, emptyClause] };
@@ -220,9 +241,13 @@ export function addRelationshipIfMissing(
     }
 
     const emptyRelationship: RelationshipState = {
-        path: [] as RelationshipPath,
+        path: {
+            type: ClauseSubjectTypeToken.NODE,
+            graph_slug: "",
+            node_alias: "",
+        },
         is_inverse: false,
-        traversal_quantifiers: [RELATIONSHIP_TRAVERSAL_ANY],
+        traversal_quantifier: QUANTIFIER_ANY,
     };
 
     return { ...groupPayload, relationship: emptyRelationship };

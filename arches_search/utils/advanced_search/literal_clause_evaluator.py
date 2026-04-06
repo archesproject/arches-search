@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from arches_search.models.models import AdvancedSearchFacet
-
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils.translation import get_language
 
+from arches_search.models.models import AdvancedSearchFacet
 from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
     build_grouped_rows_matching_aggregate_predicate,
 )
@@ -17,10 +16,14 @@ from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
 )
+from arches_search.utils.advanced_search.relationship_utils import (
+    has_relationship_path,
+)
 from arches_search.utils.advanced_search.specs import (
     AggregatePredicateSpec,
     CorrelatedLiteralClauseContext,
 )
+from arches_search.utils.advanced_search.subject_utils import is_search_models_subject
 
 
 class LiteralClauseEvaluator:
@@ -102,12 +105,119 @@ class LiteralClauseEvaluator:
 
         return any_value_exists
 
+    def _build_exists_for_search_models(
+        self,
+        clause_payload: Dict[str, Any],
+        correlate_field_name: str,
+    ):
+        subject = clause_payload["subject"]
+        graph_slug = subject["graph_slug"]
+        search_models = subject["search_models"]
+        operator_token = clause_payload["operator"]
+        quantifier_token = clause_payload["quantifier"]
+        operand_items = clause_payload["operands"]
+
+        combined = None
+        for class_name in search_models:
+            all_entries = self.search_model_registry.get_all_entries_for_class_name(
+                class_name
+            )
+            model_class, datatype_name = all_entries[0]
+            if not operand_items:
+                rows = model_class.objects.filter(
+                    graph_slug=graph_slug,
+                    resourceinstanceid=OuterRef(correlate_field_name),
+                )
+                presence_implies_match = self.facet_registry.presence_implies_match(
+                    datatype_name, operator_token
+                )
+                any_value_exists = Exists(rows)
+                if quantifier_token == QUANTIFIER_NONE:
+                    expr = (
+                        ~any_value_exists
+                        if presence_implies_match
+                        else any_value_exists
+                    )
+                else:
+                    expr = (
+                        any_value_exists
+                        if presence_implies_match
+                        else ~any_value_exists
+                    )
+            else:
+                facet = None
+                for _model_class, _datatype_name in all_entries:
+                    try:
+                        facet = self.facet_registry.get_facet(
+                            _datatype_name, operator_token
+                        )
+                        model_class = _model_class
+                        datatype_name = _datatype_name
+                        break
+                    except AdvancedSearchFacet.DoesNotExist:
+                        continue
+                if facet is None:
+                    raise AdvancedSearchFacet.DoesNotExist(
+                        f"No facet found for operator '{operator_token}' on any datatype "
+                        f"associated with search model '{class_name}'"
+                    )
+                rows = model_class.objects.filter(graph_slug=graph_slug)
+                correlated_rows = rows.filter(
+                    resourceinstanceid=OuterRef(correlate_field_name)
+                )
+                normalized_operand_items, localized_language = (
+                    self.localize_string_operands(
+                        facet=facet, operand_items=operand_items
+                    )
+                )
+                correlated_rows = self.apply_localized_language_filter(
+                    correlated_rows, facet=facet, localized_language=localized_language
+                )
+                predicate_expression, is_template_negated = (
+                    self.predicate_builder.build_predicate(
+                        datatype_name=datatype_name,
+                        operator_token=operator_token,
+                        operands=normalized_operand_items,
+                        anchor_resource_id_annotation=None,
+                        facet=facet,
+                    )
+                )
+                if isinstance(predicate_expression, AggregatePredicateSpec):
+                    raise NotImplementedError(
+                        "Aggregate operators are not supported with SEARCH_MODELS subjects."
+                    )
+                if quantifier_token == QUANTIFIER_ANY:
+                    expr = Exists(correlated_rows.filter(predicate_expression))
+                elif quantifier_token == QUANTIFIER_NONE:
+                    expr = ~Exists(correlated_rows.filter(predicate_expression))
+                elif quantifier_token == QUANTIFIER_ALL:
+                    if not is_template_negated:
+                        violating_rows = correlated_rows.exclude(predicate_expression)
+                        expr = Exists(correlated_rows) & ~Exists(violating_rows)
+                    else:
+                        positive_per_row = self.positive_rows_for_negated_template(
+                            operator_token=operator_token,
+                            datatype_name=datatype_name,
+                            operand_items=normalized_operand_items,
+                            correlated_rows=correlated_rows,
+                            predicate_expression=predicate_expression,
+                        )
+                        expr = Exists(correlated_rows) & ~Exists(positive_per_row)
+                else:
+                    raise ValueError(f"Unsupported quantifier: {quantifier_token}")
+
+            combined = expr if combined is None else (combined | expr)
+
+        return combined if combined is not None else Q(pk__in=[])
+
     def _build_correlated_literal_clause_predicate(
         self,
         clause_payload: Dict[str, Any],
         correlate_field_name: str,
     ) -> CorrelatedLiteralClauseContext:
-        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        subject = clause_payload["subject"]
+        subject_graph_slug = subject["graph_slug"]
+        subject_node_alias = subject["node_alias"]
         operator_token = clause_payload["operator"]
         operand_items = clause_payload["operands"]
 
@@ -150,7 +260,14 @@ class LiteralClauseEvaluator:
         )
 
     def build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
-        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        if is_search_models_subject(clause_payload["subject"]):
+            return self._build_exists_for_search_models(
+                clause_payload=clause_payload,
+                correlate_field_name="resourceinstanceid",
+            )
+        subject = clause_payload["subject"]
+        subject_graph_slug = subject["graph_slug"]
+        subject_node_alias = subject["node_alias"]
         operator_token = clause_payload["operator"]
         quantifier_token = clause_payload["quantifier"]
         operand_items = clause_payload["operands"]
@@ -236,7 +353,14 @@ class LiteralClauseEvaluator:
         clause_payload: Dict[str, Any],
         correlate_field: str,
     ) -> Exists:
-        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        if is_search_models_subject(clause_payload["subject"]):
+            return self._build_exists_for_search_models(
+                clause_payload=clause_payload,
+                correlate_field_name=correlate_field,
+            )
+        subject = clause_payload["subject"]
+        subject_graph_slug = subject["graph_slug"]
+        subject_node_alias = subject["node_alias"]
         operator_token = clause_payload["operator"]
         operand_items = clause_payload["operands"]
 
@@ -302,19 +426,22 @@ class LiteralClauseEvaluator:
         literal_clauses: List[Dict[str, Any]] = []
 
         for direct_child_group in group_payload["groups"]:
-            if direct_child_group["relationship"]["path"]:
+            if has_relationship_path(direct_child_group.get("relationship")):
                 continue
 
             pending_groups: List[Dict[str, Any]] = [direct_child_group]
             while pending_groups:
                 current_group = pending_groups.pop()
-                if current_group["relationship"]["path"]:
+                if has_relationship_path(current_group.get("relationship")):
                     continue
 
                 for clause_payload in current_group["clauses"]:
                     clause_type_token = clause_payload["type"]
                     if clause_type_token == CLAUSE_TYPE_LITERAL:
-                        clause_graph_slug, _ = clause_payload["subject"][0]
+                        subject = clause_payload["subject"]
+                        if is_search_models_subject(subject):
+                            continue
+                        clause_graph_slug = subject["graph_slug"]
                         if clause_graph_slug != terminal_graph_slug:
                             return None
                         literal_clauses.append(clause_payload)
@@ -331,7 +458,9 @@ class LiteralClauseEvaluator:
         intersected_rows: Optional[QuerySet] = None
 
         for clause_payload in literal_clauses:
-            subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+            subject = clause_payload["subject"]
+            subject_graph_slug = subject["graph_slug"]
+            subject_node_alias = subject["node_alias"]
             operator_token = clause_payload["operator"]
             operand_items = clause_payload["operands"]
 

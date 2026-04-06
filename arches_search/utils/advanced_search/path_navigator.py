@@ -12,6 +12,9 @@ from arches_search.utils.advanced_search.search_model_registry import (
 from arches_search.utils.advanced_search.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
+from arches_search.utils.advanced_search.relationship_utils import (
+    relationship_path_to_pair,
+)
 
 
 class PathNavigator:
@@ -58,11 +61,12 @@ class PathNavigator:
         self,
         relationship_context: Dict[str, Any],
     ) -> Tuple[Dict[str, Any], QuerySet]:
-        relationship_path: Sequence[Tuple[str, str]] = relationship_context["path"]
+        relationship_path = relationship_context["path"]
         is_inverse_relationship: bool = relationship_context["is_inverse"]
+        relationship_path_segments = [relationship_path_to_pair(relationship_path)]
 
         terminal_datatype_name, terminal_graph_slug, base_pair_rows = (
-            self.build_path_queryset(relationship_path)
+            self.build_path_queryset(relationship_path_segments)
         )
         if terminal_datatype_name.lower() not in TERMINAL_RESOURCE_DATATYPES:
             raise ValueError(
@@ -89,17 +93,18 @@ class PathNavigator:
             "anchor_id_field": anchor_id_field,
             "child_id_field": child_id_field,
             "terminal_graph_slug": terminal_graph_slug,
-            "terminal_node_alias": relationship_path[-1][1],
+            "terminal_node_alias": relationship_path_segments[-1][1],
             "is_inverse": is_inverse_relationship,
         }
         return compiled_pair_info, pairs_scoped_to_anchor
 
-    def build_scoped_pairs_for_path(
+    def build_scoped_pairs_for_relationship_path(
         self,
-        path_segments: Sequence[Tuple[str, str]],
+        relationship_path: Dict[str, Any],
         is_inverse_relationship: bool,
         correlate_on_field: str,
     ) -> Tuple[str, str, QuerySet, str]:
+        path_segments = [relationship_path_to_pair(relationship_path)]
         terminal_datatype_name, terminal_graph_slug, base_pair_rows = (
             self.build_path_queryset(path_segments)
         )
@@ -129,10 +134,12 @@ class PathNavigator:
     def normalize_relationship_context(
         self, relationship_context: Dict[str, Any]
     ) -> Dict[str, Any]:
+        path_segments = [relationship_path_to_pair(relationship_context["path"])]
+
         return {
             "is_inverse": relationship_context["is_inverse"],
-            "path_segments": relationship_context["path"],
-            "traversal_quantifier": relationship_context["traversal_quantifiers"][
-                0
+            "path_segments": path_segments,
+            "traversal_quantifier": relationship_context[
+                "traversal_quantifier"
             ].upper(),
         }

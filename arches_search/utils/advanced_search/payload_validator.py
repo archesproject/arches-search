@@ -2,6 +2,14 @@ from typing import Any, Dict, List
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
+from arches_search.utils.advanced_search.constants import (
+    SUBJECT_TYPE_NODE,
+    SUBJECT_TYPE_SEARCH_MODELS,
+)
+from arches_search.utils.advanced_search.relationship_utils import (
+    is_node_relationship_path,
+)
+
 
 class PayloadValidator:
     ALLOWED_SCOPE = {"RESOURCE", "TILE"}
@@ -21,7 +29,8 @@ class PayloadValidator:
     }
     REQUIRED_CLAUSE_KEYS = {"type", "quantifier", "subject", "operator", "operands"}
     REQUIRED_OPERAND_KEYS = {"type", "value"}
-    REQUIRED_RELATIONSHIP_KEYS = {"path", "is_inverse", "traversal_quantifiers"}
+    REQUIRED_RELATIONSHIP_KEYS = {"path", "is_inverse", "traversal_quantifier"}
+    REQUIRED_SUBJECT_KEYS = {"type", "graph_slug", "node_alias", "search_models"}
 
     def validate(self, root_payload: Dict[str, Any]) -> None:
         if not isinstance(root_payload, dict):
@@ -157,10 +166,14 @@ class PayloadValidator:
             )
 
         subject_value = clause_payload["subject"]
-        if not self._is_valid_subject_path(subject_value):
+        if not self._is_valid_subject_dict(subject_value, clause_type):
             raise ValidationError(
                 _(
-                    "%(location)s subject must be a non-empty list of [graph_slug, node_alias] pairs."
+                    "%(location)s subject must be an object with type, graph_slug, "
+                    "node_alias, and search_models. Node subjects require a non-empty "
+                    "node_alias and empty search_models. Search-model subjects require "
+                    "an empty node_alias and a non-empty search_models list. RELATED "
+                    "clauses must use a node subject."
                 ),
                 params={"location": location},
             )
@@ -213,7 +226,7 @@ class PayloadValidator:
             )
 
         if operand_type == "PATH":
-            if not self._is_valid_subject_path(operand_payload["value"]):
+            if not self._is_valid_path_list(operand_payload["value"]):
                 raise ValidationError(
                     _("%(location)s value must be a subject path when type is PATH."),
                     params={"location": location},
@@ -240,30 +253,28 @@ class PayloadValidator:
             )
 
         path_value = relationship_payload["path"]
-        if not isinstance(path_value, list) or len(path_value) == 0:
+        if not is_node_relationship_path(path_value):
             raise ValidationError(
-                _("%(location)s path must be a non-empty list."),
+                _(
+                    "%(location)s path must be an object with type, graph_slug, "
+                    "and node_alias."
+                ),
                 params={"location": location},
             )
 
-        for hop_index, hop_pair in enumerate(path_value):
-            hop_location = " > ".join(location_parts + [f"path[{hop_index}]"])
-            if not isinstance(hop_pair, list) or len(hop_pair) != 2:
-                raise ValidationError(
-                    _("%(location)s must be [graph_slug, node_alias]."),
-                    params={"location": hop_location},
-                )
-            hop_graph_slug, hop_node_alias = hop_pair
-            if not isinstance(hop_graph_slug, str) or not hop_graph_slug:
-                raise ValidationError(
-                    _("%(location)s[0] must be a non-empty string."),
-                    params={"location": hop_location},
-                )
-            if not isinstance(hop_node_alias, str) or not hop_node_alias:
-                raise ValidationError(
-                    _("%(location)s[1] must be a non-empty string."),
-                    params={"location": hop_location},
-                )
+        path_graph_slug = path_value.get("graph_slug")
+        if not isinstance(path_graph_slug, str) or not path_graph_slug:
+            raise ValidationError(
+                _("%(location)s path.graph_slug must be a non-empty string."),
+                params={"location": location},
+            )
+
+        path_node_alias = path_value.get("node_alias")
+        if not isinstance(path_node_alias, str) or not path_node_alias:
+            raise ValidationError(
+                _("%(location)s path.node_alias must be a non-empty string."),
+                params={"location": location},
+            )
 
         is_inverse_value = relationship_payload["is_inverse"]
         if not isinstance(is_inverse_value, bool):
@@ -272,32 +283,59 @@ class PayloadValidator:
                 params={"location": location},
             )
 
-        traversal_quantifiers_value = relationship_payload["traversal_quantifiers"]
-        if (
-            not isinstance(traversal_quantifiers_value, list)
-            or len(traversal_quantifiers_value) == 0
-        ):
+        traversal_quantifier_value = relationship_payload["traversal_quantifier"]
+        if not isinstance(traversal_quantifier_value, str):
             raise ValidationError(
-                _("%(location)s traversal_quantifiers must be a non-empty list."),
+                _("%(location)s traversal_quantifier must be a string."),
                 params={"location": location},
             )
 
-        for quantifier_index, quantifier_value in enumerate(
-            traversal_quantifiers_value
-        ):
-            if quantifier_value not in self.ALLOWED_QUANTIFIER:
-                q_location = " > ".join(
-                    location_parts + [f"traversal_quantifiers[{quantifier_index}]"]
-                )
-                raise ValidationError(
-                    _("%(location)s must be one of %(choices)s."),
-                    params={
-                        "location": q_location,
-                        "choices": ", ".join(sorted(self.ALLOWED_QUANTIFIER)),
-                    },
-                )
+        if traversal_quantifier_value not in self.ALLOWED_QUANTIFIER:
+            raise ValidationError(
+                _("%(location)s traversal_quantifier must be one of %(choices)s."),
+                params={
+                    "location": location,
+                    "choices": ", ".join(sorted(self.ALLOWED_QUANTIFIER)),
+                },
+            )
 
-    def _is_valid_subject_path(self, subject_path: Any) -> bool:
+    def _is_valid_subject_dict(self, subject: Any, clause_type: str) -> bool:
+        if not isinstance(subject, dict):
+            return False
+
+        missing_keys = self.REQUIRED_SUBJECT_KEYS - set(subject.keys())
+        if missing_keys:
+            return False
+
+        subject_type = subject.get("type")
+        if subject_type not in {SUBJECT_TYPE_NODE, SUBJECT_TYPE_SEARCH_MODELS}:
+            return False
+
+        graph_slug = subject.get("graph_slug")
+        if not isinstance(graph_slug, str) or not graph_slug:
+            return False
+
+        node_alias = subject.get("node_alias")
+        if not isinstance(node_alias, str):
+            return False
+
+        search_models = subject.get("search_models")
+        if not isinstance(search_models, list):
+            return False
+        if not all(
+            isinstance(model_name, str) and model_name for model_name in search_models
+        ):
+            return False
+
+        if clause_type == "RELATED" and subject_type != SUBJECT_TYPE_NODE:
+            return False
+
+        if subject_type == SUBJECT_TYPE_NODE:
+            return bool(node_alias) and len(search_models) == 0
+
+        return node_alias == "" and len(search_models) > 0
+
+    def _is_valid_path_list(self, subject_path: Any) -> bool:
         if not isinstance(subject_path, list) or len(subject_path) == 0:
             return False
         for pair in subject_path:

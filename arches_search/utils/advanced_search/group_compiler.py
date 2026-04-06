@@ -11,6 +11,9 @@ from arches_search.utils.advanced_search.related_clause_evaluator import (
     RelatedClauseEvaluator,
 )
 from arches_search.utils.advanced_search.tile_scope_evaluator import TileScopeEvaluator
+from arches_search.utils.advanced_search.relationship_utils import (
+    has_relationship_path,
+)
 
 from arches_search.utils.advanced_search.constants import (
     CLAUSE_TYPE_LITERAL,
@@ -46,8 +49,7 @@ class GroupCompiler:
         group_logic_token = group_payload["logic"].upper()
         relationship_block = group_payload["relationship"]
 
-        path_segments = (relationship_block or {}).get("path")
-        has_relationship = bool(path_segments)
+        has_relationship = has_relationship_path(relationship_block)
 
         if scope_token == SCOPE_TILE and not has_relationship:
             return self._compile_tile_scope_without_relationship(
@@ -67,7 +69,7 @@ class GroupCompiler:
 
     def _group_has_any_relationship(self, group_payload: Dict[str, Any]) -> bool:
         relationship_block = group_payload.get("relationship") or {}
-        if bool((relationship_block.get("path") or [])):
+        if has_relationship_path(relationship_block):
             return True
 
         for subgroup_payload in group_payload.get("groups") or []:
