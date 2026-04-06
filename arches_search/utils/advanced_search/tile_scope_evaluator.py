@@ -17,7 +17,7 @@ from arches_search.utils.advanced_search.specs import (
     AggregatePredicateSpec,
     TileScopePredicateSet,
 )
-from arches_search.utils.advanced_search.subject_utils import is_search_models_subject
+from arches_search.utils.advanced_search.constants import SUBJECT_TYPE_SEARCH_MODELS
 
 
 class TileScopeEvaluator:
@@ -31,7 +31,7 @@ class TileScopeEvaluator:
         tile_id_outer_ref: Any,
     ) -> TileScopePredicateSet:
         subject = clause_payload["subject"]
-        if is_search_models_subject(subject):
+        if subject.get("type") == SUBJECT_TYPE_SEARCH_MODELS:
             raise NotImplementedError(
                 "search_models subject is not supported with TILE scope."
             )
