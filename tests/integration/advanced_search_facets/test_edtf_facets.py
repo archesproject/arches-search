@@ -367,9 +367,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "EQUALS",
                     "operands": [{"type": "LITERAL", "value": self.date_2020_01_20}],
                 }
@@ -397,9 +400,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "NOT_EQUALS",
                     "operands": [{"type": "LITERAL", "value": self.date_2020_01_20}],
                 }
@@ -427,9 +433,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "LESS_THAN",
                     "operands": [{"type": "LITERAL", "value": self.date_2020_01_31}],
                 }
@@ -457,9 +466,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "GREATER_THAN",
                     "operands": [{"type": "LITERAL", "value": self.date_2020_01_20}],
                 }
@@ -487,9 +499,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "LESS_THAN_OR_EQUALS",
                     "operands": [{"type": "LITERAL", "value": self.date_2020_01_20}],
                 }
@@ -517,9 +532,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.ordered_graph.slug, self.ordered_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ordered_graph.slug,
+                        "node_alias": self.ordered_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "GREATER_THAN_OR_EQUALS",
                     "operands": [{"type": "LITERAL", "value": self.date_2020_01_31}],
                 }
@@ -547,9 +565,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.overlap_graph.slug, self.overlap_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.overlap_graph.slug,
+                        "node_alias": self.overlap_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "OVERLAPS",
                     "operands": [
                         {"type": "LITERAL", "value": self.date_2020_01_10},
@@ -580,7 +601,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.during_graph.slug, self.during_edtf_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.during_graph.slug,
+                        "node_alias": self.during_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "DURING",
                     "operands": [
                         {"type": "LITERAL", "value": self.date_2020_01_10},
@@ -611,9 +637,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.contains_graph.slug, self.contains_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.contains_graph.slug,
+                        "node_alias": self.contains_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "CONTAINS",
                     "operands": [
                         {"type": "LITERAL", "value": self.date_2020_01_12},
@@ -644,7 +673,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.starts_graph.slug, self.starts_edtf_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.starts_graph.slug,
+                        "node_alias": self.starts_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "STARTS_AT",
                     "operands": [{"type": "LITERAL", "value": self.date_2020_01_10}],
                 }
@@ -672,9 +706,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.finishes_graph.slug, self.finishes_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.finishes_graph.slug,
+                        "node_alias": self.finishes_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "FINISHES_AT",
                     "operands": [{"type": "LITERAL", "value": self.date_2020_01_20}],
                 }
@@ -702,9 +739,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_NO_VALUE",
                     "operands": [],
                 }
@@ -732,9 +772,12 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_edtf_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_edtf_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_ANY_VALUE",
                     "operands": [],
                 }

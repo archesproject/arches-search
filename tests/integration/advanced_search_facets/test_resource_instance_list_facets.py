@@ -389,12 +389,12 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [
-                            self.any_graph.slug,
-                            self.any_resource_instance_list_node.alias,
-                        ]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.any_graph.slug,
+                        "node_alias": self.any_resource_instance_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "REFERENCES_ANY",
                     "operands": [
                         {
@@ -430,12 +430,12 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [
-                            self.all_graph.slug,
-                            self.all_resource_instance_list_node.alias,
-                        ]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.all_graph.slug,
+                        "node_alias": self.all_resource_instance_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "REFERENCES_ALL",
                     "operands": [
                         {
@@ -471,12 +471,12 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [
-                            self.only_graph.slug,
-                            self.only_resource_instance_list_node.alias,
-                        ]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.only_graph.slug,
+                        "node_alias": self.only_resource_instance_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "REFERENCES_ONLY",
                     "operands": [
                         {
@@ -512,12 +512,12 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [
-                            self.none_graph.slug,
-                            self.none_resource_instance_list_node.alias,
-                        ]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.none_graph.slug,
+                        "node_alias": self.none_resource_instance_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "REFERENCES_NONE_OF",
                     "operands": [
                         {
@@ -553,12 +553,12 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [
-                            self.presence_graph.slug,
-                            self.presence_resource_instance_list_node.alias,
-                        ]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_resource_instance_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_NO_VALUE",
                     "operands": [],
                 }
@@ -586,12 +586,12 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [
-                            self.presence_graph.slug,
-                            self.presence_resource_instance_list_node.alias,
-                        ]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_resource_instance_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_ANY_VALUE",
                     "operands": [],
                 }

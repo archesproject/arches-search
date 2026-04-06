@@ -126,7 +126,12 @@ class BooleanAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.truth_graph.slug, self.truth_boolean_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.truth_graph.slug,
+                        "node_alias": self.truth_boolean_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "IS_TRUE",
                     "operands": [{"type": "LITERAL", "value": True}],
                 }
@@ -154,7 +159,12 @@ class BooleanAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.truth_graph.slug, self.truth_boolean_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.truth_graph.slug,
+                        "node_alias": self.truth_boolean_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "IS_FALSE",
                     "operands": [{"type": "LITERAL", "value": True}],
                 }
@@ -182,9 +192,12 @@ class BooleanAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_boolean_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_boolean_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_NO_VALUE",
                     "operands": [],
                 }
@@ -212,9 +225,12 @@ class BooleanAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_boolean_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_boolean_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_ANY_VALUE",
                     "operands": [],
                 }
