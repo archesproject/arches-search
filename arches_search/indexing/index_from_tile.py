@@ -29,6 +29,11 @@ def index_from_tile(
         factory = IndexingFactory()
     else:
         factory = indexing_factory
+
+    if nodegroup_cache is None:
+        nodes = Node.objects.filter(nodegroup_id=tile.nodegroup_id)
+        nodegroup_cache = {tile.nodegroup_id: list(nodes)}
+
     result = []
     for node in nodegroup_cache[tile.nodegroup_id]:
         nodeid = str(node.nodeid)
