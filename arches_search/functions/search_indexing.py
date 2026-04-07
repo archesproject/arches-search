@@ -4,9 +4,10 @@ from arches_search.indexing.index_from_tile import index_from_tile
 
 
 class SearchIndexingFunction(BaseFunction):
-    # occurrs after Tile.save
+    # occurs after Tile.save
     def post_save(self, *args, **kwargs):
         tile: Tile = args[0]
-        index_records = index_from_tile(tile)
+        nodegroup_cache = kwargs.get("nodegroup_cache", None)
+        index_records = index_from_tile(tile, nodegroup_cache=nodegroup_cache)
         for record in index_records:
             record.save()
