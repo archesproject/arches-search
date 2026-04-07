@@ -11,23 +11,21 @@ from arches_search.models.models import (
     TermSearch,
 )
 
+def _get_nodegroup(nodegroup_id):
+    return Node.objects.filter(
+        Q(nodegroup_id=nodegroup_id)
+        & ~Q(graph__slug="arches_system_settings")
+    ).select_related("graph")
+
 
 def index_from_tile(
     tile, delete_existing=True, indexing_factory=None, nodegroup_cache=None
 ):
-    def get_nodegroup(nodegroup_id):
-        return Node.objects.filter(
-            Q(nodegroup_id=nodegroup_id)
-            & ~Q(graph_id="ff623370-fa12-11e6-b98b-6c4008b05c4c")
-        ).select_related("graph")
-
     if nodegroup_cache is None:
-        nodes = get_nodegroup(tile.nodegroup_id)
-    elif tile.nodegroup_id in nodegroup_cache:
-        nodes = nodegroup_cache[tile.nodegroup_id]
-    else:
-        nodegroup_cache[tile.nodegroup_id] = get_nodegroup(tile.nodegroup_id)
-        nodes = nodegroup_cache[tile.nodegroup_id]
+        nodegroup_cache = {}
+    if tile.nodegroup_id not in nodegroup_cache:
+        nodegroup_cache[tile.nodegroup_id] = _get_nodegroup(tile.nodegroup_id)
+    nodes = nodegroup_cache[tile.nodegroup_id]
 
     if delete_existing:
         TermSearch.objects.filter(tileid=tile.tileid).delete()

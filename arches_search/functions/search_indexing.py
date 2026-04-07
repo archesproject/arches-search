@@ -7,7 +7,7 @@ class SearchIndexingFunction(BaseFunction):
     # occurs after Tile.save
     def post_save(self, *args, **kwargs):
         tile: Tile = args[0]
-        nodegroup_cache = kwargs.get("nodegroup_cache", None)
+        nodegroup_cache = kwargs.get("nodegroup_cache", {})
         index_records = index_from_tile(tile, nodegroup_cache=nodegroup_cache)
         for record in index_records:
             record.save()
