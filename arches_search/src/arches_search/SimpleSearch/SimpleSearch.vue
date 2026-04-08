@@ -6,7 +6,7 @@ import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters
 import AttributeFilters from "@/arches_search/SimpleSearch/components/AttributeFilters.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
-import SearchBar from "@/arches_search/SimpleSearch/components/SearchBar.vue";
+import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -63,10 +63,10 @@ onMounted(() => {
 <template>
     <div class="simple-search">
         <!-- Search input -->
-        <SearchBar
+        <TermFilter
             :graph-slug="activeTypeId"
             :config="{}"
-            filter-key="searchbar"
+            filter-key="termfilter"
         />
 
         <!-- Resource type tabs -->
