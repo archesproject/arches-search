@@ -24,7 +24,6 @@ defineEmits<{
 
 const { searchResults, isSearching, search } = provideSearchFilters();
 
-const activeTypeId = ref<string | null>(null);
 const sortValue = ref("aToZ");
 const showAttributeFilters = ref(false);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
@@ -64,7 +63,6 @@ onMounted(() => {
     <div class="simple-search">
 
         <TermFilter
-            :graph-slug="activeTypeId"
             :config="{}"
             filter-key="termfilter"
         />
