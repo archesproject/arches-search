@@ -7,7 +7,6 @@ import type { AutoCompleteCompleteEvent } from "primevue/autocomplete";
 import Button from "primevue/button";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
-import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts";
 
 const { $gettext } = useGettext();
@@ -18,7 +17,7 @@ const props = defineProps<{
     filterKey: string;
 }>();
 
-const { setTerm, clearTerm, setQuery } = useSearchFilters();
+const { setTerm, clearTerm, search } = useSearchFilters();
 
 const suggestions = ref<Array<{ id: number; datatype: string; value: string }>>(
     [],
@@ -38,7 +37,6 @@ function removeTerm(termValue: string) {
     selectedTerms.value = selectedTerms.value.filter(
         (t) => t.value !== termValue,
     );
-    setQuery(props.filterKey, buildEmptyPayload());
 }
 
 watch(
@@ -67,18 +65,6 @@ watch(
     { deep: true },
 );
 
-function buildEmptyPayload(): GroupPayload {
-    return {
-        graph_slug: props.graphSlug ?? "",
-        scope: "RESOURCE",
-        logic: "AND",
-        clauses: [],
-        groups: [],
-        aggregations: [],
-        relationship: null,
-    };
-}
-
 async function onComplete(event: AutoCompleteCompleteEvent) {
     if (!event.query.trim()) {
         suggestions.value = [];
@@ -87,21 +73,15 @@ async function onComplete(event: AutoCompleteCompleteEvent) {
     suggestions.value = await fetchSearchTermSuggestions(event.query);
 }
 
-function onSearch() {
-    if (!inputText.value.trim()) return;
-    setQuery(props.filterKey, buildEmptyPayload());
-}
-
 function onSelect(event: {
     value: { id: number; datatype: string; value: string };
 }) {
     selectedTerms.value = [...selectedTerms.value, event.value];
     inputText.value = "";
-    setQuery(props.filterKey, buildEmptyPayload());
 }
 
 function onKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter") onSearch();
+    if (e.key === "Enter") search();
 }
 </script>
 
@@ -158,7 +138,7 @@ function onKeydown(e: KeyboardEvent) {
         <Button
             :label="$gettext('Search')"
             class="search-button"
-            @click="onSearch"
+            @click="search"
         />
     </div>
 </template>
