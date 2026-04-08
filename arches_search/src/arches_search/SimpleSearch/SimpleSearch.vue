@@ -62,18 +62,16 @@ onMounted(() => {
 
 <template>
     <div class="simple-search">
-        <!-- Search input -->
+
         <TermFilter
             :graph-slug="activeTypeId"
             :config="{}"
             filter-key="termfilter"
         />
 
-        <!-- Resource type tabs -->
         <ResourceTypeFilter />
 
-        <!-- Active filter chips + result count -->
-        <ActiveFilters :count="searchResults.pagination.total_results" />
+        <ActiveFilters />
 
         <!-- Sort + action buttons -->
         <ResultsToolbar
