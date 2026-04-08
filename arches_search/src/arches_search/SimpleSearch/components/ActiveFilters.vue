@@ -6,11 +6,7 @@ import Chip from "primevue/chip";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 const { $gettext } = useGettext();
-const { activeFilters, activeGraph } = useSearchFilters();
-
-defineProps<{
-    count: number;
-}>();
+const { activeFilters, activeGraph, searchResults } = useSearchFilters();
 
 function clearAllFilters() {
     for (const filter of activeFilters.value) {
@@ -24,12 +20,10 @@ defineEmits<{
 </script>
 
 <template>
-    <div
-        v-if="count > 0 || activeFilters.length > 0"
-        class="active-filters"
-    >
+    <div class="active-filters">
+
         <span class="results-count">
-            {{ count }}
+            {{ searchResults.pagination?.total_results ?? 0 }}
             {{ activeGraph ? activeGraph.label : $gettext("Items") }}
             {{ $gettext("match") }}
         </span>
