@@ -96,12 +96,16 @@ function createSearchFilters() {
         searchTimeout = setTimeout(async () => {
             currentPage.value = page;
             isSearching.value = true;
-            const requestTerms = [...terms.value.values()].map((term) => (term.text));
-            const requestQueries = queries.value.values() ? queries.value.values() : {};
+            const requestTerms = [...terms.value.values()].map(
+                (term) => term.text,
+            );
+            const requestQueries = queries.value.values()
+                ? queries.value.values()
+                : {};
             try {
-                searchResults.value = await fetchSearchResults({ 
-                    terms: requestTerms, 
-                    query: requestQueries, 
+                searchResults.value = await fetchSearchResults({
+                    terms: requestTerms,
+                    query: requestQueries,
                     page: page,
                     graphId: activeGraph.value ? activeGraph.value.id : null,
                 });
@@ -134,6 +138,7 @@ export function provideSearchFilters() {
 
 export function useSearchFilters() {
     const filters = inject(SEARCH_FILTERS_KEY);
-    if (!filters) throw new Error("useSearchFilters must be used within SimpleSearch");
+    if (!filters)
+        throw new Error("useSearchFilters must be used within SimpleSearch");
     return filters;
 }

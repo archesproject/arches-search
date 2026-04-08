@@ -20,9 +20,9 @@ const props = defineProps<{
 
 const { setTerm, clearTerm, setQuery } = useSearchFilters();
 
-const suggestions = ref<
-    Array<{ id: number; datatype: string; value: string }>
->([]);
+const suggestions = ref<Array<{ id: number; datatype: string; value: string }>>(
+    [],
+);
 
 const selectedTerms = ref<
     Array<{ id: number; datatype: string; value: string }>
@@ -35,30 +35,37 @@ function termKey(termValue: string) {
 }
 
 function removeTerm(termValue: string) {
-    selectedTerms.value = selectedTerms.value.filter((t) => t.value !== termValue);
+    selectedTerms.value = selectedTerms.value.filter(
+        (t) => t.value !== termValue,
+    );
     setQuery(props.filterKey, buildEmptyPayload());
 }
 
-watch(selectedTerms, (val, prev) => {
-    // clearTerm any terms that were removed
-    const oldTerms = new Set(prev.map((t) => t.value));
-    const newTerms = new Set(val.map((t) => t.value));
-    for (const oldTerm of prev) {
-        if (!newTerms.has(oldTerm.value)) clearTerm(termKey(oldTerm.value));
-    }
-    // Register any terms that were added
-    for (const newTerm of val) {
-        if (!oldTerms.has(newTerm.value)) {
-            setTerm(termKey(newTerm.value), 
-                newTerm.value, 
-                () => removeTerm(newTerm.value), 
-                { 
-                    style: "background-color: var(--p-sky-500);" 
-                }
-            );
+watch(
+    selectedTerms,
+    (val, prev) => {
+        // clearTerm any terms that were removed
+        const oldTerms = new Set(prev.map((t) => t.value));
+        const newTerms = new Set(val.map((t) => t.value));
+        for (const oldTerm of prev) {
+            if (!newTerms.has(oldTerm.value)) clearTerm(termKey(oldTerm.value));
         }
-    }
-}, { deep: true });
+        // Register any terms that were added
+        for (const newTerm of val) {
+            if (!oldTerms.has(newTerm.value)) {
+                setTerm(
+                    termKey(newTerm.value),
+                    newTerm.value,
+                    () => removeTerm(newTerm.value),
+                    {
+                        style: "background-color: var(--p-sky-500);",
+                    },
+                );
+            }
+        }
+    },
+    { deep: true },
+);
 
 function buildEmptyPayload(): GroupPayload {
     return {
@@ -102,33 +109,57 @@ function onKeydown(e: KeyboardEvent) {
     <div class="search-bar">
         <span class="search-bar-inner">
             <i class="pi pi-search search-icon" />
-            <AutoComplete v-model="inputText" :suggestions="suggestions" option-label="text"
-                :placeholder="$gettext('Find an item, sample, supplier\u2026')" class="search-input" fluid
-                @complete="onComplete" @item-select="onSelect" @keydown="onKeydown">
+            <AutoComplete
+                v-model="inputText"
+                :suggestions="suggestions"
+                option-label="text"
+                :placeholder="$gettext('Find an item, sample, supplier\u2026')"
+                class="search-input"
+                fluid
+                @complete="onComplete"
+                @item-select="onSelect"
+                @keydown="onKeydown"
+            >
                 <template #option="{ option }">
                     <div class="suggestion-option">
-                        <span v-if="option.datatype === 'reference'"
-                            class="suggestion-icon suggestion-icon--concept">C</span>
-                        <i v-else-if="option.datatype === 'term'"
-                            class="pi pi-hashtag suggestion-icon suggestion-icon--term" />
-                        <i v-else class="pi pi-search suggestion-icon suggestion-icon--string" />
+                        <span
+                            v-if="option.datatype === 'reference'"
+                            class="suggestion-icon suggestion-icon--concept"
+                            >C</span
+                        >
+                        <i
+                            v-else-if="option.datatype === 'term'"
+                            class="pi pi-hashtag suggestion-icon suggestion-icon--term"
+                        />
+                        <i
+                            v-else
+                            class="pi pi-search suggestion-icon suggestion-icon--string"
+                        />
                         <div class="suggestion-content">
                             <span class="suggestion-label">{{
                                 option.value
-                                }}</span>
-                            <span v-if="
-                                option.addtional_info &&
-                                option.addtional_info.path &&
-                                option.addtional_info.path.length > 0
-                            " class="suggestion-path">{{
+                            }}</span>
+                            <span
+                                v-if="
+                                    option.addtional_info &&
+                                    option.addtional_info.path &&
+                                    option.addtional_info.path.length > 0
+                                "
+                                class="suggestion-path"
+                                >{{
                                     option.addtional_info.path.join(" > ")
-                                }}</span>
+                                }}</span
+                            >
                         </div>
                     </div>
                 </template>
             </AutoComplete>
         </span>
-        <Button :label="$gettext('Search')" class="search-button" @click="onSearch" />
+        <Button
+            :label="$gettext('Search')"
+            class="search-button"
+            @click="onSearch"
+        />
     </div>
 </template>
 
