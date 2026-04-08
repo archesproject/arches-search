@@ -34,7 +34,6 @@ function selectGraph(graph: { id: string } | null) {
 onMounted(async () => {
     await loadResourceTypes();
 });
-
 </script>
 
 <template>

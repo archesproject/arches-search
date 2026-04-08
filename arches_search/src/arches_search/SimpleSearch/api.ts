@@ -22,7 +22,6 @@ export async function fetchSearchResults({
     graphId?: string | null;
     page?: number;
 } = {}): Promise<SearchResults> {
-
     const requestPayload = {
         graphId: graphId,
         terms: terms,

@@ -38,7 +38,11 @@ const sortOptions: SortOption[] = [
 
 const attributeFilterSections = ref<AttributeFilterSection[]>([
     { id: "color", label: $gettext("Color"), options: [] },
-    { id: "referenceItemType", label: $gettext("Reference Item Type"), options: [] },
+    {
+        id: "referenceItemType",
+        label: $gettext("Reference Item Type"),
+        options: [],
+    },
     { id: "mixture", label: $gettext("Mixture"), options: [] },
     { id: "elements", label: $gettext("Elements"), options: [] },
     { id: "chemicalFormula", label: $gettext("Chemical Formula"), options: [] },
@@ -69,9 +73,7 @@ onMounted(() => {
         <ResourceTypeFilter />
 
         <!-- Active filter chips + result count -->
-        <ActiveFilters
-            :count="searchResults.pagination.total_results"
-        />
+        <ActiveFilters :count="searchResults.pagination.total_results" />
 
         <!-- Sort + action buttons -->
         <ResultsToolbar
