@@ -139,6 +139,6 @@ export function provideSearchFilters() {
 export function useSearchFilters() {
     const filters = inject(SEARCH_FILTERS_KEY);
     if (!filters)
-        throw new Error("useSearchFilters must be used within SimpleSearch");
+        throw new Error("a parent component must call provideSearchFilters before using useSearchFilters in a child component");
     return filters;
 }
