@@ -26,6 +26,7 @@ export async function fetchSearchResults({
         graphId: graphId,
         terms: terms,
         query: query,
+        page: page,
     };
 
     const response = await fetch(

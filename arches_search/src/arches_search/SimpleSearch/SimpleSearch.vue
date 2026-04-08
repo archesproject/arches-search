@@ -61,7 +61,6 @@ onMounted(() => {
 
 <template>
     <div class="simple-search">
-
         <TermFilter
             :config="{}"
             filter-key="termfilter"
