@@ -12,7 +12,6 @@ import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts"
 const { $gettext } = useGettext();
 
 const props = defineProps<{
-    graphSlug: string | null;
     config: Record<string, unknown>;
     filterKey: string;
 }>();
