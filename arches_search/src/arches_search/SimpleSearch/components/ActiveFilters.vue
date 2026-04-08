@@ -21,7 +21,6 @@ defineEmits<{
 
 <template>
     <div class="active-filters">
-
         <span class="results-count">
             {{ searchResults.pagination?.total_results ?? 0 }}
             {{ activeGraph ? activeGraph.label : $gettext("Items") }}

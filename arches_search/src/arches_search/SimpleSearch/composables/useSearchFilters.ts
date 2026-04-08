@@ -103,12 +103,23 @@ function createSearchFilters() {
                 ? queries.value.values()
                 : {};
             try {
-                searchResults.value = await fetchSearchResults({
+                const results = await fetchSearchResults({
                     terms: requestTerms,
                     query: requestQueries,
                     page: page,
                     graphId: activeGraph.value ? activeGraph.value.id : null,
                 });
+                if (page > 1) {
+                    searchResults.value = {
+                        ...results,
+                        resources: [
+                            ...searchResults.value.resources,
+                            ...results.resources,
+                        ],
+                    };
+                } else {
+                    searchResults.value = results;
+                }
             } finally {
                 isSearching.value = false;
             }
@@ -139,6 +150,8 @@ export function provideSearchFilters() {
 export function useSearchFilters() {
     const filters = inject(SEARCH_FILTERS_KEY);
     if (!filters)
-        throw new Error("a parent component must call provideSearchFilters before using useSearchFilters in a child component");
+        throw new Error(
+            "a parent component must call provideSearchFilters before using useSearchFilters in a child component",
+        );
     return filters;
 }
