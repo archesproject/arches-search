@@ -8,6 +8,7 @@ export interface ActiveFilter {
     id: string;
     label: string;
     clear: () => void;
+    options?: Record<string, unknown>;
 }
 
 export interface SortOption {

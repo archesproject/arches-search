@@ -3,15 +3,16 @@ import { useGettext } from "vue3-gettext";
 
 import Chip from "primevue/chip";
 
-import type { ActiveFilter } from "@/arches_search/SimpleSearch/types.ts";
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 const { $gettext } = useGettext();
+const { activeFilters, activeGraph, searchResults } = useSearchFilters();
 
-defineProps<{
-    count: number;
-    resourceTypeLabel: string;
-    filters: ActiveFilter[];
-}>();
+function clearAllFilters() {
+    for (const filter of activeFilters.value) {
+        filter.clear();
+    }
+}
 
 defineEmits<{
     (event: "clear-all"): void;
@@ -19,34 +20,32 @@ defineEmits<{
 </script>
 
 <template>
-    <div
-        v-if="count > 0 || filters.length > 0"
-        class="active-filters"
-    >
+    <div class="active-filters">
         <span class="results-count">
-            {{ count }}
-            {{ resourceTypeLabel }}
+            {{ searchResults.pagination?.total_results ?? 0 }}
+            {{ activeGraph ? activeGraph.label : $gettext("Items") }}
             {{ $gettext("match") }}
         </span>
 
         <div
-            v-if="filters.length > 0"
+            v-if="activeFilters.length > 0"
             class="filter-chips"
         >
             <Chip
-                v-for="filter in filters"
+                v-for="filter in activeFilters"
                 :key="filter.id"
                 :label="filter.label"
                 removable
                 class="filter-chip"
+                :style="filter.options?.style"
                 @remove="filter.clear()"
             />
         </div>
 
         <button
-            v-if="filters.length > 0"
+            v-if="activeFilters.length > 0"
             class="clear-all-btn"
-            @click="$emit('clear-all')"
+            @click="clearAllFilters"
         >
             {{ $gettext("Clear all") }}
         </button>

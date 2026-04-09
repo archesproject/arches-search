@@ -1,27 +1,66 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import AutoComplete from "primevue/autocomplete";
 import type { AutoCompleteCompleteEvent } from "primevue/autocomplete";
 import Button from "primevue/button";
 
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts";
 
 const { $gettext } = useGettext();
 
 const props = defineProps<{
-    modelValue: string;
+    config: Record<string, unknown>;
+    filterKey: string;
 }>();
 
-const emit = defineEmits<{
-    (event: "update:modelValue", value: string): void;
-    (event: "search", term: string): void;
-}>();
+const { setTerm, clearTerm, search } = useSearchFilters();
 
-const suggestions = ref<
-    Array<{ text: string; datatype: string; value: string }>
->([]);
+type Suggestion = { text: string; datatype: string; value: string };
+
+const suggestions = ref<Suggestion[]>([]);
+
+const selectedTerms = ref<Suggestion[]>([]);
+
+const inputText = ref("");
+
+function termKey(termValue: string) {
+    return `${props.filterKey}:${termValue}`;
+}
+
+function removeTerm(termValue: string) {
+    selectedTerms.value = selectedTerms.value.filter(
+        (t) => t.value !== termValue,
+    );
+}
+
+watch(
+    selectedTerms,
+    (val, prev) => {
+        // clearTerm any terms that were removed
+        const oldTerms = new Set(prev.map((t) => t.value));
+        const newTerms = new Set(val.map((t) => t.value));
+        for (const oldTerm of prev) {
+            if (!newTerms.has(oldTerm.value)) clearTerm(termKey(oldTerm.value));
+        }
+        // Register any terms that were added
+        for (const newTerm of val) {
+            if (!oldTerms.has(newTerm.value)) {
+                setTerm(
+                    termKey(newTerm.value),
+                    newTerm.value,
+                    () => removeTerm(newTerm.value),
+                    {
+                        style: "background-color: var(--p-sky-500);",
+                    },
+                );
+            }
+        }
+    },
+    { deep: true },
+);
 
 async function onComplete(event: AutoCompleteCompleteEvent) {
     if (!event.query.trim()) {
@@ -31,19 +70,13 @@ async function onComplete(event: AutoCompleteCompleteEvent) {
     suggestions.value = await fetchSearchTermSuggestions(event.query);
 }
 
-function onSearch() {
-    emit("search", props.modelValue);
-}
-
-function onSelect(event: {
-    value: { text: string; datatype: string; value: string };
-}) {
-    emit("update:modelValue", event.value.value);
-    emit("search", event.value.value);
+function onSelect(event: { value: Suggestion }) {
+    selectedTerms.value = [...selectedTerms.value, event.value];
+    inputText.value = "";
 }
 
 function onKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter") onSearch();
+    if (e.key === "Enter") search();
 }
 </script>
 
@@ -52,13 +85,12 @@ function onKeydown(e: KeyboardEvent) {
         <span class="search-bar-inner">
             <i class="pi pi-search search-icon" />
             <AutoComplete
-                :model-value="modelValue"
+                v-model="inputText"
                 :suggestions="suggestions"
                 option-label="text"
                 :placeholder="$gettext('Find an item, sample, supplier\u2026')"
                 class="search-input"
                 fluid
-                @update:model-value="$emit('update:modelValue', $event)"
                 @complete="onComplete"
                 @item-select="onSelect"
                 @keydown="onKeydown"
@@ -101,7 +133,7 @@ function onKeydown(e: KeyboardEvent) {
         <Button
             :label="$gettext('Search')"
             class="search-button"
-            @click="onSearch"
+            @click="() => search()"
         />
     </div>
 </template>

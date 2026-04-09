@@ -2,73 +2,52 @@
 import { computed, onMounted, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Toast from "primevue/toast";
-import { useToast } from "primevue/usetoast";
-
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
 import AttributeFilters from "@/arches_search/SimpleSearch/components/AttributeFilters.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
-import SearchBar from "@/arches_search/SimpleSearch/components/SearchBar.vue";
+import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
 import SimpleSearchTimeFilter from "@/arches_search/SimpleSearch/components/SimpleSearchTimeFilter.vue";
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 
-import { fetchSimpleSearchResults } from "@/arches_search/SimpleSearch/api.ts";
-import {
-    getGraphs,
-    getSearchResults,
-} from "@/arches_search/AdvancedSearch/api.ts";
-
-import type {
-    ActiveFilter,
-    AttributeFilterSection,
-    ResourceType,
-    SortOption,
-} from "@/arches_search/SimpleSearch/types.ts";
+import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
+    GraphModel,
     GroupPayload,
     LiteralClause,
-    GraphModel,
-    SearchResults as SearchResultsType,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
+import type {
+    AttributeFilterSection,
+    SortOption,
+} from "@/arches_search/SimpleSearch/types.ts";
+
 const { $gettext } = useGettext();
-const toast = useToast();
 
 defineEmits<{
     (event: "switch-to-advanced"): void;
 }>();
 
-const searchText = ref("");
-const activeTypeId = ref<string | null>(null);
-const activeFilters = ref<ActiveFilter[]>([]);
+const {
+    searchResults,
+    isSearching,
+    search,
+    setQuery,
+    clearQuery,
+    activeGraph,
+} = provideSearchFilters();
+
 const sortValue = ref("aToZ");
 const showAttributeFilters = ref(false);
 const showTimeFilter = ref(false);
-const isSearching = ref(false);
-const currentPage = ref(1);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
 const graphModels = ref<GraphModel[]>([]);
-const resourceTypes = ref<ResourceType[]>([]);
 const timeFilterClause = ref<LiteralClause | null>(null);
-
-const emptyResults: SearchResultsType = {
-    resources: [],
-    aggregations: {},
-    pagination: {
-        page: 1,
-        page_size: 25,
-        total_results: 0,
-        total_pages: 0,
-        has_next: false,
-        has_previous: false,
-    },
-};
-const searchResults = ref<SearchResultsType>({ ...emptyResults });
 
 const sortOptions: SortOption[] = [
     { label: $gettext("A to Z"), value: "aToZ" },
@@ -77,10 +56,6 @@ const sortOptions: SortOption[] = [
     { label: $gettext("Oldest first"), value: "oldest" },
 ];
 
-/**
- * Attribute filter sections are populated from search aggregations in practice.
- * These defaults show the panel structure; options are filled in after a search.
- */
 const attributeFilterSections = ref<AttributeFilterSection[]>([
     { id: "color", label: $gettext("Color"), options: [] },
     {
@@ -96,189 +71,32 @@ const attributeFilterSections = ref<AttributeFilterSection[]>([
     { id: "materials", label: $gettext("Materials"), options: [] },
 ]);
 
-const activeTypeLabel = computed<string>(() => {
-    if (!activeTypeId.value) return $gettext("Items");
-    const match = resourceTypes.value.find(
-        (resourceType) => resourceType.id === activeTypeId.value,
-    );
-    return match ? match.label : $gettext("Items");
-});
-
 const activeGraphSlug = computed<string | null>(() => {
-    if (!activeTypeId.value) {
-        return null;
-    }
-
-    const matchingGraph = graphModels.value.find((graphModel) => {
-        return graphModel.graphid === activeTypeId.value;
-    });
-
-    return matchingGraph?.slug ?? null;
+    if (!activeGraph.value) return null;
+    const match = graphModels.value.find(
+        (g) => g.graphid === activeGraph.value!.id,
+    );
+    return match?.slug ?? null;
 });
 
-const hasTimeFilter = computed<boolean>(() => {
-    return timeFilterClause.value !== null;
-});
+const hasTimeFilter = computed<boolean>(() => timeFilterClause.value !== null);
 
-function buildGroupPayload(): GroupPayload | null {
+function buildTimeFilterPayload(clause: LiteralClause): GroupPayload | null {
     const slug = activeGraphSlug.value;
     if (!slug) return null;
-
-    const groups: GroupPayload[] = [];
-
-    if (timeFilterClause.value) {
-        groups.push({
-            graph_slug: slug,
-            scope: GraphScopeToken.RESOURCE,
-            logic: LogicToken.AND,
-            clauses: [timeFilterClause.value],
-            groups: [],
-            aggregations: [],
-            relationship: null,
-        });
-    }
-
     return {
         graph_slug: slug,
         scope: GraphScopeToken.RESOURCE,
         logic: LogicToken.AND,
-        clauses: [],
-        groups,
+        clauses: [clause],
+        groups: [],
         aggregations: [],
         relationship: null,
     };
 }
 
-async function performSearch() {
-    isSearching.value = true;
-    try {
-        const payload = buildGroupPayload();
-
-        if (payload) {
-            const raw = await getSearchResults(payload, {
-                page: currentPage.value,
-            });
-            searchResults.value = {
-                resources: raw.resources ?? [],
-                aggregations: raw.aggregations ?? {},
-                pagination: {
-                    page: raw.pagination.page,
-                    page_size: raw.pagination.page_size,
-                    total_results: raw.pagination.total_results,
-                    total_pages: raw.pagination.num_pages ?? 1,
-                    has_next: raw.pagination.has_next,
-                    has_previous: raw.pagination.has_previous,
-                },
-            };
-        } else {
-            const terms = activeFilters.value.map((filter: ActiveFilter) => ({
-                type: "term" as const,
-                value: filter.id,
-                text: filter.label,
-                inverted: false,
-            }));
-            searchResults.value = await fetchSimpleSearchResults({
-                terms,
-                graphId: activeTypeId.value,
-                page: currentPage.value,
-            });
-        }
-    } catch (error) {
-        toast.add({
-            severity: "error",
-            life: 5000,
-            summary: $gettext("Search failed"),
-            detail: error instanceof Error ? error.message : undefined,
-        });
-    } finally {
-        isSearching.value = false;
-    }
-}
-
-function onSearch(term: string) {
-    const trimmed = term.trim();
-    if (
-        !trimmed ||
-        activeFilters.value.some(
-            (filter: ActiveFilter) => filter.id === trimmed,
-        )
-    ) {
-        performSearch();
-        return;
-    }
-
-    activeFilters.value.push({
-        id: trimmed,
-        label: trimmed,
-        clear: () => removeFilter(trimmed),
-    });
-
-    currentPage.value = 1;
-    performSearch();
-}
-
-function removeFilter(filterId: string) {
-    activeFilters.value = activeFilters.value.filter(
-        (filter: ActiveFilter) => filter.id !== filterId,
-    );
-    if (searchText.value === filterId) searchText.value = "";
-    currentPage.value = 1;
-    performSearch();
-}
-
-function clearAllFilters() {
-    activeFilters.value = [];
-    searchText.value = "";
-    currentPage.value = 1;
-    selectedFilterOptions.value = {};
-    timeFilterClause.value = null;
-    showTimeFilter.value = false;
-    performSearch();
-}
-
-function onSelectResourceType(typeId: string | null) {
-    activeTypeId.value = typeId;
-    if (timeFilterClause.value && typeId) {
-        const matchingGraph = graphModels.value.find((graphModel) => {
-            return graphModel.graphid === typeId;
-        });
-
-        if (matchingGraph) {
-            timeFilterClause.value = {
-                ...timeFilterClause.value,
-                subject: {
-                    ...timeFilterClause.value.subject,
-                    graph_slug: matchingGraph.slug,
-                },
-            };
-        }
-    }
-
-    if (typeId === null) {
-        timeFilterClause.value = null;
-    }
-    currentPage.value = 1;
-    performSearch();
-}
-
 function onRequestPage(page: number) {
-    currentPage.value = page;
-    performSearch();
-}
-
-async function loadResourceTypes() {
-    try {
-        graphModels.value = await getGraphs();
-        resourceTypes.value = graphModels.value
-            .filter((g) => g.isresource && g.is_active)
-            .map((g) => ({
-                id: g.graphid,
-                label: g.name,
-                icon: g.iconclass || "fa fa-archive",
-            }));
-    } catch {
-        // Non-fatal: page still works without type tabs
-    }
+    search(page);
 }
 
 function onToggleTimeFilter() {
@@ -287,43 +105,36 @@ function onToggleTimeFilter() {
 
 function onTimeFilterUpdate(clause: LiteralClause) {
     timeFilterClause.value = clause;
-    performSearch();
+    const payload = buildTimeFilterPayload(clause);
+    if (payload) setQuery("timeFilter", payload);
 }
 
 function onRemoveTimeFilter() {
     timeFilterClause.value = null;
     showTimeFilter.value = false;
-    performSearch();
+    clearQuery("timeFilter");
 }
 
 onMounted(async () => {
-    await loadResourceTypes();
-    performSearch();
+    try {
+        graphModels.value = await getGraphs();
+    } catch {
+        // Non-fatal: time filter degrades gracefully without graph models
+    }
+    search();
 });
 </script>
 
 <template>
     <div class="simple-search">
-        <!-- Search input -->
-        <SearchBar
-            v-model="searchText"
-            @search="onSearch"
+        <TermFilter
+            :config="{}"
+            filter-key="termfilter"
         />
 
-        <!-- Resource type tabs -->
-        <ResourceTypeFilter
-            :resource-types="resourceTypes"
-            :active-type-id="activeTypeId"
-            @select="onSelectResourceType"
-        />
+        <ResourceTypeFilter />
 
-        <!-- Active filter chips + result count -->
-        <ActiveFilters
-            :count="searchResults.pagination.total_results"
-            :resource-type-label="activeTypeLabel"
-            :filters="activeFilters"
-            @clear-all="clearAllFilters"
-        />
+        <ActiveFilters />
 
         <!-- Sort + action buttons -->
         <ResultsToolbar
@@ -370,8 +181,6 @@ onMounted(async () => {
             </aside>
         </div>
     </div>
-
-    <Toast />
 </template>
 
 <style scoped>
