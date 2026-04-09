@@ -11,10 +11,10 @@ from arches_search.models.models import (
     TermSearch,
 )
 
+
 def _get_nodegroup(nodegroup_id):
     return Node.objects.filter(
-        Q(nodegroup_id=nodegroup_id)
-        & ~Q(graph__slug="arches_system_settings")
+        Q(nodegroup_id=nodegroup_id) & ~Q(graph__slug="arches_system_settings")
     ).select_related("graph")
 
 
