@@ -12,6 +12,8 @@ defineProps<{
     sortOptions: SortOption[];
     sortValue: string;
     showFilters: boolean;
+    showTime: boolean;
+    hasTimeFilter: boolean;
 }>();
 
 defineEmits<{
@@ -59,11 +61,13 @@ defineEmits<{
                 @click="$emit('toggle-map')"
             />
             <Button
-                :label="$gettext('Show Time')"
+                :label="
+                    showTime ? $gettext('Hide Time') : $gettext('Show Time')
+                "
                 icon="pi pi-clock"
                 icon-pos="left"
                 size="small"
-                class="toolbar-btn"
+                :class="['toolbar-btn', { active: showTime || hasTimeFilter }]"
                 @click="$emit('toggle-time')"
             />
             <Button

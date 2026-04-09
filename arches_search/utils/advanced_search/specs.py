@@ -27,6 +27,7 @@ class CorrelatedLiteralClauseContext:
     normalized_operand_items: List[Dict[str, Any]]
     predicate_expression: Any
     is_template_negated: bool
+    facet_arity: int
 
 
 @dataclass(frozen=True, slots=True)

@@ -4636,6 +4636,39 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
         )
         self.assertEqual(result, {PERSON_C_ID, PERSON_D_ID})
 
+    def test_person_birth_date_not_equals_1000_includes_people_without_a_value(self):
+        """
+        NOT_EQUALS on a resource-scoped node field is vacuously true for resources that have
+        no indexed row for that node. Person A has birth_date=1000 and is excluded. Person B
+        has birth_date=2000 and matches. Persons C and D have no birth_date row and should
+        also match.
+        """
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "AND",
+                "clauses": [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ANY",
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "birth_date",
+                            "search_models": [],
+                        },
+                        "operator": "NOT_EQUALS",
+                        "operands": [{"type": "LITERAL", "value": 1000}],
+                    }
+                ],
+                "groups": [],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, {PERSON_B_ID, PERSON_C_ID, PERSON_D_ID})
+
     # --- EDTF/date-range datatype smoke test ---
 
     def test_person_availability_window_has_no_value_returns_person_c_and_person_d(

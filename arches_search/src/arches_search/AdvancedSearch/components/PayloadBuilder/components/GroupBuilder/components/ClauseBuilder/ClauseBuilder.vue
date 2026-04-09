@@ -4,17 +4,18 @@ import { useGettext } from "vue3-gettext";
 
 import Select from "primevue/select";
 import Button from "primevue/button";
-import InputText from "primevue/inputtext";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/PathBuilder.vue";
 import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
+import TextSearchFilter from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/components/TextSearchFilter.vue";
 import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Ref } from "vue";
 import type {
     GraphModel,
     AdvancedSearchFacet,
-    ClauseSubject,
+    LiteralClause,
+    LiteralOperand,
     Node,
     PathSelection,
 } from "@/arches_search/AdvancedSearch/types.ts";
@@ -25,19 +26,7 @@ type NodeWithCardinality = Node & {
     nodegroup_has_cardinality_n?: boolean;
 };
 
-type OperandPayload = {
-    type: "LITERAL" | "PATH";
-    value: unknown;
-    display_value?: string;
-};
-
-type ClausePayload = {
-    type: "LITERAL";
-    quantifier: "ANY" | "ALL" | "NONE";
-    subject: ClauseSubject;
-    operator: string | null;
-    operands: OperandPayload[];
-};
+type ClausePayload = LiteralClause;
 
 const CLAUSE_QUANTIFIER_ANY = "ANY" as const;
 const CLAUSE_QUANTIFIER_ALL = "ALL" as const;
@@ -210,7 +199,7 @@ function handleSubjectUpdate(updatedSubject: PathSelection | null): void {
 
 function handleOperandUpdate(
     parameterIndex: number,
-    updatedOperand: OperandPayload | null,
+    updatedOperand: LiteralOperand | null,
 ): void {
     const updatedOperands = [...modelValue.operands];
     if (updatedOperand === null) {
@@ -270,15 +259,20 @@ function handleQuantifierChange(
                     :graph-slugs="[subjectAnchorGraph.slug]"
                     @update:selected-node="handleSubjectUpdate"
                 />
-                <span
-                    v-else
-                    class="clause-subject-path clause-subject-all-text"
-                >
-                    {{ $gettext("All text nodes") }}
-                </span>
+                <TextSearchFilter
+                    v-if="
+                        modelValue.subject.type ===
+                        ClauseSubjectTypeToken.SEARCH_MODELS
+                    "
+                    :model-value="modelValue"
+                    :available-operator-options="availableOperatorOptions"
+                    @update:model-value="
+                        emit('update:modelValue', $event as ClausePayload)
+                    "
+                />
 
                 <Select
-                    v-if="subjectNode?.nodegroup_has_cardinality_n"
+                    v-else-if="subjectNode?.nodegroup_has_cardinality_n"
                     :model-value="modelValue.quantifier"
                     class="clause-quantifier-select"
                     :options="clauseQuantifierOptions"
@@ -288,6 +282,10 @@ function handleQuantifierChange(
                 />
 
                 <Select
+                    v-if="
+                        modelValue.subject.type !==
+                        ClauseSubjectTypeToken.SEARCH_MODELS
+                    "
                     :model-value="modelValue.operator"
                     class="clause-operator-select"
                     :options="availableOperatorOptions"
@@ -300,31 +298,8 @@ function handleQuantifierChange(
 
                 <div
                     v-if="
-                        modelValue.subject.type ===
+                        modelValue.subject.type !==
                             ClauseSubjectTypeToken.SEARCH_MODELS &&
-                        selectedAdvancedSearchFacet &&
-                        selectedAdvancedSearchFacet.arity > 0
-                    "
-                    class="clause-operands-row"
-                >
-                    <InputText
-                        v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
-                        :key="ensureOperandKey(parameterIndex - 1)"
-                        :model-value="
-                            (modelValue.operands[parameterIndex - 1]
-                                ?.value as string) ?? ''
-                        "
-                        :placeholder="$gettext('Search text...')"
-                        @update:model-value="
-                            handleOperandUpdate(parameterIndex - 1, {
-                                type: OPERAND_TYPE_LITERAL,
-                                value: $event,
-                            })
-                        "
-                    />
-                </div>
-                <div
-                    v-else-if="
                         selectedAdvancedSearchFacet &&
                         selectedAdvancedSearchFacet.arity > 0 &&
                         subjectNode &&
@@ -342,7 +317,10 @@ function handleQuantifierChange(
                         :subject-terminal-graph="subjectGraph"
                         :operand-type="OPERAND_TYPE_LITERAL"
                         @update:model-value="
-                            handleOperandUpdate(parameterIndex - 1, $event)
+                            handleOperandUpdate(
+                                parameterIndex - 1,
+                                $event as LiteralOperand,
+                            )
                         "
                     />
                 </div>

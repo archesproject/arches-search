@@ -5,6 +5,7 @@ import { useGettext } from "vue3-gettext";
 import Card from "primevue/card";
 import Drawer from "primevue/drawer";
 
+import TimeFilter from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/TimeFilter.vue";
 import GroupBracket from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupBracket.vue";
 import GroupHeader from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupHeader.vue";
 import GroupFooter from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupFooter.vue";
@@ -36,7 +37,16 @@ defineOptions({ name: "GroupBuilder" });
 
 const ITEM_TYPE_CLAUSE = "clause" as const;
 const ITEM_TYPE_GROUP = "group" as const;
-type ItemType = typeof ITEM_TYPE_CLAUSE | typeof ITEM_TYPE_GROUP;
+const ITEM_TYPE_TIME_FILTER = "time_filter" as const;
+type ItemType =
+    | typeof ITEM_TYPE_CLAUSE
+    | typeof ITEM_TYPE_GROUP
+    | typeof ITEM_TYPE_TIME_FILTER;
+
+const CLAUSE_ITEM_TYPES = new Set<ItemType>([
+    ITEM_TYPE_CLAUSE,
+    ITEM_TYPE_TIME_FILTER,
+]);
 
 const { $gettext } = useGettext();
 const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs");
@@ -101,21 +111,27 @@ const rootStyle = computed(() => {
 
 watchEffect(() => {
     const currentContentGroup = contentGroup.value;
-    const clauseCount = items.value.filter((item) => {
-        return item.type === ITEM_TYPE_CLAUSE;
-    }).length;
+    const clauseItems = items.value.filter((item) => {
+        return CLAUSE_ITEM_TYPES.has(item.type);
+    });
     const groupCount = items.value.filter((item) => {
         return item.type === ITEM_TYPE_GROUP;
     }).length;
     if (
-        clauseCount === currentContentGroup.clauses.length &&
+        clauseItems.length === currentContentGroup.clauses.length &&
         groupCount === currentContentGroup.groups.length
     ) {
         return;
     }
+    // Preserve existing clause item types (CLAUSE vs TIME_FILTER) by index
     items.value = [
-        ...currentContentGroup.clauses.map(() => {
-            return { id: crypto.randomUUID(), type: ITEM_TYPE_CLAUSE };
+        ...currentContentGroup.clauses.map((_, index) => {
+            return (
+                clauseItems[index] ?? {
+                    id: crypto.randomUUID(),
+                    type: ITEM_TYPE_CLAUSE,
+                }
+            );
         }),
         ...currentContentGroup.groups.map(() => {
             return { id: crypto.randomUUID(), type: ITEM_TYPE_GROUP };
@@ -124,12 +140,19 @@ watchEffect(() => {
 });
 
 function findItemIndex(itemId: string, itemType: ItemType) {
+    // Clause-type items (CLAUSE and TIME_FILTER) both index into clauses[],
+    // so count all clause-type items together to get the correct clause index.
+    const isClauseType = CLAUSE_ITEM_TYPES.has(itemType);
     let count = 0;
     for (const item of items.value) {
         if (item.id === itemId) {
             return count;
         }
-        if (item.type === itemType) {
+        if (
+            isClauseType
+                ? CLAUSE_ITEM_TYPES.has(item.type)
+                : item.type === itemType
+        ) {
             count++;
         }
     }
@@ -244,6 +267,32 @@ function onRemoveGroup(itemId: string) {
     emitUpdate(
         removeChildGroupAtIndexAndReconcile(contentGroup.value, groupIndex),
     );
+}
+
+function onAddTimeFilter() {
+    const newId = crypto.randomUUID();
+    items.value.push({ id: newId, type: ITEM_TYPE_TIME_FILTER });
+    emitUpdate(addEmptyLiteralClauseToGroup(contentGroup.value));
+}
+
+function onTimeFilterUpdate(itemId: string, clause: LiteralClause) {
+    const clauseIndex = findItemIndex(itemId, ITEM_TYPE_TIME_FILTER);
+    if (clauseIndex === -1) {
+        return;
+    }
+    emitUpdate(setClauseAtIndex(contentGroup.value, clauseIndex, clause));
+}
+
+function onRemoveTimeFilter(itemId: string) {
+    const clauseIndex = findItemIndex(itemId, ITEM_TYPE_TIME_FILTER);
+    if (clauseIndex === -1) {
+        return;
+    }
+    items.value.splice(
+        items.value.findIndex((item) => item.id === itemId),
+        1,
+    );
+    emitUpdate(removeClauseAtIndex(contentGroup.value, clauseIndex));
 }
 
 function onAddRelationship() {
@@ -395,6 +444,29 @@ function onUpdateInnerGraphSlug(slug: string) {
                                 </template>
                             </Card>
 
+                            <Card
+                                v-else-if="item.type === ITEM_TYPE_TIME_FILTER"
+                                class="clause-card"
+                            >
+                                <template #content>
+                                    <TimeFilter
+                                        :model-value="
+                                            contentGroup.clauses[
+                                                findItemIndex(
+                                                    item.id,
+                                                    ITEM_TYPE_TIME_FILTER,
+                                                )
+                                            ]
+                                        "
+                                        :graph-slug="contentGroup.graph_slug"
+                                        @update:model-value="
+                                            onTimeFilterUpdate(item.id, $event)
+                                        "
+                                        @remove="onRemoveTimeFilter(item.id)"
+                                    />
+                                </template>
+                            </Card>
+
                             <GroupBuilder
                                 v-else-if="item.type === ITEM_TYPE_GROUP"
                                 :model-value="
@@ -425,6 +497,7 @@ function onUpdateInnerGraphSlug(slug: string) {
                 @add-group="onAddGroup"
                 @add-filter="onAddClause"
                 @add-string-search="onAddStringSearch"
+                @add-time-filter="onAddTimeFilter"
                 @add-relationship="onAddRelationship"
                 @add-map-filter="showMapDrawer = true"
                 @remove-group="emit('remove')"

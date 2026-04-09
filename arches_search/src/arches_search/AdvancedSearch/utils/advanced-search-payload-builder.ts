@@ -1,5 +1,8 @@
+import dayjs from "dayjs";
+
 import {
     type GroupPayload,
+    type LiteralClause,
     type LiteralOperand,
     ClauseSubjectTypeToken,
     LogicToken,
@@ -12,6 +15,45 @@ type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 const CLAUSE_TYPE_LITERAL = "LITERAL";
 const QUANTIFIER_ANY = "ANY";
 const OPERATOR_HAS_ANY_VALUE = "HAS_ANY_VALUE";
+const SEARCH_MODELS_DATE = ["DateSearch", "DateRangeSearch"] as const;
+
+export function parseStoredDate(value: unknown): Date | null {
+    if (!value) return null;
+    const parsed = dayjs(String(value));
+    return parsed.isValid() ? parsed.toDate() : null;
+}
+
+export function clausesMatch(
+    left: LiteralClause | null | undefined,
+    right: LiteralClause | null | undefined,
+): boolean {
+    if (!left || !right) return left === right;
+    return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function buildDateSearchClause(
+    graphSlug: string,
+    operator: string,
+    dateFrom: string,
+    dateTo?: string,
+): LiteralClause {
+    const operands: LiteralOperand[] = [
+        { type: CLAUSE_TYPE_LITERAL, value: dateFrom },
+    ];
+    if (dateTo) operands.push({ type: CLAUSE_TYPE_LITERAL, value: dateTo });
+    return {
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
+        subject: {
+            type: ClauseSubjectTypeToken.SEARCH_MODELS,
+            graph_slug: graphSlug,
+            node_alias: "",
+            search_models: [...SEARCH_MODELS_DATE],
+        },
+        operator,
+        operands,
+    };
+}
 
 function filterLiteralClauses(
     clauses: ReadonlyArray<ClausePayload>,

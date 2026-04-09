@@ -1,4 +1,5 @@
 import arches from "arches";
+import Cookies from "js-cookie";
 
 import type { SearchResults } from "@/arches_search/AdvancedSearch/types.ts";
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
@@ -19,26 +20,28 @@ export async function fetchSimpleSearchResults({
     graphId?: string | null;
     page?: number;
 } = {}): Promise<SearchResults> {
-    const params = new URLSearchParams();
+    const body: Record<string, unknown> = {};
 
     if (terms.length > 0) {
-        params.set("term-filter", JSON.stringify(terms));
+        body["term-filter"] = terms;
     }
 
     if (graphId) {
-        params.set(
-            "typeFilter",
-            JSON.stringify({ graphid: graphId, inverted: false }),
-        );
+        body["typeFilter"] = { graphid: graphId, inverted: false };
     }
 
     if (page > 1) {
-        params.set("paging-filter", String(page));
+        body["paging-filter"] = page;
     }
 
-    const response = await fetch(
-        `${arches.urls["api-search"]}?${params.toString()}`,
-    );
+    const response = await fetch(arches.urls["api-search"], {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": Cookies.get("csrftoken") || "",
+        },
+        body: JSON.stringify(body),
+    });
 
     if (!response.ok) {
         throw new Error(response.statusText);

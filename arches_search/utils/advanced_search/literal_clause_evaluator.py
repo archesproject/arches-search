@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils.translation import get_language
 
+from arches.app.utils.date_utils import ExtendedDateFormat
+
 from arches_search.models.models import AdvancedSearchFacet
 from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
     build_grouped_rows_matching_aggregate_predicate,
@@ -117,62 +119,185 @@ class LiteralClauseEvaluator:
         quantifier_token = clause_payload["quantifier"]
         operand_items = clause_payload["operands"]
 
-        combined = Q(pk__in=[])
+        if not operand_items:
+            any_row_exists = self._combine_exists_expressions(
+                [
+                    Exists(
+                        self._build_search_model_presence_rows(
+                            class_name=class_name,
+                            graph_slug=graph_slug,
+                            correlate_field_name=correlate_field_name,
+                        )
+                    )
+                    for class_name in search_models
+                ]
+            )
+            if any_row_exists is None:
+                raise AdvancedSearchFacet.DoesNotExist(
+                    f"No search-model classes were provided for operator '{operator_token}'"
+                )
+
+            if self._search_models_presence_implies_match(operator_token):
+                return (
+                    ~any_row_exists
+                    if quantifier_token == QUANTIFIER_NONE
+                    else any_row_exists
+                )
+
+            return (
+                any_row_exists
+                if quantifier_token == QUANTIFIER_NONE
+                else ~any_row_exists
+            )
+
+        any_row_exists_fragments = []
+        matching_row_exists_fragments = []
+        violating_row_exists_fragments = []
+        allow_empty_for_negated_any = False
+
         for class_name in search_models:
-            combined |= self._exists_for_search_model_class(
+            class_context = self._build_search_model_operand_context(
                 class_name=class_name,
                 graph_slug=graph_slug,
                 operator_token=operator_token,
-                quantifier_token=quantifier_token,
                 operand_items=operand_items,
                 correlate_field_name=correlate_field_name,
             )
-        return combined
+            if class_context is None:
+                continue
 
-    def _exists_for_search_model_class(
+            any_row_exists_fragments.append(Exists(class_context.correlated_rows))
+
+            if class_context.is_template_negated:
+                matching_row_exists_fragments.append(
+                    Exists(
+                        class_context.correlated_rows.filter(
+                            class_context.predicate_expression
+                        )
+                    )
+                )
+                positive_rows = self.positive_rows_for_negated_template(
+                    operator_token=operator_token,
+                    datatype_name=class_context.datatype_name,
+                    operand_items=class_context.normalized_operand_items,
+                    correlated_rows=class_context.correlated_rows,
+                    predicate_expression=class_context.predicate_expression,
+                )
+                allow_empty_for_negated_any = (
+                    allow_empty_for_negated_any or class_context.facet_arity > 0
+                )
+                violating_rows = positive_rows
+            else:
+                matching_row_exists_fragments.append(
+                    Exists(
+                        class_context.correlated_rows.filter(
+                            class_context.predicate_expression
+                        )
+                    )
+                )
+                violating_rows = class_context.correlated_rows.exclude(
+                    class_context.predicate_expression
+                )
+            violating_row_exists_fragments.append(Exists(violating_rows))
+
+        matching_row_exists = self._combine_exists_expressions(
+            matching_row_exists_fragments
+        )
+        if matching_row_exists is None:
+            raise AdvancedSearchFacet.DoesNotExist(
+                f"No facet or search-model mapping found for operator '{operator_token}' "
+                f"on search models {search_models}"
+            )
+
+        if quantifier_token == QUANTIFIER_ANY:
+            if allow_empty_for_negated_any:
+                any_row_exists = self._combine_exists_expressions(
+                    any_row_exists_fragments
+                )
+                if any_row_exists is None:
+                    raise AdvancedSearchFacet.DoesNotExist(
+                        f"No facet or search-model mapping found for operator '{operator_token}' "
+                        f"on search models {search_models}"
+                    )
+                return matching_row_exists | ~any_row_exists
+            return matching_row_exists
+
+        if quantifier_token == QUANTIFIER_NONE:
+            return ~matching_row_exists
+
+        if quantifier_token == QUANTIFIER_ALL:
+            any_row_exists = self._combine_exists_expressions(any_row_exists_fragments)
+            violating_row_exists = self._combine_exists_expressions(
+                violating_row_exists_fragments
+            )
+            if any_row_exists is None:
+                raise AdvancedSearchFacet.DoesNotExist(
+                    f"No facet or search-model mapping found for operator '{operator_token}' "
+                    f"on search models {search_models}"
+                )
+            if violating_row_exists is None:
+                return any_row_exists
+            return any_row_exists & ~violating_row_exists
+
+        raise ValueError(f"Unsupported quantifier: {quantifier_token}")
+
+    def _build_search_model_presence_rows(
+        self,
+        class_name: str,
+        graph_slug: str,
+        correlate_field_name: str,
+    ) -> QuerySet:
+        model_class, _ = (
+            self.search_model_registry.get_model_and_datatype_for_class_name(class_name)
+        )
+        return model_class.objects.filter(
+            graph_slug=graph_slug,
+            resourceinstanceid=OuterRef(correlate_field_name),
+        )
+
+    def _build_search_model_operand_context(
         self,
         class_name: str,
         graph_slug: str,
         operator_token: str,
-        quantifier_token: str,
         operand_items: List[Dict[str, Any]],
         correlate_field_name: str,
-    ):
+    ) -> CorrelatedLiteralClauseContext | None:
         all_entries = self.search_model_registry.get_all_entries_for_class_name(
             class_name
         )
 
-        if not operand_items:
-            model_class, datatype_name = all_entries[0]
-            rows = model_class.objects.filter(
+        try:
+            model_class, datatype_name, facet = self._resolve_model_facet_for_operator(
+                all_entries=all_entries,
+                class_name=class_name,
+                operator_token=operator_token,
+            )
+        except AdvancedSearchFacet.DoesNotExist:
+            return self._build_time_filter_search_model_context(
+                class_name=class_name,
                 graph_slug=graph_slug,
-                resourceinstanceid=OuterRef(correlate_field_name),
+                operator_token=operator_token,
+                operand_items=operand_items,
+                correlate_field_name=correlate_field_name,
             )
-            any_row_exists = Exists(rows)
-            presence_implies_match = self.facet_registry.presence_implies_match(
-                datatype_name, operator_token
-            )
-            if quantifier_token == QUANTIFIER_NONE:
-                return ~any_row_exists if presence_implies_match else any_row_exists
-            return any_row_exists if presence_implies_match else ~any_row_exists
-
-        # For value-bearing operators, find the first datatype that has a facet
-        # for the requested operator
-        model_class, datatype_name, facet = self._resolve_model_facet_for_operator(
-            all_entries=all_entries,
-            class_name=class_name,
-            operator_token=operator_token,
-        )
 
         correlated_rows = model_class.objects.filter(
             graph_slug=graph_slug,
             resourceinstanceid=OuterRef(correlate_field_name),
         )
         normalized_operand_items, localized_language = self.localize_string_operands(
-            facet=facet, operand_items=operand_items
+            facet=facet,
+            operand_items=operand_items,
+        )
+        normalized_operand_items = self.coerce_date_operands(
+            datatype_name=datatype_name,
+            operand_items=normalized_operand_items,
         )
         correlated_rows = self.apply_localized_language_filter(
-            correlated_rows, facet=facet, localized_language=localized_language
+            correlated_rows,
+            facet=facet,
+            localized_language=localized_language,
         )
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
@@ -189,26 +314,14 @@ class LiteralClauseEvaluator:
                 "Aggregate operators are not supported with SEARCH_MODELS subjects."
             )
 
-        if quantifier_token == QUANTIFIER_ANY:
-            return Exists(correlated_rows.filter(predicate_expression))
-
-        if quantifier_token == QUANTIFIER_NONE:
-            return ~Exists(correlated_rows.filter(predicate_expression))
-
-        if quantifier_token == QUANTIFIER_ALL:
-            if not is_template_negated:
-                violating_rows = correlated_rows.exclude(predicate_expression)
-                return Exists(correlated_rows) & ~Exists(violating_rows)
-            positive_per_row = self.positive_rows_for_negated_template(
-                operator_token=operator_token,
-                datatype_name=datatype_name,
-                operand_items=normalized_operand_items,
-                correlated_rows=correlated_rows,
-                predicate_expression=predicate_expression,
-            )
-            return Exists(correlated_rows) & ~Exists(positive_per_row)
-
-        raise ValueError(f"Unsupported quantifier: {quantifier_token}")
+        return CorrelatedLiteralClauseContext(
+            datatype_name=datatype_name,
+            correlated_rows=correlated_rows,
+            normalized_operand_items=normalized_operand_items,
+            predicate_expression=predicate_expression,
+            is_template_negated=is_template_negated,
+            facet_arity=facet.arity,
+        )
 
     def _resolve_model_facet_for_operator(
         self,
@@ -219,12 +332,107 @@ class LiteralClauseEvaluator:
         for model_class, datatype_name in all_entries:
             try:
                 facet = self.facet_registry.get_facet(datatype_name, operator_token)
-                return model_class, datatype_name, facet
             except AdvancedSearchFacet.DoesNotExist:
                 continue
+            if facet.target_model_class is not model_class:
+                continue
+            return model_class, datatype_name, facet
         raise AdvancedSearchFacet.DoesNotExist(
             f"No facet found for operator '{operator_token}' on any datatype "
             f"associated with search model '{class_name}'"
+        )
+
+    def _build_time_filter_search_model_context(
+        self,
+        class_name: str,
+        graph_slug: str,
+        operator_token: str,
+        operand_items: List[Dict[str, Any]],
+        correlate_field_name: str,
+    ) -> CorrelatedLiteralClauseContext | None:
+        if class_name != "DateRangeSearch":
+            return None
+
+        normalized_operand_items = self.coerce_date_operands(
+            datatype_name="edtf",
+            operand_items=operand_items,
+        )
+        predicate_expression = self._build_date_range_time_filter_predicate(
+            operator_token=operator_token,
+            operand_items=normalized_operand_items,
+        )
+        if predicate_expression is None:
+            return None
+
+        model_class, _ = (
+            self.search_model_registry.get_model_and_datatype_for_class_name(class_name)
+        )
+        correlated_rows = model_class.objects.filter(
+            graph_slug=graph_slug,
+            resourceinstanceid=OuterRef(correlate_field_name),
+        )
+
+        return CorrelatedLiteralClauseContext(
+            datatype_name="edtf",
+            correlated_rows=correlated_rows,
+            normalized_operand_items=normalized_operand_items,
+            predicate_expression=predicate_expression,
+            is_template_negated=False,
+            facet_arity=len(normalized_operand_items),
+        )
+
+    def _build_date_range_time_filter_predicate(
+        self,
+        operator_token: str,
+        operand_items: List[Dict[str, Any]],
+    ) -> Q | None:
+        if operator_token in {"EQUALS", "LESS_THAN", "LESS_THAN_OR_EQUALS"}:
+            if len(operand_items) != 1:
+                return None
+            value = operand_items[0]["value"]
+            if operator_token == "EQUALS":
+                return Q(start_value__lte=value, end_value__gte=value)
+            if operator_token == "LESS_THAN":
+                return Q(end_value__lt=value)
+            return Q(end_value__lte=value)
+
+        if operator_token in {"GREATER_THAN", "GREATER_THAN_OR_EQUALS"}:
+            if len(operand_items) != 1:
+                return None
+            value = operand_items[0]["value"]
+            if operator_token == "GREATER_THAN":
+                return Q(start_value__gt=value)
+            return Q(start_value__gte=value)
+
+        if operator_token in {"BETWEEN", "NOT_BETWEEN"}:
+            if len(operand_items) != 2:
+                return None
+            start_value = operand_items[0]["value"]
+            end_value = operand_items[1]["value"]
+            overlap_q = Q(start_value__lte=end_value, end_value__gte=start_value)
+            if operator_token == "BETWEEN":
+                return overlap_q
+            return ~overlap_q
+
+        return None
+
+    def _combine_exists_expressions(self, expressions: List[Any]):
+        combined_expression = None
+        for expression in expressions:
+            combined_expression = (
+                expression
+                if combined_expression is None
+                else (combined_expression | expression)
+            )
+        return combined_expression
+
+    def _search_models_presence_implies_match(self, operator_token: str) -> bool:
+        if operator_token == "HAS_ANY_VALUE":
+            return True
+        if operator_token == "HAS_NO_VALUE":
+            return False
+        raise AdvancedSearchFacet.DoesNotExist(
+            f"Operator '{operator_token}' is not supported for empty SEARCH_MODELS operands"
         )
 
     def _build_correlated_literal_clause_predicate(
@@ -253,6 +461,9 @@ class LiteralClauseEvaluator:
             facet=facet,
             operand_items=operand_items,
         )
+        normalized_operand_items = self.coerce_date_operands(
+            datatype_name=datatype_name, operand_items=normalized_operand_items
+        )
         correlated_rows = self.apply_localized_language_filter(
             subject_rows.filter(resourceinstanceid=OuterRef(correlate_field_name)),
             facet=facet,
@@ -274,6 +485,7 @@ class LiteralClauseEvaluator:
             normalized_operand_items=normalized_operand_items,
             predicate_expression=predicate_expression,
             is_template_negated=is_template_negated,
+            facet_arity=facet.arity,
         )
 
     def build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
@@ -344,9 +556,18 @@ class LiteralClauseEvaluator:
             raise ValueError(f"Unsupported quantifier: {quantifier_token}")
 
         if quantifier_token == QUANTIFIER_ANY:
-            return Exists(correlated_rows.filter(predicate_expression))
+            if not is_template_negated:
+                return Exists(correlated_rows.filter(predicate_expression))
+
+            matching_negated_rows = correlated_rows.filter(predicate_expression)
+            if correlated_clause_predicate.facet_arity > 0:
+                return Exists(matching_negated_rows) | ~Exists(correlated_rows)
+            return Exists(matching_negated_rows)
 
         if quantifier_token == QUANTIFIER_NONE:
+            if not is_template_negated:
+                return ~Exists(correlated_rows.filter(predicate_expression))
+
             return ~Exists(correlated_rows.filter(predicate_expression))
 
         if quantifier_token == QUANTIFIER_ALL:
@@ -609,6 +830,28 @@ class LiteralClauseEvaluator:
             return correlated_rows.filter(~predicate_expression)
 
         return correlated_rows.exclude(predicate_expression)
+
+    DATE_DATATYPES = {"date", "edtf"}
+
+    def coerce_date_operands(
+        self,
+        datatype_name: str,
+        operand_items: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        if datatype_name not in self.DATE_DATATYPES:
+            return operand_items
+        edtf = ExtendedDateFormat()
+        coerced = []
+        for item in operand_items:
+            value = item.get("value")
+            if isinstance(value, str) and len(value) == 10 and value[4] == "-":
+                year, month, day = int(value[:4]), int(value[5:7]), int(value[8:10])
+                coerced.append(
+                    {**item, "value": edtf.to_sortable_date(year, month, day)}
+                )
+            else:
+                coerced.append(item)
+        return coerced
 
     def localize_string_operands(
         self,
