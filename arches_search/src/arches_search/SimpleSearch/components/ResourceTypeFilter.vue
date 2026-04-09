@@ -14,11 +14,11 @@ async function loadResourceTypes() {
     try {
         const graphs: GraphModel[] = await getGraphs();
         resourceTypes.value = graphs
-            .filter((g) => g.isresource && g.is_active)
-            .map((g) => ({
-                id: g.graphid,
-                label: g.name,
-                icon: g.iconclass || "fa fa-archive",
+            .filter((graph) => graph.isresource && graph.is_active)
+            .map((graph) => ({
+                id: graph.graphid,
+                label: graph.name,
+                icon: graph.iconclass || "fa fa-archive",
             }));
     } catch {
         // Non-fatal: page still works without type tabs

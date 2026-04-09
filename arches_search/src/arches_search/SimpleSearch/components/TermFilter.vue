@@ -34,16 +34,15 @@ function termKey(termValue: string) {
 
 function removeTerm(termValue: string) {
     selectedTerms.value = selectedTerms.value.filter(
-        (t) => t.value !== termValue,
+        (term) => term.value !== termValue,
     );
 }
 
 watch(
     selectedTerms,
     (val, prev) => {
-        // clearTerm any terms that were removed
-        const oldTerms = new Set(prev.map((t) => t.value));
-        const newTerms = new Set(val.map((t) => t.value));
+        const oldTerms = new Set(prev.map((term) => term.value));
+        const newTerms = new Set(val.map((term) => term.value));
         for (const oldTerm of prev) {
             if (!newTerms.has(oldTerm.value)) clearTerm(termKey(oldTerm.value));
         }
