@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from "vue";
+import { useGettext } from "vue3-gettext";
+import { useToast } from "primevue/usetoast";
+import Toast from "primevue/toast";
 
 import Splitter from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
@@ -9,6 +12,8 @@ import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters
 import AttributeFilters from "@/arches_search/SimpleSearch/components/AttributeFilters.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
+import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
+import SaveDialog from "@/arches_search/SimpleSearch/components/SaveDialog.vue";
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
 
@@ -17,6 +22,7 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import { createSavedSearch } from "@/arches_search/SimpleSearch/api.ts";
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 
@@ -36,12 +42,16 @@ defineEmits<{
 }>();
 
 const {
+    activeFilters,
     activeGraph,
     clearQuery,
+    clearTermFilter,
     isSearching,
     search,
     searchResults,
+    setGraph,
     setQuery,
+    setTermFilter,
 } = provideSearchFilters();
 
 const {
@@ -64,10 +74,17 @@ const {
     onSplitterResizeEnd,
 } = useSidePanel();
 
+const { $gettext } = useGettext();
+const toast = useToast();
 const sortValue = ref("aToZ");
 const graphModels = ref<GraphModel[]>([]);
 const timeFilterClauses = ref<LiteralClause[]>([]);
+const showSavedSearches = ref(false);
+const showSaveDialog = ref(false);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
+const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
+    null,
+);
 
 const activeGraphId = computed<string | null>(
     () => activeGraph.value?.id ?? null,
@@ -154,6 +171,68 @@ function onRemoveTimeFilter(): void {
     closeSidePanel();
     clearQuery(TIME_FILTER_QUERY_KEY);
 }
+
+// ── Saved searches ──────────────────────────────────────────────────────────
+function buildQueryDefinition(): Record<string, unknown> {
+    const terms = activeFilters.value.map((filter) => ({
+        type: "term",
+        value: filter.id,
+        text: filter.text,
+        inverted: false,
+    }));
+    return {
+        terms,
+        graphId: activeGraph.value?.id ?? null,
+    };
+}
+
+async function onSaveSearch(payload: { name: string; description: string }) {
+    try {
+        await createSavedSearch(
+            payload.name,
+            payload.description,
+            buildQueryDefinition(),
+        );
+        showSaveDialog.value = false;
+        savedSearchPanelRef.value?.loadSearches();
+        toast.add({
+            severity: "success",
+            life: 3000,
+            summary: $gettext("Search saved"),
+        });
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("Failed to save search"),
+            detail: error instanceof Error ? error.message : undefined,
+        });
+    }
+}
+
+function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
+    const terms =
+        (queryDefinition.terms as Array<{
+            type: string;
+            value: string;
+            text: string;
+            inverted: boolean;
+        }>) || [];
+    const graphId = (queryDefinition.graphId as string | null) ?? null;
+
+    // Clear existing search before applying saved query
+    activeFilters.value.forEach((f) => clearTermFilter(f.id));
+
+    terms.forEach((t) => {
+        setTermFilter(t.value, t.text, () => clearTermFilter(t.value));
+    });
+    if (graphId) {
+        setGraph({ id: graphId, label: "", icon: "" });
+    } else {
+        setGraph(null);
+    }
+    selectedFilterOptions.value = {};
+}
 </script>
 
 <template>
@@ -169,9 +248,14 @@ function onRemoveTimeFilter(): void {
             :show-filters="isAttributeFiltersOpen"
             :show-time="isTimeFilterOpen"
             :has-time-filter="hasTimeFilter"
+            :show-saved-searches="showSavedSearches"
             @update:sort-value="onSortValueUpdate"
+            @save-search="showSaveDialog = true"
             @toggle-filters="onToggleAttributeFilters"
+            @toggle-map="() => {}"
             @toggle-time="onToggleTimeFilter"
+            @toggle-saved-searches="showSavedSearches = !showSavedSearches"
+            @export="() => {}"
         />
 
         <div class="body">
@@ -224,8 +308,25 @@ function onRemoveTimeFilter(): void {
                     </div>
                 </SplitterPanel>
             </Splitter>
+
+            <aside
+                v-if="showSavedSearches"
+                class="saved-searches-pane"
+            >
+                <SavedSearchPanel
+                    ref="savedSearchPanelRef"
+                    @run-query="onRunSavedQuery"
+                />
+            </aside>
         </div>
     </div>
+
+    <SaveDialog
+        v-model:visible="showSaveDialog"
+        @save="onSaveSearch"
+    />
+
+    <Toast />
 </template>
 
 <style scoped>
@@ -280,5 +381,12 @@ function onRemoveTimeFilter(): void {
     .splitter.side-panel-closed
     :deep(.results-pane + .p-splitter-gutter) {
     display: none;
+}
+
+.saved-searches-pane {
+    width: 320px;
+    flex-shrink: 0;
+    border-left: 0.125rem solid var(--p-content-border-color);
+    overflow-y: auto;
 }
 </style>

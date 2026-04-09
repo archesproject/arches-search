@@ -15,6 +15,7 @@ defineProps<{
     showFilters: boolean;
     showTime: boolean;
     hasTimeFilter: boolean;
+    showSavedSearches: boolean;
 }>();
 
 const sortOptions = computed<SortOption[]>(() => [
@@ -26,9 +27,11 @@ const sortOptions = computed<SortOption[]>(() => [
 
 defineEmits<{
     (event: "update:sortValue", value: string): void;
+    (event: "save-search"): void;
     (event: "toggle-filters"): void;
     (event: "toggle-map"): void;
     (event: "toggle-time"): void;
+    (event: "toggle-saved-searches"): void;
     (event: "export"): void;
 }>();
 </script>
@@ -44,6 +47,14 @@ defineEmits<{
                 option-value="value"
                 class="sort-select"
                 @update:model-value="$emit('update:sortValue', $event)"
+            />
+            <Button
+                :label="$gettext('Save this search')"
+                icon="pi pi-save"
+                icon-pos="left"
+                size="small"
+                class="toolbar-btn save-search-btn"
+                @click="$emit('save-search')"
             />
         </div>
 
@@ -77,6 +88,14 @@ defineEmits<{
                 size="small"
                 :class="['toolbar-btn', { active: showTime || hasTimeFilter }]"
                 @click="$emit('toggle-time')"
+            />
+            <Button
+                :label="$gettext('Saved Searches')"
+                icon="pi pi-bookmark"
+                icon-pos="left"
+                size="small"
+                :class="['toolbar-btn', { active: showSavedSearches }]"
+                @click="$emit('toggle-saved-searches')"
             />
             <Button
                 :label="$gettext('Export')"
@@ -131,5 +150,11 @@ defineEmits<{
     background-color: var(--p-button-primary-hover-background);
     border-color: var(--p-button-primary-hover-border-color);
     color: var(--p-button-primary-hover-color);
+}
+
+.save-search-btn {
+    background-color: var(--p-primary-color);
+    border-color: var(--p-primary-color);
+    color: var(--p-primary-contrast-color);
 }
 </style>
