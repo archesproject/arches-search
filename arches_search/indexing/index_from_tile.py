@@ -11,10 +11,21 @@ from arches_search.models.models import (
     TermSearch,
 )
 
+def _get_nodegroup(nodegroup_id):
+    return Node.objects.filter(
+        Q(nodegroup_id=nodegroup_id)
+        & ~Q(graph__slug="arches_system_settings")
+    ).select_related("graph")
+
 
 def index_from_tile(
     tile, delete_existing=True, indexing_factory=None, nodegroup_cache=None
 ):
+    if nodegroup_cache is None:
+        nodegroup_cache = {}
+    if tile.nodegroup_id not in nodegroup_cache:
+        nodegroup_cache[tile.nodegroup_id] = _get_nodegroup(tile.nodegroup_id)
+    nodes = nodegroup_cache[tile.nodegroup_id]
 
     if delete_existing:
         TermSearch.objects.filter(tileid=tile.tileid).delete()
@@ -35,7 +46,7 @@ def index_from_tile(
         nodegroup_cache = {tile.nodegroup_id: list(nodes)}
 
     result = []
-    for node in nodegroup_cache[tile.nodegroup_id]:
+    for node in nodes:
         nodeid = str(node.nodeid)
         if nodeid in tile.data:
             if tile.data[nodeid] is None:
