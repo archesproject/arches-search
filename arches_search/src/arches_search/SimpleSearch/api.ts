@@ -38,10 +38,7 @@ export async function fetchSearchResults({
         throw new Error(response.statusText);
     }
 
-    const parsed = await response.json();
-    if (!response.ok) throw new Error(parsed.message || response.statusText);
-
-    return parsed;
+    return await response.json();
 }
 
 export async function fetchSearchTermSuggestions(

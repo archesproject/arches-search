@@ -13,10 +13,6 @@ function clearAllFilters() {
         filter.clear();
     }
 }
-
-defineEmits<{
-    (event: "clear-all"): void;
-}>();
 </script>
 
 <template>
