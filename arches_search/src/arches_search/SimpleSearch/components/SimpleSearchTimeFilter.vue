@@ -103,20 +103,24 @@ watch(
     { immediate: true },
 );
 
-watch([selectedRange, () => props.graphSlug], () => {
-    if (!props.graphSlug) return;
+watch(
+    [selectedRange, () => props.graphSlug],
+    () => {
+        if (!props.graphSlug) return;
 
-    ensureSliderBounds(...selectedRange.value);
+        ensureSliderBounds(...selectedRange.value);
 
-    const nextClause = buildClause();
-    if (!nextClause || clausesMatch(nextClause, props.modelValue)) return;
+        const nextClause = buildClause();
+        if (!nextClause || clausesMatch(nextClause, props.modelValue)) return;
 
-    if (emitDebounceTimer !== null) clearTimeout(emitDebounceTimer);
-    emitDebounceTimer = setTimeout(() => {
-        emit(UPDATE_EVENT, nextClause);
-        emitDebounceTimer = null;
-    }, EMIT_DEBOUNCE_MS);
-});
+        if (emitDebounceTimer !== null) clearTimeout(emitDebounceTimer);
+        emitDebounceTimer = setTimeout(() => {
+            emit(UPDATE_EVENT, nextClause);
+            emitDebounceTimer = null;
+        }, EMIT_DEBOUNCE_MS);
+    },
+    { immediate: true },
+);
 
 onUnmounted(() => {
     if (emitDebounceTimer !== null) clearTimeout(emitDebounceTimer);
