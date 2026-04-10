@@ -105,7 +105,7 @@ function onKeydown(e: KeyboardEvent) {
                 :placeholder="$gettext('Find an item, sample, supplier\u2026')"
                 class="search-input"
                 fluid
-                auto-option-focus="true"
+                :auto-option-focus="true"
                 @complete="onComplete"
                 @option-select="onSelect"
                 @keydown="onKeydown"
