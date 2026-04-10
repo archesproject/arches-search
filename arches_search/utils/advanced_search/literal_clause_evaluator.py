@@ -3,9 +3,6 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
-from django.utils.translation import get_language
-
-from arches.app.utils.date_utils import ExtendedDateFormat
 
 from arches_search.models.models import AdvancedSearchFacet
 from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
@@ -274,31 +271,18 @@ class LiteralClauseEvaluator:
                 operator_token=operator_token,
             )
         except AdvancedSearchFacet.DoesNotExist:
-            return self._build_time_filter_search_model_context(
-                class_name=class_name,
-                graph_slug=graph_slug,
-                operator_token=operator_token,
-                operand_items=operand_items,
-                correlate_field_name=correlate_field_name,
-            )
+            return None
 
         correlated_rows = model_class.objects.filter(
             graph_slug=graph_slug,
             resourceinstanceid=OuterRef(correlate_field_name),
         )
-        normalized_operand_items, localized_language = self.localize_string_operands(
-            facet=facet,
-            operand_items=operand_items,
+        normalized_operand_items, filter_value = (
+            model_class.normalize_operands(operand_items)
+            if hasattr(model_class, "normalize_operands")
+            else (list(operand_items), None)
         )
-        normalized_operand_items = self.coerce_date_operands(
-            datatype_name=datatype_name,
-            operand_items=normalized_operand_items,
-        )
-        correlated_rows = self.apply_localized_language_filter(
-            correlated_rows,
-            facet=facet,
-            localized_language=localized_language,
-        )
+        correlated_rows = facet.filter_rows(correlated_rows, filter_value)
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
                 datatype_name=datatype_name,
@@ -331,90 +315,16 @@ class LiteralClauseEvaluator:
     ):
         for model_class, datatype_name in all_entries:
             try:
-                facet = self.facet_registry.get_facet(datatype_name, operator_token)
+                facet = self.facet_registry.get_facet_for_model(
+                    datatype_name, operator_token, model_class
+                )
             except AdvancedSearchFacet.DoesNotExist:
-                continue
-            if facet.target_model_class is not model_class:
                 continue
             return model_class, datatype_name, facet
         raise AdvancedSearchFacet.DoesNotExist(
             f"No facet found for operator '{operator_token}' on any datatype "
             f"associated with search model '{class_name}'"
         )
-
-    def _build_time_filter_search_model_context(
-        self,
-        class_name: str,
-        graph_slug: str,
-        operator_token: str,
-        operand_items: List[Dict[str, Any]],
-        correlate_field_name: str,
-    ) -> CorrelatedLiteralClauseContext | None:
-        if class_name != "DateRangeSearch":
-            return None
-
-        normalized_operand_items = self.coerce_date_operands(
-            datatype_name="edtf",
-            operand_items=operand_items,
-        )
-        predicate_expression = self._build_date_range_time_filter_predicate(
-            operator_token=operator_token,
-            operand_items=normalized_operand_items,
-        )
-        if predicate_expression is None:
-            return None
-
-        model_class, _ = (
-            self.search_model_registry.get_model_and_datatype_for_class_name(class_name)
-        )
-        correlated_rows = model_class.objects.filter(
-            graph_slug=graph_slug,
-            resourceinstanceid=OuterRef(correlate_field_name),
-        )
-
-        return CorrelatedLiteralClauseContext(
-            datatype_name="edtf",
-            correlated_rows=correlated_rows,
-            normalized_operand_items=normalized_operand_items,
-            predicate_expression=predicate_expression,
-            is_template_negated=False,
-            facet_arity=len(normalized_operand_items),
-        )
-
-    def _build_date_range_time_filter_predicate(
-        self,
-        operator_token: str,
-        operand_items: List[Dict[str, Any]],
-    ) -> Q | None:
-        if operator_token in {"EQUALS", "LESS_THAN", "LESS_THAN_OR_EQUALS"}:
-            if len(operand_items) != 1:
-                return None
-            value = operand_items[0]["value"]
-            if operator_token == "EQUALS":
-                return Q(start_value__lte=value, end_value__gte=value)
-            if operator_token == "LESS_THAN":
-                return Q(end_value__lt=value)
-            return Q(end_value__lte=value)
-
-        if operator_token in {"GREATER_THAN", "GREATER_THAN_OR_EQUALS"}:
-            if len(operand_items) != 1:
-                return None
-            value = operand_items[0]["value"]
-            if operator_token == "GREATER_THAN":
-                return Q(start_value__gt=value)
-            return Q(start_value__gte=value)
-
-        if operator_token in {"BETWEEN", "NOT_BETWEEN"}:
-            if len(operand_items) != 2:
-                return None
-            start_value = operand_items[0]["value"]
-            end_value = operand_items[1]["value"]
-            overlap_q = Q(start_value__lte=end_value, end_value__gte=start_value)
-            if operator_token == "BETWEEN":
-                return overlap_q
-            return ~overlap_q
-
-        return None
 
     def _combine_exists_expressions(self, expressions: List[Any]):
         combined_expression = None
@@ -457,17 +367,14 @@ class LiteralClauseEvaluator:
             subject_graph_slug=subject_graph_slug,
             subject_node_alias=subject_node_alias,
         )
-        normalized_operand_items, localized_language = self.localize_string_operands(
-            facet=facet,
-            operand_items=operand_items,
+        normalized_operand_items, filter_value = (
+            model_class.normalize_operands(operand_items)
+            if hasattr(model_class, "normalize_operands")
+            else (list(operand_items), None)
         )
-        normalized_operand_items = self.coerce_date_operands(
-            datatype_name=datatype_name, operand_items=normalized_operand_items
-        )
-        correlated_rows = self.apply_localized_language_filter(
+        correlated_rows = facet.filter_rows(
             subject_rows.filter(resourceinstanceid=OuterRef(correlate_field_name)),
-            facet=facet,
-            localized_language=localized_language,
+            filter_value,
         )
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
@@ -740,16 +647,14 @@ class LiteralClauseEvaluator:
                     subject_graph_slug=subject_graph_slug,
                     subject_node_alias=subject_node_alias,
                 )
-                normalized_operand_items, localized_language = (
-                    self.localize_string_operands(
-                        facet=facet,
-                        operand_items=operand_items,
-                    )
+                normalized_operand_items, filter_value = (
+                    model_class.normalize_operands(operand_items)
+                    if hasattr(model_class, "normalize_operands")
+                    else (list(operand_items), None)
                 )
-                correlated_rows = self.apply_localized_language_filter(
+                correlated_rows = facet.filter_rows(
                     base_rows.filter(resourceinstanceid=OuterRef(correlate_field)),
-                    facet=facet,
-                    localized_language=localized_language,
+                    filter_value,
                 )
 
                 predicate_expression, is_template_negated = (
@@ -830,82 +735,3 @@ class LiteralClauseEvaluator:
             return correlated_rows.filter(~predicate_expression)
 
         return correlated_rows.exclude(predicate_expression)
-
-    DATE_DATATYPES = {"date", "edtf"}
-
-    def coerce_date_operands(
-        self,
-        datatype_name: str,
-        operand_items: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
-        if datatype_name not in self.DATE_DATATYPES:
-            return operand_items
-        edtf = ExtendedDateFormat()
-        coerced = []
-        for item in operand_items:
-            value = item.get("value")
-            if isinstance(value, str) and len(value) == 10 and value[4] == "-":
-                year, month, day = int(value[:4]), int(value[5:7]), int(value[8:10])
-                coerced.append(
-                    {**item, "value": edtf.to_sortable_date(year, month, day)}
-                )
-            else:
-                coerced.append(item)
-        return coerced
-
-    def localize_string_operands(
-        self,
-        facet: AdvancedSearchFacet,
-        operand_items: List[Dict[str, Any]],
-    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        if not facet.filter_field:
-            return operand_items, None
-
-        language_code = get_language()
-        short_language_code = None
-
-        if language_code:
-            short_language_code = language_code.split("-")[0]
-
-        normalized_items: List[Dict[str, Any]] = []
-        localized_language: Optional[str] = None
-
-        for operand_item in operand_items:
-            raw_value = operand_item.get("value")
-
-            if isinstance(raw_value, dict) and raw_value:
-                chosen_value = None
-                chosen_language = None
-
-                if language_code and language_code in raw_value:
-                    chosen_language = language_code
-                    chosen_value = raw_value[language_code]
-                elif short_language_code and short_language_code in raw_value:
-                    chosen_language = short_language_code
-                    chosen_value = raw_value[short_language_code]
-                else:
-                    chosen_language, chosen_value = next(iter(raw_value.items()))
-
-                normalized_items.append({**operand_item, "value": chosen_value})
-
-                if localized_language is None:
-                    localized_language = chosen_language
-                elif chosen_language != localized_language:
-                    raise ValueError(
-                        "Localized string operands resolved to different languages"
-                    )
-            else:
-                normalized_items.append(operand_item)
-
-        return normalized_items, localized_language
-
-    def apply_localized_language_filter(
-        self,
-        rows: QuerySet,
-        facet: AdvancedSearchFacet,
-        localized_language: Optional[str],
-    ) -> QuerySet:
-        if not facet.filter_field or localized_language is None:
-            return rows
-
-        return rows.filter(**{facet.filter_field: localized_language})

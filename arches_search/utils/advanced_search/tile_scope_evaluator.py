@@ -126,21 +126,18 @@ class TileScopeEvaluator:
             subject_node_alias=subject_node_alias,
         )
 
-        normalized_operand_items, localized_language = (
-            self.literal_clause_evaluator.localize_string_operands(
-                facet=facet,
-                operand_items=operand_items,
-            )
+        normalized_operand_items, filter_value = (
+            model_class.normalize_operands(operand_items)
+            if hasattr(model_class, "normalize_operands")
+            else (list(operand_items), None)
         )
-        resource_rows = self.literal_clause_evaluator.apply_localized_language_filter(
+        resource_rows = facet.filter_rows(
             subject_rows.filter(resourceinstanceid=OuterRef("resourceinstanceid")),
-            facet=facet,
-            localized_language=localized_language,
+            filter_value,
         )
-        tile_rows = self.literal_clause_evaluator.apply_localized_language_filter(
+        tile_rows = facet.filter_rows(
             subject_rows.filter(resourceinstanceid=OuterRef("resourceinstance_id")),
-            facet=facet,
-            localized_language=localized_language,
+            filter_value,
         )
 
         predicate_expression, is_template_negated = (

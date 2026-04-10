@@ -50,10 +50,12 @@ class AdvancedSearchFacet(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["datatype", "operator"], name="unique_operator_per_datatype"
+                fields=["datatype", "operator", "target_search_model"],
+                name="unique_operator_per_datatype_and_model",
             ),
             models.UniqueConstraint(
-                fields=["datatype", "sortorder"], name="unique_sortorder_per_datatype"
+                fields=["datatype", "sortorder", "target_search_model"],
+                name="unique_sortorder_per_datatype_and_model",
             ),
         ]
 
@@ -86,6 +88,11 @@ class AdvancedSearchFacet(models.Model):
             return None
         return self.target_search_model.model_class()
 
+    def filter_rows(self, rows, resolved_language):
+        if not self.filter_field or resolved_language is None:
+            return rows
+        return rows.filter(**{self.filter_field: resolved_language})
+
 
 class TermSearch(models.Model):
     id = models.AutoField(primary_key=True)
@@ -114,6 +121,36 @@ class TermSearch(models.Model):
         ),
         output_field=SearchVectorField(),
     )
+
+    @classmethod
+    def normalize_operands(cls, operand_items):
+        active_language_code = get_language()
+        short_language_code = (
+            active_language_code.split("-")[0] if active_language_code else None
+        )
+        normalized_items = []
+        resolved_language = None
+        for operand_item in operand_items:
+            raw_value = operand_item.get("value")
+            if isinstance(raw_value, dict) and raw_value:
+                if active_language_code and active_language_code in raw_value:
+                    chosen_language = active_language_code
+                elif short_language_code and short_language_code in raw_value:
+                    chosen_language = short_language_code
+                else:
+                    chosen_language = next(iter(raw_value))
+                if resolved_language is None:
+                    resolved_language = chosen_language
+                elif chosen_language != resolved_language:
+                    raise ValueError(
+                        "Localized string operands resolved to different languages"
+                    )
+                normalized_items.append(
+                    {**operand_item, "value": raw_value[chosen_language]}
+                )
+            else:
+                normalized_items.append(operand_item)
+        return normalized_items, resolved_language
 
     class Meta:
         managed = True
@@ -259,6 +296,24 @@ class DateSearch(models.Model):
             models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
         ]
 
+    @classmethod
+    def normalize_operands(cls, operand_items):
+        from arches.app.utils.date_utils import ExtendedDateFormat
+
+        edtf = ExtendedDateFormat()
+        normalized_items = []
+        for operand_item in operand_items:
+            raw_value = operand_item.get("value")
+            if isinstance(raw_value, str) and raw_value.count("-") == 2:
+                year_str, month_str, day_str = raw_value.split("-")
+                sortable_value = edtf.to_sortable_date(
+                    int(year_str), int(month_str), int(day_str)
+                )
+                normalized_items.append({**operand_item, "value": sortable_value})
+            else:
+                normalized_items.append(operand_item)
+        return normalized_items, None
+
 
 class DateRangeSearch(models.Model):
     id = models.AutoField(primary_key=True)
@@ -301,6 +356,8 @@ class DateRangeSearch(models.Model):
                 ]
             ),
         ]
+
+    normalize_operands = DateSearch.normalize_operands
 
 
 class BooleanSearch(models.Model):
