@@ -24,10 +24,10 @@ import type {
     GraphModel,
     LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
-const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced" as const;
-const TERM_FILTER_KEY = "termfilter" as const;
-const TIME_FILTER_QUERY_KEY = "timeFilter" as const;
-const TERM_FILTER_CONFIG: Record<string, never> = {};
+
+const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced";
+const TERM_FILTER_KEY = "termfilter";
+const TIME_FILTER_QUERY_KEY = "timeFilter";
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
 
@@ -158,10 +158,7 @@ function onRemoveTimeFilter(): void {
 
 <template>
     <div class="simple-search">
-        <TermFilter
-            :filter-key="TERM_FILTER_KEY"
-            :config="TERM_FILTER_CONFIG"
-        />
+        <TermFilter :filter-key="TERM_FILTER_KEY" />
 
         <ResourceTypeFilter />
 
