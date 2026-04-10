@@ -30,7 +30,7 @@ export async function fetchSearchResults({
     };
 
     const response = await fetch(
-        `${generateArchesURL("arches_search:simple_search")}`,
+        `${generateArchesURL("arches_search:arches_search")}`,
         {
             method: "POST",
             headers: {
