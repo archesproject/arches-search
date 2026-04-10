@@ -315,7 +315,7 @@ function onNodeSelectionUpdate(aliases: string[]): void {
 .time-filter-title {
     margin: 0;
     padding-bottom: 0.75rem;
-    border-bottom: 2px solid var(--p-content-border-color);
+    border-bottom: 0.125rem solid var(--p-content-border-color);
     font-weight: 700;
     font-size: 1.5rem;
     color: var(--p-text-color);
@@ -331,7 +331,7 @@ function onNodeSelectionUpdate(aliases: string[]): void {
 .time-filter-section-heading {
     margin: 0;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--p-content-border-color);
+    border-bottom: 0.125rem solid var(--p-content-border-color);
     font-weight: 600;
     font-size: 1.25rem;
     color: var(--p-text-color);
@@ -371,7 +371,7 @@ function onNodeSelectionUpdate(aliases: string[]): void {
 
 .time-filter-empty-state {
     padding: 1rem;
-    border: 1px solid var(--p-content-border-color);
+    border: 0.125rem solid var(--p-content-border-color);
     border-radius: 0.5rem;
     font-size: 1rem;
     color: var(--p-text-muted-color);
