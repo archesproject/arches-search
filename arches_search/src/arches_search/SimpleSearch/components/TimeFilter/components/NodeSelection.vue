@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Chip from "primevue/chip";
-import MultiSelect from "primevue/multiselect";
+import TreeSelect from "primevue/treeselect";
 
-import type { Node } from "@/arches_search/AdvancedSearch/types.ts";
+import type {
+    TimeFilterNodeSummary,
+    TimeFilterTreeNode,
+} from "@/arches_search/SimpleSearch/components/TimeFilter/types.ts";
 
 const UPDATE_EVENT = "update:modelValue" as const;
+const DATE_DATATYPES = ["date", "edtf"] as const;
 
 const props = defineProps<{
     graphLabel: string | null;
-    dateNodes: Node[];
+    loading: boolean;
     modelValue: string[];
+    nodes: TimeFilterNodeSummary[];
 }>();
 
 const emit = defineEmits<{
@@ -22,31 +27,178 @@ const emit = defineEmits<{
 const { $gettext, interpolate } = useGettext();
 const NODE_SELECT_ID = "simple-search-time-filter-node-selection" as const;
 
-const selectedNodeAliases = computed<string[]>({
-    get(): string[] {
-        return props.modelValue;
+const transientSelectedKeys = ref<Record<string, boolean>>({});
+
+const nodeOptions = computed<TimeFilterTreeNode[]>(() =>
+    buildTree(props.nodes),
+);
+
+const hasSelectableNodes = computed<boolean>(() => {
+    return hasSelectableNode(nodeOptions.value);
+});
+
+const expandedKeys = computed<Record<string, boolean>>(() => {
+    const allExpandedKeys: Record<string, boolean> = {};
+    const nodesToVisit = [...nodeOptions.value];
+
+    while (nodesToVisit.length > 0) {
+        const currentNode = nodesToVisit.pop()!;
+        allExpandedKeys[currentNode.key] = true;
+        nodesToVisit.push(...currentNode.children);
+    }
+
+    return allExpandedKeys;
+});
+
+const nodeLabelByAlias = computed<Record<string, string>>(() => {
+    return Object.fromEntries(
+        props.nodes.map((node) => [node.alias, getNodeDisplayLabel(node)]),
+    );
+});
+
+const selectedKeys = computed<Record<string, boolean>>({
+    get(): Record<string, boolean> {
+        return transientSelectedKeys.value;
     },
-    set(value: string[]): void {
-        emit(UPDATE_EVENT, value);
+    set(newSelectionKeys: unknown): void {
+        transientSelectedKeys.value = Object(newSelectionKeys) as Record<
+            string,
+            boolean
+        >;
+
+        const selectedKey =
+            Object.keys(transientSelectedKeys.value).find((key) => {
+                return transientSelectedKeys.value[key] === true;
+            }) ?? null;
+
+        const matchingNode = selectedKey
+            ? findNode(nodeOptions.value, (node) => node.key === selectedKey)
+            : null;
+
+        if (matchingNode && matchingNode.selectable !== false) {
+            const nextAlias = matchingNode.data.alias;
+
+            if (!props.modelValue.includes(nextAlias)) {
+                emit(UPDATE_EVENT, [...props.modelValue, nextAlias]);
+            }
+        }
+
+        void nextTick(() => {
+            transientSelectedKeys.value = {};
+        });
     },
 });
 
-const selectionSummary = computed<string>(() => {
-    if (selectedNodeAliases.value.length === 0) {
-        return $gettext("Select an attribute");
-    }
-
-    if (selectedNodeAliases.value.length === 1) {
-        return getNodeLabel(selectedNodeAliases.value[0]);
-    }
-
-    return interpolate($gettext("%{count} date nodes selected"), {
-        count: String(selectedNodeAliases.value.length),
+function hasSelectableNode(nodes: TimeFilterTreeNode[]): boolean {
+    return nodes.some((node) => {
+        return node.selectable !== false || hasSelectableNode(node.children);
     });
-});
+}
+
+function findNode(
+    nodes: TimeFilterTreeNode[],
+    predicate: (node: TimeFilterTreeNode) => boolean,
+): TimeFilterTreeNode | null {
+    for (const node of nodes) {
+        if (predicate(node)) {
+            return node;
+        }
+
+        const found = findNode(node.children, predicate);
+        if (found) {
+            return found;
+        }
+    }
+
+    return null;
+}
+
+function isNodeSelectable(node: TimeFilterNodeSummary): boolean {
+    return (DATE_DATATYPES as readonly string[]).includes(node.datatype);
+}
+
+function getNodeDisplayLabel(node: TimeFilterNodeSummary): string {
+    return node.card_x_node_x_widget_label || node.name || node.alias;
+}
+
+function buildTree(
+    nodeSummaries: TimeFilterNodeSummary[],
+): TimeFilterTreeNode[] {
+    const nodeKeyToPathNode: Record<string, TimeFilterTreeNode> = {};
+    const roots: TimeFilterTreeNode[] = [];
+
+    for (const nodeSummary of nodeSummaries) {
+        nodeKeyToPathNode[nodeSummary.id] = {
+            key: nodeSummary.id,
+            label: getNodeDisplayLabel(nodeSummary),
+            data: nodeSummary,
+            children: [],
+            selectable: isNodeSelectable(nodeSummary),
+        };
+    }
+
+    for (const nodeSummary of nodeSummaries) {
+        const treeNode = nodeKeyToPathNode[nodeSummary.id]!;
+
+        if (nodeSummary.semantic_parent_id) {
+            const parentNode =
+                nodeKeyToPathNode[nodeSummary.semantic_parent_id];
+            (parentNode?.children ?? roots).push(treeNode);
+        } else {
+            roots.push(treeNode);
+        }
+    }
+
+    // Card-group wrapper nodes share the same alias as their first child.
+    for (const node of Object.values(nodeKeyToPathNode)) {
+        if (
+            node.children.some((child) => {
+                return child.data.alias === node.data.alias;
+            })
+        ) {
+            node.selectable = false;
+        }
+    }
+
+    function compareNodes(
+        leftNode: TimeFilterTreeNode,
+        rightNode: TimeFilterTreeNode,
+    ): number {
+        const sortOrderDifference =
+            (leftNode.data.sortorder ?? 0) - (rightNode.data.sortorder ?? 0);
+
+        if (sortOrderDifference !== 0) {
+            return sortOrderDifference;
+        }
+
+        return leftNode.label.localeCompare(rightNode.label);
+    }
+
+    roots.sort(compareNodes);
+
+    for (const node of Object.values(nodeKeyToPathNode)) {
+        node.children.sort(compareNodes);
+    }
+
+    function pruneUnselectable(
+        nodes: TimeFilterTreeNode[],
+    ): TimeFilterTreeNode[] {
+        return nodes.flatMap((node) => {
+            const prunedChildren = pruneUnselectable(node.children);
+
+            if (node.selectable !== false || prunedChildren.length > 0) {
+                return [{ ...node, children: prunedChildren }];
+            }
+
+            return [];
+        });
+    }
+
+    return pruneUnselectable(roots);
+}
 
 function getNodeLabel(alias: string): string {
-    return props.dateNodes.find((node) => node.alias === alias)?.name ?? alias;
+    return nodeLabelByAlias.value[alias] ?? alias;
 }
 
 function removeNode(alias: string): void {
@@ -71,47 +223,42 @@ function removeNode(alias: string): void {
                 }}
             </label>
 
-            <MultiSelect
-                v-model="selectedNodeAliases"
+            <TreeSelect
+                v-model="selectedKeys"
                 :input-id="NODE_SELECT_ID"
-                :options="dateNodes"
-                option-label="name"
-                option-value="alias"
-                :placeholder="$gettext('Select an attribute')"
-                :filter="true"
-                :filter-placeholder="$gettext('Search date nodes...')"
-                :reset-filter-on-clear="true"
-                :show-toggle-all="false"
-                :max-selected-labels="0"
-                overlay-class="node-selection__select-overlay"
+                selection-mode="single"
+                style="font-size: 1.2rem"
+                :disabled="!hasSelectableNodes"
+                filter
+                :filter-placeholder="$gettext('Search nodes...')"
+                :loading="props.loading"
+                :placeholder="$gettext('Select node...')"
+                :expanded-keys="expandedKeys"
+                :options="nodeOptions"
                 class="node-selection__select"
             >
                 <template #value="valueSlotProps">
                     <span
-                        class="node-selection__select-value"
-                        :class="{
-                            'node-selection__select-value--placeholder':
-                                selectedNodeAliases.length === 0,
-                        }"
+                        v-if="
+                            valueSlotProps.value &&
+                            valueSlotProps.value.length > 0
+                        "
                     >
-                        {{
-                            selectedNodeAliases.length === 0
-                                ? valueSlotProps.placeholder
-                                : selectionSummary
-                        }}
+                        {{ valueSlotProps.value[0].label }}
                     </span>
+                    <span v-else>{{ valueSlotProps.placeholder }}</span>
                 </template>
-            </MultiSelect>
+            </TreeSelect>
         </div>
 
         <div class="node-selection__chips">
             <Chip
-                v-if="selectedNodeAliases.length === 0"
+                v-if="props.modelValue.length === 0"
                 :label="$gettext('All date nodes')"
                 class="node-selection__chip"
             />
             <Chip
-                v-for="alias in selectedNodeAliases"
+                v-for="alias in props.modelValue"
                 :key="alias"
                 :label="getNodeLabel(alias)"
                 removable
@@ -132,10 +279,9 @@ function removeNode(alias: string): void {
 
 .node-selection__attribute-row {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     flex-wrap: wrap;
     gap: 0.875rem;
-    align-items: baseline;
 }
 
 .node-selection__attribute-label {
@@ -147,58 +293,8 @@ function removeNode(alias: string): void {
 }
 
 .node-selection__select {
-    flex: 0 1 24rem;
-    min-inline-size: 16rem;
-    max-inline-size: min(100%, 28rem);
-    font-size: var(--time-filter-control-size, 1rem);
-}
-
-.node-selection__select :deep(.p-multiselect-label),
-.node-selection__select :deep(.p-multiselect-dropdown),
-.node-selection__select :deep(.p-multiselect-clear-icon) {
-    font-size: var(--time-filter-control-size, 1rem);
-}
-
-.node-selection__select :deep(.p-multiselect-label-container) {
-    display: flex;
-    align-items: center;
-}
-
-.node-selection__select :deep(.p-multiselect-label) {
-    display: flex;
-    align-items: center;
-    min-block-size: 3rem;
-    padding-block: 0.75rem;
-    padding-inline: 0.9375rem;
-}
-
-.node-selection__select :deep(.p-multiselect-dropdown) {
-    min-inline-size: 3rem;
-}
-
-.node-selection__select-value {
-    display: inline-flex;
-    align-items: center;
-    min-block-size: 1.5rem;
-    color: var(--p-text-color);
-}
-
-.node-selection__select-value--placeholder {
-    color: var(--p-text-muted-color);
-}
-
-:deep(.node-selection__select-overlay .p-multiselect-header) {
-    padding: 0.75rem;
-}
-
-:deep(.node-selection__select-overlay .p-inputtext) {
-    font-size: var(--time-filter-control-size, 1rem);
-}
-
-:deep(.node-selection__select-overlay .p-multiselect-option) {
-    padding-block: 0.8125rem;
-    padding-inline: 0.9375rem;
-    font-size: var(--time-filter-control-size, 1rem);
+    flex: 0 1 auto;
+    inline-size: min(100%, 22rem);
 }
 
 .node-selection__chips {

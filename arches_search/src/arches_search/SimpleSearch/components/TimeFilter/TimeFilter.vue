@@ -14,18 +14,14 @@ import {
     parseStoredDate,
 } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 import { getNodesForGraphId } from "@/arches_search/AdvancedSearch/api.ts";
+import type { TimeFilterNodeSummary } from "@/arches_search/SimpleSearch/components/TimeFilter/types.ts";
 
-import type {
-    LiteralClause,
-    Node,
-} from "@/arches_search/AdvancedSearch/types.ts";
+import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
 
 const UPDATE_EVENT = "update:modelValue" as const;
 const REMOVE_EVENT = "remove" as const;
 const OPERATOR_BETWEEN = "BETWEEN" as const;
-const DEFAULT_RANGE_YEARS = 1;
 const EMIT_DEBOUNCE_MS = 400;
-const DATE_DATATYPES = ["date", "edtf"] as const;
 const SLIDER_START_DATE = "1967-04-01" as const;
 
 const props = defineProps<{
@@ -49,12 +45,14 @@ const sliderValue = ref<[number, number]>([
     dayjs(selectedRange.value[0]).diff(sliderBounds.value[0], "day"),
     dayjs(selectedRange.value[1]).diff(sliderBounds.value[0], "day"),
 ]);
-const dateNodes = ref<Node[]>([]);
+const graphNodes = ref<TimeFilterNodeSummary[]>([]);
 const selectedNodeAliases = ref<string[]>([]);
 const isFilterActive = ref(false);
+const isLoadingNodes = ref(false);
 
 let emitDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let lastEmittedJson = "";
+let currentNodeLoad = 0;
 
 const orderedRange = computed<[Date, Date]>(() =>
     normalizeRangeDates(selectedRange.value[0], selectedRange.value[1]),
@@ -117,19 +115,31 @@ watch(
 watch(
     () => props.graphId,
     async (id) => {
+        currentNodeLoad++;
+        const thisLoad = currentNodeLoad;
         selectedNodeAliases.value = [];
         if (!id) {
-            dateNodes.value = [];
+            graphNodes.value = [];
+            isLoadingNodes.value = false;
             return;
         }
 
+        isLoadingNodes.value = true;
         try {
             const nodesMap = await getNodesForGraphId(id);
-            dateNodes.value = (Object.values(nodesMap) as Node[]).filter((n) =>
-                (DATE_DATATYPES as readonly string[]).includes(n.datatype),
-            );
+            if (thisLoad !== currentNodeLoad) return;
+
+            graphNodes.value = Object.values(
+                nodesMap,
+            ) as TimeFilterNodeSummary[];
         } catch {
-            dateNodes.value = [];
+            if (thisLoad !== currentNodeLoad) return;
+
+            graphNodes.value = [];
+        } finally {
+            if (thisLoad === currentNodeLoad) {
+                isLoadingNodes.value = false;
+            }
         }
     },
     { immediate: true },
@@ -179,8 +189,16 @@ onUnmounted(() => {
 });
 
 function buildDefaultDates(): [Date, Date] {
-    const end = dayjs().startOf("day");
-    return [end.subtract(DEFAULT_RANGE_YEARS, "year").toDate(), end.toDate()];
+    const [sliderStart, sliderEnd] = buildSliderBounds();
+    const start = dayjs(sliderStart).startOf("day");
+    const totalDays = dayjs(sliderEnd).startOf("day").diff(start, "day");
+    const startOffset = Math.floor(totalDays / 3);
+    const endOffset = Math.ceil((totalDays * 2) / 3);
+
+    return [
+        start.add(startOffset, "day").toDate(),
+        start.add(endOffset, "day").toDate(),
+    ];
 }
 
 function normalizeRangeDates(startDate: Date, endDate: Date): [Date, Date] {
@@ -301,10 +319,12 @@ function onNodeSelectionUpdate(aliases: string[]): void {
             </h3>
 
             <NodeSelection
-                v-if="dateNodes.length > 0"
+                v-if="props.graphId"
+                :key="props.graphId"
                 :model-value="selectedNodeAliases"
                 :graph-label="props.graphLabel"
-                :date-nodes="dateNodes"
+                :nodes="graphNodes"
+                :loading="isLoadingNodes"
                 class="time-filter__section"
                 @update:model-value="onNodeSelectionUpdate"
             />
