@@ -31,6 +31,31 @@ export function clausesMatch(
     return JSON.stringify(left) === JSON.stringify(right);
 }
 
+export function buildNodeDateSearchClause(
+    graphSlug: string,
+    nodeAlias: string,
+    operator: string,
+    dateFrom: string,
+    dateTo?: string,
+): LiteralClause {
+    const operands: LiteralOperand[] = [
+        { type: CLAUSE_TYPE_LITERAL, value: dateFrom },
+    ];
+    if (dateTo) operands.push({ type: CLAUSE_TYPE_LITERAL, value: dateTo });
+    return {
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
+        subject: {
+            type: ClauseSubjectTypeToken.NODE,
+            graph_slug: graphSlug,
+            node_alias: nodeAlias,
+            search_models: [],
+        },
+        operator,
+        operands,
+    };
+}
+
 export function buildDateSearchClause(
     graphSlug: string,
     operator: string,

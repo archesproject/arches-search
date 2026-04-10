@@ -7,8 +7,10 @@ import AttributeFilters from "@/arches_search/SimpleSearch/components/AttributeF
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
-import SimpleSearchTimeFilter from "@/arches_search/SimpleSearch/components/SimpleSearchTimeFilter.vue";
+import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
+import Splitter from "primevue/splitter";
+import SplitterPanel from "primevue/splitterpanel";
 
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
@@ -47,7 +49,7 @@ const showAttributeFilters = ref(false);
 const showTimeFilter = ref(false);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
 const graphModels = ref<GraphModel[]>([]);
-const timeFilterClause = ref<LiteralClause | null>(null);
+const timeFilterClauses = ref<LiteralClause[]>([]);
 
 const sortOptions: SortOption[] = [
     { label: $gettext("A to Z"), value: "aToZ" },
@@ -79,16 +81,81 @@ const activeGraphSlug = computed<string | null>(() => {
     return match?.slug ?? null;
 });
 
-const hasTimeFilter = computed<boolean>(() => timeFilterClause.value !== null);
+const hasTimeFilter = computed<boolean>(
+    () => timeFilterClauses.value.length > 0,
+);
 
-function buildTimeFilterPayload(clause: LiteralClause): GroupPayload | null {
+const TIME_FILTER_SIZE = 40;
+const ATTR_FILTER_SIZE = 20;
+const FLEX_TRANSITION = "240ms ease";
+const BORDER_TRANSITION = "180ms ease";
+
+const resultsPanelSize = computed<number>(() => {
+    let size = 100;
+    if (showTimeFilter.value) size -= timePanelBasis.value;
+    if (showAttributeFilters.value) size -= ATTR_FILTER_SIZE;
+    return size;
+});
+
+const timePanelBasis = ref<number>(TIME_FILTER_SIZE);
+const isSplitterResizing = ref(false);
+
+const visibleTimePanelSize = computed<number>(() =>
+    showTimeFilter.value ? timePanelBasis.value : 0,
+);
+
+const timePanelStyle = computed(() => ({
+    flexGrow: "0",
+    flexShrink: "0",
+    flexBasis: showTimeFilter.value ? `${timePanelBasis.value}%` : "0px",
+    maxWidth: showTimeFilter.value ? `${timePanelBasis.value}%` : "0px",
+    minWidth: "0",
+    borderInlineStartColor: showTimeFilter.value
+        ? "var(--p-content-border-color)"
+        : "transparent",
+    transition: isSplitterResizing.value
+        ? `border-inline-start-color ${BORDER_TRANSITION}`
+        : [
+              `flex-basis ${FLEX_TRANSITION}`,
+              `max-width ${FLEX_TRANSITION}`,
+              `border-inline-start-color ${BORDER_TRANSITION}`,
+          ].join(", "),
+    pointerEvents: showTimeFilter.value ? "auto" : "none",
+}));
+
+function syncTimePanelSizeFromEvent(event: { sizes?: number[] }): void {
+    const nextTimePanelSize = event.sizes?.[1];
+
+    if (
+        showTimeFilter.value &&
+        typeof nextTimePanelSize === "number" &&
+        nextTimePanelSize > 0
+    ) {
+        timePanelBasis.value = nextTimePanelSize;
+    }
+}
+
+function onSplitterResizeStart(): void {
+    isSplitterResizing.value = true;
+}
+
+function onSplitterResize(event: { sizes?: number[] }): void {
+    syncTimePanelSizeFromEvent(event);
+}
+
+function onSplitterResizeEnd(event: { sizes?: number[] }): void {
+    syncTimePanelSizeFromEvent(event);
+    isSplitterResizing.value = false;
+}
+
+function buildTimeFilterPayload(clauses: LiteralClause[]): GroupPayload | null {
     const slug = activeGraphSlug.value;
-    if (!slug) return null;
+    if (!slug || clauses.length === 0) return null;
     return {
         graph_slug: slug,
         scope: GraphScopeToken.RESOURCE,
-        logic: LogicToken.AND,
-        clauses: [clause],
+        logic: LogicToken.OR,
+        clauses,
         groups: [],
         aggregations: [],
         relationship: null,
@@ -103,14 +170,15 @@ function onToggleTimeFilter() {
     showTimeFilter.value = !showTimeFilter.value;
 }
 
-function onTimeFilterUpdate(clause: LiteralClause) {
-    timeFilterClause.value = clause;
-    const payload = buildTimeFilterPayload(clause);
+function onTimeFilterUpdate(clauses: LiteralClause[]) {
+    timeFilterClauses.value = clauses;
+    const payload = buildTimeFilterPayload(clauses);
     if (payload) setQuery("timeFilter", payload);
+    else clearQuery("timeFilter");
 }
 
 function onRemoveTimeFilter() {
-    timeFilterClause.value = null;
+    timeFilterClauses.value = [];
     showTimeFilter.value = false;
     clearQuery("timeFilter");
 }
@@ -150,45 +218,89 @@ onMounted(async () => {
             @export="() => {}"
         />
 
-        <SimpleSearchTimeFilter
-            v-if="showTimeFilter"
-            :graph-slug="activeGraphSlug"
-            :model-value="timeFilterClause"
-            @update:model-value="onTimeFilterUpdate"
-            @remove="onRemoveTimeFilter"
-        />
-
-        <!-- Main content: results + optional filter panel -->
+        <!-- Main content: results + optional filter panels -->
         <div class="simple-search-body">
-            <div class="results-pane">
-                <SearchResults
-                    :results="searchResults"
-                    :is-searching="isSearching"
-                    :filter-text="''"
-                    @request-page="onRequestPage"
-                />
-            </div>
-
-            <aside
-                v-if="showAttributeFilters"
-                class="filters-pane"
+            <Splitter
+                :key="`splitter-${showAttributeFilters}`"
+                :class="[
+                    'simple-search-splitter',
+                    {
+                        'time-filter-open': showTimeFilter,
+                        'time-filter-closed': !showTimeFilter,
+                    },
+                ]"
+                @resizestart="onSplitterResizeStart"
+                @resize="onSplitterResize"
+                @resizeend="onSplitterResizeEnd"
             >
-                <AttributeFilters
-                    :sections="attributeFilterSections"
-                    :selected-options="selectedFilterOptions"
-                    @update:selected-options="selectedFilterOptions = $event"
-                />
-            </aside>
+                <SplitterPanel
+                    class="results-pane"
+                    :size="resultsPanelSize"
+                    :min-size="20"
+                >
+                    <SearchResults
+                        :results="searchResults"
+                        :is-searching="isSearching"
+                        :filter-text="''"
+                        @request-page="onRequestPage"
+                    />
+                </SplitterPanel>
+
+                <SplitterPanel
+                    class="time-filter-pane"
+                    :size="visibleTimePanelSize"
+                    :min-size="showTimeFilter ? 15 : 0"
+                    :style="timePanelStyle"
+                >
+                    <div
+                        :class="[
+                            'time-filter-panel-inner',
+                            { 'time-filter-panel-inner-open': showTimeFilter },
+                        ]"
+                        :aria-hidden="!showTimeFilter"
+                    >
+                        <TimeFilter
+                            :graph-slug="activeGraphSlug"
+                            :graph-id="activeGraph?.id ?? null"
+                            :graph-label="activeGraph?.label ?? null"
+                            :is-open="showTimeFilter"
+                            :model-value="timeFilterClauses[0] ?? null"
+                            @update:model-value="onTimeFilterUpdate"
+                            @remove="onRemoveTimeFilter"
+                        />
+                    </div>
+                </SplitterPanel>
+
+                <SplitterPanel
+                    v-if="showAttributeFilters"
+                    class="filters-pane"
+                    :size="ATTR_FILTER_SIZE"
+                    :min-size="10"
+                >
+                    <AttributeFilters
+                        :sections="attributeFilterSections"
+                        :selected-options="selectedFilterOptions"
+                        @update:selected-options="
+                            selectedFilterOptions = $event
+                        "
+                    />
+                </SplitterPanel>
+            </Splitter>
         </div>
     </div>
 </template>
 
 <style scoped>
 .simple-search {
+    --time-filter-inline-offset: 1.25rem;
     display: flex;
     flex-direction: column;
     height: 100%;
     font-size: var(--p-arches-search-font-size);
+}
+
+:global([dir="rtl"]) .simple-search {
+    --time-filter-inline-offset: -1.25rem;
 }
 
 .simple-search-body {
@@ -197,18 +309,46 @@ onMounted(async () => {
     overflow: hidden;
 }
 
+.simple-search-splitter {
+    flex: 1;
+    overflow: hidden;
+    border-radius: 0;
+}
+
 .results-pane {
     display: flex;
     flex-direction: column;
-    flex: 1;
     overflow: hidden;
     background-color: var(--p-content-background);
+    min-width: 0;
+}
+
+.time-filter-pane {
+    overflow: hidden;
+    border-inline-start: 0.0625rem solid var(--p-content-border-color);
 }
 
 .filters-pane {
-    width: 260px;
-    flex-shrink: 0;
-    border-left: 0.125rem solid var(--p-content-border-color);
     overflow-y: auto;
+}
+
+.time-filter-panel-inner {
+    height: 100%;
+    overflow-y: auto;
+    opacity: 0;
+    translate: var(--time-filter-inline-offset) 0;
+    transition:
+        opacity 180ms ease,
+        translate 240ms ease;
+}
+
+.time-filter-panel-inner-open {
+    opacity: 1;
+    translate: 0 0;
+}
+
+.simple-search-splitter.time-filter-closed
+    :deep(.results-pane + .p-splitter-gutter) {
+    display: none;
 }
 </style>
