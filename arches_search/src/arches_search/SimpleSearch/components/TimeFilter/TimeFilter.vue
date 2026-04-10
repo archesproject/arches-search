@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import dayjs from "dayjs";
-
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
@@ -14,15 +13,12 @@ import {
     parseStoredDate,
 } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 import { getNodesForGraphId } from "@/arches_search/AdvancedSearch/api.ts";
-import type { TimeFilterNodeSummary } from "@/arches_search/SimpleSearch/components/TimeFilter/types.ts";
 
+import type { TimeFilterNodeSummary } from "@/arches_search/SimpleSearch/components/TimeFilter/types.ts";
 import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
 
-const UPDATE_EVENT = "update:modelValue" as const;
-const REMOVE_EVENT = "remove" as const;
-const OPERATOR_BETWEEN = "BETWEEN" as const;
 const EMIT_DEBOUNCE_MS = 400;
-const SLIDER_START_DATE = "1967-04-01" as const;
+const SLIDER_START_DATE = "1967-04-01";
 
 const props = defineProps<{
     graphSlug: string | null;
@@ -33,81 +29,63 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: typeof UPDATE_EVENT, clauses: LiteralClause[]): void;
-    (event: typeof REMOVE_EVENT): void;
+    (event: "update:modelValue", clauses: LiteralClause[]): void;
+    (event: "remove"): void;
 }>();
 
 const { $gettext } = useGettext();
 
-const selectedRange = ref<[Date, Date]>(buildDefaultDates());
-const sliderBounds = ref<[Date, Date]>(buildSliderBounds());
-const sliderValue = ref<[number, number]>([
-    dayjs(selectedRange.value[0]).diff(sliderBounds.value[0], "day"),
-    dayjs(selectedRange.value[1]).diff(sliderBounds.value[0], "day"),
-]);
-const graphNodes = ref<TimeFilterNodeSummary[]>([]);
+const selectedRange = ref<[Date, Date]>(defaultRange());
 const selectedNodeAliases = ref<string[]>([]);
-const isFilterActive = ref(false);
+const graphNodes = ref<TimeFilterNodeSummary[]>([]);
 const isLoadingNodes = ref(false);
+const isFilterActive = ref(false);
 
-let emitDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let emitTimer: ReturnType<typeof setTimeout> | null = null;
 let lastEmittedJson = "";
-let currentNodeLoad = 0;
+let nodeLoadId = 0;
 
-const orderedRange = computed<[Date, Date]>(() =>
-    normalizeRangeDates(selectedRange.value[0], selectedRange.value[1]),
-);
+const sliderBounds = computed<[Date, Date]>(() => [
+    dayjs(SLIDER_START_DATE).startOf("day").toDate(),
+    dayjs().startOf("day").toDate(),
+]);
 
-const dateFromModel = computed<Date | null>({
-    get(): Date | null {
-        return orderedRange.value[0];
-    },
-    set(value: Date | Date[] | (Date | null)[] | null | undefined): void {
-        if (value instanceof Date) {
-            isFilterActive.value = true;
-            setOrderedRangeDates(value, orderedRange.value[1]);
-        }
-    },
-});
-
-const dateToModel = computed<Date | null>({
-    get(): Date | null {
-        return orderedRange.value[1];
-    },
-    set(value: Date | Date[] | (Date | null)[] | null | undefined): void {
-        if (value instanceof Date) {
-            isFilterActive.value = true;
-            setOrderedRangeDates(orderedRange.value[0], value);
-        }
-    },
+const sliderValue = computed<[number, number]>(() => {
+    const start = sliderBounds.value[0];
+    const total = dayjs(sliderBounds.value[1]).diff(start, "day");
+    return [
+        clamp(dayjs(selectedRange.value[0]).diff(start, "day"), 0, total),
+        clamp(dayjs(selectedRange.value[1]).diff(start, "day"), 0, total),
+    ];
 });
 
 watch(
     () => props.modelValue,
-    (nextClause) => {
-        isFilterActive.value = Boolean(nextClause);
-        lastEmittedJson = nextClause ? JSON.stringify([nextClause]) : "";
+    (clause) => {
+        isFilterActive.value = Boolean(clause);
+        lastEmittedJson = clause ? JSON.stringify([clause]) : "";
 
-        const [defaultFrom, defaultTo] = buildDefaultDates();
-        const nextFrom = nextClause
-            ? parseStoredDate(nextClause.operands[0]?.value) ?? defaultFrom
+        const [defaultFrom, defaultTo] = defaultRange();
+        const from = clause
+            ? parseStoredDate(clause.operands[0]?.value) ?? defaultFrom
             : defaultFrom;
-        const nextTo = nextClause
-            ? parseStoredDate(nextClause.operands[1]?.value) ?? nextFrom
+        const to = clause
+            ? parseStoredDate(clause.operands[1]?.value) ?? from
             : defaultTo;
 
-        const start = dayjs(nextFrom).startOf("day").toDate();
-        const end = dayjs(nextTo).startOf("day").toDate();
-        const [currentStart, currentEnd] = orderedRange.value;
+        const next = normalizeRange(
+            dayjs(from).startOf("day").toDate(),
+            dayjs(to).startOf("day").toDate(),
+        );
 
         if (
-            dayjs(start).isSame(currentStart, "day") &&
-            dayjs(end).isSame(currentEnd, "day")
+            dayjs(next[0]).isSame(selectedRange.value[0], "day") &&
+            dayjs(next[1]).isSame(selectedRange.value[1], "day")
         ) {
             return;
         }
 
-        setOrderedRangeDates(start, end);
+        selectedRange.value = next;
     },
     { immediate: true },
 );
@@ -115,9 +93,9 @@ watch(
 watch(
     () => props.graphId,
     async (id) => {
-        currentNodeLoad++;
-        const thisLoad = currentNodeLoad;
+        const thisLoad = ++nodeLoadId;
         selectedNodeAliases.value = [];
+
         if (!id) {
             graphNodes.value = [];
             isLoadingNodes.value = false;
@@ -127,19 +105,15 @@ watch(
         isLoadingNodes.value = true;
         try {
             const nodesMap = await getNodesForGraphId(id);
-            if (thisLoad !== currentNodeLoad) return;
-
+            if (thisLoad !== nodeLoadId) return;
             graphNodes.value = Object.values(
                 nodesMap,
             ) as TimeFilterNodeSummary[];
         } catch {
-            if (thisLoad !== currentNodeLoad) return;
-
+            if (thisLoad !== nodeLoadId) return;
             graphNodes.value = [];
         } finally {
-            if (thisLoad === currentNodeLoad) {
-                isLoadingNodes.value = false;
-            }
+            if (thisLoad === nodeLoadId) isLoadingNodes.value = false;
         }
     },
     { immediate: true },
@@ -148,9 +122,7 @@ watch(
 watch(
     () => props.isOpen,
     (isOpen) => {
-        if (isOpen) {
-            isFilterActive.value = true;
-        }
+        if (isOpen) isFilterActive.value = true;
     },
 );
 
@@ -162,11 +134,7 @@ watch(
         () => props.isOpen,
     ],
     () => {
-        if (!props.graphSlug) return;
-        if (!isFilterActive.value) return;
-
-        ensureSliderBounds();
-        syncSliderValue();
+        if (!props.graphSlug || !isFilterActive.value) return;
 
         const nextClauses = buildClauses();
         if (!nextClauses.length) return;
@@ -174,132 +142,80 @@ watch(
         const nextJson = JSON.stringify(nextClauses);
         if (nextJson === lastEmittedJson) return;
 
-        if (emitDebounceTimer !== null) clearTimeout(emitDebounceTimer);
-        emitDebounceTimer = setTimeout(() => {
+        if (emitTimer !== null) clearTimeout(emitTimer);
+        emitTimer = setTimeout(() => {
             lastEmittedJson = nextJson;
-            emit(UPDATE_EVENT, nextClauses);
-            emitDebounceTimer = null;
+            emit("update:modelValue", nextClauses);
+            emitTimer = null;
         }, EMIT_DEBOUNCE_MS);
     },
     { immediate: true },
 );
 
 onUnmounted(() => {
-    if (emitDebounceTimer !== null) clearTimeout(emitDebounceTimer);
+    if (emitTimer !== null) clearTimeout(emitTimer);
 });
 
-function buildDefaultDates(): [Date, Date] {
-    const [sliderStart, sliderEnd] = buildSliderBounds();
-    const start = dayjs(sliderStart).startOf("day");
-    const totalDays = dayjs(sliderEnd).startOf("day").diff(start, "day");
-    const startOffset = Math.floor(totalDays / 3);
-    const endOffset = Math.ceil((totalDays * 2) / 3);
-
-    return [
-        start.add(startOffset, "day").toDate(),
-        start.add(endOffset, "day").toDate(),
-    ];
+function clamp(value: number, min: number, max: number): number {
+    return Math.min(Math.max(value, min), max);
 }
 
-function normalizeRangeDates(startDate: Date, endDate: Date): [Date, Date] {
-    const start = dayjs(startDate).startOf("day");
-    const end = dayjs(endDate).startOf("day");
-
+function normalizeRange(a: Date, b: Date): [Date, Date] {
+    const start = dayjs(a).startOf("day");
+    const end = dayjs(b).startOf("day");
     return start.isAfter(end)
         ? [end.toDate(), start.toDate()]
         : [start.toDate(), end.toDate()];
 }
 
-function buildSliderBounds(): [Date, Date] {
+function defaultRange(): [Date, Date] {
+    const boundsStart = dayjs(SLIDER_START_DATE).startOf("day");
+    const total = dayjs().startOf("day").diff(boundsStart, "day");
     return [
-        dayjs(SLIDER_START_DATE).startOf("day").toDate(),
-        dayjs().startOf("day").toDate(),
+        boundsStart.add(Math.floor(total / 3), "day").toDate(),
+        boundsStart.add(Math.ceil((total * 2) / 3), "day").toDate(),
     ];
-}
-
-function ensureSliderBounds(): void {
-    sliderBounds.value = buildSliderBounds();
-}
-
-function syncSliderValue(): void {
-    const sliderMax = dayjs(sliderBounds.value[1]).diff(
-        sliderBounds.value[0],
-        "day",
-    );
-    sliderValue.value = [
-        Math.min(
-            Math.max(
-                dayjs(selectedRange.value[0]).diff(
-                    sliderBounds.value[0],
-                    "day",
-                ),
-                0,
-            ),
-            sliderMax,
-        ),
-        Math.min(
-            Math.max(
-                dayjs(selectedRange.value[1]).diff(
-                    sliderBounds.value[0],
-                    "day",
-                ),
-                0,
-            ),
-            sliderMax,
-        ),
-    ];
-}
-
-function buildDateFromOffset(offset: number): Date {
-    return dayjs(sliderBounds.value[0])
-        .add(offset, "day")
-        .startOf("day")
-        .toDate();
-}
-
-function setOrderedRangeDates(startDate: Date, endDate: Date): void {
-    selectedRange.value = normalizeRangeDates(startDate, endDate);
-    ensureSliderBounds();
-    syncSliderValue();
-}
-
-function formatDate(date: Date): string {
-    return dayjs(date).format("YYYY-MM-DD");
 }
 
 function buildClauses(): LiteralClause[] {
     if (!props.graphSlug) return [];
 
-    const from = formatDate(orderedRange.value[0]);
-    const to = formatDate(orderedRange.value[1]);
+    const from = dayjs(selectedRange.value[0]).format("YYYY-MM-DD");
+    const to = dayjs(selectedRange.value[1]).format("YYYY-MM-DD");
 
     if (selectedNodeAliases.value.length === 0) {
-        return [
-            buildDateSearchClause(props.graphSlug, OPERATOR_BETWEEN, from, to),
-        ];
+        return [buildDateSearchClause(props.graphSlug, "BETWEEN", from, to)];
     }
 
     return selectedNodeAliases.value.map((alias) =>
-        buildNodeDateSearchClause(
-            props.graphSlug!,
-            alias,
-            OPERATOR_BETWEEN,
-            from,
-            to,
-        ),
+        buildNodeDateSearchClause(props.graphSlug!, alias, "BETWEEN", from, to),
     );
 }
 
-function onSliderUpdate(updatedValue: [number, number]): void {
+function onDateFromChange(value: unknown): void {
+    if (!(value instanceof Date)) return;
     isFilterActive.value = true;
-    const [startOffset, endOffset] = updatedValue;
-    sliderValue.value = [startOffset, endOffset];
+    selectedRange.value = normalizeRange(value, selectedRange.value[1]);
+}
+
+function onDateToChange(value: unknown): void {
+    if (!(value instanceof Date)) return;
+    isFilterActive.value = true;
+    selectedRange.value = normalizeRange(selectedRange.value[0], value);
+}
+
+function onSliderUpdate(offsets: [number, number]): void {
+    isFilterActive.value = true;
     selectedRange.value = [
-        buildDateFromOffset(startOffset),
-        buildDateFromOffset(endOffset),
+        dayjs(sliderBounds.value[0])
+            .add(offsets[0], "day")
+            .startOf("day")
+            .toDate(),
+        dayjs(sliderBounds.value[0])
+            .add(offsets[1], "day")
+            .startOf("day")
+            .toDate(),
     ];
-    ensureSliderBounds();
-    syncSliderValue();
 }
 
 function onNodeSelectionUpdate(aliases: string[]): void {
@@ -338,27 +254,28 @@ function onNodeSelectionUpdate(aliases: string[]): void {
                     <TimeSlider
                         :model-value="sliderValue"
                         :bounds="sliderBounds"
-                        :selected-range="selectedRange"
                         @update:model-value="onSliderUpdate"
                     />
 
                     <div class="time-filter__calendar-row">
                         <DatePicker
-                            v-model="dateFromModel"
+                            :model-value="selectedRange[0]"
                             class="time-filter__date-picker"
                             :placeholder="$gettext('From...')"
                             :show-icon="true"
                             icon-display="input"
                             date-format="M d, yy"
+                            @update:model-value="onDateFromChange"
                         />
 
                         <DatePicker
-                            v-model="dateToModel"
+                            :model-value="selectedRange[1]"
                             class="time-filter__date-picker"
                             :placeholder="$gettext('To...')"
                             :show-icon="true"
                             icon-display="input"
                             date-format="M d, yy"
+                            @update:model-value="onDateToChange"
                         />
                     </div>
                 </div>
@@ -431,7 +348,6 @@ function onNodeSelectionUpdate(aliases: string[]): void {
     border-block-end: 0.0625rem solid var(--time-filter-heading-rule-color);
     font-weight: 600;
     font-size: var(--time-filter-section-size);
-    letter-spacing: 0.01em;
     color: var(--p-text-color);
 }
 

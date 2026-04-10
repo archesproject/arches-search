@@ -1,80 +1,70 @@
 <script setup lang="ts">
 import dayjs from "dayjs";
-
 import { computed } from "vue";
 
 import Slider from "primevue/slider";
 
-const UPDATE_EVENT = "update:modelValue" as const;
 const LABEL_OVERLAP_THRESHOLD = 25;
 
 const props = defineProps<{
     modelValue: [number, number];
     bounds: [Date, Date];
-    selectedRange: [Date, Date];
 }>();
 
 const emit = defineEmits<{
-    (event: typeof UPDATE_EVENT, value: [number, number]): void;
+    (event: "update:modelValue", value: [number, number]): void;
 }>();
 
-const orderedRange = computed<[Date, Date]>(() =>
-    normalizeRangeDates(props.selectedRange[0], props.selectedRange[1]),
+const totalDays = computed<number>(() =>
+    dayjs(props.bounds[1]).diff(props.bounds[0], "day"),
 );
 
-const sliderMax = computed<number>(() => {
-    return dayjs(props.bounds[1]).diff(props.bounds[0], "day");
-});
+const handleStartDate = computed<Date>(() =>
+    dayjs(props.bounds[0]).add(props.modelValue[0], "day").toDate(),
+);
 
-const boundsMinLabel = computed<string>(() =>
-    formatDateDisplay(props.bounds[0]),
+const handleEndDate = computed<Date>(() =>
+    dayjs(props.bounds[0]).add(props.modelValue[1], "day").toDate(),
 );
-const boundsMaxLabel = computed<string>(() =>
-    formatDateDisplay(props.bounds[1]),
-);
+
+const boundsStartLabel = computed<string>(() => formatDate(props.bounds[0]));
+const boundsEndLabel = computed<string>(() => formatDate(props.bounds[1]));
 const handleStartLabel = computed<string>(() =>
-    formatDateDisplay(props.selectedRange[0]),
+    formatDate(handleStartDate.value),
 );
-const handleEndLabel = computed<string>(() =>
-    formatDateDisplay(props.selectedRange[1]),
-);
+const handleEndLabel = computed<string>(() => formatDate(handleEndDate.value));
+
 const handleStartPercent = computed<number>(() =>
-    sliderMax.value > 0 ? (props.modelValue[0] / sliderMax.value) * 100 : 0,
+    totalDays.value > 0 ? (props.modelValue[0] / totalDays.value) * 100 : 0,
 );
+
 const handleEndPercent = computed<number>(() =>
-    sliderMax.value > 0 ? (props.modelValue[1] / sliderMax.value) * 100 : 100,
+    totalDays.value > 0 ? (props.modelValue[1] / totalDays.value) * 100 : 100,
 );
+
 const labelsOverlap = computed<boolean>(
     () =>
         Math.abs(handleEndPercent.value - handleStartPercent.value) <
         LABEL_OVERLAP_THRESHOLD,
 );
+
 const combinedLabelPercent = computed<number>(
     () => (handleStartPercent.value + handleEndPercent.value) / 2,
 );
-const combinedLabel = computed<string>(() => {
-    if (dayjs(orderedRange.value[0]).isSame(orderedRange.value[1], "day")) {
-        return formatDateDisplay(orderedRange.value[0]);
-    }
 
-    return `${formatDateDisplay(orderedRange.value[0])} – ${formatDateDisplay(orderedRange.value[1])}`;
+const combinedLabel = computed<string>(() => {
+    if (dayjs(handleStartDate.value).isSame(handleEndDate.value, "day")) {
+        return formatDate(handleStartDate.value);
+    }
+    return `${formatDate(handleStartDate.value)} – ${formatDate(handleEndDate.value)}`;
 });
 
-function normalizeRangeDates(startDate: Date, endDate: Date): [Date, Date] {
-    const start = dayjs(startDate).startOf("day");
-    const end = dayjs(endDate).startOf("day");
-
-    return start.isAfter(end)
-        ? [end.toDate(), start.toDate()]
-        : [start.toDate(), end.toDate()];
-}
-
-function formatDateDisplay(date: Date): string {
+function formatDate(date: Date): string {
     return dayjs(date).format("MMM D, YYYY");
 }
 
-function onSliderUpdate(updatedValue: number | number[]): void {
-    emit(UPDATE_EVENT, updatedValue as [number, number]);
+function onSliderUpdate(value: number | number[]): void {
+    emit("update:modelValue", value as [number, number]);
 }
 </script>
 
@@ -82,10 +72,10 @@ function onSliderUpdate(updatedValue: number | number[]): void {
     <div class="time-slider">
         <div class="time-slider__track">
             <span class="time-slider__bound time-slider__bound--start">
-                {{ boundsMinLabel }}
+                {{ boundsStartLabel }}
             </span>
             <span class="time-slider__bound time-slider__bound--end">
-                {{ boundsMaxLabel }}
+                {{ boundsEndLabel }}
             </span>
             <div class="time-slider__terminal time-slider__terminal--start" />
             <div class="time-slider__terminal time-slider__terminal--end" />
@@ -93,7 +83,7 @@ function onSliderUpdate(updatedValue: number | number[]): void {
                 :model-value="modelValue"
                 class="time-slider__input"
                 :min="0"
-                :max="sliderMax"
+                :max="totalDays"
                 :step="1"
                 :range="true"
                 @update:model-value="onSliderUpdate"

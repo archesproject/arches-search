@@ -10,8 +10,8 @@ import type {
     TimeFilterTreeNode,
 } from "@/arches_search/SimpleSearch/components/TimeFilter/types.ts";
 
-const UPDATE_EVENT = "update:modelValue" as const;
 const DATE_DATATYPES = ["date", "edtf"] as const;
+const NODE_SELECT_ID = "simple-search-time-filter-node-selection";
 
 const props = defineProps<{
     graphLabel: string | null;
@@ -21,11 +21,10 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: typeof UPDATE_EVENT, value: string[]): void;
+    (event: "update:modelValue", value: string[]): void;
 }>();
 
 const { $gettext, interpolate } = useGettext();
-const NODE_SELECT_ID = "simple-search-time-filter-node-selection" as const;
 
 const transientSelectedKeys = ref<Record<string, boolean>>({});
 
@@ -33,53 +32,53 @@ const nodeOptions = computed<TimeFilterTreeNode[]>(() =>
     buildTree(props.nodes),
 );
 
-const hasSelectableNodes = computed<boolean>(() => {
-    return hasSelectableNode(nodeOptions.value);
-});
+const hasSelectableNodes = computed<boolean>(
+    () => nodeOptions.value.length > 0,
+);
 
 const expandedKeys = computed<Record<string, boolean>>(() => {
-    const allExpandedKeys: Record<string, boolean> = {};
-    const nodesToVisit = [...nodeOptions.value];
-
-    while (nodesToVisit.length > 0) {
-        const currentNode = nodesToVisit.pop()!;
-        allExpandedKeys[currentNode.key] = true;
-        nodesToVisit.push(...currentNode.children);
+    const keys: Record<string, boolean> = {};
+    const queue = [...nodeOptions.value];
+    while (queue.length > 0) {
+        const node = queue.pop()!;
+        keys[node.key] = true;
+        queue.push(...node.children);
     }
-
-    return allExpandedKeys;
+    return keys;
 });
 
-const nodeLabelByAlias = computed<Record<string, string>>(() => {
-    return Object.fromEntries(
-        props.nodes.map((node) => [node.alias, getNodeDisplayLabel(node)]),
-    );
+const nodeLabelByAlias = computed<Record<string, string>>(() =>
+    Object.fromEntries(props.nodes.map((n) => [n.alias, getDisplayLabel(n)])),
+);
+
+const nodeByKey = computed<Map<string, TimeFilterTreeNode>>(() => {
+    const map = new Map<string, TimeFilterTreeNode>();
+    function collect(nodes: TimeFilterTreeNode[]): void {
+        for (const node of nodes) {
+            map.set(node.key, node);
+            collect(node.children);
+        }
+    }
+    collect(nodeOptions.value);
+    return map;
 });
 
 const selectedKeys = computed<Record<string, boolean>>({
     get(): Record<string, boolean> {
         return transientSelectedKeys.value;
     },
-    set(newSelectionKeys: unknown): void {
-        transientSelectedKeys.value = Object(newSelectionKeys) as Record<
-            string,
-            boolean
-        >;
+    set(newKeys: unknown): void {
+        const keys = Object(newKeys) as Record<string, boolean>;
+        transientSelectedKeys.value = keys;
 
-        const selectedKey =
-            Object.keys(transientSelectedKeys.value).find((key) => {
-                return transientSelectedKeys.value[key] === true;
-            }) ?? null;
-
-        const matchingNode = selectedKey
-            ? findNode(nodeOptions.value, (node) => node.key === selectedKey)
-            : null;
-
-        if (matchingNode && matchingNode.selectable !== false) {
-            const nextAlias = matchingNode.data.alias;
-
-            if (!props.modelValue.includes(nextAlias)) {
-                emit(UPDATE_EVENT, [...props.modelValue, nextAlias]);
+        const selectedKey = Object.keys(keys).find((k) => keys[k] === true);
+        if (selectedKey) {
+            const node = nodeByKey.value.get(selectedKey);
+            if (node?.selectable !== false) {
+                const alias = node!.data.alias;
+                if (!props.modelValue.includes(alias)) {
+                    emit("update:modelValue", [...props.modelValue, alias]);
+                }
             }
         }
 
@@ -89,109 +88,67 @@ const selectedKeys = computed<Record<string, boolean>>({
     },
 });
 
-function hasSelectableNode(nodes: TimeFilterTreeNode[]): boolean {
-    return nodes.some((node) => {
-        return node.selectable !== false || hasSelectableNode(node.children);
-    });
-}
-
-function findNode(
-    nodes: TimeFilterTreeNode[],
-    predicate: (node: TimeFilterTreeNode) => boolean,
-): TimeFilterTreeNode | null {
-    for (const node of nodes) {
-        if (predicate(node)) {
-            return node;
-        }
-
-        const found = findNode(node.children, predicate);
-        if (found) {
-            return found;
-        }
-    }
-
-    return null;
-}
-
 function isNodeSelectable(node: TimeFilterNodeSummary): boolean {
     return (DATE_DATATYPES as readonly string[]).includes(node.datatype);
 }
 
-function getNodeDisplayLabel(node: TimeFilterNodeSummary): string {
+function getDisplayLabel(node: TimeFilterNodeSummary): string {
     return node.card_x_node_x_widget_label || node.name || node.alias;
+}
+
+function compareNodes(a: TimeFilterTreeNode, b: TimeFilterTreeNode): number {
+    const sortDiff = (a.data.sortorder ?? 0) - (b.data.sortorder ?? 0);
+    return sortDiff !== 0 ? sortDiff : a.label.localeCompare(b.label);
+}
+
+function pruneUnselectable(nodes: TimeFilterTreeNode[]): TimeFilterTreeNode[] {
+    return nodes.flatMap((node) => {
+        const children = pruneUnselectable(node.children);
+        return node.selectable !== false || children.length > 0
+            ? [{ ...node, children }]
+            : [];
+    });
 }
 
 function buildTree(
     nodeSummaries: TimeFilterNodeSummary[],
 ): TimeFilterTreeNode[] {
-    const nodeKeyToPathNode: Record<string, TimeFilterTreeNode> = {};
+    const nodeById: Record<string, TimeFilterTreeNode> = {};
     const roots: TimeFilterTreeNode[] = [];
 
-    for (const nodeSummary of nodeSummaries) {
-        nodeKeyToPathNode[nodeSummary.id] = {
-            key: nodeSummary.id,
-            label: getNodeDisplayLabel(nodeSummary),
-            data: nodeSummary,
+    for (const summary of nodeSummaries) {
+        nodeById[summary.id] = {
+            key: summary.id,
+            label: getDisplayLabel(summary),
+            data: summary,
             children: [],
-            selectable: isNodeSelectable(nodeSummary),
+            selectable: isNodeSelectable(summary),
         };
     }
 
-    for (const nodeSummary of nodeSummaries) {
-        const treeNode = nodeKeyToPathNode[nodeSummary.id]!;
-
-        if (nodeSummary.semantic_parent_id) {
-            const parentNode =
-                nodeKeyToPathNode[nodeSummary.semantic_parent_id];
-            (parentNode?.children ?? roots).push(treeNode);
+    for (const summary of nodeSummaries) {
+        const node = nodeById[summary.id]!;
+        if (summary.semantic_parent_id) {
+            (nodeById[summary.semantic_parent_id]?.children ?? roots).push(
+                node,
+            );
         } else {
-            roots.push(treeNode);
+            roots.push(node);
         }
     }
 
     // Card-group wrapper nodes share the same alias as their first child.
-    for (const node of Object.values(nodeKeyToPathNode)) {
+    for (const node of Object.values(nodeById)) {
         if (
-            node.children.some((child) => {
-                return child.data.alias === node.data.alias;
-            })
+            node.children.some((child) => child.data.alias === node.data.alias)
         ) {
             node.selectable = false;
         }
     }
 
-    function compareNodes(
-        leftNode: TimeFilterTreeNode,
-        rightNode: TimeFilterTreeNode,
-    ): number {
-        const sortOrderDifference =
-            (leftNode.data.sortorder ?? 0) - (rightNode.data.sortorder ?? 0);
-
-        if (sortOrderDifference !== 0) {
-            return sortOrderDifference;
-        }
-
-        return leftNode.label.localeCompare(rightNode.label);
-    }
-
     roots.sort(compareNodes);
-
-    for (const node of Object.values(nodeKeyToPathNode)) {
+    for (const node of Object.values(nodeById)) {
         node.children.sort(compareNodes);
-    }
-
-    function pruneUnselectable(
-        nodes: TimeFilterTreeNode[],
-    ): TimeFilterTreeNode[] {
-        return nodes.flatMap((node) => {
-            const prunedChildren = pruneUnselectable(node.children);
-
-            if (node.selectable !== false || prunedChildren.length > 0) {
-                return [{ ...node, children: prunedChildren }];
-            }
-
-            return [];
-        });
     }
 
     return pruneUnselectable(roots);
@@ -203,8 +160,8 @@ function getNodeLabel(alias: string): string {
 
 function removeNode(alias: string): void {
     emit(
-        UPDATE_EVENT,
-        props.modelValue.filter((value) => value !== alias),
+        "update:modelValue",
+        props.modelValue.filter((v) => v !== alias),
     );
 }
 </script>
@@ -237,16 +194,11 @@ function removeNode(alias: string): void {
                 :options="nodeOptions"
                 class="node-selection__select"
             >
-                <template #value="valueSlotProps">
-                    <span
-                        v-if="
-                            valueSlotProps.value &&
-                            valueSlotProps.value.length > 0
-                        "
-                    >
-                        {{ valueSlotProps.value[0].label }}
+                <template #value="{ value, placeholder }">
+                    <span v-if="value && value.length > 0">
+                        {{ value[0].label }}
                     </span>
-                    <span v-else>{{ valueSlotProps.placeholder }}</span>
+                    <span v-else>{{ placeholder }}</span>
                 </template>
             </TreeSelect>
         </div>
