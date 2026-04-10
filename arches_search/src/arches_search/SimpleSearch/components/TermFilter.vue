@@ -8,6 +8,7 @@ import Button from "primevue/button";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts";
+import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
 
 const { $gettext } = useGettext();
 
@@ -16,14 +17,12 @@ const props = defineProps<{
     filterKey: string;
 }>();
 
-const { setTerm, clearTerm } = useSearchFilters();
+const { setTermFilter, clearTermFilter } = useSearchFilters();
 
-const suggestions = ref<Array<{ id: number; datatype: string; value: string }>>(
+const suggestions = ref<Array<TermSuggestion>>(
     [],
 );
-const selectedTerms = ref<
-    Array<{ id: number; datatype: string; value: string }>
->([]);
+const selectedTerms = ref<Array<TermSuggestion>>([]);
 const inputText = ref("");
 const overLayShown = ref(false);
 
@@ -33,25 +32,25 @@ function termKey(termValue: string) {
 
 function removeTerm(termValue: string) {
     selectedTerms.value = selectedTerms.value.filter(
-        (term) => term.value !== termValue,
+        (term) => term.text !== termValue,
     );
 }
 
 watch(
     selectedTerms,
     (val, prev) => {
-        const oldTerms = new Set(prev.map((term) => term.value));
-        const newTerms = new Set(val.map((term) => term.value));
+        const oldTerms = new Set(prev.map((term) => term.text));
+        const newTerms = new Set(val.map((term) => term.text));
         for (const oldTerm of prev) {
-            if (!newTerms.has(oldTerm.value)) clearTerm(termKey(oldTerm.value));
+            if (!newTerms.has(oldTerm.text)) clearTermFilter(termKey(oldTerm.text));
         }
         // Register any terms that were added
         for (const newTerm of val) {
-            if (!oldTerms.has(newTerm.value)) {
-                setTerm(
-                    termKey(newTerm.value),
-                    newTerm.value,
-                    () => removeTerm(newTerm.value),
+            if (!oldTerms.has(newTerm.text)) {
+                setTermFilter(
+                    termKey(newTerm.text),
+                    newTerm.text,
+                    () => removeTerm(newTerm.text),
                     {
                         style: "background-color: var(--p-sky-500);",
                     },
@@ -71,7 +70,7 @@ async function onComplete(event: AutoCompleteCompleteEvent) {
 }
 
 function onSelect(event: {
-    value: { id: number; datatype: string; value: string };
+    value: TermSuggestion;
 }) {
     selectedTerms.value = [...selectedTerms.value, event.value];
     inputText.value = "";
@@ -87,7 +86,7 @@ function onKeydown(e: KeyboardEvent) {
                 value: {
                     id: Date.now(),
                     datatype: "string",
-                    value: inputText.value.trim(),
+                    text: inputText.value.trim(),
                 },
             });
         }
@@ -130,7 +129,7 @@ function onKeydown(e: KeyboardEvent) {
                         />
                         <div class="suggestion-content">
                             <span class="suggestion-label">{{
-                                option.value
+                                option.text
                             }}</span>
                             <span
                                 v-if="

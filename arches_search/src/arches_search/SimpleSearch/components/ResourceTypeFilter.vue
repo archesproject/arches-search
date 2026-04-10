@@ -27,7 +27,7 @@ async function loadResourceTypes() {
 
 const { setGraph, activeGraph } = useSearchFilters();
 
-function selectGraph(graph: { id: string } | null) {
+function selectGraph(graph: ResourceType | null) {
     if (activeGraph?.value?.id === graph?.id) {
         setGraph(null);
     } else {
