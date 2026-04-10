@@ -19,9 +19,7 @@ const props = defineProps<{
 
 const { setTermFilter, clearTermFilter } = useSearchFilters();
 
-const suggestions = ref<Array<TermSuggestion>>(
-    [],
-);
+const suggestions = ref<Array<TermSuggestion>>([]);
 const selectedTerms = ref<Array<TermSuggestion>>([]);
 const inputText = ref("");
 const overLayShown = ref(false);
@@ -42,7 +40,8 @@ watch(
         const oldTerms = new Set(prev.map((term) => term.text));
         const newTerms = new Set(val.map((term) => term.text));
         for (const oldTerm of prev) {
-            if (!newTerms.has(oldTerm.text)) clearTermFilter(termKey(oldTerm.text));
+            if (!newTerms.has(oldTerm.text))
+                clearTermFilter(termKey(oldTerm.text));
         }
         // Register any terms that were added
         for (const newTerm of val) {
@@ -69,9 +68,7 @@ async function onComplete(event: AutoCompleteCompleteEvent) {
     suggestions.value = await fetchSearchTermSuggestions(event.query);
 }
 
-function onSelect(event: {
-    value: TermSuggestion;
-}) {
+function onSelect(event: { value: TermSuggestion }) {
     selectedTerms.value = [...selectedTerms.value, event.value];
     inputText.value = "";
 }

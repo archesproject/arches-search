@@ -11,7 +11,7 @@ export async function fetchSearchResults({
     graphId = null,
     page = 1,
 }: {
-    terms?: {type: string; text: string; inverted: boolean}[];
+    terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
     graphId?: string | null;
     page?: number;

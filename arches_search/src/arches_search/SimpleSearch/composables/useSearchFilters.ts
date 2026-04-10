@@ -1,7 +1,10 @@
 import { ref, computed, provide, inject } from "vue";
 import type { InjectionKey } from "vue";
 
-import type { ActiveFilter, ResourceType } from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    ActiveFilter,
+    ResourceType,
+} from "@/arches_search/SimpleSearch/types.ts";
 import type {
     GroupPayload,
     SearchResults,
@@ -43,7 +46,13 @@ function createSearchFilters() {
         options?: Record<string, unknown>,
     ) {
         const next = new Map(terms.value);
-        next.set(key, {id: key, text: text, clear: clear, inverted: false, options: options });
+        next.set(key, {
+            id: key,
+            text: text,
+            clear: clear,
+            inverted: false,
+            options: options,
+        });
         terms.value = next;
         currentPage.value = 1;
         search();
@@ -85,9 +94,11 @@ function createSearchFilters() {
         searchTimeout = setTimeout(async () => {
             currentPage.value = page;
             isSearching.value = true;
-            const requestTerms = [...terms.value.values()].map(
-                (term) => ({ type: "string", text: term.text, inverted: term.inverted }),
-            );
+            const requestTerms = [...terms.value.values()].map((term) => ({
+                type: "string",
+                text: term.text,
+                inverted: term.inverted,
+            }));
             const requestQueries = queries.value.values()
                 ? queries.value.values()
                 : {};
