@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from "vue";
+
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
@@ -9,12 +11,18 @@ import type { SortOption } from "@/arches_search/SimpleSearch/types.ts";
 const { $gettext } = useGettext();
 
 defineProps<{
-    sortOptions: SortOption[];
     sortValue: string;
     showFilters: boolean;
     showTime: boolean;
     hasTimeFilter: boolean;
 }>();
+
+const sortOptions = computed<SortOption[]>(() => [
+    { label: $gettext("A to Z"), value: "aToZ" },
+    { label: $gettext("Z to A"), value: "zToA" },
+    { label: $gettext("Newest first"), value: "newest" },
+    { label: $gettext("Oldest first"), value: "oldest" },
+]);
 
 defineEmits<{
     (event: "update:sortValue", value: string): void;

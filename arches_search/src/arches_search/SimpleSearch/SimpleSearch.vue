@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from "vue";
 
-import { useGettext } from "vue3-gettext";
-
 import Splitter from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
 
@@ -26,29 +24,16 @@ import type {
     GraphModel,
     LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import type {
-    AttributeFilterSection,
-    SortOption,
-} from "@/arches_search/SimpleSearch/types.ts";
-
 const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced" as const;
 const TERM_FILTER_KEY = "termfilter" as const;
 const TIME_FILTER_QUERY_KEY = "timeFilter" as const;
 const TERM_FILTER_CONFIG: Record<string, never> = {};
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
-const SORT = {
-    A_TO_Z: "aToZ",
-    Z_TO_A: "zToA",
-    NEWEST: "newest",
-    OLDEST: "oldest",
-} as const;
 
 defineEmits<{
     (event: typeof SWITCH_TO_ADVANCED_EVENT): void;
 }>();
-
-const { $gettext } = useGettext();
 
 const {
     activeGraph,
@@ -79,7 +64,7 @@ const {
     onSplitterResizeEnd,
 } = useSidePanel();
 
-const sortValue = ref<string>(SORT.A_TO_Z);
+const sortValue = ref("aToZ");
 const graphModels = ref<GraphModel[]>([]);
 const timeFilterClauses = ref<LiteralClause[]>([]);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
@@ -103,28 +88,6 @@ const activeGraphSlug = computed<string | null>(() => {
 
     return matchingGraph?.slug ?? null;
 });
-
-const sortOptions = computed<SortOption[]>(() => [
-    { label: $gettext("A to Z"), value: SORT.A_TO_Z },
-    { label: $gettext("Z to A"), value: SORT.Z_TO_A },
-    { label: $gettext("Newest first"), value: SORT.NEWEST },
-    { label: $gettext("Oldest first"), value: SORT.OLDEST },
-]);
-
-const attributeFilterSections = computed<AttributeFilterSection[]>(() => [
-    { id: "color", label: $gettext("Color"), options: [] },
-    {
-        id: "referenceItemType",
-        label: $gettext("Reference Item Type"),
-        options: [],
-    },
-    { id: "mixture", label: $gettext("Mixture"), options: [] },
-    { id: "elements", label: $gettext("Elements"), options: [] },
-    { id: "chemicalFormula", label: $gettext("Chemical Formula"), options: [] },
-    { id: "pigments", label: $gettext("Pigments"), options: [] },
-    { id: "itemCategory", label: $gettext("Item Category"), options: [] },
-    { id: "materials", label: $gettext("Materials"), options: [] },
-]);
 
 const hasTimeFilter = computed<boolean>(
     () => timeFilterClauses.value.length > 0,
@@ -205,7 +168,6 @@ function onRemoveTimeFilter(): void {
         <ActiveFilters />
 
         <ResultsToolbar
-            :sort-options="sortOptions"
             :sort-value="sortValue"
             :show-filters="isAttributeFiltersOpen"
             :show-time="isTimeFilterOpen"
@@ -259,7 +221,6 @@ function onRemoveTimeFilter(): void {
                         />
                         <AttributeFilters
                             v-else-if="isAttributeFiltersActive"
-                            :sections="attributeFilterSections"
                             :selected-options="selectedFilterOptions"
                             @update:selected-options="onSelectedOptionsUpdate"
                         />
@@ -311,10 +272,6 @@ function onRemoveTimeFilter(): void {
     transition:
         opacity 180ms ease,
         translate 240ms ease;
-}
-
-:global([dir="rtl"]) .simple-search .side-panel-content {
-    translate: -1.25rem 0;
 }
 
 .simple-search .side-panel-content.side-panel-content-open {
