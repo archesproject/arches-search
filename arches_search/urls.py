@@ -22,6 +22,7 @@ from arches_search.views.api.relatable_node_tree_for_graph import (
 )
 from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 from arches_search.views.api.saved_search import SavedSearchAPI
+from arches_search.views.api.search_config import NodeFilterConfigAPI
 from arches_search.views.api.term_suggestions import TermSuggestionView
 from arches_search.views.api.simple_search import SimpleSearchAPI
 
@@ -66,6 +67,11 @@ urlpatterns = [
         "api/advanced-search/graph/<uuid:graph_id>/relatable-nodes-tree",
         RelatableNodesTreeForGraphAPI.as_view(),
         name="api-relatable-nodes-tree-for-graph",
+    ),
+    path(
+        "api/advanced-search/graph/<uuid:graph_id>/search-config",
+        NodeFilterConfigAPI.as_view(),
+        name="node_filter_config_for_graph",
     ),
     path(
         "api/resource-descriptors",

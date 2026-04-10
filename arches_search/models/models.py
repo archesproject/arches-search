@@ -525,6 +525,31 @@ class SharedSearchXUser(models.Model):
         ]
 
 
+class NodeFilterConfig(models.Model):
+    id = models.AutoField(primary_key=True)
+    config = models.JSONField(default=dict)
+    slug = models.TextField(default="filtering")
+    graph = models.ForeignKey(
+        "models.GraphModel",
+        on_delete=models.CASCADE,
+        related_name="node_filter_configs",
+    )
+
+    class Meta:
+        managed = True
+        db_table = "arches_search_node_filter_config"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["graph", "slug"],
+                name="unique_node_filter_config_slug_per_graph",
+            )
+        ]
+
+    def __str__(self):
+        graph_name = getattr(self.graph, "name", "Unknown")
+        return f"NodeFilterConfig ({self.slug}) for {graph_name}"
+
+
 class SharedSearchXGroup(models.Model):
     id = models.AutoField(primary_key=True)
     saved_search = models.ForeignKey(
