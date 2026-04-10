@@ -1,64 +1,117 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref, watchEffect } from "vue";
+
 import { useGettext } from "vue3-gettext";
 
+import Splitter from "primevue/splitter";
+import SplitterPanel from "primevue/splitterpanel";
+
+import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
 import AttributeFilters from "@/arches_search/SimpleSearch/components/AttributeFilters.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
-import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
-import Splitter from "primevue/splitter";
-import SplitterPanel from "primevue/splitterpanel";
 
-import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
+
 import type {
     GraphModel,
-    GroupPayload,
     LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
-
 import type {
     AttributeFilterSection,
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-const { $gettext } = useGettext();
+const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced" as const;
+const TERM_FILTER_KEY = "termfilter" as const;
+const TIME_FILTER_QUERY_KEY = "timeFilter" as const;
+const TERM_FILTER_CONFIG: Record<string, never> = {};
+const INITIAL_RESULTS_PAGE = 1;
+const RESULTS_PANEL_MIN_SIZE = 20;
+const SORT = {
+    A_TO_Z: "aToZ",
+    Z_TO_A: "zToA",
+    NEWEST: "newest",
+    OLDEST: "oldest",
+} as const;
 
 defineEmits<{
-    (event: "switch-to-advanced"): void;
+    (event: typeof SWITCH_TO_ADVANCED_EVENT): void;
 }>();
 
+const { $gettext } = useGettext();
+
 const {
-    searchResults,
+    activeGraph,
+    clearQuery,
     isSearching,
     search,
+    searchResults,
     setQuery,
-    clearQuery,
-    activeGraph,
 } = provideSearchFilters();
 
-const sortValue = ref("aToZ");
-const showAttributeFilters = ref(false);
-const showTimeFilter = ref(false);
-const selectedFilterOptions = ref<Record<string, string[]>>({});
+const {
+    isAttributeFiltersActive,
+    isAttributeFiltersOpen,
+    isTimeFilterActive,
+    isTimeFilterOpen,
+    hasOpenSidePanel,
+    resultsPanelSize,
+    visibleSidePanelSize,
+    sidePanelMinSize,
+    splitterStateClass,
+    sidePanelContentClass,
+    sidePanelStyle,
+    closeSidePanel,
+    onToggleAttributeFilters,
+    onToggleTimeFilter,
+    onSplitterResizeStart,
+    onSplitterResize,
+    onSplitterResizeEnd,
+} = useSidePanel();
+
+const sortValue = ref<string>(SORT.A_TO_Z);
 const graphModels = ref<GraphModel[]>([]);
 const timeFilterClauses = ref<LiteralClause[]>([]);
+const selectedFilterOptions = ref<Record<string, string[]>>({});
 
-const sortOptions: SortOption[] = [
-    { label: $gettext("A to Z"), value: "aToZ" },
-    { label: $gettext("Z to A"), value: "zToA" },
-    { label: $gettext("Newest first"), value: "newest" },
-    { label: $gettext("Oldest first"), value: "oldest" },
-];
+const activeGraphId = computed<string | null>(
+    () => activeGraph.value?.id ?? null,
+);
 
-const attributeFilterSections = ref<AttributeFilterSection[]>([
+const activeGraphLabel = computed<string | null>(
+    () => activeGraph.value?.label ?? null,
+);
+
+const activeGraphSlug = computed<string | null>(() => {
+    if (!activeGraphId.value) {
+        return null;
+    }
+
+    const matchingGraph = graphModels.value.find((graphModel) => {
+        return graphModel.graphid === activeGraphId.value;
+    });
+
+    return matchingGraph?.slug ?? null;
+});
+
+const sortOptions = computed<SortOption[]>(() => [
+    { label: $gettext("A to Z"), value: SORT.A_TO_Z },
+    { label: $gettext("Z to A"), value: SORT.Z_TO_A },
+    { label: $gettext("Newest first"), value: SORT.NEWEST },
+    { label: $gettext("Oldest first"), value: SORT.OLDEST },
+]);
+
+const attributeFilterSections = computed<AttributeFilterSection[]>(() => [
     { id: "color", label: $gettext("Color"), options: [] },
     {
         id: "referenceItemType",
@@ -73,162 +126,99 @@ const attributeFilterSections = ref<AttributeFilterSection[]>([
     { id: "materials", label: $gettext("Materials"), options: [] },
 ]);
 
-const activeGraphSlug = computed<string | null>(() => {
-    if (!activeGraph.value) return null;
-    const match = graphModels.value.find(
-        (g) => g.graphid === activeGraph.value!.id,
-    );
-    return match?.slug ?? null;
-});
-
 const hasTimeFilter = computed<boolean>(
     () => timeFilterClauses.value.length > 0,
 );
 
-const TIME_FILTER_SIZE = 40;
-const ATTR_FILTER_SIZE = 20;
-const FLEX_TRANSITION = "240ms ease";
-const BORDER_TRANSITION = "180ms ease";
-
-const resultsPanelSize = computed<number>(() => {
-    let size = 100;
-    if (showTimeFilter.value) size -= timePanelBasis.value;
-    if (showAttributeFilters.value) size -= ATTR_FILTER_SIZE;
-    return size;
+const selectedTimeFilterClause = computed<LiteralClause | null>(() => {
+    return timeFilterClauses.value[0] ?? null;
 });
 
-const timePanelBasis = ref<number>(TIME_FILTER_SIZE);
-const isSplitterResizing = ref(false);
+watchEffect(() => {
+    void initializeSearch();
+});
 
-const visibleTimePanelSize = computed<number>(() =>
-    showTimeFilter.value ? timePanelBasis.value : 0,
-);
+async function initializeSearch(): Promise<void> {
+    await loadGraphModels();
+    search(INITIAL_RESULTS_PAGE);
+}
 
-const timePanelStyle = computed(() => ({
-    flexGrow: "0",
-    flexShrink: "0",
-    flexBasis: showTimeFilter.value ? `${timePanelBasis.value}%` : "0px",
-    maxWidth: showTimeFilter.value ? `${timePanelBasis.value}%` : "0px",
-    minWidth: "0",
-    borderInlineStartColor: showTimeFilter.value
-        ? "var(--p-content-border-color)"
-        : "transparent",
-    transition: isSplitterResizing.value
-        ? `border-inline-start-color ${BORDER_TRANSITION}`
-        : [
-              `flex-basis ${FLEX_TRANSITION}`,
-              `max-width ${FLEX_TRANSITION}`,
-              `border-inline-start-color ${BORDER_TRANSITION}`,
-          ].join(", "),
-    pointerEvents: showTimeFilter.value ? "auto" : "none",
-}));
-
-function syncTimePanelSizeFromEvent(event: { sizes?: number[] }): void {
-    const nextTimePanelSize = event.sizes?.[1];
-
-    if (
-        showTimeFilter.value &&
-        typeof nextTimePanelSize === "number" &&
-        nextTimePanelSize > 0
-    ) {
-        timePanelBasis.value = nextTimePanelSize;
+async function loadGraphModels(): Promise<void> {
+    try {
+        graphModels.value = await getGraphs();
+    } catch {
+        graphModels.value = [];
+        // Non-fatal: time filter degrades gracefully without graph models.
     }
 }
 
-function onSplitterResizeStart(): void {
-    isSplitterResizing.value = true;
+function onRequestPage(page: number): void {
+    search(page);
 }
 
-function onSplitterResize(event: { sizes?: number[] }): void {
-    syncTimePanelSizeFromEvent(event);
+function onSelectedOptionsUpdate(
+    nextSelectedFilterOptions: Record<string, string[]>,
+): void {
+    selectedFilterOptions.value = nextSelectedFilterOptions;
 }
 
-function onSplitterResizeEnd(event: { sizes?: number[] }): void {
-    syncTimePanelSizeFromEvent(event);
-    isSplitterResizing.value = false;
+function onSortValueUpdate(nextSortValue: string): void {
+    sortValue.value = nextSortValue;
 }
 
-function buildTimeFilterPayload(clauses: LiteralClause[]): GroupPayload | null {
-    const slug = activeGraphSlug.value;
-    if (!slug || clauses.length === 0) return null;
-    return {
-        graph_slug: slug,
+function onTimeFilterUpdate(clauses: LiteralClause[]): void {
+    timeFilterClauses.value = clauses;
+
+    const graphSlug = activeGraphSlug.value;
+    if (!graphSlug || clauses.length === 0) {
+        clearQuery(TIME_FILTER_QUERY_KEY);
+        return;
+    }
+
+    setQuery(TIME_FILTER_QUERY_KEY, {
+        graph_slug: graphSlug,
         scope: GraphScopeToken.RESOURCE,
         logic: LogicToken.OR,
         clauses,
         groups: [],
         aggregations: [],
         relationship: null,
-    };
+    });
 }
 
-function onRequestPage(page: number) {
-    search(page);
-}
-
-function onToggleTimeFilter() {
-    showTimeFilter.value = !showTimeFilter.value;
-}
-
-function onTimeFilterUpdate(clauses: LiteralClause[]) {
-    timeFilterClauses.value = clauses;
-    const payload = buildTimeFilterPayload(clauses);
-    if (payload) setQuery("timeFilter", payload);
-    else clearQuery("timeFilter");
-}
-
-function onRemoveTimeFilter() {
+function onRemoveTimeFilter(): void {
     timeFilterClauses.value = [];
-    showTimeFilter.value = false;
-    clearQuery("timeFilter");
+    closeSidePanel();
+    clearQuery(TIME_FILTER_QUERY_KEY);
 }
-
-onMounted(async () => {
-    try {
-        graphModels.value = await getGraphs();
-    } catch {
-        // Non-fatal: time filter degrades gracefully without graph models
-    }
-    search();
-});
 </script>
 
 <template>
     <div class="simple-search">
         <TermFilter
-            :config="{}"
-            filter-key="termfilter"
+            :filter-key="TERM_FILTER_KEY"
+            :config="TERM_FILTER_CONFIG"
         />
 
         <ResourceTypeFilter />
 
         <ActiveFilters />
 
-        <!-- Sort + action buttons -->
         <ResultsToolbar
             :sort-options="sortOptions"
             :sort-value="sortValue"
-            :show-filters="showAttributeFilters"
-            :show-time="showTimeFilter"
+            :show-filters="isAttributeFiltersOpen"
+            :show-time="isTimeFilterOpen"
             :has-time-filter="hasTimeFilter"
-            @update:sort-value="sortValue = $event"
-            @toggle-filters="showAttributeFilters = !showAttributeFilters"
-            @toggle-map="() => {}"
+            @update:sort-value="onSortValueUpdate"
+            @toggle-filters="onToggleAttributeFilters"
             @toggle-time="onToggleTimeFilter"
-            @export="() => {}"
         />
 
-        <!-- Main content: results + optional filter panels -->
-        <div class="simple-search-body">
+        <div class="body">
             <Splitter
-                :key="`splitter-${showAttributeFilters}`"
-                :class="[
-                    'simple-search-splitter',
-                    {
-                        'time-filter-open': showTimeFilter,
-                        'time-filter-closed': !showTimeFilter,
-                    },
-                ]"
+                class="splitter"
+                :class="splitterStateClass"
                 @resizestart="onSplitterResizeStart"
                 @resize="onSplitterResize"
                 @resizeend="onSplitterResizeEnd"
@@ -236,7 +226,7 @@ onMounted(async () => {
                 <SplitterPanel
                     class="results-pane"
                     :size="resultsPanelSize"
-                    :min-size="20"
+                    :min-size="RESULTS_PANEL_MIN_SIZE"
                 >
                     <SearchResults
                         :results="searchResults"
@@ -247,43 +237,33 @@ onMounted(async () => {
                 </SplitterPanel>
 
                 <SplitterPanel
-                    class="time-filter-pane"
-                    :size="visibleTimePanelSize"
-                    :min-size="showTimeFilter ? 15 : 0"
-                    :style="timePanelStyle"
+                    class="side-panel"
+                    :size="visibleSidePanelSize"
+                    :min-size="sidePanelMinSize"
+                    :style="sidePanelStyle"
                 >
                     <div
-                        :class="[
-                            'time-filter-panel-inner',
-                            { 'time-filter-panel-inner-open': showTimeFilter },
-                        ]"
-                        :aria-hidden="!showTimeFilter"
+                        class="side-panel-content"
+                        :class="sidePanelContentClass"
+                        :aria-hidden="!hasOpenSidePanel"
                     >
                         <TimeFilter
+                            v-if="isTimeFilterActive"
                             :graph-slug="activeGraphSlug"
-                            :graph-id="activeGraph?.id ?? null"
-                            :graph-label="activeGraph?.label ?? null"
-                            :is-open="showTimeFilter"
-                            :model-value="timeFilterClauses[0] ?? null"
+                            :graph-id="activeGraphId"
+                            :graph-label="activeGraphLabel"
+                            :is-open="isTimeFilterOpen"
+                            :model-value="selectedTimeFilterClause"
                             @update:model-value="onTimeFilterUpdate"
                             @remove="onRemoveTimeFilter"
                         />
+                        <AttributeFilters
+                            v-else-if="isAttributeFiltersActive"
+                            :sections="attributeFilterSections"
+                            :selected-options="selectedFilterOptions"
+                            @update:selected-options="onSelectedOptionsUpdate"
+                        />
                     </div>
-                </SplitterPanel>
-
-                <SplitterPanel
-                    v-if="showAttributeFilters"
-                    class="filters-pane"
-                    :size="ATTR_FILTER_SIZE"
-                    :min-size="10"
-                >
-                    <AttributeFilters
-                        :sections="attributeFilterSections"
-                        :selected-options="selectedFilterOptions"
-                        @update:selected-options="
-                            selectedFilterOptions = $event
-                        "
-                    />
                 </SplitterPanel>
             </Splitter>
         </div>
@@ -292,62 +272,58 @@ onMounted(async () => {
 
 <style scoped>
 .simple-search {
-    --time-filter-inline-offset: 1.25rem;
     display: flex;
     flex-direction: column;
-    height: 100%;
+    block-size: 100%;
     font-size: var(--p-arches-search-font-size);
 }
 
-:global([dir="rtl"]) .simple-search {
-    --time-filter-inline-offset: -1.25rem;
-}
-
-.simple-search-body {
+.simple-search .body {
     display: flex;
     flex: 1;
     overflow: hidden;
 }
 
-.simple-search-splitter {
+.simple-search .splitter {
     flex: 1;
     overflow: hidden;
     border-radius: 0;
 }
 
-.results-pane {
+.simple-search .results-pane {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-inline-size: 0;
     background-color: var(--p-content-background);
-    min-width: 0;
 }
 
-.time-filter-pane {
+.simple-search .side-panel {
     overflow: hidden;
     border-inline-start: 0.0625rem solid var(--p-content-border-color);
 }
 
-.filters-pane {
-    overflow-y: auto;
-}
-
-.time-filter-panel-inner {
-    height: 100%;
+.simple-search .side-panel-content {
+    block-size: 100%;
     overflow-y: auto;
     opacity: 0;
-    translate: var(--time-filter-inline-offset) 0;
+    translate: 1.25rem 0;
     transition:
         opacity 180ms ease,
         translate 240ms ease;
 }
 
-.time-filter-panel-inner-open {
+:global([dir="rtl"]) .simple-search .side-panel-content {
+    translate: -1.25rem 0;
+}
+
+.simple-search .side-panel-content.side-panel-content-open {
     opacity: 1;
     translate: 0 0;
 }
 
-.simple-search-splitter.time-filter-closed
+.simple-search
+    .splitter.side-panel-closed
     :deep(.results-pane + .p-splitter-gutter) {
     display: none;
 }
