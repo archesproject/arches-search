@@ -16,17 +16,16 @@ const props = defineProps<{
     filterKey: string;
 }>();
 
-const { setTerm, clearTerm, search } = useSearchFilters();
+const { setTerm, clearTerm } = useSearchFilters();
 
 const suggestions = ref<Array<{ id: number; datatype: string; value: string }>>(
     [],
 );
-
 const selectedTerms = ref<
     Array<{ id: number; datatype: string; value: string }>
 >([]);
-
 const inputText = ref("");
+const overLayShown = ref(false);
 
 function termKey(termValue: string) {
     return `${props.filterKey}:${termValue}`;
@@ -79,7 +78,20 @@ function onSelect(event: {
 }
 
 function onKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter") search();
+    // this only fires if you beat the opening of the suggestion dropdown
+    if (e.key === "Enter" && !overLayShown.value) {
+        if (suggestions.value.length > 1) {
+            onSelect({ value: suggestions.value[0] });
+        } else if (inputText.value.trim()) {
+            onSelect({
+                value: {
+                    id: Date.now(),
+                    datatype: "string",
+                    value: inputText.value.trim(),
+                },
+            });
+        }
+    }
 }
 </script>
 
@@ -94,9 +106,12 @@ function onKeydown(e: KeyboardEvent) {
                 :placeholder="$gettext('Find an item, sample, supplier\u2026')"
                 class="search-input"
                 fluid
+                auto-option-focus="true"
                 @complete="onComplete"
-                @item-select="onSelect"
+                @option-select="onSelect"
                 @keydown="onKeydown"
+                @before-show="() => (overLayShown = true)"
+                @before-hide="() => (overLayShown = false)"
             >
                 <template #option="{ option }">
                     <div class="suggestion-option">
@@ -136,7 +151,7 @@ function onKeydown(e: KeyboardEvent) {
         <Button
             :label="$gettext('Search')"
             class="search-button"
-            @click="search"
+            @click="onKeydown({ key: 'Enter' } as KeyboardEvent)"
         />
     </div>
 </template>
