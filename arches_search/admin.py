@@ -1,7 +1,10 @@
 from django.contrib import admin
+from django.db import models
+from django.forms import Textarea
 
 from arches_search.models.models import (
     SavedSearch,
+    NodeFilterConfig,
     SharedSearchXUser,
     SharedSearchXGroup,
 )
@@ -24,6 +27,16 @@ class SavedSearchAdmin(admin.ModelAdmin):
     search_fields = ["name", "description"]
     readonly_fields = ["savedsearchid", "created_at"]
     inlines = [SharedSearchXUserInline, SharedSearchXGroupInline]
+
+
+@admin.register(NodeFilterConfig)
+class NodeFilterConfigAdmin(admin.ModelAdmin):
+    list_display = ["graph", "slug"]
+    list_filter = ["slug"]
+    search_fields = ["graph__name"]
+    formfield_overrides = {
+        models.JSONField: {"widget": Textarea(attrs={"rows": 20, "cols": 80})},
+    }
 
 
 @admin.register(SharedSearchXUser)
