@@ -20,7 +20,7 @@ import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
 const EMIT_DEBOUNCE_MS = 400;
 const SLIDER_START_DATE = "1967-04-01";
 
-const props = defineProps<{
+const { graphSlug, graphId, graphLabel, isOpen, modelValue } = defineProps<{
     graphSlug: string | null;
     graphId: string | null;
     graphLabel: string | null;
@@ -60,18 +60,23 @@ const sliderValue = computed<[number, number]>(() => {
 });
 
 watch(
-    () => props.modelValue,
+    () => modelValue,
     (clause) => {
         isFilterActive.value = Boolean(clause);
-        lastEmittedJson = clause ? JSON.stringify([clause]) : "";
+        lastEmittedJson = "";
+
+        if (clause) {
+            lastEmittedJson = JSON.stringify([clause]);
+        }
 
         const [defaultFrom, defaultTo] = defaultRange();
-        const from = clause
-            ? parseStoredDate(clause.operands[0]?.value) ?? defaultFrom
-            : defaultFrom;
-        const to = clause
-            ? parseStoredDate(clause.operands[1]?.value) ?? from
-            : defaultTo;
+        let from = defaultFrom;
+        let to = defaultTo;
+
+        if (clause) {
+            from = parseStoredDate(clause.operands[0]?.value) ?? defaultFrom;
+            to = parseStoredDate(clause.operands[1]?.value) ?? from;
+        }
 
         const next = normalizeRange(
             dayjs(from).startOf("day").toDate(),
@@ -91,7 +96,7 @@ watch(
 );
 
 watch(
-    () => props.graphId,
+    () => graphId,
     async (id) => {
         const thisLoad = ++nodeLoadId;
         selectedNodeAliases.value = [];
@@ -120,21 +125,16 @@ watch(
 );
 
 watch(
-    () => props.isOpen,
+    () => isOpen,
     (isOpen) => {
         if (isOpen) isFilterActive.value = true;
     },
 );
 
 watch(
-    [
-        selectedRange,
-        () => props.graphSlug,
-        selectedNodeAliases,
-        () => props.isOpen,
-    ],
+    [selectedRange, () => graphSlug, selectedNodeAliases, () => isOpen],
     () => {
-        if (!props.graphSlug || !isFilterActive.value) return;
+        if (!graphSlug || !isFilterActive.value) return;
 
         const nextClauses = buildClauses();
         if (!nextClauses.length) return;
@@ -163,9 +163,12 @@ function clamp(value: number, min: number, max: number): number {
 function normalizeRange(a: Date, b: Date): [Date, Date] {
     const start = dayjs(a).startOf("day");
     const end = dayjs(b).startOf("day");
-    return start.isAfter(end)
-        ? [end.toDate(), start.toDate()]
-        : [start.toDate(), end.toDate()];
+
+    if (start.isAfter(end)) {
+        return [end.toDate(), start.toDate()];
+    }
+
+    return [start.toDate(), end.toDate()];
 }
 
 function defaultRange(): [Date, Date] {
@@ -178,17 +181,18 @@ function defaultRange(): [Date, Date] {
 }
 
 function buildClauses(): LiteralClause[] {
-    if (!props.graphSlug) return [];
+    const slug = graphSlug;
+    if (!slug) return [];
 
     const from = dayjs(selectedRange.value[0]).format("YYYY-MM-DD");
     const to = dayjs(selectedRange.value[1]).format("YYYY-MM-DD");
 
     if (selectedNodeAliases.value.length === 0) {
-        return [buildDateSearchClause(props.graphSlug, "BETWEEN", from, to)];
+        return [buildDateSearchClause(slug, "BETWEEN", from, to)];
     }
 
     return selectedNodeAliases.value.map((alias) =>
-        buildNodeDateSearchClause(props.graphSlug!, alias, "BETWEEN", from, to),
+        buildNodeDateSearchClause(slug, alias, "BETWEEN", from, to),
     );
 }
 
@@ -227,40 +231,40 @@ function onNodeSelectionUpdate(aliases: string[]): void {
 <template>
     <div class="time-filter">
         <div
-            v-if="props.graphSlug"
-            class="time-filter__content"
+            v-if="graphSlug"
+            class="time-filter-content"
         >
-            <h3 class="time-filter__title">
+            <h3 class="time-filter-title">
                 {{ $gettext("Time Filter") }}
             </h3>
 
             <NodeSelection
-                v-if="props.graphId"
-                :key="props.graphId"
+                v-if="graphId"
+                :key="graphId"
                 :model-value="selectedNodeAliases"
-                :graph-label="props.graphLabel"
+                :graph-label="graphLabel"
                 :nodes="graphNodes"
                 :loading="isLoadingNodes"
-                class="time-filter__section"
+                class="time-filter-section"
                 @update:model-value="onNodeSelectionUpdate"
             />
 
-            <section class="time-filter__section time-filter__section--range">
-                <h4 class="time-filter__section-heading">
+            <section class="time-filter-section">
+                <h4 class="time-filter-section-heading">
                     {{ $gettext("Time Span") }}
                 </h4>
 
-                <div class="time-filter__section-body">
+                <div class="time-filter-section-body">
                     <TimeSlider
                         :model-value="sliderValue"
                         :bounds="sliderBounds"
                         @update:model-value="onSliderUpdate"
                     />
 
-                    <div class="time-filter__calendar-row">
+                    <div class="time-filter-calendar-row">
                         <DatePicker
                             :model-value="selectedRange[0]"
-                            class="time-filter__date-picker"
+                            class="time-filter-date-picker"
                             :placeholder="$gettext('From...')"
                             :show-icon="true"
                             icon-display="input"
@@ -270,7 +274,7 @@ function onNodeSelectionUpdate(aliases: string[]): void {
 
                         <DatePicker
                             :model-value="selectedRange[1]"
-                            class="time-filter__date-picker"
+                            class="time-filter-date-picker"
                             :placeholder="$gettext('To...')"
                             :show-icon="true"
                             icon-display="input"
@@ -284,7 +288,7 @@ function onNodeSelectionUpdate(aliases: string[]): void {
 
         <span
             v-else
-            class="time-filter__empty-state"
+            class="time-filter-empty-state"
         >
             {{ $gettext("Select a resource type to use the time filter.") }}
         </span>
@@ -293,101 +297,83 @@ function onNodeSelectionUpdate(aliases: string[]): void {
 
 <style scoped>
 .time-filter {
-    --time-filter-body-size: 1.0625rem;
-    --time-filter-label-size: 1.125rem;
-    --time-filter-control-size: 1.0625rem;
-    --time-filter-chip-size: 1.125rem;
-    --time-filter-title-size: 1.5rem;
-    --time-filter-section-size: 1.3125rem;
-    --time-filter-heading-rule-color: var(--p-content-border-color);
-    --time-filter-section-radius: 0.75rem;
-    --time-filter-section-padding: 1rem;
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
     padding: 2rem;
     background-color: var(--p-content-background);
-    font-size: var(--time-filter-body-size);
+    font-size: 1rem;
     line-height: 1.45;
 }
 
-.time-filter__content {
+.time-filter-content {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
 }
 
-.time-filter__title {
-    display: block;
-    inline-size: 100%;
+.time-filter-title {
     margin: 0;
-    padding-block-end: 0.75rem;
-    border-block-end: 0.125rem solid var(--time-filter-heading-rule-color);
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--p-content-border-color);
     font-weight: 700;
-    font-size: var(--time-filter-title-size);
-    letter-spacing: 0.01em;
+    font-size: 1.5rem;
     color: var(--p-text-color);
 }
 
-.time-filter__section {
+.time-filter-section {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    padding: var(--time-filter-section-padding);
+    padding: 1rem;
 }
 
-.time-filter__section--range {
-    gap: 1rem;
-}
-
-.time-filter__section-heading {
-    display: block;
-    inline-size: 100%;
+.time-filter-section-heading {
     margin: 0;
-    padding-block-end: 0.5rem;
-    border-block-end: 0.0625rem solid var(--time-filter-heading-rule-color);
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--p-content-border-color);
     font-weight: 600;
-    font-size: var(--time-filter-section-size);
+    font-size: 1.25rem;
     color: var(--p-text-color);
 }
 
-.time-filter__section-body {
+.time-filter-section-body {
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
 
-.time-filter__calendar-row {
+.time-filter-calendar-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.875rem;
+    gap: 1rem;
 }
 
-.time-filter__date-picker {
+.time-filter-date-picker {
     flex: 1 1 13rem;
     min-width: 13rem;
-    font-size: var(--time-filter-control-size);
+    font-size: 1rem;
 }
 
-.time-filter__date-picker :deep(.p-inputtext),
-.time-filter__date-picker :deep(.p-datepicker-dropdown) {
-    font-size: var(--time-filter-control-size);
+.time-filter-date-picker :deep(.p-inputtext),
+.time-filter-date-picker :deep(.p-datepicker-dropdown) {
+    font-size: 1rem;
 }
 
-.time-filter__date-picker :deep(.p-inputtext) {
-    min-block-size: 3rem;
-    padding-inline: 0.9375rem;
+.time-filter-date-picker :deep(.p-inputtext) {
+    min-height: 3rem;
+    padding: 0 1rem;
 }
 
-.time-filter__date-picker :deep(.p-datepicker-dropdown) {
-    min-inline-size: 3rem;
+.time-filter-date-picker :deep(.p-datepicker-dropdown) {
+    min-width: 3rem;
 }
 
-.time-filter__empty-state {
-    font-size: var(--time-filter-label-size);
-    padding: var(--time-filter-section-padding);
-    border: 0.0625rem solid var(--time-filter-heading-rule-color);
-    border-radius: var(--time-filter-section-radius);
+.time-filter-empty-state {
+    padding: 1rem;
+    border: 1px solid var(--p-content-border-color);
+    border-radius: 0.5rem;
+    font-size: 1rem;
     color: var(--p-text-muted-color);
     line-height: 1.5;
 }
