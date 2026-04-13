@@ -281,6 +281,24 @@ export function addEmptySearchModelsClauseToGroup(
     return { ...groupPayload, clauses: [...groupPayload.clauses, emptyClause] };
 }
 
+export function addEmptyDateFilterClauseToGroup(
+    groupPayload: GroupPayload,
+): GroupPayload {
+    const emptyClause: ClausePayload = {
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
+        subject: {
+            type: ClauseSubjectTypeToken.SEARCH_MODELS,
+            graph_slug: groupPayload.graph_slug,
+            node_alias: "",
+            search_models: [...SEARCH_MODELS_DATE],
+        },
+        operator: "",
+        operands: [] as LiteralOperand[],
+    };
+    return { ...groupPayload, clauses: [...groupPayload.clauses, emptyClause] };
+}
+
 export function removeClauseAtIndex(
     groupPayload: GroupPayload,
     clauseIndex: number,

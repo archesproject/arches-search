@@ -28,11 +28,12 @@ class SimpleSearchAPI(APIBase):
         results_queryset = None
         if terms:
             if graph_id:
-                results_queryset = get_related_resources_by_text(terms, graph_id)
+                term_texts = [term["text"] for term in terms]
+                results_queryset = get_related_resources_by_text(term_texts, graph_id)
             else:
                 initial_match_ids = None
                 for term in terms:
-                    sq = SearchQuery(term, search_type="plain")
+                    sq = SearchQuery(term["text"], search_type="plain")
                     if initial_match_ids is None:
                         initial_match_ids = TermSearch.objects.filter(
                             search_vector=sq

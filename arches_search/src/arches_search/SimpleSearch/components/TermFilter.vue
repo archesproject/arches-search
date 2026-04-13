@@ -1,56 +1,65 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import AutoComplete from "primevue/autocomplete";
-import type { AutoCompleteCompleteEvent } from "primevue/autocomplete";
 import Button from "primevue/button";
 
-import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts";
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
-const { $gettext } = useGettext();
+import type { AutoCompleteCompleteEvent } from "primevue/autocomplete";
+import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
+
+interface TermSuggestionSelectEvent {
+    value: TermSuggestion;
+}
+
+interface TermSuggestionAdditionalInfo {
+    path?: unknown;
+}
 
 const props = defineProps<{
     filterKey: string;
 }>();
 
-const { setTerm, clearTerm, search } = useSearchFilters();
+const { $gettext } = useGettext();
+const { setTermFilter, clearTermFilter } = useSearchFilters();
 
-type Suggestion = { text: string; datatype: string; value: string };
-
-const suggestions = ref<Suggestion[]>([]);
-
-const selectedTerms = ref<Suggestion[]>([]);
-
+const suggestions = ref<Array<TermSuggestion>>([]);
+const selectedTerms = ref<Array<TermSuggestion>>([]);
 const inputText = ref("");
+const isOverlayShown = ref(false);
+const hasSuggestionLoadError = ref(false);
 
-function termKey(termValue: string) {
-    return `${props.filterKey}:${termValue}`;
-}
-
-function removeTerm(termValue: string) {
-    selectedTerms.value = selectedTerms.value.filter(
-        (t) => t.value !== termValue,
-    );
-}
+const emptySearchMessage = computed(() =>
+    hasSuggestionLoadError.value
+        ? $gettext("Search suggestions are unavailable.")
+        : undefined,
+);
 
 watch(
     selectedTerms,
-    (val, prev) => {
-        // clearTerm any terms that were removed
-        const oldTerms = new Set(prev.map((t) => t.value));
-        const newTerms = new Set(val.map((t) => t.value));
-        for (const oldTerm of prev) {
-            if (!newTerms.has(oldTerm.value)) clearTerm(termKey(oldTerm.value));
+    (selectedTermValues, previousSelectedTerms) => {
+        const previousTermTexts = new Set(
+            previousSelectedTerms.map((term) => term.text),
+        );
+        const selectedTermTexts = new Set(
+            selectedTermValues.map((term) => term.text),
+        );
+
+        for (const previousTerm of previousSelectedTerms) {
+            if (!selectedTermTexts.has(previousTerm.text)) {
+                clearTermFilter(termKey(previousTerm.text));
+            }
         }
-        // Register any terms that were added
-        for (const newTerm of val) {
-            if (!oldTerms.has(newTerm.value)) {
-                setTerm(
-                    termKey(newTerm.value),
-                    newTerm.value,
-                    () => removeTerm(newTerm.value),
+
+        for (const selectedTerm of selectedTermValues) {
+            if (!previousTermTexts.has(selectedTerm.text)) {
+                setTermFilter(
+                    termKey(selectedTerm.text),
+                    selectedTerm.text,
+                    () => removeTerm(selectedTerm.text),
                     {
                         style: "background-color: var(--p-sky-500);",
                     },
@@ -61,21 +70,98 @@ watch(
     { deep: true },
 );
 
-async function onComplete(event: AutoCompleteCompleteEvent) {
-    if (!event.query.trim()) {
-        suggestions.value = [];
-        return;
-    }
-    suggestions.value = await fetchSearchTermSuggestions(event.query);
+function termKey(termValue: string): string {
+    return `${props.filterKey}:${termValue}`;
 }
 
-function onSelect(event: { value: Suggestion }) {
+function removeTerm(termValue: string): void {
+    selectedTerms.value = selectedTerms.value.filter(
+        (term) => term.text !== termValue,
+    );
+}
+
+async function onComplete(event: AutoCompleteCompleteEvent): Promise<void> {
+    const trimmedQuery = event.query.trim();
+
+    if (!trimmedQuery) {
+        suggestions.value = [];
+        hasSuggestionLoadError.value = false;
+        return;
+    }
+
+    try {
+        hasSuggestionLoadError.value = false;
+        suggestions.value = await fetchSearchTermSuggestions(trimmedQuery);
+    } catch (error) {
+        console.error(error);
+        suggestions.value = [];
+        hasSuggestionLoadError.value = true;
+    }
+}
+
+function onSelect(event: TermSuggestionSelectEvent): void {
     selectedTerms.value = [...selectedTerms.value, event.value];
     inputText.value = "";
 }
 
-function onKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter") search();
+function onKeydown(event: KeyboardEvent): void {
+    if (event.key !== "Enter" || isOverlayShown.value) {
+        return;
+    }
+
+    submitSearch();
+}
+
+function submitSearch(): void {
+    const trimmedInputText = inputText.value.trim();
+
+    if (suggestions.value.length > 1) {
+        onSelect({ value: suggestions.value[0] });
+        return;
+    }
+
+    if (trimmedInputText) {
+        onSelect({
+            value: {
+                id: Date.now(),
+                datatype: "string",
+                text: trimmedInputText,
+            },
+        });
+    }
+}
+
+function showOverlay(): void {
+    isOverlayShown.value = true;
+}
+
+function hideOverlay(): void {
+    isOverlayShown.value = false;
+}
+
+function isConceptSuggestion(suggestion: TermSuggestion): boolean {
+    return suggestion.datatype === "reference";
+}
+
+function isTermSuggestion(suggestion: TermSuggestion): boolean {
+    return suggestion.datatype === "term";
+}
+
+function getSuggestionPath(suggestion: TermSuggestion): string | null {
+    const additionalInfo = suggestion.addtional_info as
+        | TermSuggestionAdditionalInfo
+        | undefined;
+    const suggestionPath = additionalInfo?.path;
+
+    if (
+        !Array.isArray(suggestionPath) ||
+        suggestionPath.length === 0 ||
+        !suggestionPath.every((pathItem) => typeof pathItem === "string")
+    ) {
+        return null;
+    }
+
+    return suggestionPath.join(" > ");
 }
 </script>
 
@@ -85,24 +171,29 @@ function onKeydown(e: KeyboardEvent) {
             <i class="pi pi-search search-icon" />
             <AutoComplete
                 v-model="inputText"
-                :suggestions="suggestions"
-                option-label="text"
-                :placeholder="$gettext('Find an item, sample, supplier\u2026')"
                 class="search-input"
-                fluid
+                option-label="text"
+                :auto-option-focus="true"
+                :empty-search-message="emptySearchMessage"
+                :fluid="true"
+                :placeholder="$gettext('Find an item, sample, supplier\u2026')"
+                :suggestions="suggestions"
                 @complete="onComplete"
-                @item-select="onSelect"
+                @option-select="onSelect"
                 @keydown="onKeydown"
+                @before-show="showOverlay"
+                @before-hide="hideOverlay"
             >
                 <template #option="{ option }">
                     <div class="suggestion-option">
                         <span
-                            v-if="option.datatype === 'reference'"
+                            v-if="isConceptSuggestion(option)"
                             class="suggestion-icon suggestion-icon--concept"
-                            >C</span
                         >
+                            C
+                        </span>
                         <i
-                            v-else-if="option.datatype === 'term'"
+                            v-else-if="isTermSuggestion(option)"
                             class="pi pi-hashtag suggestion-icon suggestion-icon--term"
                         />
                         <i
@@ -110,20 +201,15 @@ function onKeydown(e: KeyboardEvent) {
                             class="pi pi-search suggestion-icon suggestion-icon--string"
                         />
                         <div class="suggestion-content">
-                            <span class="suggestion-label">{{
-                                option.value
-                            }}</span>
+                            <span class="suggestion-label">
+                                {{ option.text }}
+                            </span>
                             <span
-                                v-if="
-                                    option.addtional_info &&
-                                    option.addtional_info.path &&
-                                    option.addtional_info.path.length > 0
-                                "
+                                v-if="getSuggestionPath(option)"
                                 class="suggestion-path"
-                                >{{
-                                    option.addtional_info.path.join(" > ")
-                                }}</span
                             >
+                                {{ getSuggestionPath(option) }}
+                            </span>
                         </div>
                     </div>
                 </template>
@@ -132,7 +218,8 @@ function onKeydown(e: KeyboardEvent) {
         <Button
             :label="$gettext('Search')"
             class="search-button"
-            @click="() => search()"
+            type="button"
+            @click="submitSearch"
         />
     </div>
 </template>
@@ -147,7 +234,7 @@ function onKeydown(e: KeyboardEvent) {
     border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
-.search-bar-inner {
+.search-bar .search-bar-inner {
     display: flex;
     align-items: center;
     flex: 1;
@@ -156,17 +243,17 @@ function onKeydown(e: KeyboardEvent) {
     padding: 0 1rem;
 }
 
-.search-icon {
+.search-bar .search-icon {
     font-size: var(--p-arches-search-font-size);
-    margin-right: 0.8rem;
+    margin-inline-end: 0.8rem;
     flex-shrink: 0;
 }
 
-.search-input {
+.search-bar .search-input {
     flex: 1;
 }
 
-:deep(.search-input .p-autocomplete-input) {
+.search-bar :deep(.search-input .p-autocomplete-input) {
     border: none;
     box-shadow: none;
     padding: 1rem 2rem;
@@ -175,25 +262,25 @@ function onKeydown(e: KeyboardEvent) {
     background-color: var(--p-content-background);
 }
 
-:deep(.search-input .p-autocomplete-input:focus) {
+.search-bar :deep(.search-input .p-autocomplete-input:focus) {
     outline: none;
     box-shadow: none;
 }
 
-.search-button {
+.search-bar .search-button {
     font-size: var(--p-arches-search-font-size);
     padding: 1rem 2rem;
     border-radius: 0.4rem;
     white-space: nowrap;
 }
 
-.suggestion-option {
+.search-bar .suggestion-option {
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
 }
 
-.suggestion-icon {
+.search-bar .suggestion-icon {
     flex-shrink: 0;
     width: 1.75rem;
     height: 1.75rem;
@@ -203,31 +290,31 @@ function onKeydown(e: KeyboardEvent) {
     border-radius: 50%;
     font-size: 0.8rem;
     font-weight: 700;
-    margin-top: 0.1rem;
+    margin-block-start: 0.1rem;
 }
 
-.suggestion-icon--concept {
+.search-bar .suggestion-icon--concept {
     background-color: var(--p-primary-color);
-    color: white;
+    color: var(--p-primary-contrast-color, var(--p-surface-0));
 }
 
-.suggestion-icon--term {
+.search-bar .suggestion-icon--term {
     background-color: var(--p-surface-200);
     color: var(--p-surface-700);
 }
 
-.suggestion-icon--string {
+.search-bar .suggestion-icon--string {
     background-color: var(--p-surface-200);
     color: var(--p-surface-700);
 }
 
-.suggestion-content {
+.search-bar .suggestion-content {
     display: flex;
     flex-direction: column;
     min-width: 0;
 }
 
-.suggestion-label {
+.search-bar .suggestion-label {
     font-weight: 500;
     color: var(--p-text-color);
     white-space: nowrap;
@@ -235,7 +322,7 @@ function onKeydown(e: KeyboardEvent) {
     text-overflow: ellipsis;
 }
 
-.suggestion-path {
+.search-bar .suggestion-path {
     font-size: 1.1rem;
     color: var(--p-text-muted-color, var(--p-surface-500));
     white-space: nowrap;

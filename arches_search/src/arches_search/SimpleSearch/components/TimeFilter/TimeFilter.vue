@@ -184,8 +184,12 @@ function buildClauses(): LiteralClause[] {
     const slug = graphSlug;
     if (!slug) return [];
 
-    const from = dayjs(selectedRange.value[0]).format("YYYY-MM-DD");
-    const to = dayjs(selectedRange.value[1]).format("YYYY-MM-DD");
+    const [rangeStart, rangeEnd] = normalizeRange(
+        selectedRange.value[0],
+        selectedRange.value[1],
+    );
+    const from = dayjs(rangeStart).format("YYYY-MM-DD");
+    const to = dayjs(rangeEnd).format("YYYY-MM-DD");
 
     if (selectedNodeAliases.value.length === 0) {
         return [buildDateSearchClause(slug, "BETWEEN", from, to)];

@@ -96,7 +96,7 @@ class TermSuggestionView(View):
                 {
                     "id": result["id"],
                     "datatype": result["datatype"],
-                    "value": result["value"],
+                    "text": result["value"],
                     "addtional_info": addtional_info,
                 }
             )

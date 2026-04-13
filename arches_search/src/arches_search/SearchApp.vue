@@ -10,7 +10,7 @@ const SIMPLE = "simple";
 const ADVANCED = "advanced";
 type SearchView = typeof SIMPLE | typeof ADVANCED;
 
-const activeView = ref<SearchView>(ADVANCED);
+const activeView = ref<SearchView>(SIMPLE);
 </script>
 
 <template>
@@ -77,6 +77,7 @@ const activeView = ref<SearchView>(ADVANCED);
 }
 
 :deep(.p-card-body) {
+    flex: 1;
     padding: 0;
     overflow-y: hidden;
 }

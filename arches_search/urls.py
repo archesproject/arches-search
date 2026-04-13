@@ -88,9 +88,9 @@ urlpatterns = [
         name="term_suggestion_search",
     ),
     path(
-        "api/simple-search",
+        "api/arches-search",
         SimpleSearchAPI.as_view(),
-        name="simple_search",
+        name="arches_search",
     ),
 ]
 
