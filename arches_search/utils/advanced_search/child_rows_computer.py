@@ -37,8 +37,7 @@ class ChildRowsComputer:
                     continue
 
                 for clause_payload in current_group["clauses"]:
-                    clause_type_token = clause_payload["type"]
-                    if clause_type_token == CLAUSE_TYPE_LITERAL:
+                    if clause_payload["type"] == CLAUSE_TYPE_LITERAL:
                         subject = clause_payload["subject"]
                         if subject.get("type") == SUBJECT_TYPE_SEARCH_MODELS:
                             continue
@@ -46,8 +45,6 @@ class ChildRowsComputer:
                         if clause_graph_slug != terminal_graph_slug:
                             return None
                         literal_clauses.append(clause_payload)
-                    elif clause_type_token == CLAUSE_TYPE_RELATED:
-                        continue
                     else:
                         continue
 

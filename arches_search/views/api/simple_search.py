@@ -50,11 +50,14 @@ class SimpleSearchAPI(APIBase):
         if query:
             if results_queryset is None:
                 base = ResourceInstance.objects.all()
+
                 if graph_id:
                     base = base.filter(graph_id=graph_id)
+
                 results_queryset = base
+
             results_queryset = AdvancedSearchQueryCompiler(query).compile(
-                results_queryset.values_list("resourceinstanceid")
+                results_queryset
             )
 
         if not terms and not query:
