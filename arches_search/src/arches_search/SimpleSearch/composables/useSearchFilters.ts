@@ -3,6 +3,9 @@ import { computed, inject, provide, ref } from "vue";
 import { fetchSearchResults } from "@/arches_search/SimpleSearch/api.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
+import {
+    LogicToken,
+} from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     GroupPayload,
     SearchResults,
@@ -151,7 +154,18 @@ function createSearchFilters(): SearchFilters {
     }
 
     function getRequestQuery(): GroupPayload | undefined {
-        return queries.value.values().next().value;
+        const queryList = [...queries.value.values()];
+        if (queryList.length === 0) return undefined;
+        if (queryList.length === 1) return queryList[0];
+        return {
+            graph_slug: queryList[0].graph_slug,
+            scope: queryList[0].scope,
+            logic: LogicToken.AND,
+            clauses: [],
+            groups: queryList,
+            aggregations: [],
+            relationship: null,
+        };
     }
 
     return {

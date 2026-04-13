@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watchEffect } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 
 import Splitter from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
@@ -17,13 +17,22 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    fetchNodeFilterConfig,
+    fetchControlledListItems,
+} from "@/arches_search/SimpleSearch/api.ts";
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 
 import type {
     GraphModel,
+    GroupPayload,
     LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import type {
+    AttributeFilterSection,
+    NodeFilterConfigNode,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced";
 const TERM_FILTER_KEY = "termfilter";
@@ -77,6 +86,101 @@ const activeGraphLabel = computed<string | null>(
     () => activeGraph.value?.label ?? null,
 );
 
+const attributeFilterSections = ref<AttributeFilterSection[]>([]);
+const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
+
+watch(
+    () => activeGraph.value,
+    async (graph) => {
+        if (!graph) {
+            attributeFilterSections.value = [];
+            nodeFilterConfigNodes.value = [];
+            return;
+        }
+        try {
+            const config = await fetchNodeFilterConfig(graph.id);
+            nodeFilterConfigNodes.value = config.nodes;
+            attributeFilterSections.value = config.nodes.map((node) => ({
+                id: node.node_alias,
+                label: node.label,
+                options: [],
+            }));
+
+            // Populate options from controlled lists for reference nodes
+            const sections = [...attributeFilterSections.value];
+            await Promise.all(
+                config.nodes.map(async (node, index) => {
+                    if (
+                        node.datatype !== "reference" ||
+                        !node.config?.controlledList
+                    ) {
+                        return;
+                    }
+                    const items = await fetchControlledListItems(
+                        node.config.controlledList as string,
+                    );
+                    sections[index] = {
+                        ...sections[index],
+                        options: items.map((item) => ({
+                            id: item.uri,
+                            label: item.label,
+                        })),
+                    };
+                }),
+            );
+            attributeFilterSections.value = sections;
+        } catch (err) {
+            console.error("[SimpleSearch] error loading filter config:", err);
+            attributeFilterSections.value = [];
+            nodeFilterConfigNodes.value = [];
+        }
+    },
+);
+
+function onFilterOptionsChanged(selected: Record<string, string[]>) {
+    selectedFilterOptions.value = selected;
+
+    // Clear all existing attribute filter queries
+    for (const node of nodeFilterConfigNodes.value) {
+        clearQuery(node.node_alias);
+    }
+
+    // Set a query for each section that has selections
+    for (const [nodeAlias, values] of Object.entries(selected)) {
+        if (values.length === 0) continue;
+
+        const section = attributeFilterSections.value.find(
+            (s) => s.id === nodeAlias,
+        );
+        const resolvedValues = values.map((val) => {
+            const opt = section?.options.find((o) => o.id === val);
+            return opt?.label ?? val;
+        });
+
+        const query: GroupPayload = {
+            graph_slug: activeGraphSlug.value!,
+            scope: GraphScopeToken.RESOURCE,
+            logic: LogicToken.AND,
+            clauses: [
+                {
+                    type: "LITERAL" as const,
+                    quantifier: "ANY" as const,
+                    subject: [[activeGraphSlug.value!, nodeAlias]],
+                    operator: "REFERENCES_ANY",
+                    operands: [
+                        { type: "LITERAL" as const, value: resolvedValues },
+                    ],
+                },
+            ],
+            groups: [],
+            aggregations: [],
+            relationship: null,
+        };
+
+        setQuery(nodeAlias, query);
+    }
+}
+
 const activeGraphSlug = computed<string | null>(() => {
     if (!activeGraphId.value) {
         return null;
@@ -117,12 +221,6 @@ async function loadGraphModels(): Promise<void> {
 
 function onRequestPage(page: number): void {
     search(page);
-}
-
-function onSelectedOptionsUpdate(
-    nextSelectedFilterOptions: Record<string, string[]>,
-): void {
-    selectedFilterOptions.value = nextSelectedFilterOptions;
 }
 
 function onSortValueUpdate(nextSortValue: string): void {
@@ -169,6 +267,7 @@ function onRemoveTimeFilter(): void {
             :show-filters="isAttributeFiltersOpen"
             :show-time="isTimeFilterOpen"
             :has-time-filter="hasTimeFilter"
+            :hide-filters-button="!activeGraph"
             @update:sort-value="onSortValueUpdate"
             @toggle-filters="onToggleAttributeFilters"
             @toggle-time="onToggleTimeFilter"
@@ -218,8 +317,9 @@ function onRemoveTimeFilter(): void {
                         />
                         <AttributeFilters
                             v-else-if="isAttributeFiltersActive"
+                            :sections="attributeFilterSections"
                             :selected-options="selectedFilterOptions"
-                            @update:selected-options="onSelectedOptionsUpdate"
+                            @update:selected-options="onFilterOptionsChanged"
                         />
                     </div>
                 </SplitterPanel>
