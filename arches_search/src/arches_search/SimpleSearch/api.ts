@@ -1,97 +1,62 @@
-import arches from "arches";
+import Cookies from "js-cookie";
 
 import type { SearchResults } from "@/arches_search/AdvancedSearch/types.ts";
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import type { GroupPayload } from "../AdvancedSearch/types";
+import type { TermSuggestion } from "./types";
 
-interface TermFilter {
-    type: "term" | "concept" | "string";
-    value: string;
-    text: string;
-    inverted: boolean;
-}
-
-export async function fetchSimpleSearchResults({
+export async function fetchSearchResults({
     terms = [],
+    query = {} as GroupPayload,
     graphId = null,
     page = 1,
 }: {
-    terms?: TermFilter[];
+    terms?: { type: string; text: string; inverted: boolean }[];
+    query?: GroupPayload;
     graphId?: string | null;
     page?: number;
 } = {}): Promise<SearchResults> {
-    const params = new URLSearchParams();
-
-    if (terms.length > 0) {
-        params.set("term-filter", JSON.stringify(terms));
-    }
-
-    if (graphId) {
-        params.set(
-            "typeFilter",
-            JSON.stringify({ graphid: graphId, inverted: false }),
-        );
-    }
-
-    if (page > 1) {
-        params.set("paging-filter", String(page));
-    }
+    const requestPayload = {
+        graphId: graphId,
+        terms: terms,
+        query: query,
+        page: page,
+    };
 
     const response = await fetch(
-        `${arches.urls["api-search"]}?${params.toString()}`,
+        `${generateArchesURL("arches_search:arches_search")}`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify(requestPayload),
+        },
     );
 
     if (!response.ok) {
         throw new Error(response.statusText);
     }
 
-    const data = await response.json();
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
 
-    const pageSize: number = data.page_size || 25;
-    const total: number = data.total_results || 0;
-    const totalPages = Math.ceil(total / pageSize);
-
-    const resources = (data.results || []).map(
-        (hit: Record<string, unknown>) => {
-            const source =
-                (hit._source as Record<string, unknown> | undefined) || hit;
-            return {
-                resourceinstanceid: source.resourceinstanceid as string,
-                graph_id: source.graph_id as string,
-                createdtime: (source.createdtime as string) || "",
-            };
-        },
-    );
-
-    return {
-        resources,
-        aggregations: (data.aggregations as Record<string, unknown>) || {},
-        pagination: {
-            page,
-            page_size: pageSize,
-            total_results: total,
-            total_pages: totalPages,
-            has_next: page < totalPages,
-            has_previous: page > 1,
-        },
-    };
+    return parsed;
 }
 
 export async function fetchSearchTermSuggestions(
     query: string,
-): Promise<Array<{ text: string; datatype: string; value: string }>> {
+): Promise<TermSuggestion[]> {
     const params = new URLSearchParams({ q: query, lang: "*", flat: "true" });
     const response = await fetch(
         `${generateArchesURL("arches_search:term_suggestion_search")}?${params.toString()}`,
     );
     const results = await response.json();
-    const suggestions = results.results as Array<{
-        text: string;
-        datatype: string;
-        value: string;
-    }>;
+    const suggestions = results.results as Array<TermSuggestion>;
 
     // Prepend a literal term entry for the raw query string
-    suggestions.unshift({ text: query, datatype: "term", value: query });
+    suggestions.unshift({ id: Date.now(), datatype: "term", text: query });
 
     return suggestions;
 }

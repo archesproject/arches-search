@@ -1,52 +1,75 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Chip from "primevue/chip";
 
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+
 import type { ActiveFilter } from "@/arches_search/SimpleSearch/types.ts";
 
+const CLEAR_ALL_EVENT = "clear-all" as const;
+
+const emit = defineEmits<{
+    (event: typeof CLEAR_ALL_EVENT): void;
+}>();
+
 const { $gettext } = useGettext();
+const { activeFilters, resultsGraph, searchResults } = useSearchFilters();
 
-defineProps<{
-    count: number;
-    resourceTypeLabel: string;
-    filters: ActiveFilter[];
-}>();
+const hasActiveFilters = computed(() => activeFilters.value.length > 0);
+const totalResults = computed(
+    () => searchResults.value.pagination?.total_results ?? 0,
+);
+const resourceTypeLabel = computed(
+    () => resultsGraph.value?.label ?? $gettext("Items"),
+);
+const resultsCountText = computed(() =>
+    $gettext("%{totalResults} %{resourceType} match", {
+        totalResults: String(totalResults.value),
+        resourceType: resourceTypeLabel.value,
+    }),
+);
 
-defineEmits<{
-    (event: "clear-all"): void;
-}>();
+function clearFilter(activeFilter: ActiveFilter): void {
+    activeFilter.clear();
+}
+
+function clearAllFilters(): void {
+    for (const activeFilter of activeFilters.value) {
+        clearFilter(activeFilter);
+    }
+
+    emit(CLEAR_ALL_EVENT);
+}
 </script>
 
 <template>
-    <div
-        v-if="count > 0 || filters.length > 0"
-        class="active-filters"
-    >
+    <div class="active-filters">
         <span class="results-count">
-            {{ count }}
-            {{ resourceTypeLabel }}
-            {{ $gettext("match") }}
+            {{ resultsCountText }}
         </span>
 
         <div
-            v-if="filters.length > 0"
+            v-if="hasActiveFilters"
             class="filter-chips"
         >
             <Chip
-                v-for="filter in filters"
-                :key="filter.id"
-                :label="filter.label"
-                removable
+                v-for="activeFilter in activeFilters"
+                :key="activeFilter.id"
                 class="filter-chip"
-                @remove="filter.clear()"
+                :label="activeFilter.text"
+                :removable="true"
+                :style="activeFilter.options?.style"
+                @remove="clearFilter(activeFilter)"
             />
         </div>
 
         <button
-            v-if="filters.length > 0"
+            v-if="hasActiveFilters"
             class="clear-all-btn"
-            @click="$emit('clear-all')"
+            type="button"
+            @click="clearAllFilters"
         >
             {{ $gettext("Clear all") }}
         </button>
@@ -63,22 +86,22 @@ defineEmits<{
     border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
-.results-count {
+.active-filters .results-count {
     font-weight: 600;
     white-space: nowrap;
 }
 
-.filter-chips {
+.active-filters .filter-chips {
     display: flex;
     flex-wrap: wrap;
     gap: 0.6rem;
 }
 
-.filter-chip {
+.active-filters .filter-chip {
     border-radius: 0.4rem;
 }
 
-.clear-all-btn {
+.active-filters .clear-all-btn {
     background: none;
     border: none;
     cursor: pointer;
@@ -86,7 +109,7 @@ defineEmits<{
     text-decoration: underline;
 }
 
-.clear-all-btn:hover {
+.active-filters .clear-all-btn:hover {
     color: var(--p-surface-400);
 }
 </style>

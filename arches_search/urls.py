@@ -23,6 +23,7 @@ from arches_search.views.api.relatable_node_tree_for_graph import (
 from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 from arches_search.views.api.saved_search import SavedSearchAPI
 from arches_search.views.api.term_suggestions import TermSuggestionView
+from arches_search.views.api.simple_search import SimpleSearchAPI
 
 urlpatterns = [
     path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
@@ -85,6 +86,11 @@ urlpatterns = [
         "api/term-suggestions",
         TermSuggestionView.as_view(),
         name="term_suggestion_search",
+    ),
+    path(
+        "api/arches-search",
+        SimpleSearchAPI.as_view(),
+        name="arches_search",
     ),
 ]
 

@@ -4,10 +4,19 @@ export interface ResourceType {
     icon: string;
 }
 
+export interface TermSuggestion {
+    id: number;
+    datatype: string;
+    text: string;
+    addtional_info?: Record<string, unknown>;
+}
+
 export interface ActiveFilter {
     id: string;
-    label: string;
+    text: string;
     clear: () => void;
+    inverted: boolean;
+    options?: Record<string, unknown>;
 }
 
 export interface SortOption {
