@@ -7,32 +7,21 @@ import Button from "primevue/button";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/PathBuilder.vue";
 import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
+import TextSearchFilter from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/components/TextSearchFilter.vue";
+import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Ref } from "vue";
 import type {
     GraphModel,
     AdvancedSearchFacet,
+    LiteralClause,
+    LiteralOperand,
     Node,
+    PathSelection,
 } from "@/arches_search/AdvancedSearch/types.ts";
-
-const { $gettext } = useGettext();
 
 type NodeWithCardinality = Node & {
     nodegroup_has_cardinality_n?: boolean;
-};
-
-type OperandPayload = {
-    type: "LITERAL" | "PATH";
-    value: unknown;
-    display_value?: string;
-};
-
-type ClausePayload = {
-    type: "LITERAL";
-    quantifier: "ANY" | "ALL" | "NONE";
-    subject: [string, string][];
-    operator: string | null;
-    operands: OperandPayload[];
 };
 
 const CLAUSE_QUANTIFIER_ANY = "ANY" as const;
@@ -40,6 +29,16 @@ const CLAUSE_QUANTIFIER_ALL = "ALL" as const;
 const CLAUSE_QUANTIFIER_NONE = "NONE" as const;
 
 const OPERAND_TYPE_LITERAL = "LITERAL" as const;
+
+const { modelValue, anchorGraph } = defineProps<{
+    modelValue: LiteralClause;
+    anchorGraph: GraphModel;
+}>();
+
+const emit = defineEmits<{
+    (event: "update:modelValue", updatedClause: LiteralClause): void;
+    (event: "request:remove"): void;
+}>();
 
 const datatypesToAdvancedSearchFacets = inject<
     Ref<Record<string, AdvancedSearchFacet[]>>
@@ -52,97 +51,93 @@ const getNodesForGraphId =
         "getNodesForGraphId",
     )!;
 
-const { modelValue, anchorGraph } = defineProps<{
-    modelValue: ClausePayload;
-    anchorGraph: GraphModel;
-}>();
-
-const emit = defineEmits<{
-    "update:modelValue": [updatedClause: ClausePayload];
-    "request:remove": [];
-}>();
-
-const clauseQuantifierOptions = computed(() => {
-    return [
-        { label: $gettext("At least one"), value: CLAUSE_QUANTIFIER_ANY },
-        { label: $gettext("Every"), value: CLAUSE_QUANTIFIER_ALL },
-        { label: $gettext("No"), value: CLAUSE_QUANTIFIER_NONE },
-    ];
-});
+const { $gettext } = useGettext();
 
 const subjectNode = ref<NodeWithCardinality | null>(null);
 const subjectGraph = ref<GraphModel | null>(null);
 const operandKeysByIndex = ref<string[]>([]);
 
-const subjectAnchorGraph = computed<GraphModel>(() => {
-    if (modelValue.subject.length === 0) {
-        return anchorGraph;
+const clauseQuantifierOptions = computed(() => [
+    { label: $gettext("At least one"), value: CLAUSE_QUANTIFIER_ANY },
+    { label: $gettext("Every"), value: CLAUSE_QUANTIFIER_ALL },
+    { label: $gettext("No"), value: CLAUSE_QUANTIFIER_NONE },
+]);
+
+const subjectAnchorGraph = computed<GraphModel>(
+    () =>
+        graphs.value.find(
+            (graph) => graph.slug === modelValue.subject.graph_slug,
+        ) ?? anchorGraph,
+);
+
+const selectedSubjectNode = computed<PathSelection | null>(() => {
+    if (
+        modelValue.subject.type !== ClauseSubjectTypeToken.NODE ||
+        !modelValue.subject.node_alias
+    ) {
+        return null;
     }
-    const [firstSubjectGraphSlug] = modelValue.subject[0];
-    const graphAtFirstSubjectSlug = graphs.value.find((graphModel) => {
-        return graphModel.slug === firstSubjectGraphSlug;
-    });
-    if (graphAtFirstSubjectSlug) {
-        return graphAtFirstSubjectSlug;
-    }
-    return anchorGraph;
+    return {
+        graph_slug: modelValue.subject.graph_slug,
+        node_alias: modelValue.subject.node_alias,
+    };
 });
 
 const availableOperatorOptions = computed<AdvancedSearchFacet[]>(() => {
-    if (!subjectNode.value?.datatype) {
-        return [];
+    if (modelValue.subject.type === ClauseSubjectTypeToken.SEARCH_MODELS) {
+        return datatypesToAdvancedSearchFacets.value["string"] ?? [];
     }
-    const facetsForDatatype =
-        datatypesToAdvancedSearchFacets.value[subjectNode.value.datatype];
-    if (!facetsForDatatype) {
-        return [];
-    }
-    return facetsForDatatype;
+    const datatype = subjectNode.value?.datatype;
+    return datatype
+        ? datatypesToAdvancedSearchFacets.value[datatype] ?? []
+        : [];
 });
 
 const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(() => {
-    if (!modelValue.operator) {
-        return null;
-    }
-    const matchingFacet = availableOperatorOptions.value.find((searchFacet) => {
-        return searchFacet.operator === modelValue.operator;
-    });
-    return matchingFacet ?? null;
+    if (!modelValue.operator) return null;
+    return (
+        availableOperatorOptions.value.find(
+            (facet) => facet.operator === modelValue.operator,
+        ) ?? null
+    );
 });
 
 watch(
-    () => {
-        if (modelValue.subject.length === 0) {
-            return null;
-        }
-        return modelValue.subject[modelValue.subject.length - 1];
-    },
-    async (updatedTerminal) => {
+    [
+        () => modelValue.subject.type,
+        () => modelValue.subject.graph_slug,
+        () => modelValue.subject.node_alias,
+    ],
+    async ([subjectType, terminalGraphSlug, terminalNodeAlias]) => {
         subjectNode.value = null;
         subjectGraph.value = null;
 
-        if (!updatedTerminal) {
+        if (
+            subjectType !== ClauseSubjectTypeToken.NODE ||
+            !terminalGraphSlug ||
+            !terminalNodeAlias
+        ) {
             return;
         }
 
-        const [terminalGraphSlug, terminalNodeAlias] = updatedTerminal;
-        const graphMatchingTerminalSlug = graphs.value.find((graphModel) => {
-            return graphModel.slug === terminalGraphSlug;
-        });
+        const graphMatchingTerminalSlug = graphs.value.find(
+            (graphModel) => graphModel.slug === terminalGraphSlug,
+        );
 
         if (!graphMatchingTerminalSlug) {
             return;
         }
 
+        subjectGraph.value = graphMatchingTerminalSlug;
+
         const allNodesForGraph = await getNodesForGraphId(
             graphMatchingTerminalSlug.graphid,
         );
-        const nodeMatchingTerminalAlias = allNodesForGraph.find((graphNode) => {
-            return graphNode.alias === terminalNodeAlias;
-        });
 
-        subjectGraph.value = graphMatchingTerminalSlug;
-        subjectNode.value = nodeMatchingTerminalAlias ?? null;
+        subjectNode.value =
+            allNodesForGraph.find(
+                (graphNode) => graphNode.alias === terminalNodeAlias,
+            ) ?? null;
     },
     { immediate: true },
 );
@@ -160,9 +155,8 @@ watch(
     { immediate: true },
 );
 
-function patchClause(partialClause: Partial<ClausePayload>): void {
-    const updatedClause: ClausePayload = { ...modelValue, ...partialClause };
-    emit("update:modelValue", updatedClause);
+function patchClause(partialClause: Partial<LiteralClause>): void {
+    emit("update:modelValue", { ...modelValue, ...partialClause });
 }
 
 function ensureOperandKey(parameterIndex: number): string {
@@ -172,11 +166,15 @@ function ensureOperandKey(parameterIndex: number): string {
     return operandKeysByIndex.value[parameterIndex];
 }
 
-function handleSubjectUpdate(
-    updatedSubjectPathSequence: [string, string][],
-): void {
+function handleSubjectUpdate(updatedSubject: PathSelection | null): void {
     patchClause({
-        subject: updatedSubjectPathSequence,
+        subject: {
+            type: ClauseSubjectTypeToken.NODE,
+            graph_slug:
+                updatedSubject?.graph_slug ?? subjectAnchorGraph.value.slug,
+            node_alias: updatedSubject?.node_alias ?? "",
+            search_models: [],
+        },
         operator: null,
         operands: [],
     });
@@ -184,17 +182,13 @@ function handleSubjectUpdate(
 
 function handleOperandUpdate(
     parameterIndex: number,
-    updatedOperand: OperandPayload | null,
+    updatedOperand: LiteralOperand | null,
 ): void {
     const updatedOperands = [...modelValue.operands];
-    if (updatedOperand === null) {
-        updatedOperands[parameterIndex] = {
-            type: OPERAND_TYPE_LITERAL,
-            value: null,
-        };
-    } else {
-        updatedOperands[parameterIndex] = updatedOperand;
-    }
+    updatedOperands[parameterIndex] = updatedOperand ?? {
+        type: OPERAND_TYPE_LITERAL,
+        value: null,
+    };
     patchClause({ operands: updatedOperands });
 }
 
@@ -207,12 +201,10 @@ function handleOperatorChange(nextOperator: string | null): void {
         return;
     }
     const previousFacetArity = selectedAdvancedSearchFacet.value?.arity ?? 0;
-    const nextSearchFacet = availableOperatorOptions.value.find(
-        (searchFacet) => {
-            return searchFacet.operator === nextOperator;
-        },
-    );
-    const nextFacetArity = nextSearchFacet?.arity ?? 0;
+    const nextFacetArity =
+        availableOperatorOptions.value.find(
+            (facet) => facet.operator === nextOperator,
+        )?.arity ?? 0;
     if (previousFacetArity !== nextFacetArity) {
         patchClause({ operator: nextOperator, operands: [] });
         return;
@@ -221,7 +213,7 @@ function handleOperatorChange(nextOperator: string | null): void {
 }
 
 function handleQuantifierChange(
-    nextQuantifier: ClausePayload["quantifier"],
+    nextQuantifier: LiteralClause["quantifier"],
 ): void {
     if (modelValue.quantifier === nextQuantifier) {
         return;
@@ -235,14 +227,29 @@ function handleQuantifierChange(
         <div class="clause-main">
             <div class="clause-core-row">
                 <PathBuilder
+                    v-if="
+                        modelValue.subject.type !==
+                        ClauseSubjectTypeToken.SEARCH_MODELS
+                    "
                     class="clause-subject-path"
-                    :path-sequence="modelValue.subject"
+                    :selected-node="selectedSubjectNode"
                     :graph-slugs="[subjectAnchorGraph.slug]"
-                    @update:path-sequence="handleSubjectUpdate"
+                    @update:selected-node="handleSubjectUpdate"
+                />
+                <TextSearchFilter
+                    v-if="
+                        modelValue.subject.type ===
+                        ClauseSubjectTypeToken.SEARCH_MODELS
+                    "
+                    :model-value="modelValue"
+                    :available-operator-options="availableOperatorOptions"
+                    @update:model-value="
+                        emit('update:modelValue', $event as LiteralClause)
+                    "
                 />
 
                 <Select
-                    v-if="subjectNode?.nodegroup_has_cardinality_n"
+                    v-else-if="subjectNode?.nodegroup_has_cardinality_n"
                     :model-value="modelValue.quantifier"
                     class="clause-quantifier-select"
                     :options="clauseQuantifierOptions"
@@ -252,6 +259,10 @@ function handleQuantifierChange(
                 />
 
                 <Select
+                    v-if="
+                        modelValue.subject.type !==
+                        ClauseSubjectTypeToken.SEARCH_MODELS
+                    "
                     :model-value="modelValue.operator"
                     class="clause-operator-select"
                     :options="availableOperatorOptions"
@@ -264,8 +275,9 @@ function handleQuantifierChange(
 
                 <div
                     v-if="
-                        selectedAdvancedSearchFacet &&
-                        selectedAdvancedSearchFacet.arity > 0 &&
+                        modelValue.subject.type !==
+                            ClauseSubjectTypeToken.SEARCH_MODELS &&
+                        selectedAdvancedSearchFacet?.arity &&
                         subjectNode &&
                         subjectGraph
                     "
@@ -281,7 +293,10 @@ function handleQuantifierChange(
                         :subject-terminal-graph="subjectGraph"
                         :operand-type="OPERAND_TYPE_LITERAL"
                         @update:model-value="
-                            handleOperandUpdate(parameterIndex - 1, $event)
+                            handleOperandUpdate(
+                                parameterIndex - 1,
+                                $event as LiteralOperand,
+                            )
                         "
                     />
                 </div>
@@ -342,7 +357,7 @@ function handleQuantifierChange(
 
 .clause-cardinality-subtext {
     margin-inline-start: 0.5rem;
-    margin-top: 1rem;
+    margin-block-start: 1rem;
     font-size: 1rem;
     line-height: 1.25;
     opacity: 0.75;

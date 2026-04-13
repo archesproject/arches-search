@@ -7,7 +7,7 @@ import TreeSelect from "primevue/treeselect";
 
 import type {
     GraphModel,
-    RelationshipPath,
+    PathSelection,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 type NodeSummary = {
@@ -43,19 +43,19 @@ const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs")!;
 
 const {
     graphSlugs,
-    pathSequence,
+    selectedNode,
     relationshipBetweenGraphs,
     shouldPrependGraphName,
     restrictToResourceInstanceDatatypes,
 } = defineProps<{
     graphSlugs: string[];
-    pathSequence?: RelationshipPath;
+    selectedNode?: PathSelection | null;
     relationshipBetweenGraphs?: string[];
     shouldPrependGraphName?: boolean;
     restrictToResourceInstanceDatatypes?: boolean;
 }>();
 
-const emit = defineEmits<{ "update:pathSequence": [RelationshipPath] }>();
+const emit = defineEmits<{ "update:selectedNode": [PathSelection | null] }>();
 
 let currentLoad = 0;
 
@@ -84,15 +84,14 @@ const expandedKeys = computed(() => {
 
 const selectedKeys = computed({
     get(): Record<string, boolean> {
-        if (!pathSequence?.[0]) {
+        if (!selectedNode?.graph_slug || !selectedNode.node_alias) {
             return {};
         }
 
-        const [graphSlug, nodeAlias] = pathSequence[0];
         const matchingNode = findNode(nodeOptions.value, (node) => {
             return (
-                node.data.graph_slug === graphSlug &&
-                node.data.alias === nodeAlias &&
+                node.data.graph_slug === selectedNode.graph_slug &&
+                node.data.alias === selectedNode.node_alias &&
                 node.selectable !== false
             );
         });
@@ -120,14 +119,15 @@ const selectedKeys = computed({
             });
         }
         if (!matchingNode || matchingNode.selectable === false) {
-            emit("update:pathSequence", []);
+            emit("update:selectedNode", null);
 
             return;
         }
 
-        emit("update:pathSequence", [
-            [matchingNode.data.graph_slug!, matchingNode.data.alias],
-        ]);
+        emit("update:selectedNode", {
+            graph_slug: matchingNode.data.graph_slug!,
+            node_alias: matchingNode.data.alias,
+        });
     },
 });
 

@@ -1,8 +1,10 @@
+import dayjs from "dayjs";
+
 import {
     type GroupPayload,
-    type RelationshipPath,
+    type LiteralClause,
     type LiteralOperand,
-    type SubjectPath,
+    ClauseSubjectTypeToken,
     LogicToken,
     GraphScopeToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
@@ -13,7 +15,70 @@ type RelationshipState = NonNullable<GroupPayload["relationship"]>;
 const CLAUSE_TYPE_LITERAL = "LITERAL";
 const QUANTIFIER_ANY = "ANY";
 const OPERATOR_HAS_ANY_VALUE = "HAS_ANY_VALUE";
-const RELATIONSHIP_TRAVERSAL_ANY = "ANY";
+const SEARCH_MODELS_DATE = ["DateSearch", "DateRangeSearch"] as const;
+
+export function parseStoredDate(value: unknown): Date | null {
+    if (!value) return null;
+    const parsed = dayjs(String(value));
+    return parsed.isValid() ? parsed.toDate() : null;
+}
+
+export function clausesMatch(
+    left: LiteralClause | null | undefined,
+    right: LiteralClause | null | undefined,
+): boolean {
+    if (!left || !right) return left === right;
+    return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function buildNodeDateSearchClause(
+    graphSlug: string,
+    nodeAlias: string,
+    operator: string,
+    dateFrom: string,
+    dateTo?: string,
+): LiteralClause {
+    const operands: LiteralOperand[] = [
+        { type: CLAUSE_TYPE_LITERAL, value: dateFrom },
+    ];
+    if (dateTo) operands.push({ type: CLAUSE_TYPE_LITERAL, value: dateTo });
+    return {
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
+        subject: {
+            type: ClauseSubjectTypeToken.NODE,
+            graph_slug: graphSlug,
+            node_alias: nodeAlias,
+            search_models: [],
+        },
+        operator,
+        operands,
+    };
+}
+
+export function buildDateSearchClause(
+    graphSlug: string,
+    operator: string,
+    dateFrom: string,
+    dateTo?: string,
+): LiteralClause {
+    const operands: LiteralOperand[] = [
+        { type: CLAUSE_TYPE_LITERAL, value: dateFrom },
+    ];
+    if (dateTo) operands.push({ type: CLAUSE_TYPE_LITERAL, value: dateTo });
+    return {
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
+        subject: {
+            type: ClauseSubjectTypeToken.SEARCH_MODELS,
+            graph_slug: graphSlug,
+            node_alias: "",
+            search_models: [...SEARCH_MODELS_DATE],
+        },
+        operator,
+        operands,
+    };
+}
 
 function filterLiteralClauses(
     clauses: ReadonlyArray<ClausePayload>,
@@ -186,8 +251,49 @@ export function addEmptyLiteralClauseToGroup(
     const emptyClause: ClausePayload = {
         type: CLAUSE_TYPE_LITERAL,
         quantifier: QUANTIFIER_ANY,
-        subject: [] as SubjectPath,
+        subject: {
+            type: ClauseSubjectTypeToken.NODE,
+            graph_slug: groupPayload.graph_slug,
+            node_alias: "",
+            search_models: [],
+        },
         operator: OPERATOR_HAS_ANY_VALUE,
+        operands: [] as LiteralOperand[],
+    };
+    return { ...groupPayload, clauses: [...groupPayload.clauses, emptyClause] };
+}
+
+export function addEmptySearchModelsClauseToGroup(
+    groupPayload: GroupPayload,
+): GroupPayload {
+    const emptyClause: ClausePayload = {
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
+        subject: {
+            type: ClauseSubjectTypeToken.SEARCH_MODELS,
+            graph_slug: groupPayload.graph_slug,
+            node_alias: "",
+            search_models: ["TermSearch"],
+        },
+        operator: "LIKE",
+        operands: [] as LiteralOperand[],
+    };
+    return { ...groupPayload, clauses: [...groupPayload.clauses, emptyClause] };
+}
+
+export function addEmptyDateFilterClauseToGroup(
+    groupPayload: GroupPayload,
+): GroupPayload {
+    const emptyClause: ClausePayload = {
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
+        subject: {
+            type: ClauseSubjectTypeToken.SEARCH_MODELS,
+            graph_slug: groupPayload.graph_slug,
+            node_alias: "",
+            search_models: [...SEARCH_MODELS_DATE],
+        },
+        operator: "",
         operands: [] as LiteralOperand[],
     };
     return { ...groupPayload, clauses: [...groupPayload.clauses, emptyClause] };
@@ -220,9 +326,13 @@ export function addRelationshipIfMissing(
     }
 
     const emptyRelationship: RelationshipState = {
-        path: [] as RelationshipPath,
+        path: {
+            type: ClauseSubjectTypeToken.NODE,
+            graph_slug: "",
+            node_alias: "",
+        },
         is_inverse: false,
-        traversal_quantifiers: [RELATIONSHIP_TRAVERSAL_ANY],
+        traversal_quantifier: QUANTIFIER_ANY,
     };
 
     return { ...groupPayload, relationship: emptyRelationship };

@@ -23,13 +23,13 @@ class SimpleSearchAPI(APIBase):
         body = JSONDeserializer().deserialize(request.body)
         terms = body.get("terms")
         query = body.get("query")
-        graphId = body.get("graphId")
+        graph_id = body.get("graphId")
 
         results_queryset = None
         if terms:
-            if graphId:
+            if graph_id:
                 term_texts = [term["text"] for term in terms]
-                results_queryset = get_related_resources_by_text(term_texts, graphId)
+                results_queryset = get_related_resources_by_text(term_texts, graph_id)
             else:
                 initial_match_ids = None
                 for term in terms:
@@ -49,14 +49,22 @@ class SimpleSearchAPI(APIBase):
                 )
 
         if query:
-            results_queryset = AdvancedSearchQueryCompiler(body).compile(
-                results_queryset.values_list("resourceinstanceid")
+            if results_queryset is None:
+                base = ResourceInstance.objects.all()
+
+                if graph_id:
+                    base = base.filter(graph_id=graph_id)
+
+                results_queryset = base
+
+            results_queryset = AdvancedSearchQueryCompiler(query).compile(
+                results_queryset
             )
 
         if not terms and not query:
             results_queryset = ResourceInstance.objects.all()
-            if graphId:
-                results_queryset = results_queryset.filter(graph_id=graphId)
+            if graph_id:
+                results_queryset = results_queryset.filter(graph_id=graph_id)
 
         page_number = body.get("page", 1)
         page_size = body.get("page_size", 20)

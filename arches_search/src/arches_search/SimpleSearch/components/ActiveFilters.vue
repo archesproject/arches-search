@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
 import Chip from "primevue/chip";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -65,14 +66,14 @@ function clearAllFilters(): void {
             />
         </div>
 
-        <button
+        <Button
             v-if="hasActiveFilters"
-            class="clear-all-btn"
+            class="clear-all-button"
             type="button"
+            variant="text"
+            :label="$gettext('Clear all')"
             @click="clearAllFilters"
-        >
-            {{ $gettext("Clear all") }}
-        </button>
+        />
     </div>
 </template>
 
@@ -101,15 +102,7 @@ function clearAllFilters(): void {
     border-radius: 0.4rem;
 }
 
-.active-filters .clear-all-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
+.active-filters .clear-all-button {
     padding: 0;
-    text-decoration: underline;
-}
-
-.active-filters .clear-all-btn:hover {
-    color: var(--p-surface-400);
 }
 </style>

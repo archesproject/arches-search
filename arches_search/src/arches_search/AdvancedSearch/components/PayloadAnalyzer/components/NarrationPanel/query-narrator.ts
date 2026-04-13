@@ -1,4 +1,7 @@
-import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    ClauseSubjectTypeToken,
+    LogicToken,
+} from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     AdvancedSearchFacet,
     GraphModel,
@@ -180,7 +183,8 @@ export function describeAdvancedSearchQuery(
 
         if (
             groupPayload.relationship !== null &&
-            groupPayload.relationship.path.length > 0
+            groupPayload.relationship.path.graph_slug &&
+            groupPayload.relationship.path.node_alias
         ) {
             const relationshipDescription = describeRelationship(
                 groupPayload.relationship,
@@ -211,26 +215,36 @@ export function describeAdvancedSearchQuery(
     }
 
     function describeClause(clause: LiteralClause) {
-        if (clause.subject.length === 0) {
+        const subjectGraphSlug = clause.subject.graph_slug?.trim();
+        if (!subjectGraphSlug) {
             return "";
         }
 
-        const [subjectGraphSlug, subjectNodeAlias] =
-            clause.subject[clause.subject.length - 1];
-        const fieldLabel = resolveFieldLabel(
-            subjectGraphSlug,
-            subjectNodeAlias,
-        ).trim();
-        const operatorLabel = (
-            operatorLabelMap[clause.operator] ?? clause.operator
-        ).trim();
+        let subjectNodeAlias = "";
+        if (clause.subject.type === ClauseSubjectTypeToken.NODE) {
+            subjectNodeAlias = clause.subject.node_alias;
+        }
+
+        const rawOperator = clause.operator?.trim();
+        const fieldLabel = resolveClauseFieldLabel(clause).trim();
+
+        let operatorLabel = "";
+        if (rawOperator) {
+            operatorLabel = (
+                operatorLabelMap[rawOperator] ?? rawOperator
+            ).trim();
+        }
 
         if (!fieldLabel || !operatorLabel) {
             return "";
         }
 
-        const subjectDatatype =
-            getNodeMetadata(subjectGraphSlug, subjectNodeAlias)?.datatype ?? "";
+        let subjectDatatype = "";
+        if (subjectNodeAlias) {
+            subjectDatatype =
+                getNodeMetadata(subjectGraphSlug, subjectNodeAlias)?.datatype ??
+                "";
+        }
         const operandDescriptions: string[] = [];
 
         for (const operand of clause.operands as (
@@ -260,6 +274,39 @@ export function describeAdvancedSearchQuery(
             field: fieldLabel,
             operator: operatorLabel,
         });
+    }
+
+    function resolveClauseFieldLabel(clause: LiteralClause) {
+        const subjectGraphSlug = clause.subject.graph_slug?.trim();
+        if (!subjectGraphSlug) {
+            return "";
+        }
+
+        if (
+            clause.subject.type === ClauseSubjectTypeToken.NODE &&
+            clause.subject.node_alias
+        ) {
+            return resolveFieldLabel(
+                subjectGraphSlug,
+                clause.subject.node_alias,
+            );
+        }
+
+        if (
+            clause.subject.type === ClauseSubjectTypeToken.SEARCH_MODELS &&
+            clause.subject.search_models.length > 0
+        ) {
+            const graphLabel = resolveGraphLabel(subjectGraphSlug).trim();
+            if (graphLabel) {
+                return gettext("any field in %{graph}", {
+                    graph: graphLabel,
+                });
+            }
+
+            return gettext("any field");
+        }
+
+        return "";
     }
 
     function describeOperand(
@@ -352,18 +399,19 @@ export function describeAdvancedSearchQuery(
         relationship: RelationshipBlock,
         relatedGroupPayload?: GroupPayload,
     ) {
-        if (relationship.path.length !== 1) {
+        if (!relationship.path.graph_slug || !relationship.path.node_alias) {
             return "";
         }
 
-        const [relatedGraphSlug, relatedNodeAlias] = relationship.path[0];
+        const relatedGraphSlug = relationship.path.graph_slug;
+        const relatedNodeAlias = relationship.path.node_alias;
         const relatedGraphLabel = resolveGraphLabel(relatedGraphSlug);
         const relationshipFieldLabel = resolveFieldLabel(
             relatedGraphSlug,
             relatedNodeAlias,
         );
         const traversalQuantifier = resolveTraversalQuantifier(
-            relationship.traversal_quantifiers,
+            relationship.traversal_quantifier,
         );
         let innerConditions = "";
         if (relatedGroupPayload) {
@@ -472,7 +520,8 @@ function startsWithPredicateFragment(groupPayload: GroupPayload): boolean {
     }
     if (
         groupPayload.relationship !== null &&
-        groupPayload.relationship.path.length > 0
+        groupPayload.relationship.path.graph_slug &&
+        groupPayload.relationship.path.node_alias
     ) {
         return true;
     }
@@ -482,13 +531,9 @@ function startsWithPredicateFragment(groupPayload: GroupPayload): boolean {
     return startsWithPredicateFragment(groupPayload.groups[0]);
 }
 
-function resolveTraversalQuantifier(quantifiers: readonly string[]) {
-    const firstQuantifier = quantifiers[0];
-    if (
-        firstQuantifier === TRAVERSAL_ALL ||
-        firstQuantifier === TRAVERSAL_NONE
-    ) {
-        return firstQuantifier;
+function resolveTraversalQuantifier(quantifier: string) {
+    if (quantifier === TRAVERSAL_ALL || quantifier === TRAVERSAL_NONE) {
+        return quantifier;
     }
     return "ANY";
 }

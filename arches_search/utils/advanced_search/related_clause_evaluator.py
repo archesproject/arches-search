@@ -11,6 +11,7 @@ from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_NONE,
 )
 from arches_search.utils.advanced_search.specs import AggregatePredicateSpec
+from arches_search.utils.advanced_search.constants import SUBJECT_TYPE_NODE
 
 
 class RelatedClauseEvaluator:
@@ -45,10 +46,12 @@ class RelatedClauseEvaluator:
     ):
         operator_token = clause_payload["operator"]
         quantifier_token = clause_payload["quantifier"]
-        subject_path_sequence = clause_payload["subject"]
+        subject = clause_payload["subject"]
+        if not subject.get("type") == SUBJECT_TYPE_NODE:
+            raise ValueError("RELATED clauses require a node subject.")
 
         traversal_context, child_row_set = self.path_navigator.build_relationship_pairs(
-            {"path": subject_path_sequence, "is_inverse": False}
+            {"path": subject, "is_inverse": False}
         )
 
         if terminal_datatype_name is None:
@@ -82,7 +85,11 @@ class RelatedClauseEvaluator:
     def _build_child_presence_exists(
         self, clause_payload: Dict[str, Any], traversal_context: Dict[str, Any]
     ):
-        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        subject = clause_payload["subject"]
+        if not subject.get("type") == SUBJECT_TYPE_NODE:
+            raise ValueError("RELATED clauses require a node subject.")
+        subject_graph_slug = subject["graph_slug"]
+        subject_node_alias = subject["node_alias"]
         operator_token = clause_payload["operator"]
         operand_items = clause_payload["operands"]
 

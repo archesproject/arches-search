@@ -8,6 +8,9 @@ SCOPE_TILE = "TILE"
 CLAUSE_TYPE_LITERAL = "LITERAL"
 CLAUSE_TYPE_RELATED = "RELATED"
 
+SUBJECT_TYPE_NODE = "NODE"
+SUBJECT_TYPE_SEARCH_MODELS = "SEARCH_MODELS"
+
 # Operand payload types
 OPERAND_TYPE_LITERAL = "LITERAL"
 OPERAND_TYPE_PATH = "PATH"
@@ -17,11 +20,6 @@ OPERAND_TYPE_GEO_LITERAL = "GEO_LITERAL"
 QUANTIFIER_ANY = "ANY"
 QUANTIFIER_ALL = "ALL"
 QUANTIFIER_NONE = "NONE"
-
-# Internal context used by GroupCompiler to distinguish the anchor side from
-# the child side when compiling nested groups that contain no relationship.
-CONTEXT_ANCHOR = "ANCHOR"
-CONTEXT_CHILD = "CHILD"
 
 # Aggregate predicate kinds
 AGGREGATE_KIND_SET_SUPERSET = "set_superset"

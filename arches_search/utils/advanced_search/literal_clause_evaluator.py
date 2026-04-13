@@ -1,26 +1,26 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
-
-from arches_search.models.models import AdvancedSearchFacet
+from typing import Any, Dict, List, Optional
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
-from django.utils.translation import get_language
 
 from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
     build_grouped_rows_matching_aggregate_predicate,
 )
+from arches_search.utils.advanced_search.child_rows_computer import ChildRowsComputer
 from arches_search.utils.advanced_search.constants import (
-    CLAUSE_TYPE_LITERAL,
-    CLAUSE_TYPE_RELATED,
     QUANTIFIER_ALL,
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
+)
+from arches_search.utils.advanced_search.search_model_clause_evaluator import (
+    SearchModelClauseEvaluator,
 )
 from arches_search.utils.advanced_search.specs import (
     AggregatePredicateSpec,
     CorrelatedLiteralClauseContext,
 )
+from arches_search.utils.advanced_search.constants import SUBJECT_TYPE_SEARCH_MODELS
 
 
 class LiteralClauseEvaluator:
@@ -35,6 +35,13 @@ class LiteralClauseEvaluator:
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
         self.predicate_builder = predicate_builder
+        self._search_model_clause_evaluator = SearchModelClauseEvaluator(
+            search_model_registry=search_model_registry,
+            facet_registry=facet_registry,
+            predicate_builder=predicate_builder,
+            literal_clause_evaluator=self,
+        )
+        self._child_rows_computer = ChildRowsComputer(literal_clause_evaluator=self)
 
     def build_subject_rows(
         self,
@@ -107,7 +114,9 @@ class LiteralClauseEvaluator:
         clause_payload: Dict[str, Any],
         correlate_field_name: str,
     ) -> CorrelatedLiteralClauseContext:
-        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        subject = clause_payload["subject"]
+        subject_graph_slug = subject["graph_slug"]
+        subject_node_alias = subject["node_alias"]
         operator_token = clause_payload["operator"]
         operand_items = clause_payload["operands"]
 
@@ -122,14 +131,14 @@ class LiteralClauseEvaluator:
             subject_graph_slug=subject_graph_slug,
             subject_node_alias=subject_node_alias,
         )
-        normalized_operand_items, localized_language = self.localize_string_operands(
-            facet=facet,
-            operand_items=operand_items,
+        normalized_operand_items, filter_value = (
+            model_class.normalize_operands(operand_items)
+            if hasattr(model_class, "normalize_operands")
+            else (list(operand_items), None)
         )
-        correlated_rows = self.apply_localized_language_filter(
+        correlated_rows = facet.filter_rows(
             subject_rows.filter(resourceinstanceid=OuterRef(correlate_field_name)),
-            facet=facet,
-            localized_language=localized_language,
+            filter_value,
         )
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
@@ -147,10 +156,17 @@ class LiteralClauseEvaluator:
             normalized_operand_items=normalized_operand_items,
             predicate_expression=predicate_expression,
             is_template_negated=is_template_negated,
+            facet_arity=facet.arity,
         )
 
     def build_anchor_exists(self, clause_payload: Dict[str, Any]) -> Exists:
-        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        if clause_payload["subject"].get("type") == SUBJECT_TYPE_SEARCH_MODELS:
+            return self._search_model_clause_evaluator.build_exists(
+                clause_payload, correlate_field_name="resourceinstanceid"
+            )
+        subject = clause_payload["subject"]
+        subject_graph_slug = subject["graph_slug"]
+        subject_node_alias = subject["node_alias"]
         operator_token = clause_payload["operator"]
         quantifier_token = clause_payload["quantifier"]
         operand_items = clause_payload["operands"]
@@ -210,9 +226,18 @@ class LiteralClauseEvaluator:
             raise ValueError(f"Unsupported quantifier: {quantifier_token}")
 
         if quantifier_token == QUANTIFIER_ANY:
-            return Exists(correlated_rows.filter(predicate_expression))
+            if not is_template_negated:
+                return Exists(correlated_rows.filter(predicate_expression))
+
+            matching_negated_rows = correlated_rows.filter(predicate_expression)
+            if correlated_clause_predicate.facet_arity > 0:
+                return Exists(matching_negated_rows) | ~Exists(correlated_rows)
+            return Exists(matching_negated_rows)
 
         if quantifier_token == QUANTIFIER_NONE:
+            if not is_template_negated:
+                return ~Exists(correlated_rows.filter(predicate_expression))
+
             return ~Exists(correlated_rows.filter(predicate_expression))
 
         if quantifier_token == QUANTIFIER_ALL:
@@ -236,7 +261,13 @@ class LiteralClauseEvaluator:
         clause_payload: Dict[str, Any],
         correlate_field: str,
     ) -> Exists:
-        subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+        if clause_payload["subject"].get("type") == SUBJECT_TYPE_SEARCH_MODELS:
+            return self._search_model_clause_evaluator.build_exists(
+                clause_payload, correlate_field_name=correlate_field
+            )
+        subject = clause_payload["subject"]
+        subject_graph_slug = subject["graph_slug"]
+        subject_node_alias = subject["node_alias"]
         operator_token = clause_payload["operator"]
         operand_items = clause_payload["operands"]
 
@@ -299,143 +330,9 @@ class LiteralClauseEvaluator:
         correlate_field: str,
         terminal_graph_slug: str,
     ) -> Optional[QuerySet]:
-        literal_clauses: List[Dict[str, Any]] = []
-
-        for direct_child_group in group_payload["groups"]:
-            if direct_child_group["relationship"]["path"]:
-                continue
-
-            pending_groups: List[Dict[str, Any]] = [direct_child_group]
-            while pending_groups:
-                current_group = pending_groups.pop()
-                if current_group["relationship"]["path"]:
-                    continue
-
-                for clause_payload in current_group["clauses"]:
-                    clause_type_token = clause_payload["type"]
-                    if clause_type_token == CLAUSE_TYPE_LITERAL:
-                        clause_graph_slug, _ = clause_payload["subject"][0]
-                        if clause_graph_slug != terminal_graph_slug:
-                            return None
-                        literal_clauses.append(clause_payload)
-                    elif clause_type_token == CLAUSE_TYPE_RELATED:
-                        continue
-                    else:
-                        continue
-
-                pending_groups.extend(current_group["groups"])
-
-        if not literal_clauses:
-            return None
-
-        intersected_rows: Optional[QuerySet] = None
-
-        for clause_payload in literal_clauses:
-            subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
-            operator_token = clause_payload["operator"]
-            operand_items = clause_payload["operands"]
-
-            datatype_name, facet, model_class = self.resolve_facet_and_model(
-                subject_graph_slug=subject_graph_slug,
-                subject_node_alias=subject_node_alias,
-                operator_token=operator_token,
-            )
-
-            if not operand_items:
-                presence_implies_match = self.facet_registry.presence_implies_match(
-                    datatype_name,
-                    operator_token,
-                )
-                base_row_sets = self.build_presence_subject_row_sets(
-                    datatype_name=datatype_name,
-                    subject_graph_slug=subject_graph_slug,
-                    subject_node_alias=subject_node_alias,
-                )
-                if presence_implies_match:
-                    predicate_rows = None
-                    for base_rows in base_row_sets:
-                        correlated_rows = base_rows.filter(
-                            resourceinstanceid=OuterRef(correlate_field)
-                        ).values("resourceinstanceid")
-                        predicate_rows = (
-                            correlated_rows
-                            if predicate_rows is None
-                            else predicate_rows.union(correlated_rows)
-                        )
-                else:
-                    first_model_class = base_row_sets[0].model
-                    predicate_rows = first_model_class.objects.none().values(
-                        "resourceinstanceid"
-                    )
-            else:
-                base_rows = self.build_subject_rows(
-                    model_class=model_class,
-                    subject_graph_slug=subject_graph_slug,
-                    subject_node_alias=subject_node_alias,
-                )
-                normalized_operand_items, localized_language = (
-                    self.localize_string_operands(
-                        facet=facet,
-                        operand_items=operand_items,
-                    )
-                )
-                correlated_rows = self.apply_localized_language_filter(
-                    base_rows.filter(resourceinstanceid=OuterRef(correlate_field)),
-                    facet=facet,
-                    localized_language=localized_language,
-                )
-
-                predicate_expression, is_template_negated = (
-                    self.predicate_builder.build_predicate(
-                        datatype_name=datatype_name,
-                        operator_token=operator_token,
-                        operands=normalized_operand_items,
-                        anchor_resource_id_annotation=None,
-                        facet=facet,
-                    )
-                )
-                if isinstance(predicate_expression, AggregatePredicateSpec):
-                    positive_rows = build_grouped_rows_matching_aggregate_predicate(
-                        correlated_rows=correlated_rows,
-                        aggregate_predicate_spec=predicate_expression,
-                        grouping_field_name="resourceinstanceid",
-                    )
-                    if not is_template_negated:
-                        predicate_rows = positive_rows
-                    else:
-                        predicate_rows = (
-                            correlated_rows.values("resourceinstanceid")
-                            .exclude(
-                                resourceinstanceid__in=positive_rows.values(
-                                    "resourceinstanceid"
-                                )
-                            )
-                            .distinct()
-                        )
-                else:
-                    if not is_template_negated:
-                        predicate_rows = correlated_rows.filter(predicate_expression)
-                    else:
-                        positive_rows = self.positive_rows_for_negated_template(
-                            operator_token=operator_token,
-                            datatype_name=datatype_name,
-                            operand_items=normalized_operand_items,
-                            correlated_rows=correlated_rows,
-                            predicate_expression=predicate_expression,
-                        )
-                        predicate_rows = correlated_rows.exclude(
-                            pk__in=positive_rows.values("pk")
-                        )
-
-            intersected_rows = (
-                predicate_rows
-                if intersected_rows is None
-                else intersected_rows.filter(
-                    resourceinstanceid__in=predicate_rows.values("resourceinstanceid")
-                )
-            )
-
-        return intersected_rows
+        return self._child_rows_computer.compute_child_rows(
+            group_payload, correlate_field, terminal_graph_slug
+        )
 
     def positive_rows_for_negated_template(
         self,
@@ -463,60 +360,3 @@ class LiteralClauseEvaluator:
             return correlated_rows.filter(~predicate_expression)
 
         return correlated_rows.exclude(predicate_expression)
-
-    def localize_string_operands(
-        self,
-        facet: AdvancedSearchFacet,
-        operand_items: List[Dict[str, Any]],
-    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        if not facet.filter_field:
-            return operand_items, None
-
-        language_code = get_language()
-        short_language_code = None
-
-        if language_code:
-            short_language_code = language_code.split("-")[0]
-
-        normalized_items: List[Dict[str, Any]] = []
-        localized_language: Optional[str] = None
-
-        for operand_item in operand_items:
-            raw_value = operand_item.get("value")
-
-            if isinstance(raw_value, dict) and raw_value:
-                chosen_value = None
-                chosen_language = None
-
-                if language_code and language_code in raw_value:
-                    chosen_language = language_code
-                    chosen_value = raw_value[language_code]
-                elif short_language_code and short_language_code in raw_value:
-                    chosen_language = short_language_code
-                    chosen_value = raw_value[short_language_code]
-                else:
-                    chosen_language, chosen_value = next(iter(raw_value.items()))
-
-                normalized_items.append({**operand_item, "value": chosen_value})
-
-                if localized_language is None:
-                    localized_language = chosen_language
-                elif chosen_language != localized_language:
-                    raise ValueError(
-                        "Localized string operands resolved to different languages"
-                    )
-            else:
-                normalized_items.append(operand_item)
-
-        return normalized_items, localized_language
-
-    def apply_localized_language_filter(
-        self,
-        rows: QuerySet,
-        facet: AdvancedSearchFacet,
-        localized_language: Optional[str],
-    ) -> QuerySet:
-        if not facet.filter_field or localized_language is None:
-            return rows
-
-        return rows.filter(**{facet.filter_field: localized_language})

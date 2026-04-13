@@ -20,7 +20,6 @@ interface TermSuggestionAdditionalInfo {
 }
 
 const props = defineProps<{
-    config: Record<string, unknown>;
     filterKey: string;
 }>();
 

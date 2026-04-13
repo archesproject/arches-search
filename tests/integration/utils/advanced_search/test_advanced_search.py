@@ -28,7 +28,7 @@ DOG_C_ID = uuid.UUID("c1d2e3f4-a5b6-7c8d-9e0f-1a2b3c4d5e6f")
 DOG_D_ID = uuid.UUID("d1e2f3a4-b5c6-d7e8-f9a0-b1c2d3e4f5a6")
 
 
-class AdvancedSearchTestCase(TestCase):
+class AdvancedSearchSetupMixin:
     @classmethod
     def setUpTestData(cls):
         cls._create_fixture_models()
@@ -849,6 +849,8 @@ class AdvancedSearchTestCase(TestCase):
             .values_list("resourceinstanceid", flat=True)
         )
 
+
+class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
     def test_dog_baseline_returns_all_dogs(self):
         """
         Verifies that an empty query with no clauses, groups, or relationship returns all resources
@@ -881,7 +883,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "age"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "age",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN",
                         "operands": [{"type": "LITERAL", "value": 18}],
                     }
@@ -907,14 +914,24 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "age"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "age",
+                            "search_models": [],
+                        },
                         "operator": "EQUALS",
                         "operands": [{"type": "LITERAL", "value": 22}],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "age"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "age",
+                            "search_models": [],
+                        },
                         "operator": "EQUALS",
                         "operands": [{"type": "LITERAL", "value": 24}],
                     },
@@ -940,7 +957,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "LESS_THAN_OR_EQUALS",
                         "operands": [{"type": "LITERAL", "value": 50}],
                     }
@@ -966,7 +988,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "age"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "age",
+                            "search_models": [],
+                        },
                         "operator": "HAS_NO_VALUE",
                         "operands": [],
                     }
@@ -992,21 +1019,36 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "age"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "age",
+                            "search_models": [],
+                        },
                         "operator": "HAS_NO_VALUE",
                         "operands": [],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "LESS_THAN_OR_EQUALS",
                         "operands": [{"type": "LITERAL", "value": 25}],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN",
                         "operands": [{"type": "LITERAL", "value": 50}],
                     },
@@ -1033,7 +1075,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN",
                         "operands": [{"type": "LITERAL", "value": 50}],
                     }
@@ -1047,14 +1094,24 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "HAS_NO_VALUE",
                                 "operands": [],
                             },
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "fingernail_length"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "fingernail_length",
+                                    "search_models": [],
+                                },
                                 "operator": "EQUALS",
                                 "operands": [{"type": "LITERAL", "value": 10}],
                             },
@@ -1084,7 +1141,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_NO_VALUE",
                         "operands": [],
                     }
@@ -1110,14 +1172,24 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "last_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "last_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "FOO"}],
                     },
@@ -1144,14 +1216,24 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "last_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "last_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "REAL"}],
                     },
@@ -1177,14 +1259,24 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "last_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "last_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "REAL"}],
                     },
@@ -1210,14 +1302,24 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "last_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "last_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "MOTHER"}],
                     },
@@ -1244,7 +1346,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["dog", "favorite_person"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "dog",
+                            "node_alias": "favorite_person",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -1262,9 +1369,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -1286,7 +1397,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["dog", "tail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "dog",
+                            "node_alias": "tail_length",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN_OR_EQUALS",
                         "operands": [
                             {"type": "PATH", "value": [["person", "fingernail_length"]]}
@@ -1306,9 +1422,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -1329,7 +1449,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["dog", "tail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "dog",
+                            "node_alias": "tail_length",
+                            "search_models": [],
+                        },
                         "operator": "EQUALS",
                         "operands": [
                             {"type": "PATH", "value": [["person", "fingernail_length"]]}
@@ -1349,9 +1474,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -1372,7 +1501,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["dog", "tail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "dog",
+                            "node_alias": "tail_length",
+                            "search_models": [],
+                        },
                         "operator": "LESS_THAN",
                         "operands": [
                             {"type": "PATH", "value": [["person", "fingernail_length"]]}
@@ -1392,9 +1526,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -1415,7 +1553,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -1429,7 +1572,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "LESS_THAN",
                                 "operands": [{"type": "LITERAL", "value": 18}],
                             }
@@ -1441,9 +1589,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -1464,7 +1616,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -1478,7 +1635,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [{"type": "LITERAL", "value": 18}],
                             }
@@ -1490,9 +1652,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -1513,7 +1679,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -1527,7 +1698,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "EQUALS",
                                 "operands": [{"type": "LITERAL", "value": 22}],
                             }
@@ -1539,9 +1715,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -1576,7 +1756,12 @@ class AdvancedSearchTestCase(TestCase):
                                     {
                                         "type": "LITERAL",
                                         "quantifier": "ANY",
-                                        "subject": [["person", "age"]],
+                                        "subject": {
+                                            "type": "NODE",
+                                            "graph_slug": "person",
+                                            "node_alias": "age",
+                                            "search_models": [],
+                                        },
                                         "operator": "EQUALS",
                                         "operands": [{"type": "LITERAL", "value": 22}],
                                     }
@@ -1588,9 +1773,13 @@ class AdvancedSearchTestCase(TestCase):
                         ],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["person", "friends"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "person",
+                                "node_alias": "friends",
+                            },
                             "is_inverse": False,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     }
                 ],
@@ -1599,6 +1788,38 @@ class AdvancedSearchTestCase(TestCase):
             }
         )
         self.assertEqual(result, {PERSON_B_ID, PERSON_D_ID})
+
+    def test_all_string_nodes_like_incognito_returns_person_b(self):
+        """
+        Tests the search_models subject format. Using search_models: ["TermSearch"] queries all
+        string nodes in the person graph (first_name, last_name, nickname) without specifying a
+        particular node. Only Person B has "INCOGNITO" across any of those nodes (first_name tile).
+        """
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "AND",
+                "clauses": [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ANY",
+                        "subject": {
+                            "type": "SEARCH_MODELS",
+                            "graph_slug": "person",
+                            "node_alias": "",
+                            "search_models": ["TermSearch"],
+                        },
+                        "operator": "LIKE",
+                        "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
+                    }
+                ],
+                "groups": [],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, {PERSON_B_ID})
 
     def test_people_all_friends_have_any_pet_tail_gt_10(self):
         """
@@ -1615,7 +1836,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -1635,7 +1861,12 @@ class AdvancedSearchTestCase(TestCase):
                                     {
                                         "type": "LITERAL",
                                         "quantifier": "ANY",
-                                        "subject": [["dog", "tail_length"]],
+                                        "subject": {
+                                            "type": "NODE",
+                                            "graph_slug": "dog",
+                                            "node_alias": "tail_length",
+                                            "search_models": [],
+                                        },
                                         "operator": "GREATER_THAN",
                                         "operands": [{"type": "LITERAL", "value": 10}],
                                     }
@@ -1647,17 +1878,25 @@ class AdvancedSearchTestCase(TestCase):
                         ],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["person", "pets"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "person",
+                                "node_alias": "pets",
+                            },
                             "is_inverse": False,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     }
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -1678,7 +1917,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -1698,7 +1942,12 @@ class AdvancedSearchTestCase(TestCase):
                                     {
                                         "type": "LITERAL",
                                         "quantifier": "ANY",
-                                        "subject": [["dog", "tail_length"]],
+                                        "subject": {
+                                            "type": "NODE",
+                                            "graph_slug": "dog",
+                                            "node_alias": "tail_length",
+                                            "search_models": [],
+                                        },
                                         "operator": "LESS_THAN",
                                         "operands": [{"type": "LITERAL", "value": 10}],
                                     }
@@ -1710,17 +1959,25 @@ class AdvancedSearchTestCase(TestCase):
                         ],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["person", "pets"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "person",
+                                "node_alias": "pets",
+                            },
                             "is_inverse": False,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     }
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -1740,7 +1997,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -1760,7 +2022,12 @@ class AdvancedSearchTestCase(TestCase):
                                     {
                                         "type": "LITERAL",
                                         "quantifier": "ANY",
-                                        "subject": [["dog", "tail_length"]],
+                                        "subject": {
+                                            "type": "NODE",
+                                            "graph_slug": "dog",
+                                            "node_alias": "tail_length",
+                                            "search_models": [],
+                                        },
                                         "operator": "GREATER_THAN",
                                         "operands": [{"type": "LITERAL", "value": 25}],
                                     }
@@ -1772,17 +2039,25 @@ class AdvancedSearchTestCase(TestCase):
                         ],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["person", "pets"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "person",
+                                "node_alias": "pets",
+                            },
                             "is_inverse": False,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     }
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -1806,7 +2081,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -1826,7 +2106,12 @@ class AdvancedSearchTestCase(TestCase):
                                     {
                                         "type": "LITERAL",
                                         "quantifier": "ANY",
-                                        "subject": [["dog", "tail_length"]],
+                                        "subject": {
+                                            "type": "NODE",
+                                            "graph_slug": "dog",
+                                            "node_alias": "tail_length",
+                                            "search_models": [],
+                                        },
                                         "operator": "EQUALS",
                                         "operands": [{"type": "LITERAL", "value": 999}],
                                     }
@@ -1838,17 +2123,25 @@ class AdvancedSearchTestCase(TestCase):
                         ],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["person", "pets"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "person",
+                                "node_alias": "pets",
+                            },
                             "is_inverse": False,
-                            "traversal_quantifiers": ["NONE"],
+                            "traversal_quantifier": "NONE",
                         },
                     }
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -1869,7 +2162,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -1889,7 +2187,12 @@ class AdvancedSearchTestCase(TestCase):
                                     {
                                         "type": "LITERAL",
                                         "quantifier": "ANY",
-                                        "subject": [["dog", "tail_length"]],
+                                        "subject": {
+                                            "type": "NODE",
+                                            "graph_slug": "dog",
+                                            "node_alias": "tail_length",
+                                            "search_models": [],
+                                        },
                                         "operator": "EQUALS",
                                         "operands": [{"type": "LITERAL", "value": 25}],
                                     }
@@ -1901,17 +2204,25 @@ class AdvancedSearchTestCase(TestCase):
                         ],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["person", "pets"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "person",
+                                "node_alias": "pets",
+                            },
                             "is_inverse": False,
-                            "traversal_quantifiers": ["NONE"],
+                            "traversal_quantifier": "NONE",
                         },
                     }
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -1942,9 +2253,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -1974,9 +2289,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["NONE"],
+                    "traversal_quantifier": "NONE",
                 },
             }
         )
@@ -2007,9 +2326,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -2040,9 +2363,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -2072,9 +2399,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["NONE"],
+                    "traversal_quantifier": "NONE",
                 },
             }
         )
@@ -2097,14 +2428,24 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "last_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "last_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "MOTHER"}],
                     },
@@ -2130,7 +2471,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["dog", "tail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "dog",
+                            "node_alias": "tail_length",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN",
                         "operands": [{"type": "LITERAL", "value": 0}],
                     }
@@ -2156,7 +2502,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "EQUALS",
                         "operands": [{"type": "LITERAL", "value": 10}],
                     }
@@ -2185,7 +2536,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     }
@@ -2199,7 +2555,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "last_name"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "last_name",
+                                    "search_models": [],
+                                },
                                 "operator": "LIKE",
                                 "operands": [{"type": "LITERAL", "value": "MOTHER"}],
                             }
@@ -2233,7 +2594,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "LESS_THAN_OR_EQUALS",
                         "operands": [{"type": "LITERAL", "value": 50}],
                     }
@@ -2247,7 +2613,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [{"type": "LITERAL", "value": 18}],
                             }
@@ -2259,9 +2630,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -2281,7 +2656,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "pets"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "pets",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -2307,7 +2687,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "pets"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "pets",
+                            "search_models": [],
+                        },
                         "operator": "HAS_NO_VALUE",
                         "operands": [],
                     }
@@ -2333,7 +2718,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "mother"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "mother",
+                            "search_models": [],
+                        },
                         "operator": "HAS_NO_VALUE",
                         "operands": [],
                     }
@@ -2359,7 +2749,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "mother"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "mother",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -2385,7 +2780,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -2399,7 +2799,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [{"type": "LITERAL", "value": 23}],
                             }
@@ -2411,9 +2816,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -2433,7 +2842,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["person", "friends"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -2447,7 +2861,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [{"type": "LITERAL", "value": 100}],
                             }
@@ -2459,9 +2878,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -2490,7 +2913,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN_OR_EQUALS",
                                 "operands": [{"type": "LITERAL", "value": 30}],
                             }
@@ -2502,9 +2930,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["NONE"],
+                    "traversal_quantifier": "NONE",
                 },
             }
         )
@@ -2533,7 +2965,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN_OR_EQUALS",
                                 "operands": [{"type": "LITERAL", "value": 24}],
                             }
@@ -2545,9 +2982,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -2574,7 +3015,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "pets"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "pets",
+                                    "search_models": [],
+                                },
                                 "operator": "HAS_ANY_VALUE",
                                 "operands": [],
                             }
@@ -2586,9 +3032,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -2615,7 +3065,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "pets"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "pets",
+                                    "search_models": [],
+                                },
                                 "operator": "HAS_NO_VALUE",
                                 "operands": [],
                             }
@@ -2627,9 +3082,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -2656,7 +3115,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "pets"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "pets",
+                                    "search_models": [],
+                                },
                                 "operator": "HAS_NO_VALUE",
                                 "operands": [],
                             }
@@ -2668,9 +3132,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -2700,17 +3168,25 @@ class AdvancedSearchTestCase(TestCase):
                         "groups": [],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["dog", "favorite_person"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "dog",
+                                "node_alias": "favorite_person",
+                            },
                             "is_inverse": True,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     }
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -2734,7 +3210,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "age"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "age",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN",
                         "operands": [{"type": "LITERAL", "value": 23}],
                     }
@@ -2748,7 +3229,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "RELATED",
                                 "quantifier": "ANY",
-                                "subject": [["dog", "favorite_person"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "dog",
+                                    "node_alias": "favorite_person",
+                                    "search_models": [],
+                                },
                                 "operator": "HAS_ANY_VALUE",
                                 "operands": [],
                             }
@@ -2756,9 +3242,13 @@ class AdvancedSearchTestCase(TestCase):
                         "groups": [],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["dog", "favorite_person"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "dog",
+                                "node_alias": "favorite_person",
+                            },
                             "is_inverse": True,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     }
                 ],
@@ -2785,7 +3275,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["dog", "favorite_person"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "dog",
+                            "node_alias": "favorite_person",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -2799,7 +3294,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["dog", "tail_length"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "dog",
+                                    "node_alias": "tail_length",
+                                    "search_models": [],
+                                },
                                 "operator": "LESS_THAN",
                                 "operands": [{"type": "LITERAL", "value": 100}],
                             }
@@ -2811,9 +3311,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -2838,7 +3342,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "RELATED",
                         "quantifier": "ANY",
-                        "subject": [["dog", "tail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "dog",
+                            "node_alias": "tail_length",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN_OR_EQUALS",
                         "operands": [
                             {"type": "PATH", "value": [["person", "fingernail_length"]]}
@@ -2858,9 +3367,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -2880,7 +3393,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["dog", "tail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "dog",
+                            "node_alias": "tail_length",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN_OR_EQUALS",
                         "operands": [{"type": "LITERAL", "value": 900}],
                     }
@@ -2912,7 +3430,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [{"type": "LITERAL", "value": 23}],
                             }
@@ -2924,9 +3447,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -2953,7 +3480,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "friends"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "friends",
+                                    "search_models": [],
+                                },
                                 "operator": "HAS_NO_VALUE",
                                 "operands": [],
                             }
@@ -2965,9 +3497,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -2997,9 +3533,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "pets"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "pets",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -3032,9 +3572,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "pets"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "pets",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["NONE"],
+                    "traversal_quantifier": "NONE",
                 },
             }
         )
@@ -3061,7 +3605,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [{"type": "LITERAL", "value": 20}],
                             }
@@ -3073,9 +3622,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "pets"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "pets",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -3108,7 +3661,12 @@ class AdvancedSearchTestCase(TestCase):
                                     {
                                         "type": "LITERAL",
                                         "quantifier": "ANY",
-                                        "subject": [["person", "age"]],
+                                        "subject": {
+                                            "type": "NODE",
+                                            "graph_slug": "person",
+                                            "node_alias": "age",
+                                            "search_models": [],
+                                        },
                                         "operator": "EQUALS",
                                         "operands": [{"type": "LITERAL", "value": 22}],
                                     }
@@ -3120,17 +3678,25 @@ class AdvancedSearchTestCase(TestCase):
                         ],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["person", "friends"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "person",
+                                "node_alias": "friends",
+                            },
                             "is_inverse": False,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     }
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "pets"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "pets",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -3150,7 +3716,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "last_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "last_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "FRIEND!"}],
                     }
@@ -3176,14 +3747,24 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN",
                         "operands": [{"type": "LITERAL", "value": 50}],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "LESS_THAN_OR_EQUALS",
                         "operands": [{"type": "LITERAL", "value": 50}],
                     },
@@ -3212,14 +3793,24 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "LESS_THAN_OR_EQUALS",
                         "operands": [{"type": "LITERAL", "value": 10}],
                     },
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "fingernail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "fingernail_length",
+                            "search_models": [],
+                        },
                         "operator": "GREATER_THAN_OR_EQUALS",
                         "operands": [{"type": "LITERAL", "value": 999}],
                     },
@@ -3252,7 +3843,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "HAS_NO_VALUE",
                                 "operands": [],
                             }
@@ -3264,9 +3860,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -3293,7 +3893,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "HAS_NO_VALUE",
                                 "operands": [],
                             }
@@ -3305,9 +3910,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["NONE"],
+                    "traversal_quantifier": "NONE",
                 },
             }
         )
@@ -3330,7 +3939,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ALL",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "NOT_LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     }
@@ -3358,7 +3972,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "NOT_LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     }
@@ -3386,7 +4005,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "NONE",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     }
@@ -3415,7 +4039,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ALL",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "NOT_LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     }
@@ -3443,7 +4072,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "NOT_LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     }
@@ -3472,7 +4106,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "NONE",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
                     }
@@ -3500,7 +4139,12 @@ class AdvancedSearchTestCase(TestCase):
                 "clauses": [
                     {
                         "type": "LITERAL",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "NOT_LIKE",
                         "quantifier": "ALL",
                         "operands": [{"type": "LITERAL", "value": "INCOGNITO"}],
@@ -3536,7 +4180,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["dog", "tail_length"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "dog",
+                                    "node_alias": "tail_length",
+                                    "search_models": [],
+                                },
                                 "operator": "EQUALS",
                                 "operands": [{"type": "LITERAL", "value": 25}],
                             }
@@ -3553,7 +4202,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["dog", "tail_length"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "dog",
+                                    "node_alias": "tail_length",
+                                    "search_models": [],
+                                },
                                 "operator": "EQUALS",
                                 "operands": [{"type": "LITERAL", "value": 999}],
                             }
@@ -3565,9 +4219,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -3591,7 +4249,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["dog", "tail_length"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "dog",
+                            "node_alias": "tail_length",
+                            "search_models": [],
+                        },
                         "operator": "LESS_THAN",
                         "operands": [{"type": "LITERAL", "value": 100}],
                     }
@@ -3605,7 +4268,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "fingernail_length"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "fingernail_length",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [{"type": "LITERAL", "value": 10}],
                             }
@@ -3617,9 +4285,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -3654,7 +4326,12 @@ class AdvancedSearchTestCase(TestCase):
                                     {
                                         "type": "LITERAL",
                                         "quantifier": "ANY",
-                                        "subject": [["dog", "tail_length"]],
+                                        "subject": {
+                                            "type": "NODE",
+                                            "graph_slug": "dog",
+                                            "node_alias": "tail_length",
+                                            "search_models": [],
+                                        },
                                         "operator": "EQUALS",
                                         "operands": [
                                             {
@@ -3671,9 +4348,13 @@ class AdvancedSearchTestCase(TestCase):
                         ],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["person", "pets"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "person",
+                                "node_alias": "pets",
+                            },
                             "is_inverse": False,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     },
                     {
@@ -3684,7 +4365,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "fingernail_length"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "fingernail_length",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [
                                     {
@@ -3750,9 +4436,13 @@ class AdvancedSearchTestCase(TestCase):
                                         ],
                                         "aggregations": [],
                                         "relationship": {
-                                            "path": [["person", "friends"]],
+                                            "path": {
+                                                "type": "NODE",
+                                                "graph_slug": "person",
+                                                "node_alias": "friends",
+                                            },
                                             "is_inverse": False,
-                                            "traversal_quantifiers": ["NONE"],
+                                            "traversal_quantifier": "NONE",
                                         },
                                     }
                                 ],
@@ -3762,9 +4452,13 @@ class AdvancedSearchTestCase(TestCase):
                         ],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["dog", "favorite_person"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "dog",
+                                "node_alias": "favorite_person",
+                            },
                             "is_inverse": False,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     }
                 ],
@@ -3828,7 +4522,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "is_active"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "is_active",
+                            "search_models": [],
+                        },
                         "operator": "IS_TRUE",
                         "operands": [{"type": "LITERAL", "value": True}],
                     }
@@ -3854,7 +4553,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "is_active"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "is_active",
+                            "search_models": [],
+                        },
                         "operator": "IS_FALSE",
                         "operands": [{"type": "LITERAL", "value": True}],
                     }
@@ -3883,7 +4587,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "birth_date"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "birth_date",
+                            "search_models": [],
+                        },
                         "operator": "LESS_THAN",
                         "operands": [{"type": "LITERAL", "value": 1500}],
                     }
@@ -3910,7 +4619,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "birth_date"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "birth_date",
+                            "search_models": [],
+                        },
                         "operator": "HAS_NO_VALUE",
                         "operands": [],
                     }
@@ -3921,6 +4635,39 @@ class AdvancedSearchTestCase(TestCase):
             }
         )
         self.assertEqual(result, {PERSON_C_ID, PERSON_D_ID})
+
+    def test_person_birth_date_not_equals_1000_includes_people_without_a_value(self):
+        """
+        NOT_EQUALS on a resource-scoped node field is vacuously true for resources that have
+        no indexed row for that node. Person A has birth_date=1000 and is excluded. Person B
+        has birth_date=2000 and matches. Persons C and D have no birth_date row and should
+        also match.
+        """
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "AND",
+                "clauses": [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ANY",
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "birth_date",
+                            "search_models": [],
+                        },
+                        "operator": "NOT_EQUALS",
+                        "operands": [{"type": "LITERAL", "value": 1000}],
+                    }
+                ],
+                "groups": [],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, {PERSON_B_ID, PERSON_C_ID, PERSON_D_ID})
 
     # --- EDTF/date-range datatype smoke test ---
 
@@ -3941,7 +4688,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "availability_window"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "availability_window",
+                            "search_models": [],
+                        },
                         "operator": "HAS_NO_VALUE",
                         "operands": [],
                     }
@@ -3978,7 +4730,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "fingernail_length"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "fingernail_length",
+                                    "search_models": [],
+                                },
                                 "operator": "LESS_THAN",
                                 "operands": [{"type": "LITERAL", "value": 20}],
                             }
@@ -3990,9 +4747,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "mother"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "mother",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -4023,9 +4784,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "mother"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "mother",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ANY"],
+                    "traversal_quantifier": "ANY",
                 },
             }
         )
@@ -4051,7 +4816,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "first_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": {"en": "FOO"}}],
                     }
@@ -4079,7 +4849,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "last_name"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "last_name",
+                            "search_models": [],
+                        },
                         "operator": "EQUALS",
                         "operands": [{"type": "LITERAL", "value": {"en": "MERE"}}],
                     }
@@ -4108,7 +4883,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "nickname"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "nickname",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -4139,7 +4919,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "NONE",
-                        "subject": [["person", "is_active"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "is_active",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -4168,7 +4953,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "NONE",
-                        "subject": [["person", "is_active"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "is_active",
+                            "search_models": [],
+                        },
                         "operator": "HAS_NO_VALUE",
                         "operands": [],
                     }
@@ -4201,7 +4991,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ALL",
-                        "subject": [["person", "is_active"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "is_active",
+                            "search_models": [],
+                        },
                         "operator": "HAS_ANY_VALUE",
                         "operands": [],
                     }
@@ -4229,7 +5024,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ALL",
-                        "subject": [["person", "is_active"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "is_active",
+                            "search_models": [],
+                        },
                         "operator": "HAS_NO_VALUE",
                         "operands": [],
                     }
@@ -4267,7 +5067,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["person", "age"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "person",
+                                    "node_alias": "age",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [{"type": "LITERAL", "value": 18}],
                             }
@@ -4279,9 +5084,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["person", "friends"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
                     "is_inverse": False,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -4316,7 +5125,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "LITERAL",
                                 "quantifier": "ANY",
-                                "subject": [["dog", "tail_length"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "dog",
+                                    "node_alias": "tail_length",
+                                    "search_models": [],
+                                },
                                 "operator": "GREATER_THAN",
                                 "operands": [{"type": "LITERAL", "value": 50}],
                             }
@@ -4328,9 +5142,13 @@ class AdvancedSearchTestCase(TestCase):
                 ],
                 "aggregations": [],
                 "relationship": {
-                    "path": [["dog", "favorite_person"]],
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "dog",
+                        "node_alias": "favorite_person",
+                    },
                     "is_inverse": True,
-                    "traversal_quantifiers": ["ALL"],
+                    "traversal_quantifier": "ALL",
                 },
             }
         )
@@ -4358,7 +5176,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "age"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "age",
+                            "search_models": [],
+                        },
                         "operator": "EQUALS",
                         "operands": [{"type": "LITERAL", "value": 22}],
                     }
@@ -4372,7 +5195,12 @@ class AdvancedSearchTestCase(TestCase):
                             {
                                 "type": "RELATED",
                                 "quantifier": "ANY",
-                                "subject": [["dog", "favorite_person"]],
+                                "subject": {
+                                    "type": "NODE",
+                                    "graph_slug": "dog",
+                                    "node_alias": "favorite_person",
+                                    "search_models": [],
+                                },
                                 "operator": "HAS_ANY_VALUE",
                                 "operands": [],
                             }
@@ -4380,9 +5208,13 @@ class AdvancedSearchTestCase(TestCase):
                         "groups": [],
                         "aggregations": [],
                         "relationship": {
-                            "path": [["dog", "favorite_person"]],
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "dog",
+                                "node_alias": "favorite_person",
+                            },
                             "is_inverse": True,
-                            "traversal_quantifiers": ["ANY"],
+                            "traversal_quantifier": "ANY",
                         },
                     }
                 ],
@@ -4408,7 +5240,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "nickname"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "nickname",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "ALPHA"}],
                     }
@@ -4435,7 +5272,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ANY",
-                        "subject": [["person", "nickname"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "nickname",
+                            "search_models": [],
+                        },
                         "operator": "NOT_LIKE",
                         "operands": [{"type": "LITERAL", "value": "ALPHA"}],
                     }
@@ -4463,7 +5305,12 @@ class AdvancedSearchTestCase(TestCase):
                     {
                         "type": "LITERAL",
                         "quantifier": "ALL",
-                        "subject": [["person", "nickname"]],
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "nickname",
+                            "search_models": [],
+                        },
                         "operator": "LIKE",
                         "operands": [{"type": "LITERAL", "value": "ALPHA"}],
                     }

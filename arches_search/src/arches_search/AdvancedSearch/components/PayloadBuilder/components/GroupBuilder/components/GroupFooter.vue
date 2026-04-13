@@ -12,6 +12,8 @@ defineProps<{
 const emit = defineEmits<{
     "add-group": [];
     "add-filter": [];
+    "add-string-search": [];
+    "add-time-filter": [];
     "add-relationship": [];
     "add-map-filter": [];
     "remove-group": [];
@@ -33,6 +35,20 @@ const emit = defineEmits<{
             :label="$gettext('Add filter')"
             :disabled="disabled"
             @click.stop="emit('add-filter')"
+        />
+        <Button
+            severity="secondary"
+            icon="pi pi-search"
+            :label="$gettext('Add text search')"
+            :disabled="disabled"
+            @click.stop="emit('add-string-search')"
+        />
+        <Button
+            severity="secondary"
+            icon="pi pi-calendar"
+            :label="$gettext('Add time filter')"
+            :disabled="disabled"
+            @click.stop="emit('add-time-filter')"
         />
         <Button
             severity="secondary"

@@ -296,7 +296,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.size_graph.slug, self.size_file_list_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.size_graph.slug,
+                        "node_alias": self.size_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "FILE_SIZE_GREATER_THAN",
                     "operands": [{"type": "LITERAL", "value": 10}],
                 }
@@ -323,7 +328,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.size_graph.slug, self.size_file_list_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.size_graph.slug,
+                        "node_alias": self.size_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "FILE_SIZE_LESS_THAN",
                     "operands": [{"type": "LITERAL", "value": 10}],
                 }
@@ -350,7 +360,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.size_graph.slug, self.size_file_list_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.size_graph.slug,
+                        "node_alias": self.size_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "FILE_SIZE_BETWEEN",
                     "operands": [
                         {"type": "LITERAL", "value": 10},
@@ -380,7 +395,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [[self.name_graph.slug, self.name_file_list_node.alias]],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.name_graph.slug,
+                        "node_alias": self.name_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "FILE_NAME_LIKE",
                     "operands": [{"type": "LITERAL", "value": "invoice"}],
                 }
@@ -407,9 +427,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.extension_graph.slug, self.extension_file_list_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.extension_graph.slug,
+                        "node_alias": self.extension_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "FILE_EXTENSION_EQUALS",
                     "operands": [{"type": "LITERAL", "value": "pdf"}],
                 }
@@ -436,9 +459,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.modified_graph.slug, self.modified_file_list_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.modified_graph.slug,
+                        "node_alias": self.modified_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "FILE_MODIFIED_BEFORE",
                     "operands": [
                         {"type": "LITERAL", "value": self.modified_2024_01_20}
@@ -467,9 +493,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.modified_graph.slug, self.modified_file_list_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.modified_graph.slug,
+                        "node_alias": self.modified_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "FILE_MODIFIED_AFTER",
                     "operands": [
                         {"type": "LITERAL", "value": self.modified_2024_01_20}
@@ -498,9 +527,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.modified_graph.slug, self.modified_file_list_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.modified_graph.slug,
+                        "node_alias": self.modified_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "FILE_MODIFIED_BETWEEN",
                     "operands": [
                         {"type": "LITERAL", "value": self.modified_2024_01_10},
@@ -530,9 +562,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_file_list_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_NO_VALUE",
                     "operands": [],
                 }
@@ -559,9 +594,12 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
                 {
                     "type": "LITERAL",
                     "quantifier": "ANY",
-                    "subject": [
-                        [self.presence_graph.slug, self.presence_file_list_node.alias]
-                    ],
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.presence_graph.slug,
+                        "node_alias": self.presence_file_list_node.alias,
+                        "search_models": [],
+                    },
                     "operator": "HAS_ANY_VALUE",
                     "operands": [],
                 }

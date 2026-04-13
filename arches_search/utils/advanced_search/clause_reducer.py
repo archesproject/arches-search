@@ -14,7 +14,9 @@ from arches_search.utils.advanced_search.tile_scope_evaluator import (
 from arches_search.utils.advanced_search.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
-
+from arches_search.utils.advanced_search.relationship_utils import (
+    has_relationship_path,
+)
 from arches_search.utils.advanced_search.constants import (
     CLAUSE_TYPE_LITERAL,
     CLAUSE_TYPE_RELATED,
@@ -22,6 +24,7 @@ from arches_search.utils.advanced_search.constants import (
     LOGIC_OR,
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
+    SUBJECT_TYPE_NODE,
 )
 from arches_search.utils.advanced_search.specs import ClauseReductionResult
 
@@ -56,11 +59,11 @@ class ClauseReducer:
             if clause_type_token != CLAUSE_TYPE_LITERAL:
                 continue
 
-            subject_pairs = clause_payload.get("subject") or []
-            if not subject_pairs:
+            subject = clause_payload.get("subject")
+            if not subject:
                 continue
 
-            subject_graph_slug, _subject_node_alias = subject_pairs[0]
+            subject_graph_slug = subject.get("graph_slug", "")
             if subject_graph_slug != anchor_graph_slug:
                 continue
 
@@ -100,7 +103,6 @@ class ClauseReducer:
             group_payload, traversal_context, child_rows, logic
         )
         return ClauseReductionResult(
-            relationshipless_q=None,
             constrained_child_rows=constrained_child_rows,
             had_inner_filters=had_inner_filters,
         )
@@ -136,7 +138,7 @@ class ClauseReducer:
             (
                 candidate_group
                 for candidate_group in group_payload["groups"]
-                if (candidate_group.get("relationship") or {}).get("path")
+                if has_relationship_path(candidate_group.get("relationship"))
             ),
             None,
         )
@@ -175,9 +177,7 @@ class ClauseReducer:
         pending_group_payloads: List[Dict[str, Any]] = list(group_payload["groups"])
         while pending_group_payloads:
             current_group_payload = pending_group_payloads.pop()
-            has_path = bool(
-                ((current_group_payload.get("relationship")) or {}).get("path")
-            )
+            has_path = has_relationship_path(current_group_payload.get("relationship"))
             if not has_path:
                 for clause_payload in current_group_payload["clauses"]:
                     if clause_payload["type"] != CLAUSE_TYPE_LITERAL:
@@ -204,9 +204,7 @@ class ClauseReducer:
 
         while pending_group_payloads:
             current_group_payload = pending_group_payloads.pop()
-            has_path = bool(
-                (current_group_payload.get("relationship") or {}).get("path")
-            )
+            has_path = has_relationship_path(current_group_payload.get("relationship"))
             if not has_path:
                 ok_rowset = self.literal_clause_evaluator.compute_child_rows(
                     group_payload=current_group_payload,
@@ -230,25 +228,21 @@ class ClauseReducer:
         traversal_context: Dict[str, Any],
         nested_group_payload: Dict[str, Any],
     ) -> Tuple[QuerySet, bool]:
-        nested_relationship = nested_group_payload.get("relationship") or {}
-        nested_path = nested_relationship.get("path") or []
-        if len(nested_path) != 1:
+        nested_relationship = nested_group_payload.get("relationship")
+        if not has_relationship_path(nested_relationship):
             return base_child_rows, False
 
         parent_child_id_field_name = traversal_context["child_id_field"]
-        nested_quantifier = (
-            nested_relationship.get("traversal_quantifiers") or [QUANTIFIER_ANY]
-        )[0]
+        nested_quantifier = nested_relationship.get(
+            "traversal_quantifier", QUANTIFIER_ANY
+        )
 
-        (
-            _anchor_slug,
-            _nested_terminal_graph_slug,
-            nested_child_rows,
-            nested_child_id_field_name,
-        ) = self.path_navigator.build_scoped_pairs_for_path(
-            path_segments=nested_path,
-            is_inverse_relationship=bool(nested_relationship["is_inverse"]),
-            correlate_on_field=parent_child_id_field_name,
+        *_, nested_child_rows, nested_child_id_field_name = (
+            self.path_navigator.build_scoped_pairs_for_relationship_path(
+                relationship_path=nested_relationship["path"],
+                is_inverse_relationship=bool(nested_relationship["is_inverse"]),
+                correlate_on_field=parent_child_id_field_name,
+            )
         )
 
         nested_ok_rows = nested_child_rows
@@ -258,9 +252,7 @@ class ClauseReducer:
         )
         while pending_group_payloads:
             current_group_payload = pending_group_payloads.pop()
-            has_path = bool(
-                ((current_group_payload.get("relationship")) or {}).get("path")
-            )
+            has_path = has_relationship_path(current_group_payload.get("relationship"))
             if not has_path:
                 for clause_payload in current_group_payload["clauses"]:
                     if clause_payload["type"] != CLAUSE_TYPE_LITERAL:
@@ -309,7 +301,12 @@ class ClauseReducer:
             if clause_payload["type"] != CLAUSE_TYPE_RELATED:
                 continue
 
-            subject_graph_slug, subject_node_alias = clause_payload["subject"][0]
+            subject = clause_payload["subject"]
+            if subject.get("type") != SUBJECT_TYPE_NODE:
+                raise ValueError("RELATED clauses require a node subject.")
+
+            subject_graph_slug = subject["graph_slug"]
+            subject_node_alias = subject["node_alias"]
             operator_token = clause_payload["operator"]
             has_operands = bool(clause_payload["operands"])
 

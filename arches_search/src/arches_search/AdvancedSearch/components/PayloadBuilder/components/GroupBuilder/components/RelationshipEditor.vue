@@ -10,8 +10,8 @@ import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilde
 
 import type {
     GraphModel,
+    PathSelection,
     RelationshipBlock,
-    RelationshipPath,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext, $pgettext } = useGettext();
@@ -80,11 +80,18 @@ const traversalQuantifierOptions = computed(() => [
 ]);
 
 const currentTraversalQuantifier = computed(() => {
-    return relationship.traversal_quantifiers[0] ?? TRAVERSAL_QUANTIFIER_ANY;
+    return relationship.traversal_quantifier ?? TRAVERSAL_QUANTIFIER_ANY;
 });
 
-const pathSequenceForPathBuilder = computed(() => {
-    return relationship.path.slice(0, 1);
+const selectedRelationshipNode = computed<PathSelection | null>(() => {
+    if (!relationship.path.graph_slug || !relationship.path.node_alias) {
+        return null;
+    }
+
+    return {
+        graph_slug: relationship.path.graph_slug,
+        node_alias: relationship.path.node_alias,
+    };
 });
 
 watch(
@@ -94,8 +101,8 @@ watch(
             if (innerGraphSlug) {
                 emit("update:innerGraphSlug", "");
             }
-            if (relationship.path.length > 0) {
-                emit("update:relationship", { ...relationship, path: [] });
+            if (relationship.path.graph_slug || relationship.path.node_alias) {
+                emitPathReset();
             }
         }
         await loadRelatableTree();
@@ -109,7 +116,7 @@ watch(
         if (!previousSlug) {
             return;
         }
-        emit("update:relationship", { ...relationship, path: [] });
+        emitPathReset();
     },
 );
 
@@ -138,8 +145,8 @@ async function loadRelatableTree() {
         } else if (!options.some((option) => option.value === innerGraphSlug)) {
             emit("update:innerGraphSlug", "");
 
-            if (relationship.path.length > 0) {
-                emit("update:relationship", { ...relationship, path: [] });
+            if (relationship.path.graph_slug || relationship.path.node_alias) {
+                emitPathReset();
             }
         }
     } catch (error) {
@@ -150,25 +157,38 @@ async function loadRelatableTree() {
     }
 }
 
-function onUpdatePathSequence(nextPathSequence: RelationshipPath): void {
-    if (nextPathSequence.length === 0) {
-        emit("update:relationship", { ...relationship, path: [] });
-        return;
-    }
-    const [firstGraphSlug, firstNodeAlias] = nextPathSequence[0]!;
+function emitPathReset(): void {
     emit("update:relationship", {
         ...relationship,
-        path: [[firstGraphSlug, firstNodeAlias]],
-        is_inverse: firstGraphSlug !== anchorGraphSlug,
+        path: {
+            type: relationship.path.type,
+            graph_slug: "",
+            node_alias: "",
+        },
+    });
+}
+
+function onUpdateSelectedNode(nextSelectedNode: PathSelection | null): void {
+    if (!nextSelectedNode) {
+        emitPathReset();
+        return;
+    }
+    emit("update:relationship", {
+        ...relationship,
+        path: {
+            type: relationship.path.type,
+            graph_slug: nextSelectedNode.graph_slug,
+            node_alias: nextSelectedNode.node_alias,
+        },
+        is_inverse: nextSelectedNode.graph_slug !== anchorGraphSlug,
     });
 }
 
 function onChangeTraversalQuantifier(nextQuantifier: string): void {
     emit("update:relationship", {
         ...relationship,
-        traversal_quantifiers: [
-            nextQuantifier,
-        ] as RelationshipBlock["traversal_quantifiers"],
+        traversal_quantifier:
+            nextQuantifier as RelationshipBlock["traversal_quantifier"],
     });
 }
 </script>
@@ -224,19 +244,23 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
                 >
                     <PathBuilder
                         :graph-slugs="[anchorGraphSlug, innerGraphSlug]"
-                        :path-sequence="pathSequenceForPathBuilder"
+                        :selected-node="selectedRelationshipNode"
                         :restrict-to-resource-instance-datatypes="true"
                         :relationship-between-graphs="[
                             anchorGraphSlug,
                             innerGraphSlug,
                         ]"
                         :should-prepend-graph-name="true"
-                        @update:path-sequence="onUpdatePathSequence"
+                        @update:selected-node="onUpdateSelectedNode"
                     />
                 </div>
 
                 <span
-                    v-if="innerGraphSlug && relationship.path.length > 0"
+                    v-if="
+                        innerGraphSlug &&
+                        relationship.path.graph_slug &&
+                        relationship.path.node_alias
+                    "
                     class="relationship-leadin-text"
                 >
                     {{
@@ -248,7 +272,11 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
                 </span>
 
                 <Select
-                    v-if="innerGraphSlug && relationship.path.length > 0"
+                    v-if="
+                        innerGraphSlug &&
+                        relationship.path.graph_slug &&
+                        relationship.path.node_alias
+                    "
                     :model-value="currentTraversalQuantifier"
                     :options="traversalQuantifierOptions"
                     option-label="label"

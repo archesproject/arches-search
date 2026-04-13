@@ -150,11 +150,8 @@ function createSearchFilters(): SearchFilters {
         }));
     }
 
-    function getRequestQuery(): GroupPayload {
-        const requestQueries = queries.value.values()
-            ? queries.value.values()
-            : {};
-        return requestQueries as GroupPayload;
+    function getRequestQuery(): GroupPayload | undefined {
+        return queries.value.values().next().value;
     }
 
     return {

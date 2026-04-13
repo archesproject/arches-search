@@ -1,9 +1,12 @@
 import Cookies from "js-cookie";
 
-import type { SearchResults } from "@/arches_search/AdvancedSearch/types.ts";
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
-import type { GroupPayload } from "../AdvancedSearch/types";
-import type { TermSuggestion } from "./types";
+
+import type {
+    GroupPayload,
+    SearchResults,
+} from "@/arches_search/AdvancedSearch/types.ts";
+import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
 
 export async function fetchSearchResults({
     terms = [],
@@ -39,10 +42,7 @@ export async function fetchSearchResults({
         throw new Error(response.statusText);
     }
 
-    const parsed = await response.json();
-    if (!response.ok) throw new Error(parsed.message || response.statusText);
-
-    return parsed;
+    return await response.json();
 }
 
 export async function fetchSearchTermSuggestions(
