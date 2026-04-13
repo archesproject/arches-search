@@ -1,7 +1,6 @@
 <script setup lang="ts">
+import { computed, inject, ref, watch } from "vue";
 import dayjs from "dayjs";
-
-import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
@@ -14,35 +13,14 @@ import {
     parseStoredDate,
 } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 
-import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
+import type { Ref } from "vue";
+import type {
+    AdvancedSearchFacet,
+    LiteralClause,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 const UPDATE_EVENT = "update:modelValue" as const;
 const REMOVE_EVENT = "remove" as const;
-
-const MODE_EQUALS = "EQUALS" as const;
-const MODE_BEFORE = "BEFORE" as const;
-const MODE_AFTER = "AFTER" as const;
-const MODE_BETWEEN = "BETWEEN" as const;
-
-const OPERATOR_BY_MODE: Record<string, string> = {
-    [MODE_EQUALS]: "EQUALS",
-    [MODE_BEFORE]: "LESS_THAN",
-    [MODE_AFTER]: "GREATER_THAN",
-    [MODE_BETWEEN]: "BETWEEN",
-};
-
-const OPERATOR_TO_MODE: Record<string, string> = {
-    EQUALS: MODE_EQUALS,
-    LESS_THAN: MODE_BEFORE,
-    GREATER_THAN: MODE_AFTER,
-    BETWEEN: MODE_BETWEEN,
-};
-
-type TimeFilterMode =
-    | typeof MODE_EQUALS
-    | typeof MODE_BEFORE
-    | typeof MODE_AFTER
-    | typeof MODE_BETWEEN;
 
 const { modelValue, graphSlug } = defineProps<{
     modelValue?: LiteralClause;
@@ -54,80 +32,86 @@ const emit = defineEmits<{
     (event: typeof REMOVE_EVENT): void;
 }>();
 
+const datatypesToAdvancedSearchFacets = inject<
+    Ref<Record<string, AdvancedSearchFacet[]>>
+>("datatypesToAdvancedSearchFacets")!;
+
 const { $gettext } = useGettext();
 
-const selectedMode = ref<TimeFilterMode>(MODE_EQUALS);
+const selectedFacet = ref<AdvancedSearchFacet | null>(null);
 const dateFrom = ref<Date | null>(null);
 const dateTo = ref<Date | null>(null);
 
-const modeOptions = computed(() => [
-    { label: $gettext("On"), value: MODE_EQUALS },
-    { label: $gettext("Before"), value: MODE_BEFORE },
-    { label: $gettext("After"), value: MODE_AFTER },
-    { label: $gettext("Between"), value: MODE_BETWEEN },
-]);
+const dateFilterFacets = computed<AdvancedSearchFacet[]>(() =>
+    (datatypesToAdvancedSearchFacets.value["date"] ?? []).filter(
+        (facet) => facet.arity > 0,
+    ),
+);
 
-const isBetween = computed(() => selectedMode.value === MODE_BETWEEN);
+const isBetween = computed(() => selectedFacet.value?.arity === 2);
 
 const isValid = computed(() => {
-    if (!dateFrom.value) return false;
+    if (!selectedFacet.value || !dateFrom.value) return false;
     if (isBetween.value && !dateTo.value) return false;
     return true;
 });
 
 watch(
-    () => modelValue,
-    (clause) => {
+    [() => modelValue, dateFilterFacets],
+    ([clause]) => {
         if (!clause) return;
-        selectedMode.value = (OPERATOR_TO_MODE[clause.operator ?? ""] ??
-            MODE_EQUALS) as TimeFilterMode;
+        selectedFacet.value =
+            dateFilterFacets.value.find(
+                (facet) => facet.operator === clause.operator,
+            ) ?? null;
         dateFrom.value = parseStoredDate(clause.operands[0]?.value);
         dateTo.value = parseStoredDate(clause.operands[1]?.value);
     },
     { immediate: true },
 );
 
-watch([selectedMode, dateFrom, dateTo], () => {
-    if (!isValid.value || !dateFrom.value) return;
-    const formatted = dayjs(dateFrom.value).format("YYYY-MM-DD");
-    const formattedTo =
+watch([selectedFacet, dateFrom, dateTo], () => {
+    if (!isValid.value) return;
+    const from = dayjs(dateFrom.value!).format("YYYY-MM-DD");
+    const to =
         isBetween.value && dateTo.value
             ? dayjs(dateTo.value).format("YYYY-MM-DD")
             : undefined;
     const nextClause = buildDateSearchClause(
         graphSlug,
-        OPERATOR_BY_MODE[selectedMode.value],
-        formatted,
-        formattedTo,
+        selectedFacet.value!.operator,
+        from,
+        to,
     );
     if (clausesMatch(nextClause, modelValue)) return;
     emit(UPDATE_EVENT, nextClause);
 });
 
-function onModeChange(mode: TimeFilterMode): void {
-    selectedMode.value = mode;
-    dateTo.value = null;
+function onFacetChange(facet: AdvancedSearchFacet): void {
+    if (selectedFacet.value?.arity === 2 && facet.arity !== 2) {
+        dateTo.value = null;
+    }
+    selectedFacet.value = facet;
 }
 </script>
 
 <template>
     <div class="time-filter">
-        <span class="time-filter__subject-label">
+        <span class="time-filter-subject-label">
             {{ $gettext("Any date nodes") }}
         </span>
 
         <Select
-            :model-value="selectedMode"
-            class="time-filter__mode-select"
-            :options="modeOptions"
+            :model-value="selectedFacet"
+            class="time-filter-facet-select"
+            :options="dateFilterFacets"
             option-label="label"
-            option-value="value"
-            @update:model-value="onModeChange"
+            @update:model-value="onFacetChange"
         />
 
         <DatePicker
             v-model="dateFrom"
-            class="time-filter__date-picker"
+            class="time-filter-date-picker"
             :placeholder="
                 isBetween ? $gettext('From...') : $gettext('Select date...')
             "
@@ -139,7 +123,7 @@ function onModeChange(mode: TimeFilterMode): void {
         <DatePicker
             v-if="isBetween"
             v-model="dateTo"
-            class="time-filter__date-picker"
+            class="time-filter-date-picker"
             :placeholder="$gettext('To...')"
             :min-date="dateFrom ?? undefined"
             :show-icon="true"
@@ -148,7 +132,7 @@ function onModeChange(mode: TimeFilterMode): void {
         />
 
         <Button
-            class="time-filter__remove-button"
+            class="time-filter-remove-button"
             icon="pi pi-times"
             severity="danger"
             variant="text"
@@ -166,19 +150,19 @@ function onModeChange(mode: TimeFilterMode): void {
     gap: 0.5rem;
 }
 
-.time-filter__subject-label {
+.time-filter-subject-label {
     white-space: nowrap;
 }
 
-.time-filter__mode-select {
+.time-filter-facet-select {
     min-width: 8rem;
 }
 
-.time-filter__date-picker {
+.time-filter-date-picker {
     min-width: 10rem;
 }
 
-.time-filter__remove-button {
+.time-filter-remove-button {
     margin-inline-start: auto;
 }
 </style>

@@ -10,7 +10,7 @@ const SIMPLE = "simple";
 const ADVANCED = "advanced";
 type SearchView = typeof SIMPLE | typeof ADVANCED;
 
-const activeView = ref<SearchView>(SIMPLE);
+const activeView = ref<SearchView>(ADVANCED);
 </script>
 
 <template>

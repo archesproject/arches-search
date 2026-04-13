@@ -20,19 +20,25 @@ import type {
     PathSelection,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-const { $gettext } = useGettext();
-
 type NodeWithCardinality = Node & {
     nodegroup_has_cardinality_n?: boolean;
 };
-
-type ClausePayload = LiteralClause;
 
 const CLAUSE_QUANTIFIER_ANY = "ANY" as const;
 const CLAUSE_QUANTIFIER_ALL = "ALL" as const;
 const CLAUSE_QUANTIFIER_NONE = "NONE" as const;
 
 const OPERAND_TYPE_LITERAL = "LITERAL" as const;
+
+const { modelValue, anchorGraph } = defineProps<{
+    modelValue: LiteralClause;
+    anchorGraph: GraphModel;
+}>();
+
+const emit = defineEmits<{
+    (event: "update:modelValue", updatedClause: LiteralClause): void;
+    (event: "request:remove"): void;
+}>();
 
 const datatypesToAdvancedSearchFacets = inject<
     Ref<Record<string, AdvancedSearchFacet[]>>
@@ -45,40 +51,24 @@ const getNodesForGraphId =
         "getNodesForGraphId",
     )!;
 
-const { modelValue, anchorGraph } = defineProps<{
-    modelValue: ClausePayload;
-    anchorGraph: GraphModel;
-}>();
-
-const emit = defineEmits<{
-    "update:modelValue": [updatedClause: ClausePayload];
-    "request:remove": [];
-}>();
-
-const clauseQuantifierOptions = computed(() => {
-    return [
-        { label: $gettext("At least one"), value: CLAUSE_QUANTIFIER_ANY },
-        { label: $gettext("Every"), value: CLAUSE_QUANTIFIER_ALL },
-        { label: $gettext("No"), value: CLAUSE_QUANTIFIER_NONE },
-    ];
-});
+const { $gettext } = useGettext();
 
 const subjectNode = ref<NodeWithCardinality | null>(null);
 const subjectGraph = ref<GraphModel | null>(null);
 const operandKeysByIndex = ref<string[]>([]);
 
-const subjectAnchorGraph = computed<GraphModel>(() => {
-    if (!modelValue.subject.graph_slug) {
-        return anchorGraph;
-    }
-    const graphAtFirstSubjectSlug = graphs.value.find((graphModel) => {
-        return graphModel.slug === modelValue.subject.graph_slug;
-    });
-    if (graphAtFirstSubjectSlug) {
-        return graphAtFirstSubjectSlug;
-    }
-    return anchorGraph;
-});
+const clauseQuantifierOptions = computed(() => [
+    { label: $gettext("At least one"), value: CLAUSE_QUANTIFIER_ANY },
+    { label: $gettext("Every"), value: CLAUSE_QUANTIFIER_ALL },
+    { label: $gettext("No"), value: CLAUSE_QUANTIFIER_NONE },
+]);
+
+const subjectAnchorGraph = computed<GraphModel>(
+    () =>
+        graphs.value.find(
+            (graph) => graph.slug === modelValue.subject.graph_slug,
+        ) ?? anchorGraph,
+);
 
 const selectedSubjectNode = computed<PathSelection | null>(() => {
     if (
@@ -87,7 +77,6 @@ const selectedSubjectNode = computed<PathSelection | null>(() => {
     ) {
         return null;
     }
-
     return {
         graph_slug: modelValue.subject.graph_slug,
         node_alias: modelValue.subject.node_alias,
@@ -98,25 +87,19 @@ const availableOperatorOptions = computed<AdvancedSearchFacet[]>(() => {
     if (modelValue.subject.type === ClauseSubjectTypeToken.SEARCH_MODELS) {
         return datatypesToAdvancedSearchFacets.value["string"] ?? [];
     }
-    if (!subjectNode.value?.datatype) {
-        return [];
-    }
-    const facetsForDatatype =
-        datatypesToAdvancedSearchFacets.value[subjectNode.value.datatype];
-    if (!facetsForDatatype) {
-        return [];
-    }
-    return facetsForDatatype;
+    const datatype = subjectNode.value?.datatype;
+    return datatype
+        ? datatypesToAdvancedSearchFacets.value[datatype] ?? []
+        : [];
 });
 
 const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(() => {
-    if (!modelValue.operator) {
-        return null;
-    }
-    const matchingFacet = availableOperatorOptions.value.find((searchFacet) => {
-        return searchFacet.operator === modelValue.operator;
-    });
-    return matchingFacet ?? null;
+    if (!modelValue.operator) return null;
+    return (
+        availableOperatorOptions.value.find(
+            (facet) => facet.operator === modelValue.operator,
+        ) ?? null
+    );
 });
 
 watch(
@@ -136,9 +119,10 @@ watch(
         ) {
             return;
         }
-        const graphMatchingTerminalSlug = graphs.value.find((graphModel) => {
-            return graphModel.slug === terminalGraphSlug;
-        });
+
+        const graphMatchingTerminalSlug = graphs.value.find(
+            (graphModel) => graphModel.slug === terminalGraphSlug,
+        );
 
         if (!graphMatchingTerminalSlug) {
             return;
@@ -149,11 +133,11 @@ watch(
         const allNodesForGraph = await getNodesForGraphId(
             graphMatchingTerminalSlug.graphid,
         );
-        const nodeMatchingTerminalAlias = allNodesForGraph.find((graphNode) => {
-            return graphNode.alias === terminalNodeAlias;
-        });
 
-        subjectNode.value = nodeMatchingTerminalAlias ?? null;
+        subjectNode.value =
+            allNodesForGraph.find(
+                (graphNode) => graphNode.alias === terminalNodeAlias,
+            ) ?? null;
     },
     { immediate: true },
 );
@@ -171,9 +155,8 @@ watch(
     { immediate: true },
 );
 
-function patchClause(partialClause: Partial<ClausePayload>): void {
-    const updatedClause: ClausePayload = { ...modelValue, ...partialClause };
-    emit("update:modelValue", updatedClause);
+function patchClause(partialClause: Partial<LiteralClause>): void {
+    emit("update:modelValue", { ...modelValue, ...partialClause });
 }
 
 function ensureOperandKey(parameterIndex: number): string {
@@ -202,14 +185,10 @@ function handleOperandUpdate(
     updatedOperand: LiteralOperand | null,
 ): void {
     const updatedOperands = [...modelValue.operands];
-    if (updatedOperand === null) {
-        updatedOperands[parameterIndex] = {
-            type: OPERAND_TYPE_LITERAL,
-            value: null,
-        };
-    } else {
-        updatedOperands[parameterIndex] = updatedOperand;
-    }
+    updatedOperands[parameterIndex] = updatedOperand ?? {
+        type: OPERAND_TYPE_LITERAL,
+        value: null,
+    };
     patchClause({ operands: updatedOperands });
 }
 
@@ -222,12 +201,10 @@ function handleOperatorChange(nextOperator: string | null): void {
         return;
     }
     const previousFacetArity = selectedAdvancedSearchFacet.value?.arity ?? 0;
-    const nextSearchFacet = availableOperatorOptions.value.find(
-        (searchFacet) => {
-            return searchFacet.operator === nextOperator;
-        },
-    );
-    const nextFacetArity = nextSearchFacet?.arity ?? 0;
+    const nextFacetArity =
+        availableOperatorOptions.value.find(
+            (facet) => facet.operator === nextOperator,
+        )?.arity ?? 0;
     if (previousFacetArity !== nextFacetArity) {
         patchClause({ operator: nextOperator, operands: [] });
         return;
@@ -236,7 +213,7 @@ function handleOperatorChange(nextOperator: string | null): void {
 }
 
 function handleQuantifierChange(
-    nextQuantifier: ClausePayload["quantifier"],
+    nextQuantifier: LiteralClause["quantifier"],
 ): void {
     if (modelValue.quantifier === nextQuantifier) {
         return;
@@ -267,7 +244,7 @@ function handleQuantifierChange(
                     :model-value="modelValue"
                     :available-operator-options="availableOperatorOptions"
                     @update:model-value="
-                        emit('update:modelValue', $event as ClausePayload)
+                        emit('update:modelValue', $event as LiteralClause)
                     "
                 />
 
@@ -300,8 +277,7 @@ function handleQuantifierChange(
                     v-if="
                         modelValue.subject.type !==
                             ClauseSubjectTypeToken.SEARCH_MODELS &&
-                        selectedAdvancedSearchFacet &&
-                        selectedAdvancedSearchFacet.arity > 0 &&
+                        selectedAdvancedSearchFacet?.arity &&
                         subjectNode &&
                         subjectGraph
                     "
@@ -381,7 +357,7 @@ function handleQuantifierChange(
 
 .clause-cardinality-subtext {
     margin-inline-start: 0.5rem;
-    margin-top: 1rem;
+    margin-block-start: 1rem;
     font-size: 1rem;
     line-height: 1.25;
     opacity: 0.75;

@@ -8,7 +8,6 @@ import InputText from "primevue/inputtext";
 import type {
     AdvancedSearchFacet,
     LiteralClause,
-    LiteralOperand,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const OPERAND_TYPE_LITERAL = "LITERAL" as const;
@@ -28,12 +27,11 @@ const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(() => {
     if (!modelValue.operator) {
         return null;
     }
-
-    const matchingFacet = availableOperatorOptions.find((searchFacet) => {
-        return searchFacet.operator === modelValue.operator;
-    });
-
-    return matchingFacet ?? null;
+    return (
+        availableOperatorOptions.find(
+            (facet) => facet.operator === modelValue.operator,
+        ) ?? null
+    );
 });
 
 function patchClause(partialClause: Partial<LiteralClause>): void {
@@ -51,10 +49,10 @@ function handleOperatorChange(nextOperator: string | null): void {
     }
 
     const previousFacetArity = selectedAdvancedSearchFacet.value?.arity ?? 0;
-    const nextSearchFacet = availableOperatorOptions.find((searchFacet) => {
-        return searchFacet.operator === nextOperator;
-    });
-    const nextFacetArity = nextSearchFacet?.arity ?? 0;
+    const nextFacetArity =
+        availableOperatorOptions.find(
+            (facet) => facet.operator === nextOperator,
+        )?.arity ?? 0;
 
     if (previousFacetArity !== nextFacetArity) {
         patchClause({ operator: nextOperator, operands: [] });
@@ -66,14 +64,13 @@ function handleOperatorChange(nextOperator: string | null): void {
 
 function handleOperandUpdate(
     parameterIndex: number,
-    updatedValue: LiteralOperand["value"],
+    updatedValue: string,
 ): void {
     const updatedOperands = [...modelValue.operands];
     updatedOperands[parameterIndex] = {
         type: OPERAND_TYPE_LITERAL,
         value: updatedValue,
     };
-
     patchClause({ operands: updatedOperands });
 }
 </script>
@@ -95,9 +92,7 @@ function handleOperandUpdate(
     />
 
     <div
-        v-if="
-            selectedAdvancedSearchFacet && selectedAdvancedSearchFacet.arity > 0
-        "
+        v-if="selectedAdvancedSearchFacet?.arity"
         class="text-search-filter__operands-row"
     >
         <InputText
