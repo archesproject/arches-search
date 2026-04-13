@@ -1,59 +1,94 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, ref, watchEffect } from "vue";
+import { useGettext } from "vue3-gettext";
+
 import Button from "primevue/button";
 
-import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
-import type { ResourceType } from "@/arches_search/SimpleSearch/types.ts";
 import type { GraphModel } from "@/arches_search/AdvancedSearch/types.ts";
+import type { ResourceType } from "@/arches_search/SimpleSearch/types.ts";
+
+const RESOURCE_TYPE_FALLBACK_KEY = "__all__";
+
+const { $gettext } = useGettext();
+const { setGraph, activeGraph } = useSearchFilters();
 
 const resourceTypes = ref<ResourceType[]>([]);
+const hasResourceTypeLoadError = ref(false);
 
-async function loadResourceTypes() {
+const resourceTypeLoadErrorMessage = computed(() =>
+    $gettext("Resource type filters are unavailable."),
+);
+
+watchEffect(async () => {
+    await loadResourceTypes();
+});
+
+async function loadResourceTypes(): Promise<void> {
     try {
+        hasResourceTypeLoadError.value = false;
+
         const graphs: GraphModel[] = await getGraphs();
         resourceTypes.value = graphs
             .filter((graph) => graph.isresource && graph.is_active)
             .map((graph) => ({
                 id: graph.graphid,
                 label: graph.name,
-                icon: graph.iconclass || "fa fa-archive",
+                icon: graph.iconclass,
             }));
-    } catch {
-        // Non-fatal: page still works without type tabs
+    } catch (error) {
+        console.error(error);
+        resourceTypes.value = [];
+        hasResourceTypeLoadError.value = true;
     }
 }
 
-const { setGraph, activeGraph } = useSearchFilters();
+function getResourceTypeButtonKey(resourceType: ResourceType): string {
+    return resourceType.id ?? RESOURCE_TYPE_FALLBACK_KEY;
+}
 
-function selectGraph(graph: ResourceType | null) {
-    if (activeGraph?.value?.id === graph?.id) {
+function isResourceTypeSelected(resourceType: ResourceType): boolean {
+    return activeGraph.value?.id === resourceType.id;
+}
+
+function selectGraph(graph: ResourceType | null): void {
+    if (activeGraph.value?.id === graph?.id) {
         setGraph(null);
-    } else {
-        setGraph(graph);
-    }
-}
 
-onMounted(async () => {
-    await loadResourceTypes();
-});
+        return;
+    }
+
+    setGraph(graph);
+}
 </script>
 
 <template>
     <div class="resource-type-filter">
         <Button
-            v-for="type in resourceTypes"
-            :key="type.id ?? '__all__'"
-            :label="type.label"
-            :icon="type.icon"
+            v-for="resourceType in resourceTypes"
+            :key="getResourceTypeButtonKey(resourceType)"
+            class="type-btn"
             icon-pos="left"
-            size="large"
             severity="secondary"
+            size="large"
+            type="button"
             variant="outlined"
-            :class="['type-btn', { active: activeGraph?.id === type.id }]"
-            @click="selectGraph(type)"
+            :class="{ active: isResourceTypeSelected(resourceType) }"
+            :icon="resourceType.icon"
+            :label="resourceType.label"
+            @click="selectGraph(resourceType)"
         />
+
+        <span
+            v-if="hasResourceTypeLoadError"
+            aria-live="polite"
+            class="load-error"
+            role="status"
+        >
+            {{ resourceTypeLoadErrorMessage }}
+        </span>
     </div>
 </template>
 
@@ -67,13 +102,18 @@ onMounted(async () => {
     border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
-.type-btn {
+.resource-type-filter .type-btn {
     font-size: var(--p-arches-search-font-size);
 }
 
-.type-btn.active,
-.type-btn.active:hover,
-.p-button-outlined.p-button-secondary.type-btn:hover {
+.resource-type-filter .type-btn.active,
+.resource-type-filter .type-btn.active:hover,
+.resource-type-filter .p-button-outlined.p-button-secondary.type-btn:hover {
     background-color: var(--p-button-primary-background);
+}
+
+.resource-type-filter .load-error {
+    color: var(--p-surface-500);
+    font-size: var(--p-arches-search-font-size);
 }
 </style>
