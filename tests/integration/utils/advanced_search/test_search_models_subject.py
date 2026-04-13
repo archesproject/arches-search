@@ -64,6 +64,13 @@ def _root_payload(graph_slug, clauses):
     }
 
 
+def _time_search_models_subject(graph_slug="person"):
+    return _search_models_subject(
+        graph_slug=graph_slug,
+        search_models=["DateSearch", "DateRangeSearch"],
+    )
+
+
 class SearchModelsSubjectNoOperandTestCase(AdvancedSearchSetupMixin, TestCase):
     """Tests the arity-0 (no-operand) branch of _build_exists_for_search_models."""
 
@@ -409,6 +416,105 @@ class SearchModelsSubjectMultipleTermsTestCase(AdvancedSearchSetupMixin, TestCas
             )
         )
         self.assertEqual(result, {PERSON_B_ID})
+
+
+class SearchModelsSubjectTimeFilterTestCase(AdvancedSearchSetupMixin, TestCase):
+    """Regression tests for mixed DateSearch/DateRangeSearch SEARCH_MODELS clauses."""
+
+    def test_less_than_uses_date_rows_without_crashing_on_date_range_rows(self):
+        """
+        Mixed time filters ask SEARCH_MODELS to evaluate both DateSearch and
+        DateRangeSearch rows together. LESS_THAN 1500 should still return only
+        Person A (birth_date=1000) and must not try to apply a DateSearch
+        `value__lt` predicate directly to DateRangeSearch.
+        """
+        result = self._compile(
+            _root_payload(
+                "person",
+                [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ANY",
+                        "subject": _time_search_models_subject(),
+                        "operator": "LESS_THAN",
+                        "operands": [{"type": "LITERAL", "value": 1500}],
+                    }
+                ],
+            )
+        )
+        self.assertEqual(result, {PERSON_A_ID})
+
+    def test_not_equals_is_vacuously_true_for_resources_without_date_rows(self):
+        """
+        Negated SEARCH_MODELS predicates should treat missing rows vacuously. Person A has a
+        DateSearch row equal to 1000 and is excluded. Person B has a different date row and
+        matches. Persons C and D have no DateSearch rows and should also match.
+        """
+        result = self._compile(
+            _root_payload(
+                "person",
+                [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ANY",
+                        "subject": _search_models_subject(
+                            graph_slug="person",
+                            search_models=["DateSearch"],
+                        ),
+                        "operator": "NOT_EQUALS",
+                        "operands": [{"type": "LITERAL", "value": 1000}],
+                    }
+                ],
+            )
+        )
+        self.assertEqual(result, {PERSON_B_ID, PERSON_C_ID, PERSON_D_ID})
+
+    def test_equals_matches_date_ranges_that_cover_the_requested_day(self):
+        """
+        EQUALS behaves like "on this day" for mixed time filters. Person A's
+        availability window spans 500-1500, so querying for 1200 should match
+        even though no DateSearch row equals 1200.
+        """
+        result = self._compile(
+            _root_payload(
+                "person",
+                [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ANY",
+                        "subject": _time_search_models_subject(),
+                        "operator": "EQUALS",
+                        "operands": [{"type": "LITERAL", "value": 1200}],
+                    }
+                ],
+            )
+        )
+        self.assertEqual(result, {PERSON_A_ID})
+
+    def test_between_matches_date_ranges_that_overlap_the_requested_window(self):
+        """
+        BETWEEN uses interval-overlap semantics for DateRangeSearch so the mixed
+        time filter continues to search range-backed EDTF rows as well as exact
+        date rows.
+        """
+        result = self._compile(
+            _root_payload(
+                "person",
+                [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ANY",
+                        "subject": _time_search_models_subject(),
+                        "operator": "BETWEEN",
+                        "operands": [
+                            {"type": "LITERAL", "value": 1200},
+                            {"type": "LITERAL", "value": 1700},
+                        ],
+                    }
+                ],
+            )
+        )
+        self.assertEqual(result, {PERSON_A_ID})
 
 
 class SearchModelsSubjectTraversalTestCase(AdvancedSearchSetupMixin, TestCase):

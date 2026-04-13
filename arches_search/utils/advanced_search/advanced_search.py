@@ -102,11 +102,9 @@ class AdvancedSearchQueryCompiler:
                     % {"slug": self.payload_query["graph_slug"]}
                 )
 
-            queryset = (
-                arches_models.ResourceInstance.objects.only("resourceinstanceid")
-                .filter(graph_id=anchor_graph_id)
-                .order_by()
-            )
+            queryset = arches_models.ResourceInstance.objects.filter(
+                graph_id=anchor_graph_id
+            ).order_by()
 
         for existence_predicate in existence_predicates:
             queryset = queryset.filter(existence_predicate)

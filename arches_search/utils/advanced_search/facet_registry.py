@@ -1,6 +1,7 @@
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional, Tuple
 
 from django.utils.translation import gettext as _
+
 from arches_search.models.models import AdvancedSearchFacet
 
 
@@ -9,14 +10,26 @@ class FacetRegistry:
         self._facet_by_datatype_and_operator: Dict[
             Tuple[str, str], AdvancedSearchFacet
         ] = {}
+        self._facet_by_datatype_operator_and_model: Dict[
+            Tuple[str, str, object], AdvancedSearchFacet
+        ] = {}
 
         queryset = AdvancedSearchFacet.objects.select_related(
             "datatype", "target_search_model"
         )
 
         for facet in queryset:
-            facet_key = (facet.datatype.datatype, facet.operator)
-            self._facet_by_datatype_and_operator[facet_key] = facet
+            datatype_name = facet.datatype.datatype
+            operator_token = facet.operator
+            model_class = facet.target_model_class
+
+            self._facet_by_datatype_and_operator.setdefault(
+                (datatype_name, operator_token), facet
+            )
+            if model_class is not None:
+                self._facet_by_datatype_operator_and_model[
+                    (datatype_name, operator_token, model_class)
+                ] = facet
 
     def get_facet(
         self, subject_datatype_name: str, operator_token: str
@@ -31,6 +44,30 @@ class FacetRegistry:
                     "No facet found for datatype '%(datatype)s' with operator '%(operator)s'"
                 )
                 % {"datatype": subject_datatype_name, "operator": operator_token}
+            )
+        return facet
+
+    def get_facet_for_model(
+        self,
+        subject_datatype_name: str,
+        operator_token: str,
+        model_class,
+    ) -> AdvancedSearchFacet:
+        facet = self._facet_by_datatype_operator_and_model.get(
+            (subject_datatype_name, operator_token, model_class)
+        )
+
+        if facet is None:
+            raise AdvancedSearchFacet.DoesNotExist(
+                _(
+                    "No facet found for datatype '%(datatype)s', operator '%(operator)s', "
+                    "model '%(model)s'"
+                )
+                % {
+                    "datatype": subject_datatype_name,
+                    "operator": operator_token,
+                    "model": model_class.__name__,
+                }
             )
         return facet
 
