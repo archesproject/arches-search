@@ -1,15 +1,12 @@
 import Cookies from "js-cookie";
 
-import type { SearchResults } from "@/arches_search/AdvancedSearch/types.ts";
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
-import type { GroupPayload } from "../AdvancedSearch/types";
 
-interface TermFilter {
-    type: "term" | "concept" | "string";
-    value: string;
-    text: string;
-    inverted: boolean;
-}
+import type {
+    GroupPayload,
+    SearchResults,
+} from "@/arches_search/AdvancedSearch/types.ts";
+import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
 
 export async function fetchSearchResults({
     terms = [],
@@ -17,7 +14,7 @@ export async function fetchSearchResults({
     graphId = null,
     page = 1,
 }: {
-    terms?: TermFilter[];
+    terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
     graphId?: string | null;
     page?: number;
@@ -30,7 +27,7 @@ export async function fetchSearchResults({
     };
 
     const response = await fetch(
-        `${generateArchesURL("arches_search:simple_search")}`,
+        `${generateArchesURL("arches_search:arches_search")}`,
         {
             method: "POST",
             headers: {
@@ -53,20 +50,16 @@ export async function fetchSearchResults({
 
 export async function fetchSearchTermSuggestions(
     query: string,
-): Promise<Array<{ text: string; datatype: string; value: string }>> {
+): Promise<TermSuggestion[]> {
     const params = new URLSearchParams({ q: query, lang: "*", flat: "true" });
     const response = await fetch(
         `${generateArchesURL("arches_search:term_suggestion_search")}?${params.toString()}`,
     );
     const results = await response.json();
-    const suggestions = results.results as Array<{
-        text: string;
-        datatype: string;
-        value: string;
-    }>;
+    const suggestions = results.results as Array<TermSuggestion>;
 
     // Prepend a literal term entry for the raw query string
-    suggestions.unshift({ text: query, datatype: "term", value: query });
+    suggestions.unshift({ id: Date.now(), datatype: "term", text: query });
 
     return suggestions;
 }
