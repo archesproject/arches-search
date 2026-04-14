@@ -172,7 +172,6 @@ function onRemoveTimeFilter(): void {
     clearQuery(TIME_FILTER_QUERY_KEY);
 }
 
-// ── Saved searches ──────────────────────────────────────────────────────────
 function buildQueryDefinition(): Record<string, unknown> {
     const terms = activeFilters.value.map((filter) => ({
         type: "term",
