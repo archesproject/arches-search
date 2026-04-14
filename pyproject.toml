@@ -23,7 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-dependencies = [ "arches<8.2.0,>=8.1.0a0", "arches-controlled-lists>=1.1.0a0", "arches-modular-reports>=1.0.0b6",]
+dependencies = [ "arches<8.3.0,>=8.1.0", "arches-controlled-lists>=1.1.0a0", "arches-modular-reports>=1.0.0b7",]
 dynamic = []
 
 [tool.setuptools]
