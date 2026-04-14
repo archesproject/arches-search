@@ -35,3 +35,15 @@ export interface AttributeFilterSection {
     label: string;
     options: AttributeFilterOption[];
 }
+
+export interface SavedSearch {
+    savedsearchid: string;
+    name: string;
+    description: string;
+    query_definition: Record<string, unknown>;
+    created_at: string;
+    creator: {
+        id: number;
+        username: string;
+    };
+}

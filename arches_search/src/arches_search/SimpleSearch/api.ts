@@ -6,7 +6,10 @@ import type {
     GroupPayload,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    SavedSearch,
+    TermSuggestion,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 export async function fetchSearchResults({
     terms = [],
@@ -59,4 +62,62 @@ export async function fetchSearchTermSuggestions(
     suggestions.unshift({ id: Date.now(), datatype: "term", text: query });
 
     return suggestions;
+}
+
+export async function getSavedSearches(
+    scope: "mine" | "shared" = "mine",
+    search = "",
+): Promise<SavedSearch[]> {
+    const params = new URLSearchParams({ scope });
+    if (search) {
+        params.set("search", search);
+    }
+    const response = await fetch(
+        `${generateArchesURL("arches_search:saved_searches")}?${params.toString()}`,
+    );
+    if (!response.ok) {
+        throw new Error(response.statusText);
+    }
+    return response.json();
+}
+
+export async function createSavedSearch(
+    name: string,
+    description: string,
+    queryDefinition: Record<string, unknown>,
+): Promise<SavedSearch> {
+    const response = await fetch(
+        generateArchesURL("arches_search:saved_searches"),
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify({
+                name,
+                description,
+                query_definition: queryDefinition,
+            }),
+        },
+    );
+    if (!response.ok) {
+        throw new Error(response.statusText);
+    }
+    return response.json();
+}
+
+export async function deleteSavedSearch(savedsearchid: string): Promise<void> {
+    const response = await fetch(
+        `${generateArchesURL("arches_search:saved_searches")}/${savedsearchid}`,
+        {
+            method: "DELETE",
+            headers: {
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+        },
+    );
+    if (!response.ok) {
+        throw new Error(response.statusText);
+    }
 }
