@@ -15,6 +15,7 @@ defineProps<{
     showFilters: boolean;
     showTime: boolean;
     hasTimeFilter: boolean;
+    hideFiltersButton?: boolean;
 }>();
 
 const sortOptions = computed<SortOption[]>(() => [
@@ -49,6 +50,7 @@ defineEmits<{
 
         <div class="toolbar-right">
             <Button
+                v-if="!hideFiltersButton"
                 :label="
                     showFilters
                         ? $gettext('Hide Filters')
