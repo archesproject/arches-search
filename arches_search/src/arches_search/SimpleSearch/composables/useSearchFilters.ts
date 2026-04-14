@@ -3,9 +3,7 @@ import { computed, inject, provide, ref } from "vue";
 import { fetchSearchResults } from "@/arches_search/SimpleSearch/api.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
-import {
-    LogicToken,
-} from "@/arches_search/AdvancedSearch/types.ts";
+import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     GroupPayload,
     SearchResults,
