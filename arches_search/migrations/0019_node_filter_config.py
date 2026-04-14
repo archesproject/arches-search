@@ -6,7 +6,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("models", "0001_initial"),
-        ("arches_search", "0017_advancedsearchfacet_filter_field"),
+        ("arches_search", "0018_daterangesearch_comparison_facets"),
     ]
 
     operations = [
