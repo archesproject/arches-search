@@ -14,6 +14,7 @@ import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeF
 
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
+    ClauseSubjectTypeToken,
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
@@ -92,7 +93,7 @@ const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
 watch(
     () => activeGraph.value,
     async (graph) => {
-        if (!graph) {
+        if (!graph || !graph.id) {
             attributeFilterSections.value = [];
             nodeFilterConfigNodes.value = [];
             return;
@@ -165,7 +166,12 @@ function onFilterOptionsChanged(selected: Record<string, string[]>) {
                 {
                     type: "LITERAL" as const,
                     quantifier: "ANY" as const,
-                    subject: [[activeGraphSlug.value!, nodeAlias]],
+                    subject: {
+                        type: ClauseSubjectTypeToken.NODE,
+                        graph_slug: activeGraphSlug.value!,
+                        node_alias: nodeAlias,
+                        search_models: [],
+                    },
                     operator: "REFERENCES_ANY",
                     operands: [
                         { type: "LITERAL" as const, value: resolvedValues },

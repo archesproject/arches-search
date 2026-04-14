@@ -2,7 +2,6 @@ import Cookies from "js-cookie";
 
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
-
 import type {
     GroupPayload,
     SearchResults,
