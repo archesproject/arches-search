@@ -116,8 +116,7 @@ function handleGenericWidgetUpdate(updatedWidgetValue: unknown): void {
             :graph-slug="subjectTerminalGraph.slug"
             :node-alias="subjectTerminalNode.alias"
             :should-show-label="false"
-            :aliased-node-data="initialAliasedNodeData || undefined"
-            :should-emit-simplified-value="true"
+            :node-value="initialAliasedNodeData || undefined"
             @update:value="handleGenericWidgetUpdate"
         />
     </div>

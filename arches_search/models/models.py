@@ -139,15 +139,20 @@ class TermSearch(models.Model):
                     chosen_language = short_language_code
                 else:
                     chosen_language = next(iter(raw_value))
+
                 if resolved_language is None:
                     resolved_language = chosen_language
                 elif chosen_language != resolved_language:
                     raise ValueError(
                         "Localized string operands resolved to different languages"
                     )
-                normalized_items.append(
-                    {**operand_item, "value": raw_value[chosen_language]}
-                )
+
+                language_value = raw_value[chosen_language]
+
+                if isinstance(language_value, dict) and "value" in language_value:
+                    language_value = language_value["value"]
+                normalized_items.append({**operand_item, "value": language_value})
+
             else:
                 normalized_items.append(operand_item)
         return normalized_items, resolved_language
