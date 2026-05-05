@@ -22,8 +22,6 @@ defineProps<{
 const sortOptions = computed<SortOption[]>(() => [
     { label: $gettext("A to Z"), value: "aToZ" },
     { label: $gettext("Z to A"), value: "zToA" },
-    { label: $gettext("Newest first"), value: "newest" },
-    { label: $gettext("Oldest first"), value: "oldest" },
 ]);
 
 defineEmits<{
