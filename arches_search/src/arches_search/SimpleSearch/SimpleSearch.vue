@@ -266,9 +266,6 @@ function sortSpecForValue(value: string | null): SortSpec[] {
         case "zToA":
             return [{ type: "primary_name", direction: "desc" }];
         default:
-            // Cleared selection and not-yet-wired options (newest/oldest) fall
-            // through to "no sort" — results come back in the backend's
-            // natural order.
             return [];
     }
 }
