@@ -1,7 +1,27 @@
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
+
 export interface ResourceType {
     id: string | null; // graph id; null = "all types"
     label: string;
     icon: string;
+}
+
+// Serializable snapshot of every piece of state that defines a search.
+// Anything that should round-trip through "save / load search" must live
+// here — and therefore on `useSearchFilters`. Bump `version` when the
+// shape changes so old saved rows can be migrated.
+export interface SearchDefinition {
+    version: 1;
+    terms: SerializedTerm[];
+    queries: Record<string, GroupPayload>;
+    graphId: string | null;
+}
+
+export interface SerializedTerm {
+    id: string;
+    text: string;
+    inverted: boolean;
+    options?: Record<string, unknown>;
 }
 
 export interface TermSuggestion {

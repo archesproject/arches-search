@@ -15,6 +15,7 @@ import type {
 import type {
     ActiveFilter,
     ResourceType,
+    SearchDefinition,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
@@ -31,13 +32,16 @@ interface SearchFilters {
     currentPage: Ref<number>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
+    queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
     resultsGraph: Ref<ResourceType | null>;
     searchResults: Ref<SearchResults>;
     sort: Ref<SortSpec[]>;
+    applySearchDefinition(definition: SearchDefinition): void;
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
+    getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
     setGraph(graph: ResourceType | null): void;
     setMapFilter(featureCollection: FeatureCollection): void;
@@ -86,6 +90,10 @@ function createSearchFilters(): SearchFilters {
     const activeFilters = computed<ActiveFilter[]>(() => {
         return [...terms.value.values()];
     });
+
+    const queriesView = computed<ReadonlyMap<string, GroupPayload>>(
+        () => queries.value,
+    );
 
     function setTermFilter(
         key: string,
@@ -225,15 +233,66 @@ function createSearchFilters(): SearchFilters {
         };
     }
 
+    function getSearchDefinition(): SearchDefinition {
+        // Strip the `clear` closure off each ActiveFilter — closures aren't
+        // serializable, and the restore path rebuilds them from `id`.
+        const serializedTerms = [...terms.value.values()].map(
+            ({ id, text, inverted, options }) => ({
+                id,
+                text,
+                inverted,
+                ...(options !== undefined ? { options } : {}),
+            }),
+        );
+        return {
+            version: 1,
+            terms: serializedTerms,
+            queries: Object.fromEntries(queries.value),
+            graphId: activeGraph.value?.id ?? null,
+        };
+    }
+
+    function applySearchDefinition(definition: SearchDefinition): void {
+        // Clear current state first. Each setter triggers a debounced search,
+        // so the cascade collapses to a single fetch on the trailing edge.
+        for (const id of [...terms.value.keys()]) {
+            clearTermFilter(id);
+        }
+        for (const filterKey of [...queries.value.keys()]) {
+            clearQuery(filterKey);
+        }
+
+        if (definition.graphId) {
+            setGraph({ id: definition.graphId, label: "", icon: "" });
+        } else {
+            setGraph(null);
+        }
+
+        for (const term of definition.terms) {
+            setTermFilter(
+                term.id,
+                term.text,
+                () => clearTermFilter(term.id),
+                term.options,
+            );
+        }
+        for (const [filterKey, payload] of Object.entries(definition.queries)) {
+            setQuery(filterKey, payload);
+        }
+    }
+
     return {
         activeFilters,
         activeGraph,
+        applySearchDefinition,
         clearMapFilter,
         clearQuery,
         clearTermFilter,
         currentPage,
+        getSearchDefinition,
         isSearching,
         mapFilter,
+        queries: queriesView,
         resultsTileUrl,
         resultsGraph,
         search,
