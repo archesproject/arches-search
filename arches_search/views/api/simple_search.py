@@ -10,6 +10,7 @@ from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
 )
 from arches_search.utils.search_aggregation import build_aggregations
+from arches_search.utils.search_sort import SortResolver
 from arches_search.utils.through_resource_search import get_related_resources_by_text
 
 
@@ -65,6 +66,8 @@ class SimpleSearchAPI(APIBase):
             results_queryset = ResourceInstance.objects.all()
             if graph_id:
                 results_queryset = results_queryset.filter(graph_id=graph_id)
+
+        results_queryset = SortResolver(body.get("sort")).apply(results_queryset)
 
         page_number = body.get("page", 1)
         page_size = body.get("page_size", 20)

@@ -11,6 +11,7 @@ import type {
 import type {
     ActiveFilter,
     ResourceType,
+    SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 interface SearchRequestTerm {
@@ -26,11 +27,13 @@ interface SearchFilters {
     isSearching: Ref<boolean>;
     resultsGraph: Ref<ResourceType | null>;
     searchResults: Ref<SearchResults>;
+    sort: Ref<SortSpec[]>;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
     search(page?: number): void;
     setGraph(graph: ResourceType | null): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
+    setSort(next: SortSpec[]): void;
     setTermFilter(
         key: string,
         text: string,
@@ -43,6 +46,9 @@ const FIRST_SEARCH_PAGE = 1;
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_RESULTS_PAGE_SIZE = 25;
 const SEARCH_FILTERS_KEY: InjectionKey<SearchFilters> = Symbol("searchFilters");
+// Empty by default: the user must pick a sort before one is applied. Populate
+// with SortSpec entries to preset a sort without requiring user selection.
+const DEFAULT_SORT: SortSpec[] = [];
 
 function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
@@ -52,6 +58,7 @@ function createSearchFilters(): SearchFilters {
     const searchResults = ref<SearchResults>(createEmptySearchResults());
     const isSearching = ref(false);
     const currentPage = ref(FIRST_SEARCH_PAGE);
+    const sort = ref<SortSpec[]>(DEFAULT_SORT);
     let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const activeFilters = computed<ActiveFilter[]>(() => {
@@ -106,6 +113,12 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function setSort(next: SortSpec[]): void {
+        sort.value = next;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
     function search(page = currentPage.value): void {
         if (searchTimeout) {
             clearTimeout(searchTimeout);
@@ -122,6 +135,7 @@ function createSearchFilters(): SearchFilters {
                     query: getRequestQuery(),
                     page,
                     graphId: requestGraph ? requestGraph.id : null,
+                    sort: sort.value,
                 });
 
                 if (page > FIRST_SEARCH_PAGE) {
@@ -178,7 +192,9 @@ function createSearchFilters(): SearchFilters {
         searchResults,
         setGraph,
         setQuery,
+        setSort,
         setTermFilter,
+        sort,
     };
 }
 

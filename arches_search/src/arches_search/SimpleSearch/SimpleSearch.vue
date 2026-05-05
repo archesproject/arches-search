@@ -39,6 +39,7 @@ import type {
 import type {
     AttributeFilterSection,
     NodeFilterConfigNode,
+    SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced";
@@ -61,6 +62,7 @@ const {
     searchResults,
     setGraph,
     setQuery,
+    setSort,
     setTermFilter,
 } = provideSearchFilters();
 
@@ -86,7 +88,7 @@ const {
 
 const { $gettext } = useGettext();
 const toast = useToast();
-const sortValue = ref("aToZ");
+const sortValue = ref<string | null>(null);
 const graphModels = ref<GraphModel[]>([]);
 const timeFilterClauses = ref<LiteralClause[]>([]);
 const showSavedSearches = ref(false);
@@ -246,8 +248,29 @@ function onRequestPage(page: number): void {
     search(page);
 }
 
-function onSortValueUpdate(nextSortValue: string): void {
+function onSelectedOptionsUpdate(
+    nextSelectedFilterOptions: Record<string, string[]>,
+): void {
+    selectedFilterOptions.value = nextSelectedFilterOptions;
+}
+
+function onSortValueUpdate(nextSortValue: string | null): void {
     sortValue.value = nextSortValue;
+    setSort(sortSpecForValue(nextSortValue));
+}
+
+function sortSpecForValue(value: string | null): SortSpec[] {
+    switch (value) {
+        case "aToZ":
+            return [{ type: "primary_name", direction: "asc" }];
+        case "zToA":
+            return [{ type: "primary_name", direction: "desc" }];
+        default:
+            // Cleared selection and not-yet-wired options (newest/oldest) fall
+            // through to "no sort" — results come back in the backend's
+            // natural order.
+            return [];
+    }
 }
 
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {

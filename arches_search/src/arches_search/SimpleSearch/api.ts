@@ -9,6 +9,7 @@ import type {
 import type {
     NodeFilterConfigResponse,
     SavedSearch,
+    SortSpec,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -17,18 +18,24 @@ export async function fetchSearchResults({
     query = {} as GroupPayload,
     graphId = null,
     page = 1,
+    sort,
 }: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
     graphId?: string | null;
     page?: number;
+    sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
-    const requestPayload = {
+    const requestPayload: Record<string, unknown> = {
         graphId: graphId,
         terms: terms,
         query: query,
         page: page,
     };
+
+    if (sort !== undefined) {
+        requestPayload.sort = sort;
+    }
 
     const response = await fetch(
         `${generateArchesURL("arches_search:arches_search")}`,
