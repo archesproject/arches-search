@@ -41,6 +41,10 @@ export interface NodeFilterConfigNode {
     sortorder: number;
 }
 
+export type SortDirection = "asc" | "desc";
+
+export type SortSpec = { type: "primary_name"; direction: SortDirection };
+
 export interface AttributeFilterOption {
     id: string;
     label: string;

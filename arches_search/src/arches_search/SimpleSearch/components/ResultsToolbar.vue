@@ -11,7 +11,7 @@ import type { SortOption } from "@/arches_search/SimpleSearch/types.ts";
 const { $gettext } = useGettext();
 
 defineProps<{
-    sortValue: string;
+    sortValue: string | null;
     showFilters: boolean;
     showTime: boolean;
     hasTimeFilter: boolean;
@@ -27,7 +27,7 @@ const sortOptions = computed<SortOption[]>(() => [
 ]);
 
 defineEmits<{
-    (event: "update:sortValue", value: string): void;
+    (event: "update:sortValue", value: string | null): void;
     (event: "save-search"): void;
     (event: "toggle-filters"): void;
     (event: "toggle-map"): void;
@@ -46,6 +46,8 @@ defineEmits<{
                 :options="sortOptions"
                 option-label="label"
                 option-value="value"
+                :placeholder="$gettext('Sort by...')"
+                show-clear
                 class="sort-select"
                 @update:model-value="$emit('update:sortValue', $event)"
             />

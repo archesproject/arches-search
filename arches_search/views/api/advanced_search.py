@@ -8,6 +8,7 @@ from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
 )
 from arches_search.utils.search_aggregation import build_aggregations
+from arches_search.utils.search_sort import SortResolver
 
 
 class AdvancedSearchAPI(APIBase):
@@ -15,6 +16,7 @@ class AdvancedSearchAPI(APIBase):
         body = JSONDeserializer().deserialize(request.body)
 
         results_queryset = AdvancedSearchQueryCompiler(body).compile()
+        results_queryset = SortResolver(body.get("sort")).apply(results_queryset)
 
         page_number = body.get("page", 1)
         page_size = body.get("page_size", 20)
