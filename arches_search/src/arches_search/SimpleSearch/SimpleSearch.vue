@@ -41,6 +41,7 @@ import type {
 import type {
     AttributeFilterSection,
     NodeFilterConfigNode,
+    SearchDefinition,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -55,20 +56,19 @@ defineEmits<{
 }>();
 
 const {
-    activeFilters,
     activeGraph,
+    applySearchDefinition,
     clearMapFilter,
     clearQuery,
-    clearTermFilter,
+    getSearchDefinition,
     isSearching,
     mapFilter,
+    queries,
     search,
     searchResults,
-    setGraph,
     setMapFilter,
     setQuery,
     setSort,
-    setTermFilter,
 } = provideSearchFilters();
 
 const {
@@ -101,7 +101,6 @@ const { $gettext } = useGettext();
 const toast = useToast();
 const sortValue = ref<string | null>(null);
 const graphModels = ref<GraphModel[]>([]);
-const timeFilterClauses = ref<LiteralClause[]>([]);
 const showSaveDialog = ref(false);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
 const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
@@ -228,13 +227,17 @@ const activeGraphSlug = computed<string | null>(() => {
     return matchingGraph?.slug ?? null;
 });
 
-const hasTimeFilter = computed<boolean>(
-    () => timeFilterClauses.value.length > 0,
+const timeFilterQuery = computed(
+    () => queries.value.get(TIME_FILTER_QUERY_KEY) ?? null,
 );
 
-const selectedTimeFilterClause = computed<LiteralClause | null>(() => {
-    return timeFilterClauses.value[0] ?? null;
-});
+const hasTimeFilter = computed<boolean>(
+    () => (timeFilterQuery.value?.clauses.length ?? 0) > 0,
+);
+
+const selectedTimeFilterClause = computed<LiteralClause | null>(
+    () => timeFilterQuery.value?.clauses[0] ?? null,
+);
 
 watchEffect(() => {
     void initializeSearch();
@@ -274,8 +277,6 @@ function sortSpecForValue(value: string | null): SortSpec[] {
 }
 
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {
-    timeFilterClauses.value = clauses;
-
     const graphSlug = activeGraphSlug.value;
     if (!graphSlug || clauses.length === 0) {
         clearQuery(TIME_FILTER_QUERY_KEY);
@@ -294,7 +295,6 @@ function onTimeFilterUpdate(clauses: LiteralClause[]): void {
 }
 
 function onRemoveTimeFilter(): void {
-    timeFilterClauses.value = [];
     closeSidePanel();
     clearQuery(TIME_FILTER_QUERY_KEY);
 }
@@ -307,25 +307,12 @@ function onRemoveMapFilter(): void {
     clearMapFilter();
 }
 
-function buildQueryDefinition(): Record<string, unknown> {
-    const terms = activeFilters.value.map((filter) => ({
-        type: "term",
-        value: filter.id,
-        text: filter.text,
-        inverted: false,
-    }));
-    return {
-        terms,
-        graphId: activeGraph.value?.id ?? null,
-    };
-}
-
 async function onSaveSearch(payload: { name: string; description: string }) {
     try {
         await createSavedSearch(
             payload.name,
             payload.description,
-            buildQueryDefinition(),
+            getSearchDefinition() as unknown as Record<string, unknown>,
         );
         showSaveDialog.value = false;
         savedSearchPanelRef.value?.loadSearches();
@@ -345,27 +332,49 @@ async function onSaveSearch(payload: { name: string; description: string }) {
 }
 
 function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
-    const terms =
-        (queryDefinition.terms as Array<{
-            type: string;
-            value: string;
-            text: string;
-            inverted: boolean;
-        }>) || [];
-    const graphId = (queryDefinition.graphId as string | null) ?? null;
-
-    // Clear existing search before applying saved query
-    activeFilters.value.forEach((f) => clearTermFilter(f.id));
-
-    terms.forEach((t) => {
-        setTermFilter(t.value, t.text, () => clearTermFilter(t.value));
-    });
-    if (graphId) {
-        setGraph({ id: graphId, label: "", icon: "" });
-    } else {
-        setGraph(null);
-    }
+    applySearchDefinition(parseSearchDefinition(queryDefinition));
     selectedFilterOptions.value = {};
+}
+
+// Tolerant parser so older saved rows (which only stored `terms` + `graphId`)
+// load cleanly. New code always writes the full SearchDefinition shape.
+function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
+    const rawTerms = Array.isArray(raw.terms) ? raw.terms : [];
+    const terms = rawTerms.flatMap((t) => {
+        if (!t || typeof t !== "object") return [];
+        const term = t as Record<string, unknown>;
+        // Legacy rows used `value` for the id; new rows use `id`.
+        const id =
+            typeof term.id === "string"
+                ? term.id
+                : typeof term.value === "string"
+                    ? term.value
+                    : null;
+        const text = typeof term.text === "string" ? term.text : null;
+        if (!id || text === null) return [];
+        return [
+            {
+                id,
+                text,
+                inverted: term.inverted === true,
+                ...(term.options && typeof term.options === "object"
+                    ? { options: term.options as Record<string, unknown> }
+                    : {}),
+            },
+        ];
+    });
+
+    const queriesIn =
+        raw.queries && typeof raw.queries === "object"
+            ? (raw.queries as SearchDefinition["queries"])
+            : {};
+
+    return {
+        version: 1,
+        terms,
+        queries: queriesIn,
+        graphId: typeof raw.graphId === "string" ? raw.graphId : null,
+    };
 }
 </script>
 
@@ -519,9 +528,7 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
     translate: 0 0;
 }
 
-.simple-search
-    .splitter.side-panel-closed
-    :deep(.results-pane + .p-splitter-gutter) {
+.simple-search .splitter.side-panel-closed :deep(.results-pane + .p-splitter-gutter) {
     display: none;
 }
 </style>
