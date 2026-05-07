@@ -8,12 +8,22 @@ const BORDER_TRANSITION = "180ms ease" as const;
 const SIDE_PANEL_SWITCH_DELAY_MS = 240;
 const ATTRIBUTE_FILTERS_PANEL = "attribute-filters" as const;
 const TIME_FILTER_PANEL = "time-filter" as const;
+const MAP_FILTER_PANEL = "map-filter" as const;
 
 interface SplitterResizeEvent {
     sizes?: number[];
 }
 
-type SidePanelType = typeof ATTRIBUTE_FILTERS_PANEL | typeof TIME_FILTER_PANEL;
+type SidePanelType =
+    | typeof ATTRIBUTE_FILTERS_PANEL
+    | typeof TIME_FILTER_PANEL
+    | typeof MAP_FILTER_PANEL;
+
+const PANEL_SIZES: Record<SidePanelType, number> = {
+    [ATTRIBUTE_FILTERS_PANEL]: 27,
+    [TIME_FILTER_PANEL]: SIDE_PANEL_SIZE,
+    [MAP_FILTER_PANEL]: 65,
+};
 
 export function useSidePanel() {
     const activeSidePanel = ref<SidePanelType | null>(null);
@@ -39,6 +49,12 @@ export function useSidePanel() {
             activeSidePanel.value === TIME_FILTER_PANEL,
     );
 
+    const isMapFilterOpen = computed<boolean>(
+        () =>
+            hasOpenSidePanel.value &&
+            activeSidePanel.value === MAP_FILTER_PANEL,
+    );
+
     // Stay true during the close animation so the panel component stays mounted.
     const isAttributeFiltersActive = computed<boolean>(
         () => activeSidePanel.value === ATTRIBUTE_FILTERS_PANEL,
@@ -46,6 +62,10 @@ export function useSidePanel() {
 
     const isTimeFilterActive = computed<boolean>(
         () => activeSidePanel.value === TIME_FILTER_PANEL,
+    );
+
+    const isMapFilterActive = computed<boolean>(
+        () => activeSidePanel.value === MAP_FILTER_PANEL,
     );
 
     const resultsPanelSize = computed<number>(
@@ -103,25 +123,30 @@ export function useSidePanel() {
         }
     }
 
+    function applyPanel(nextPanel: SidePanelType | null): void {
+        activeSidePanel.value = nextPanel;
+        if (nextPanel !== null) sidePanelBasis.value = PANEL_SIZES[nextPanel];
+        isSidePanelOpen.value = nextPanel !== null;
+    }
+
     function closeSidePanel(nextPanel: SidePanelType | null = null): void {
         clearSwitchTimer();
 
         if (!hasOpenSidePanel.value) {
-            activeSidePanel.value = nextPanel;
-            isSidePanelOpen.value = nextPanel !== null;
+            applyPanel(nextPanel);
             return;
         }
 
         isSidePanelOpen.value = false;
         switchTimer = setTimeout(() => {
-            activeSidePanel.value = nextPanel;
-            isSidePanelOpen.value = nextPanel !== null;
+            applyPanel(nextPanel);
             switchTimer = null;
         }, SIDE_PANEL_SWITCH_DELAY_MS);
     }
 
     function openSidePanel(panelType: SidePanelType): void {
         clearSwitchTimer();
+        sidePanelBasis.value = PANEL_SIZES[panelType];
         activeSidePanel.value = panelType;
         isSidePanelOpen.value = true;
     }
@@ -159,11 +184,17 @@ export function useSidePanel() {
         toggleSidePanel(TIME_FILTER_PANEL);
     }
 
+    function onToggleMapFilter(): void {
+        toggleSidePanel(MAP_FILTER_PANEL);
+    }
+
     onUnmounted(clearSwitchTimer);
 
     return {
         isAttributeFiltersActive,
         isAttributeFiltersOpen,
+        isMapFilterActive,
+        isMapFilterOpen,
         isTimeFilterActive,
         isTimeFilterOpen,
         hasOpenSidePanel,
@@ -175,6 +206,7 @@ export function useSidePanel() {
         sidePanelStyle,
         closeSidePanel,
         onToggleAttributeFilters,
+        onToggleMapFilter,
         onToggleTimeFilter,
         onSplitterResizeStart,
         onSplitterResize,

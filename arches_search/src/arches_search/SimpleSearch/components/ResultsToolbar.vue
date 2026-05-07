@@ -13,6 +13,8 @@ const { $gettext } = useGettext();
 defineProps<{
     sortValue: string;
     showFilters: boolean;
+    showMap: boolean;
+    hasMapFilter: boolean;
     showTime: boolean;
     hasTimeFilter: boolean;
     showSavedSearches: boolean;
@@ -72,11 +74,11 @@ defineEmits<{
                 @click="$emit('toggle-filters')"
             />
             <Button
-                :label="$gettext('Show Map')"
+                :label="showMap ? $gettext('Hide Map') : $gettext('Show Map')"
                 icon="pi pi-map"
                 icon-pos="left"
                 size="small"
-                class="toolbar-btn"
+                :class="['toolbar-btn', { active: showMap || hasMapFilter }]"
                 @click="$emit('toggle-map')"
             />
             <Button

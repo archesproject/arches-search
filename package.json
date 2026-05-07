@@ -22,7 +22,9 @@
         "arches": "archesproject/arches#dev/8.1.x"
     },
     "devDependencies": {
-"arches-component-lab": "archesproject/arches-component-lab#main",
+        "@mapbox/geojson-extent": "^1.0.1",
+        "@mapbox/mapbox-gl-draw": "^1.4.3",
+        "arches-component-lab": "archesproject/arches-component-lab#main",
         "arches-controlled-lists": "archesproject/arches-controlled-lists#dev/1.1.x",
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#dev/8.1.x",
         "arches-modular-reports": "archesproject/arches-modular-reports#main"

@@ -11,6 +11,7 @@ import type {
     ActiveFilter,
     ResourceType,
 } from "@/arches_search/SimpleSearch/types.ts";
+import type { FeatureCollection } from "geojson";
 
 interface SearchRequestTerm {
     type: string;
@@ -23,12 +24,15 @@ interface SearchFilters {
     activeGraph: Ref<ResourceType | null>;
     currentPage: Ref<number>;
     isSearching: Ref<boolean>;
+    mapFilter: Ref<FeatureCollection | null>;
     resultsGraph: Ref<ResourceType | null>;
     searchResults: Ref<SearchResults>;
+    clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
     search(page?: number): void;
     setGraph(graph: ResourceType | null): void;
+    setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
     setTermFilter(
         key: string,
@@ -46,6 +50,7 @@ const SEARCH_FILTERS_KEY: InjectionKey<SearchFilters> = Symbol("searchFilters");
 function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
+    const mapFilter = ref<FeatureCollection | null>(null);
     const activeGraph = ref<ResourceType | null>(null);
     const resultsGraph = ref<ResourceType | null>(null);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
@@ -99,6 +104,17 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function setMapFilter(featureCollection: FeatureCollection): void {
+        mapFilter.value = featureCollection;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function clearMapFilter(): void {
+        mapFilter.value = null;
+        search();
+    }
+
     function setGraph(graph: ResourceType | null): void {
         activeGraph.value = graph;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -121,6 +137,7 @@ function createSearchFilters(): SearchFilters {
                     query: getRequestQuery(),
                     page,
                     graphId: requestGraph ? requestGraph.id : null,
+                    mapFilter: mapFilter.value,
                 });
 
                 if (page > FIRST_SEARCH_PAGE) {
@@ -157,14 +174,17 @@ function createSearchFilters(): SearchFilters {
     return {
         activeFilters,
         activeGraph,
+        clearMapFilter,
         clearQuery,
         clearTermFilter,
         currentPage,
         isSearching,
+        mapFilter,
         resultsGraph,
         search,
         searchResults,
         setGraph,
+        setMapFilter,
         setQuery,
         setTermFilter,
     };

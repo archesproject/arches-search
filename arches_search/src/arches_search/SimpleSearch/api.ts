@@ -10,22 +10,26 @@ import type {
     SavedSearch,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
+import type { FeatureCollection } from "geojson";
 
 export async function fetchSearchResults({
     terms = [],
     query = {} as GroupPayload,
     graphId = null,
+    mapFilter = null,
     page = 1,
 }: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
     graphId?: string | null;
+    mapFilter?: FeatureCollection | null;
     page?: number;
 } = {}): Promise<SearchResults> {
     const requestPayload = {
         graphId: graphId,
         terms: terms,
         query: query,
+        mapFilter: mapFilter,
         page: page,
     };
 

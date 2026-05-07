@@ -15,6 +15,7 @@ import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolb
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
 import SaveDialog from "@/arches_search/SimpleSearch/components/SaveDialog.vue";
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
+import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
 
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
@@ -26,6 +27,7 @@ import { createSavedSearch } from "@/arches_search/SimpleSearch/api.ts";
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 
+import type { FeatureCollection } from "geojson";
 import type {
     GraphModel,
     LiteralClause,
@@ -44,12 +46,15 @@ defineEmits<{
 const {
     activeFilters,
     activeGraph,
+    clearMapFilter,
     clearQuery,
     clearTermFilter,
     isSearching,
+    mapFilter,
     search,
     searchResults,
     setGraph,
+    setMapFilter,
     setQuery,
     setTermFilter,
 } = provideSearchFilters();
@@ -57,6 +62,8 @@ const {
 const {
     isAttributeFiltersActive,
     isAttributeFiltersOpen,
+    isMapFilterActive,
+    isMapFilterOpen,
     isTimeFilterActive,
     isTimeFilterOpen,
     hasOpenSidePanel,
@@ -68,6 +75,7 @@ const {
     sidePanelStyle,
     closeSidePanel,
     onToggleAttributeFilters,
+    onToggleMapFilter,
     onToggleTimeFilter,
     onSplitterResizeStart,
     onSplitterResize,
@@ -172,6 +180,15 @@ function onRemoveTimeFilter(): void {
     clearQuery(TIME_FILTER_QUERY_KEY);
 }
 
+function onMapFilterUpdate(featureCollection: FeatureCollection): void {
+    setMapFilter(featureCollection);
+}
+
+function onRemoveMapFilter(): void {
+    clearMapFilter();
+    closeSidePanel();
+}
+
 function buildQueryDefinition(): Record<string, unknown> {
     const terms = activeFilters.value.map((filter) => ({
         type: "term",
@@ -245,13 +262,15 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
         <ResultsToolbar
             :sort-value="sortValue"
             :show-filters="isAttributeFiltersOpen"
+            :show-map="isMapFilterOpen"
+            :has-map-filter="mapFilter !== null"
             :show-time="isTimeFilterOpen"
             :has-time-filter="hasTimeFilter"
             :show-saved-searches="showSavedSearches"
             @update:sort-value="onSortValueUpdate"
             @save-search="showSaveDialog = true"
             @toggle-filters="onToggleAttributeFilters"
-            @toggle-map="() => {}"
+            @toggle-map="onToggleMapFilter"
             @toggle-time="onToggleTimeFilter"
             @toggle-saved-searches="showSavedSearches = !showSavedSearches"
             @export="() => {}"
@@ -289,8 +308,14 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
                         :class="sidePanelContentClass"
                         :aria-hidden="!hasOpenSidePanel"
                     >
+                        <MapFilterPanel
+                            v-show="isMapFilterActive"
+                            :model-value="mapFilter"
+                            @update:model-value="onMapFilterUpdate"
+                            @remove="onRemoveMapFilter"
+                        />
                         <TimeFilter
-                            v-if="isTimeFilterActive"
+                            v-if="!isMapFilterActive && isTimeFilterActive"
                             :graph-slug="activeGraphSlug"
                             :graph-id="activeGraphId"
                             :graph-label="activeGraphLabel"
@@ -300,7 +325,9 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
                             @remove="onRemoveTimeFilter"
                         />
                         <AttributeFilters
-                            v-else-if="isAttributeFiltersActive"
+                            v-else-if="
+                                !isMapFilterActive && isAttributeFiltersActive
+                            "
                             :selected-options="selectedFilterOptions"
                             @update:selected-options="onSelectedOptionsUpdate"
                         />
@@ -357,12 +384,16 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
 }
 
 .simple-search .side-panel {
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     border-inline-start: 0.0625rem solid var(--p-content-border-color);
 }
 
 .simple-search .side-panel-content {
-    block-size: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
     overflow-y: auto;
     opacity: 0;
     translate: 1.25rem 0;
