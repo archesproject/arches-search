@@ -11,7 +11,9 @@ class NodeFilterConfigAPI(APIBase):
         slug = request.GET.get("slug", "filtering")
 
         try:
-            search_config = NodeFilterConfig.objects.get(graph_id=graph_id, slug=slug)
+            search_config = NodeFilterConfig.objects.select_related("graph").get(
+                graph_id=graph_id, slug=slug
+            )
         except NodeFilterConfig.DoesNotExist:
             return JSONResponse({"nodes": []})
 
@@ -56,6 +58,7 @@ class NodeFilterConfigAPI(APIBase):
         return JSONResponse(
             {
                 "graph_id": str(graph_id),
+                "graph_slug": search_config.graph.slug,
                 "slug": slug,
                 "nodes": result_nodes,
             }
