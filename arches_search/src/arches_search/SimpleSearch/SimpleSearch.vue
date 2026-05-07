@@ -348,8 +348,8 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             typeof term.id === "string"
                 ? term.id
                 : typeof term.value === "string"
-                    ? term.value
-                    : null;
+                  ? term.value
+                  : null;
         const text = typeof term.text === "string" ? term.text : null;
         if (!id || text === null) return [];
         return [
@@ -528,7 +528,9 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
     translate: 0 0;
 }
 
-.simple-search .splitter.side-panel-closed :deep(.results-pane + .p-splitter-gutter) {
+.simple-search
+    .splitter.side-panel-closed
+    :deep(.results-pane + .p-splitter-gutter) {
     display: none;
 }
 </style>
