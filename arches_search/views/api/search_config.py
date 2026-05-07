@@ -21,7 +21,7 @@ class NodeFilterConfigAPI(APIBase):
 
         node_aliases = [entry["node_alias"] for entry in config_nodes]
 
-        nodes_qs = arches_models.Node.objects.filter(
+        nodes = arches_models.Node.objects.filter(
             graph_id=graph_id,
             alias__in=node_aliases,
         ).select_related("nodegroup")
@@ -29,10 +29,10 @@ class NodeFilterConfigAPI(APIBase):
         permitted_nodegroups = get_nodegroups_by_perm(
             request.user, "models.read_nodegroup"
         )
-        nodes_qs = nodes_qs.filter(nodegroup__in=permitted_nodegroups)
+        nodes = nodes.filter(nodegroup__in=permitted_nodegroups)
 
         node_by_alias = {}
-        for node in nodes_qs:
+        for node in nodes:
             node_by_alias[node.alias] = node
 
         result_nodes = []
