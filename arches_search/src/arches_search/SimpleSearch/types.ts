@@ -24,6 +24,23 @@ export interface SortOption {
     value: string;
 }
 
+export interface NodeFilterConfigResponse {
+    graph_id: string;
+    graph_slug: string;
+    slug: string;
+    nodes: NodeFilterConfigNode[];
+}
+
+export interface NodeFilterConfigNode {
+    node_id: string;
+    node_alias: string;
+    nodegroup_id: string;
+    label: string;
+    datatype: string;
+    config: Record<string, unknown> | null;
+    sortorder: number;
+}
+
 export interface AttributeFilterOption {
     id: string;
     label: string;

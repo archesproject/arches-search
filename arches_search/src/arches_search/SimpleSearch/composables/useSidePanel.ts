@@ -9,6 +9,7 @@ const SIDE_PANEL_SWITCH_DELAY_MS = 240;
 const ATTRIBUTE_FILTERS_PANEL = "attribute-filters" as const;
 const TIME_FILTER_PANEL = "time-filter" as const;
 const MAP_FILTER_PANEL = "map-filter" as const;
+const SAVED_SEARCHES_PANEL = "saved-searches" as const;
 
 interface SplitterResizeEvent {
     sizes?: number[];
@@ -17,12 +18,14 @@ interface SplitterResizeEvent {
 type SidePanelType =
     | typeof ATTRIBUTE_FILTERS_PANEL
     | typeof TIME_FILTER_PANEL
-    | typeof MAP_FILTER_PANEL;
+    | typeof MAP_FILTER_PANEL
+    | typeof SAVED_SEARCHES_PANEL;
 
 const PANEL_SIZES: Record<SidePanelType, number> = {
     [ATTRIBUTE_FILTERS_PANEL]: 27,
     [TIME_FILTER_PANEL]: SIDE_PANEL_SIZE,
     [MAP_FILTER_PANEL]: 65,
+    [SAVED_SEARCHES_PANEL]: 27,
 };
 
 export function useSidePanel() {
@@ -66,6 +69,14 @@ export function useSidePanel() {
 
     const isMapFilterActive = computed<boolean>(
         () => activeSidePanel.value === MAP_FILTER_PANEL,
+    );
+
+    const isSavedSearchesOpen = computed<boolean>(
+        () => activeSidePanel.value === SAVED_SEARCHES_PANEL,
+    );
+
+    const isSavedSearchesActive = computed<boolean>(
+        () => activeSidePanel.value === SAVED_SEARCHES_PANEL,
     );
 
     const resultsPanelSize = computed<number>(
@@ -188,6 +199,10 @@ export function useSidePanel() {
         toggleSidePanel(MAP_FILTER_PANEL);
     }
 
+    function onToggleSavedSearches(): void {
+        toggleSidePanel(SAVED_SEARCHES_PANEL);
+    }
+
     onUnmounted(clearSwitchTimer);
 
     return {
@@ -195,6 +210,8 @@ export function useSidePanel() {
         isAttributeFiltersOpen,
         isMapFilterActive,
         isMapFilterOpen,
+        isSavedSearchesActive,
+        isSavedSearchesOpen,
         isTimeFilterActive,
         isTimeFilterOpen,
         hasOpenSidePanel,
@@ -207,6 +224,7 @@ export function useSidePanel() {
         closeSidePanel,
         onToggleAttributeFilters,
         onToggleMapFilter,
+        onToggleSavedSearches,
         onToggleTimeFilter,
         onSplitterResizeStart,
         onSplitterResize,

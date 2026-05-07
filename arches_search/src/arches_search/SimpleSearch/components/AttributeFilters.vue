@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { computed } from "vue";
-
 import { useGettext } from "vue3-gettext";
 
 import Accordion from "primevue/accordion";
@@ -14,23 +12,9 @@ import type { AttributeFilterSection } from "@/arches_search/SimpleSearch/types.
 const { $gettext } = useGettext();
 
 const props = defineProps<{
+    sections: AttributeFilterSection[];
     selectedOptions: Record<string, string[]>;
 }>();
-
-const sections = computed<AttributeFilterSection[]>(() => [
-    { id: "color", label: $gettext("Color"), options: [] },
-    {
-        id: "referenceItemType",
-        label: $gettext("Reference Item Type"),
-        options: [],
-    },
-    { id: "mixture", label: $gettext("Mixture"), options: [] },
-    { id: "elements", label: $gettext("Elements"), options: [] },
-    { id: "chemicalFormula", label: $gettext("Chemical Formula"), options: [] },
-    { id: "pigments", label: $gettext("Pigments"), options: [] },
-    { id: "itemCategory", label: $gettext("Item Category"), options: [] },
-    { id: "materials", label: $gettext("Materials"), options: [] },
-]);
 
 const emit = defineEmits<{
     (event: "update:selectedOptions", value: Record<string, string[]>): void;
@@ -62,7 +46,7 @@ function toggleOption(sectionId: string, optionId: string) {
 
         <Accordion
             multiple
-            :value="sections.map((s) => s.id)"
+            :value="[]"
         >
             <AccordionPanel
                 v-for="section in sections"

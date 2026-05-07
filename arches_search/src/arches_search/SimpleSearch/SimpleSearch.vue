@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watchEffect } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 import { useToast } from "primevue/usetoast";
 import Toast from "primevue/toast";
@@ -20,18 +20,28 @@ import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeF
 
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
+    ClauseSubjectTypeToken,
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import { createSavedSearch } from "@/arches_search/SimpleSearch/api.ts";
+import {
+    createSavedSearch,
+    fetchNodeFilterConfig,
+    fetchControlledListItems,
+} from "@/arches_search/SimpleSearch/api.ts";
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 
 import type { FeatureCollection } from "geojson";
 import type {
     GraphModel,
+    GroupPayload,
     LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import type {
+    AttributeFilterSection,
+    NodeFilterConfigNode,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced";
 const TERM_FILTER_KEY = "termfilter";
@@ -64,6 +74,8 @@ const {
     isAttributeFiltersOpen,
     isMapFilterActive,
     isMapFilterOpen,
+    isSavedSearchesActive,
+    isSavedSearchesOpen,
     isTimeFilterActive,
     isTimeFilterOpen,
     hasOpenSidePanel,
@@ -76,6 +88,7 @@ const {
     closeSidePanel,
     onToggleAttributeFilters,
     onToggleMapFilter,
+    onToggleSavedSearches,
     onToggleTimeFilter,
     onSplitterResizeStart,
     onSplitterResize,
@@ -87,7 +100,6 @@ const toast = useToast();
 const sortValue = ref("aToZ");
 const graphModels = ref<GraphModel[]>([]);
 const timeFilterClauses = ref<LiteralClause[]>([]);
-const showSavedSearches = ref(false);
 const showSaveDialog = ref(false);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
 const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
@@ -101,6 +113,106 @@ const activeGraphId = computed<string | null>(
 const activeGraphLabel = computed<string | null>(
     () => activeGraph.value?.label ?? null,
 );
+
+const attributeFilterSections = ref<AttributeFilterSection[]>([]);
+const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
+
+watch(
+    () => activeGraph.value,
+    async (graph) => {
+        if (!graph || !graph.id) {
+            attributeFilterSections.value = [];
+            nodeFilterConfigNodes.value = [];
+            return;
+        }
+        try {
+            const config = await fetchNodeFilterConfig(graph.id);
+            nodeFilterConfigNodes.value = config.nodes;
+            attributeFilterSections.value = config.nodes.map((node) => ({
+                id: node.node_alias,
+                label: node.label,
+                options: [],
+            }));
+
+            // Populate options from controlled lists for reference nodes
+            const sections = [...attributeFilterSections.value];
+            await Promise.all(
+                config.nodes.map(async (node, index) => {
+                    if (
+                        node.datatype !== "reference" ||
+                        !node.config?.controlledList
+                    ) {
+                        return;
+                    }
+                    const items = await fetchControlledListItems(
+                        node.config.controlledList as string,
+                    );
+                    sections[index] = {
+                        ...sections[index],
+                        options: items.map((item) => ({
+                            id: item.uri,
+                            label: item.label,
+                        })),
+                    };
+                }),
+            );
+            attributeFilterSections.value = sections;
+        } catch (err) {
+            console.error("[SimpleSearch] error loading filter config:", err);
+            attributeFilterSections.value = [];
+            nodeFilterConfigNodes.value = [];
+        }
+    },
+);
+
+function onFilterOptionsChanged(selected: Record<string, string[]>) {
+    selectedFilterOptions.value = selected;
+
+    // Clear all existing attribute filter queries
+    for (const node of nodeFilterConfigNodes.value) {
+        clearQuery(node.node_alias);
+    }
+
+    // Set a query for each section that has selections
+    for (const [nodeAlias, values] of Object.entries(selected)) {
+        if (values.length === 0) continue;
+
+        const section = attributeFilterSections.value.find(
+            (s) => s.id === nodeAlias,
+        );
+        const resolvedValues = values.map((val) => {
+            const opt = section?.options.find((o) => o.id === val);
+            return opt?.label ?? val;
+        });
+
+        const query: GroupPayload = {
+            graph_slug: activeGraphSlug.value!,
+            scope: GraphScopeToken.RESOURCE,
+            logic: LogicToken.AND,
+            clauses: [
+                {
+                    type: "LITERAL" as const,
+                    quantifier: "ANY" as const,
+                    subject: {
+                        type: ClauseSubjectTypeToken.NODE,
+                        graph_slug: activeGraphSlug.value!,
+                        node_alias: nodeAlias,
+                        search_models: [],
+                    },
+                    operator: "REFERENCES_ANY",
+                    operands: [
+                        { type: "LITERAL" as const, value: resolvedValues },
+                    ],
+                },
+            ],
+            groups: [],
+            aggregations: [],
+            relationship: null,
+        };
+
+        setQuery(nodeAlias, query);
+    }
+}
 
 const activeGraphSlug = computed<string | null>(() => {
     if (!activeGraphId.value) {
@@ -142,12 +254,6 @@ async function loadGraphModels(): Promise<void> {
 
 function onRequestPage(page: number): void {
     search(page);
-}
-
-function onSelectedOptionsUpdate(
-    nextSelectedFilterOptions: Record<string, string[]>,
-): void {
-    selectedFilterOptions.value = nextSelectedFilterOptions;
 }
 
 function onSortValueUpdate(nextSortValue: string): void {
@@ -266,13 +372,13 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
             :has-map-filter="mapFilter !== null"
             :show-time="isTimeFilterOpen"
             :has-time-filter="hasTimeFilter"
-            :show-saved-searches="showSavedSearches"
+            :show-saved-searches="isSavedSearchesOpen"
             @update:sort-value="onSortValueUpdate"
             @save-search="showSaveDialog = true"
             @toggle-filters="onToggleAttributeFilters"
             @toggle-map="onToggleMapFilter"
             @toggle-time="onToggleTimeFilter"
-            @toggle-saved-searches="showSavedSearches = !showSavedSearches"
+            @toggle-saved-searches="onToggleSavedSearches"
             @export="() => {}"
         />
 
@@ -315,7 +421,7 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
                             @remove="onRemoveMapFilter"
                         />
                         <TimeFilter
-                            v-if="!isMapFilterActive && isTimeFilterActive"
+                            v-if="isTimeFilterActive"
                             :graph-slug="activeGraphSlug"
                             :graph-id="activeGraphId"
                             :graph-label="activeGraphLabel"
@@ -325,25 +431,19 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
                             @remove="onRemoveTimeFilter"
                         />
                         <AttributeFilters
-                            v-else-if="
-                                !isMapFilterActive && isAttributeFiltersActive
-                            "
+                            v-else-if="isAttributeFiltersActive"
+                            :sections="attributeFilterSections"
                             :selected-options="selectedFilterOptions"
-                            @update:selected-options="onSelectedOptionsUpdate"
+                            @update:selected-options="onFilterOptionsChanged"
+                        />
+                        <SavedSearchPanel
+                            v-else-if="isSavedSearchesActive"
+                            ref="savedSearchPanelRef"
+                            @run-query="onRunSavedQuery"
                         />
                     </div>
                 </SplitterPanel>
             </Splitter>
-
-            <aside
-                v-if="showSavedSearches"
-                class="saved-searches-pane"
-            >
-                <SavedSearchPanel
-                    ref="savedSearchPanelRef"
-                    @run-query="onRunSavedQuery"
-                />
-            </aside>
         </div>
     </div>
 
@@ -411,12 +511,5 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
     .splitter.side-panel-closed
     :deep(.results-pane + .p-splitter-gutter) {
     display: none;
-}
-
-.saved-searches-pane {
-    width: 320px;
-    flex-shrink: 0;
-    border-left: 0.125rem solid var(--p-content-border-color);
-    overflow-y: auto;
 }
 </style>
