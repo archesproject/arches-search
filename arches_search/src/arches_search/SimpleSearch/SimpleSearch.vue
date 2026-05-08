@@ -10,6 +10,7 @@ import SplitterPanel from "primevue/splitterpanel";
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
 import AttributeFilters from "@/arches_search/SimpleSearch/components/AttributeFilters.vue";
+import ExportPanel from "@/arches_search/SimpleSearch/components/ExportPanel.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
@@ -101,6 +102,9 @@ const { $gettext } = useGettext();
 const toast = useToast();
 const sortValue = ref<string | null>(null);
 const graphModels = ref<GraphModel[]>([]);
+const timeFilterClauses = ref<LiteralClause[]>([]);
+const showSavedSearches = ref(false);
+const showExportPanel = ref(false);
 const showSaveDialog = ref(false);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
 const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
@@ -399,8 +403,8 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             @toggle-filters="onToggleAttributeFilters"
             @toggle-map="onToggleMapFilter"
             @toggle-time="onToggleTimeFilter"
-            @toggle-saved-searches="onToggleSavedSearches"
-            @export="() => {}"
+            @toggle-saved-searches="showSavedSearches = !showSavedSearches"
+            @export="showExportPanel = !showExportPanel"
         />
 
         <div class="body">
@@ -465,6 +469,23 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                     </div>
                 </SplitterPanel>
             </Splitter>
+
+            <aside
+                v-if="showSavedSearches"
+                class="saved-searches-pane"
+            >
+                <SavedSearchPanel
+                    ref="savedSearchPanelRef"
+                    @run-query="onRunSavedQuery"
+                />
+            </aside>
+
+            <aside
+                v-if="showExportPanel"
+                class="export-pane"
+            >
+                <ExportPanel />
+            </aside>
         </div>
     </div>
 
@@ -532,5 +553,19 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
     .splitter.side-panel-closed
     :deep(.results-pane + .p-splitter-gutter) {
     display: none;
+}
+
+.saved-searches-pane {
+    width: 20rem;
+    flex-shrink: 0;
+    border-left: 0.125rem solid var(--p-content-border-color);
+    overflow-y: auto;
+}
+
+.export-pane {
+    width: 20rem;
+    flex-shrink: 0;
+    border-left: 0.125rem solid var(--p-content-border-color);
+    overflow-y: auto;
 }
 </style>

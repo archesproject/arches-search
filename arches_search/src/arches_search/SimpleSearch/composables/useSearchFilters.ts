@@ -26,6 +26,12 @@ interface SearchRequestTerm {
     inverted: boolean;
 }
 
+interface ExportPayload {
+    terms: SearchRequestTerm[];
+    query: GroupPayload | undefined;
+    graphId: string | null;
+}
+
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
     activeGraph: Ref<ResourceType | null>;
@@ -41,7 +47,7 @@ interface SearchFilters {
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
-    getSearchDefinition(): SearchDefinition;
+    getExportPayload(): ExportPayload;
     search(page?: number): void;
     setGraph(graph: ResourceType | null): void;
     setMapFilter(featureCollection: FeatureCollection): void;
@@ -281,6 +287,14 @@ function createSearchFilters(): SearchFilters {
         }
     }
 
+    function getExportPayload(): ExportPayload {
+        return {
+            terms: getRequestTerms(),
+            query: getRequestQuery(),
+            graphId: activeGraph.value ? activeGraph.value.id : null,
+        };
+    }
+
     return {
         activeFilters,
         activeGraph,
@@ -290,6 +304,7 @@ function createSearchFilters(): SearchFilters {
         clearTermFilter,
         currentPage,
         getSearchDefinition,
+        getExportPayload,
         isSearching,
         mapFilter,
         queries: queriesView,

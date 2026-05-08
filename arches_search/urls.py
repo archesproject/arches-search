@@ -29,6 +29,7 @@ from arches_search.views.api.search_mvt import (
     SearchMVTAPI,
     SearchMVTContextAPI,
 )
+from arches_search.views.api.search_export import SearchExportAPI
 from arches_search.views.api.simple_search import SimpleSearchAPI
 
 urlpatterns = [
@@ -117,6 +118,11 @@ urlpatterns = [
         "api/arches-search/mvt/<str:context_id>/<int:zoom>/<int:x>/<int:y>.pbf",
         SearchMVTAPI.as_view(),
         name="search_mvt",
+    ),
+    path(
+        "api/search-export",
+        SearchExportAPI.as_view(),
+        name="search_export",
     ),
 ]
 
