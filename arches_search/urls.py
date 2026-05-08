@@ -23,6 +23,7 @@ from arches_search.views.api.relatable_node_tree_for_graph import (
 from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 from arches_search.views.api.saved_search import SavedSearchAPI
 from arches_search.views.api.term_suggestions import TermSuggestionView
+from arches_search.views.api.relationship_viewer import RelationshipViewerAPI
 from arches_search.views.api.simple_search import SimpleSearchAPI
 
 urlpatterns = [
@@ -91,6 +92,11 @@ urlpatterns = [
         "api/arches-search",
         SimpleSearchAPI.as_view(),
         name="arches_search",
+    ),
+    path(
+        "api/relationship-viewer",
+        RelationshipViewerAPI.as_view(),
+        name="relationship_viewer",
     ),
 ]
 

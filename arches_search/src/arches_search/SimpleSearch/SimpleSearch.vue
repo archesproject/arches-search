@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watchEffect } from "vue";
+import { computed, provide, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 import { useToast } from "primevue/usetoast";
 import Toast from "primevue/toast";
@@ -16,6 +16,7 @@ import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearc
 import SaveDialog from "@/arches_search/SimpleSearch/components/SaveDialog.vue";
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
+import RelationshipViewer from "@/arches_search/RelationshipViewer/RelationshipViewer.vue";
 
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
@@ -59,6 +60,8 @@ const {
     isAttributeFiltersOpen,
     isTimeFilterActive,
     isTimeFilterOpen,
+    isRelationshipViewerActive,
+    isRelationshipViewerOpen,
     hasOpenSidePanel,
     resultsPanelSize,
     visibleSidePanelSize,
@@ -69,10 +72,32 @@ const {
     closeSidePanel,
     onToggleAttributeFilters,
     onToggleTimeFilter,
+    onToggleRelationshipViewer,
     onSplitterResizeStart,
     onSplitterResize,
     onSplitterResizeEnd,
 } = useSidePanel();
+
+const graphResourceIds = computed<string[]>(() => {
+    if (seedResourceIds.value.length) return seedResourceIds.value;
+    return searchResults.value.resources.map((r) => r.resourceinstanceid);
+});
+
+const seedResourceIds = ref<string[]>([]);
+
+function openRelationshipViewer(resourceId: string): void {
+    seedResourceIds.value = [resourceId];
+    if (!isRelationshipViewerOpen.value) {
+        onToggleRelationshipViewer();
+    }
+}
+
+// Reset seed when the viewer is closed
+watch(isRelationshipViewerOpen, (open) => {
+    if (!open) seedResourceIds.value = [];
+});
+
+provide("openRelationshipViewer", openRelationshipViewer);
 
 const { $gettext } = useGettext();
 const toast = useToast();
@@ -248,12 +273,14 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
             :show-time="isTimeFilterOpen"
             :has-time-filter="hasTimeFilter"
             :show-saved-searches="showSavedSearches"
+            :show-graph="isRelationshipViewerOpen"
             @update:sort-value="onSortValueUpdate"
             @save-search="showSaveDialog = true"
             @toggle-filters="onToggleAttributeFilters"
             @toggle-map="() => {}"
             @toggle-time="onToggleTimeFilter"
             @toggle-saved-searches="showSavedSearches = !showSavedSearches"
+            @toggle-graph="onToggleRelationshipViewer"
             @export="() => {}"
         />
 
@@ -303,6 +330,10 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
                             v-else-if="isAttributeFiltersActive"
                             :selected-options="selectedFilterOptions"
                             @update:selected-options="onSelectedOptionsUpdate"
+                        />
+                        <RelationshipViewer
+                            v-else-if="isRelationshipViewerActive"
+                            :resource-ids="graphResourceIds"
                         />
                     </div>
                 </SplitterPanel>

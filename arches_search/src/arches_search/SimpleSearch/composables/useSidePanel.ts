@@ -1,24 +1,32 @@
 import { computed, onUnmounted, ref } from "vue";
 import type { CSSProperties } from "vue";
 
-const SIDE_PANEL_SIZE = 40;
 const SIDE_PANEL_MIN_SIZE = 15;
+const PANEL_SIZES = {
+    "attribute-filters": 40,
+    "time-filter": 40,
+    "relationship-viewer": 70,
+} as const satisfies Record<string, number>;
 const FLEX_TRANSITION = "240ms ease" as const;
 const BORDER_TRANSITION = "180ms ease" as const;
 const SIDE_PANEL_SWITCH_DELAY_MS = 240;
 const ATTRIBUTE_FILTERS_PANEL = "attribute-filters" as const;
 const TIME_FILTER_PANEL = "time-filter" as const;
+const RELATIONSHIP_VIEWER_PANEL = "relationship-viewer" as const;
 
 interface SplitterResizeEvent {
     sizes?: number[];
 }
 
-type SidePanelType = typeof ATTRIBUTE_FILTERS_PANEL | typeof TIME_FILTER_PANEL;
+type SidePanelType =
+    | typeof ATTRIBUTE_FILTERS_PANEL
+    | typeof TIME_FILTER_PANEL
+    | typeof RELATIONSHIP_VIEWER_PANEL;
 
 export function useSidePanel() {
     const activeSidePanel = ref<SidePanelType | null>(null);
     const isSidePanelOpen = ref(false);
-    const sidePanelBasis = ref(SIDE_PANEL_SIZE);
+    const sidePanelBasis = ref(PANEL_SIZES["attribute-filters"]);
     const isSplitterResizing = ref(false);
 
     let switchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -46,6 +54,16 @@ export function useSidePanel() {
 
     const isTimeFilterActive = computed<boolean>(
         () => activeSidePanel.value === TIME_FILTER_PANEL,
+    );
+
+    const isRelationshipViewerOpen = computed<boolean>(
+        () =>
+            hasOpenSidePanel.value &&
+            activeSidePanel.value === RELATIONSHIP_VIEWER_PANEL,
+    );
+
+    const isRelationshipViewerActive = computed<boolean>(
+        () => activeSidePanel.value === RELATIONSHIP_VIEWER_PANEL,
     );
 
     const resultsPanelSize = computed<number>(
@@ -115,6 +133,9 @@ export function useSidePanel() {
         isSidePanelOpen.value = false;
         switchTimer = setTimeout(() => {
             activeSidePanel.value = nextPanel;
+            if (nextPanel !== null) {
+                sidePanelBasis.value = PANEL_SIZES[nextPanel];
+            }
             isSidePanelOpen.value = nextPanel !== null;
             switchTimer = null;
         }, SIDE_PANEL_SWITCH_DELAY_MS);
@@ -123,6 +144,7 @@ export function useSidePanel() {
     function openSidePanel(panelType: SidePanelType): void {
         clearSwitchTimer();
         activeSidePanel.value = panelType;
+        sidePanelBasis.value = PANEL_SIZES[panelType];
         isSidePanelOpen.value = true;
     }
 
@@ -159,6 +181,10 @@ export function useSidePanel() {
         toggleSidePanel(TIME_FILTER_PANEL);
     }
 
+    function onToggleRelationshipViewer(): void {
+        toggleSidePanel(RELATIONSHIP_VIEWER_PANEL);
+    }
+
     onUnmounted(clearSwitchTimer);
 
     return {
@@ -166,6 +192,8 @@ export function useSidePanel() {
         isAttributeFiltersOpen,
         isTimeFilterActive,
         isTimeFilterOpen,
+        isRelationshipViewerActive,
+        isRelationshipViewerOpen,
         hasOpenSidePanel,
         resultsPanelSize,
         visibleSidePanelSize,
@@ -176,6 +204,7 @@ export function useSidePanel() {
         closeSidePanel,
         onToggleAttributeFilters,
         onToggleTimeFilter,
+        onToggleRelationshipViewer,
         onSplitterResizeStart,
         onSplitterResize,
         onSplitterResizeEnd,

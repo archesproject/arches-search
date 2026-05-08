@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, nextTick, ref } from "vue";
-import { useGettext } from "vue3-gettext";
+import { computed, inject, onMounted, nextTick, ref } from "vue";import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
 
@@ -23,6 +22,10 @@ const descriptorData = inject("descriptorData") as Ref<
     ResourceDescriptorData | null | undefined
 >;
 const isExpanded = inject("searchResultExpanded") as Ref<boolean>;
+const openRelationshipViewer = inject<((id: string) => void) | null>(
+    "openRelationshipViewer",
+    null,
+);
 
 const shouldShowThumbnailContainer = ref(false);
 const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
@@ -131,9 +134,11 @@ onMounted(function () {
                         :label="$gettext('Edit')"
                     />
                     <Button
+                        v-if="openRelationshipViewer"
                         icon="pi pi-sitemap"
                         variant="link"
                         :label="$gettext('Related Resources')"
+                        @click="openRelationshipViewer(resourceInstanceId)"
                     />
                 </div>
 

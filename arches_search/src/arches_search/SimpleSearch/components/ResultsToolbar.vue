@@ -16,6 +16,7 @@ defineProps<{
     showTime: boolean;
     hasTimeFilter: boolean;
     showSavedSearches: boolean;
+    showGraph: boolean;
 }>();
 
 const sortOptions = computed<SortOption[]>(() => [
@@ -32,6 +33,7 @@ defineEmits<{
     (event: "toggle-map"): void;
     (event: "toggle-time"): void;
     (event: "toggle-saved-searches"): void;
+    (event: "toggle-graph"): void;
     (event: "export"): void;
 }>();
 </script>
@@ -88,6 +90,16 @@ defineEmits<{
                 size="small"
                 :class="['toolbar-btn', { active: showTime || hasTimeFilter }]"
                 @click="$emit('toggle-time')"
+            />
+            <Button
+                :label="
+                    showGraph ? $gettext('Hide Visualization') : $gettext('Show Relationships')
+                "
+                icon="pi pi-share-alt"
+                icon-pos="left"
+                size="small"
+                :class="['toolbar-btn', { active: showGraph }]"
+                @click="$emit('toggle-graph')"
             />
             <Button
                 :label="$gettext('Saved Searches')"
