@@ -39,6 +39,8 @@ from arches_search.views.api.search_mvt import (
 )
 from arches_search.views.api.search_export import SearchExportAPI
 from arches_search.views.api.search import SearchAPI
+from arches_search.views.api.relationship_viewer import RelationshipViewerAPI
+
 
 urlpatterns = [
     path("api/search", SearchAPI.as_view(), name="search"),
@@ -151,6 +153,11 @@ urlpatterns = [
         "api/search-export",
         SearchExportAPI.as_view(),
         name="search_export",
+    ),
+    path(
+        "api/relationship-viewer",
+        RelationshipViewerAPI.as_view(),
+        name="relationship_viewer",
     ),
 ]
 
