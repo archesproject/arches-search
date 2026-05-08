@@ -248,12 +248,6 @@ function onRequestPage(page: number): void {
     search(page);
 }
 
-function onSelectedOptionsUpdate(
-    nextSelectedFilterOptions: Record<string, string[]>,
-): void {
-    selectedFilterOptions.value = nextSelectedFilterOptions;
-}
-
 function onSortValueUpdate(nextSortValue: string | null): void {
     sortValue.value = nextSortValue;
     setSort(sortSpecForValue(nextSortValue));
