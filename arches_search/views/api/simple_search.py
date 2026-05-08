@@ -1,6 +1,5 @@
-from django.core.paginator import Paginator
 from django.contrib.postgres.search import SearchQuery
-
+from django.core.paginator import Paginator
 
 from arches.app.models.models import (
     ResourceInstance,
@@ -107,3 +106,4 @@ class SimpleSearchAPI(APIBase):
                 "aggregations": aggregations,
             }
         )
+
