@@ -9,6 +9,7 @@ import type {
 import type {
     NodeFilterConfigResponse,
     SavedSearch,
+    SortSpec,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
@@ -40,20 +41,26 @@ export async function fetchSearchResults({
     graphId = null,
     mapFilter = null,
     page = 1,
+    sort,
 }: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
     graphId?: string | null;
     mapFilter?: FeatureCollection | null;
     page?: number;
+    sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
-    const requestPayload = {
+    const requestPayload: Record<string, unknown> = {
         graphId: graphId,
         terms: terms,
         query: query,
         mapFilter: mapFilter,
         page: page,
     };
+
+    if (sort !== undefined) {
+        requestPayload.sort = sort;
+    }
 
     const response = await fetch(
         `${generateArchesURL("arches_search:arches_search")}`,

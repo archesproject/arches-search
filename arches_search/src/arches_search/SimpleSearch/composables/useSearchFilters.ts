@@ -15,6 +15,7 @@ import type {
 import type {
     ActiveFilter,
     ResourceType,
+    SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
 
@@ -33,6 +34,7 @@ interface SearchFilters {
     resultsTileUrl: ComputedRef<string | null>;
     resultsGraph: Ref<ResourceType | null>;
     searchResults: Ref<SearchResults>;
+    sort: Ref<SortSpec[]>;
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
@@ -40,6 +42,7 @@ interface SearchFilters {
     setGraph(graph: ResourceType | null): void;
     setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
+    setSort(next: SortSpec[]): void;
     setTermFilter(
         key: string,
         text: string,
@@ -52,6 +55,9 @@ const FIRST_SEARCH_PAGE = 1;
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_RESULTS_PAGE_SIZE = 25;
 const SEARCH_FILTERS_KEY: InjectionKey<SearchFilters> = Symbol("searchFilters");
+// Empty by default: the user must pick a sort before one is applied. Populate
+// with SortSpec entries to preset a sort without requiring user selection.
+const DEFAULT_SORT: SortSpec[] = [];
 
 function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
@@ -63,6 +69,7 @@ function createSearchFilters(): SearchFilters {
     const isSearching = ref(false);
     const currentPage = ref(FIRST_SEARCH_PAGE);
     const mvtContextId = ref<string | null>(null);
+    const sort = ref<SortSpec[]>(DEFAULT_SORT);
     let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const resultsTileUrl = computed<string | null>(() => {
@@ -139,6 +146,12 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function setSort(next: SortSpec[]): void {
+        sort.value = next;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
     function search(page = currentPage.value): void {
         if (searchTimeout) {
             clearTimeout(searchTimeout);
@@ -156,9 +169,10 @@ function createSearchFilters(): SearchFilters {
                     page,
                     graphId: requestGraph ? requestGraph.id : null,
                     mapFilter: mapFilter.value,
+                    sort: sort.value,
                 };
 
-                const { page: _page, ...mvtParams } = searchParams;
+                const { page: _page, sort: _sort, ...mvtParams } = searchParams;
                 const [results, context] = await Promise.all([
                     fetchSearchResults(searchParams),
                     createSearchMVTContext(mvtParams).catch((error) => {
@@ -227,7 +241,9 @@ function createSearchFilters(): SearchFilters {
         setGraph,
         setMapFilter,
         setQuery,
+        setSort,
         setTermFilter,
+        sort,
     };
 }
 

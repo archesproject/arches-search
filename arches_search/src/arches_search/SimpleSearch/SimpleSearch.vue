@@ -41,6 +41,7 @@ import type {
 import type {
     AttributeFilterSection,
     NodeFilterConfigNode,
+    SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced";
@@ -66,6 +67,7 @@ const {
     setGraph,
     setMapFilter,
     setQuery,
+    setSort,
     setTermFilter,
 } = provideSearchFilters();
 
@@ -97,7 +99,7 @@ const {
 
 const { $gettext } = useGettext();
 const toast = useToast();
-const sortValue = ref("aToZ");
+const sortValue = ref<string | null>(null);
 const graphModels = ref<GraphModel[]>([]);
 const timeFilterClauses = ref<LiteralClause[]>([]);
 const showSaveDialog = ref(false);
@@ -255,8 +257,20 @@ function onRequestPage(page: number): void {
     search(page);
 }
 
-function onSortValueUpdate(nextSortValue: string): void {
+function onSortValueUpdate(nextSortValue: string | null): void {
     sortValue.value = nextSortValue;
+    setSort(sortSpecForValue(nextSortValue));
+}
+
+function sortSpecForValue(value: string | null): SortSpec[] {
+    switch (value) {
+        case "aToZ":
+            return [{ type: "primary_name", direction: "asc" }];
+        case "zToA":
+            return [{ type: "primary_name", direction: "desc" }];
+        default:
+            return [];
+    }
 }
 
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {

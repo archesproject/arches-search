@@ -1,6 +1,7 @@
 from django.core.paginator import Paginator
 from django.contrib.postgres.search import SearchQuery
 
+
 from arches.app.models.models import (
     ResourceInstance,
 )
@@ -14,7 +15,7 @@ from arches_search.utils.advanced_search.advanced_search import (
 )
 from arches_search.utils.geo_utils import GeoUtils
 from arches_search.utils.search_aggregation import build_aggregations
-
+from arches_search.utils.search_sort import SortResolver
 from arches_search.utils.through_resource_search import get_related_resources_by_text
 
 
@@ -77,6 +78,8 @@ class SimpleSearchAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
         results_queryset = build_search_queryset(body)
+
+        results_queryset = SortResolver(body.get("sort")).apply(results_queryset)
 
         page_number = body.get("page", 1)
         page_size = body.get("page_size", 20)
