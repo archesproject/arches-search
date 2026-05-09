@@ -248,7 +248,6 @@ async function loadGraphModels(): Promise<void> {
         graphModels.value = await getGraphs();
     } catch {
         graphModels.value = [];
-        // Non-fatal: time filter degrades gracefully without graph models.
     }
 }
 
@@ -292,7 +291,6 @@ function onMapFilterUpdate(featureCollection: FeatureCollection): void {
 
 function onRemoveMapFilter(): void {
     clearMapFilter();
-    closeSidePanel();
 }
 
 function buildQueryDefinition(): Record<string, unknown> {

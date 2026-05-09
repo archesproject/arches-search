@@ -2,7 +2,16 @@ import json
 
 from django.contrib.gis.geos import GEOSGeometry
 
+from arches.app.models.system_settings import settings
 from arches.app.utils.geo_utils import GeoUtils as ArchesGeoUtils
+
+_BUFFER_UNIT_FACTORS = {
+    "meters": 1,
+    "kilometers": 1000,
+    "feet": 0.3048,
+    "miles": 1609.344,
+    "yards": 0.9144,
+}
 
 
 class GeoUtils(ArchesGeoUtils):
@@ -53,3 +62,33 @@ class GeoUtils(ArchesGeoUtils):
                     return (geom.intersection(west), updated_geom.intersection(east))
 
         return [geom]
+
+    def map_filter_to_union(self, feature_collection):
+        """
+        Convert a map filter FeatureCollection to a single union GEOSGeometry.
+        Features with buffer_distance + buffer_units properties are expanded before unioning.
+        Returns None if the collection has no valid geometries.
+        """
+        union_geom = None
+        for feature in feature_collection.get("features", []):
+            if not feature.get("geometry"):
+                continue
+            geom = GEOSGeometry(json.dumps(feature["geometry"]))
+
+            props = feature.get("properties") or {}
+            buffer_distance = props.get("buffer_distance")
+            buffer_units = props.get("buffer_units")
+
+            if (
+                buffer_distance
+                and buffer_units
+                and buffer_units in _BUFFER_UNIT_FACTORS
+            ):
+                distance_meters = buffer_distance * _BUFFER_UNIT_FACTORS[buffer_units]
+                geom.transform(settings.ANALYSIS_COORDINATE_SYSTEM_SRID)
+                geom = geom.buffer(distance_meters)
+                geom.transform(4326)
+
+            union_geom = geom if union_geom is None else union_geom.union(geom)
+
+        return union_geom

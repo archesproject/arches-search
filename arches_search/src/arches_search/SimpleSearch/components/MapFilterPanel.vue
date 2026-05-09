@@ -1,39 +1,117 @@
 <script setup lang="ts">
+import { nextTick, useTemplateRef, watch } from "vue";
+
 import { useGettext } from "vue3-gettext";
 
 import MapWidget from "@/arches_component_lab/widgets/MapWidget/MapWidget.vue";
 
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+
 import type { FeatureCollection } from "geojson";
 import type { GeoJSONFeatureCollectionValue } from "@/arches_component_lab/datatypes/geojson-feature-collection/types";
 
-const { $gettext } = useGettext();
+interface LayerSpec {
+    id: string;
+    [key: string]: unknown;
+}
 
-const props = defineProps<{
+const SEARCH_RESULTS_SOURCE = "arches-search-results";
+const SEARCH_RESULTS_LAYERS = [
+    "arches-search-results-fill",
+    "arches-search-results-fill-outline",
+    "arches-search-results-line",
+    "arches-search-results-circle",
+];
+
+const { modelValue, visible } = defineProps<{
     modelValue: FeatureCollection | null;
+    visible?: boolean;
 }>();
+
+const { resultsTileUrl } = useSearchFilters();
 
 const emit = defineEmits<{
     (event: "update:modelValue", value: FeatureCollection): void;
+    (event: "remove"): void;
 }>();
 
-const aliasedNodeData = (): GeoJSONFeatureCollectionValue | null => {
-    if (!props.modelValue) return null;
-    return {
-        display_value: "",
-        node_value: props.modelValue,
-        details: [],
-    };
-};
+const { $gettext } = useGettext();
+
+const mapWidgetRef =
+    useTemplateRef<InstanceType<typeof MapWidget>>("mapWidget");
+
+let cachedSourceSpec: Record<string, unknown> | null = null;
+let cachedLayerSpecs: LayerSpec[] = [];
+
+watch(resultsTileUrl, (tileUrl) => setSearchTiles(tileUrl));
+
+watch(
+    () => visible,
+    (isVisible) => {
+        if (isVisible) {
+            nextTick(() => {
+                mapWidgetRef.value?.map?.resize();
+            });
+        }
+    },
+);
+
+function setSearchTiles(tileUrl: string | null) {
+    const map = mapWidgetRef.value?.map;
+    if (!map) return;
+
+    if (map.getSource(SEARCH_RESULTS_SOURCE)) {
+        const style = map.getStyle();
+
+        cachedSourceSpec = style.sources[SEARCH_RESULTS_SOURCE] as Record<
+            string,
+            unknown
+        >;
+        cachedLayerSpecs = style.layers.filter((layer) =>
+            SEARCH_RESULTS_LAYERS.includes(layer.id),
+        ) as LayerSpec[];
+
+        for (const layerId of SEARCH_RESULTS_LAYERS) {
+            if (map.getLayer(layerId)) map.removeLayer(layerId);
+        }
+
+        map.removeSource(SEARCH_RESULTS_SOURCE);
+    }
+
+    if (!tileUrl || !cachedSourceSpec || !cachedLayerSpecs.length) return;
+
+    map.addSource(SEARCH_RESULTS_SOURCE, {
+        ...cachedSourceSpec,
+        tiles: [tileUrl],
+    } as Parameters<typeof map.addSource>[1]);
+
+    for (const layerSpec of cachedLayerSpecs) {
+        if (!map.getLayer(layerSpec.id)) {
+            map.addLayer(layerSpec as Parameters<typeof map.addLayer>[0]);
+        }
+    }
+}
+
+function aliasedNodeData(): GeoJSONFeatureCollectionValue | null {
+    if (!modelValue) return null;
+    return { display_value: "", node_value: modelValue, details: [] };
+}
 
 function onEditorUpdate(
-    value: GeoJSONFeatureCollectionValue | FeatureCollection,
+    updatedValue: GeoJSONFeatureCollectionValue | FeatureCollection,
 ) {
-    const fc =
-        "node_value" in value
-            ? (value as GeoJSONFeatureCollectionValue).node_value
-            : (value as FeatureCollection);
-    if (fc) {
-        emit("update:modelValue", fc);
+    let featureCollection: FeatureCollection | null;
+    if ("node_value" in updatedValue) {
+        featureCollection = (updatedValue as GeoJSONFeatureCollectionValue)
+            .node_value;
+    } else {
+        featureCollection = updatedValue as FeatureCollection;
+    }
+
+    if (!featureCollection || featureCollection.features.length === 0) {
+        emit("remove");
+    } else {
+        emit("update:modelValue", featureCollection);
     }
 }
 </script>
@@ -46,8 +124,10 @@ function onEditorUpdate(
             </h3>
         </div>
         <MapWidget
+            ref="mapWidget"
             mode="edit"
             :aliased-node-data="aliasedNodeData()"
+            @update:overlays="() => setSearchTiles(resultsTileUrl)"
             @update:value="onEditorUpdate"
         />
     </div>
@@ -68,9 +148,6 @@ function onEditorUpdate(
 }
 
 .map-filter-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     padding-bottom: 0.75rem;
     border-bottom: 0.125rem solid var(--p-content-border-color);
 }
