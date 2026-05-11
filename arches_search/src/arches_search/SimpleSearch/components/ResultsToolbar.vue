@@ -16,7 +16,6 @@ defineProps<{
     showMap: boolean;
     hasMapFilter: boolean;
     showTime: boolean;
-    hasTimeFilter: boolean;
     showSavedSearches: boolean;
     hideFiltersButton?: boolean;
 }>();
@@ -90,11 +89,15 @@ defineEmits<{
                 icon="pi pi-clock"
                 icon-pos="left"
                 size="small"
-                :class="['toolbar-btn', { active: showTime || hasTimeFilter }]"
+                :class="['toolbar-btn', { active: showTime }]"
                 @click="$emit('toggle-time')"
             />
             <Button
-                :label="$gettext('Saved Searches')"
+                :label="
+                    showSavedSearches
+                        ? $gettext('Hide Saved Searches')
+                        : $gettext('Saved Searches')
+                "
                 icon="pi pi-bookmark"
                 icon-pos="left"
                 size="small"
@@ -118,13 +121,13 @@ defineEmits<{
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 16px;
+    padding: 0.375rem 1rem;
 }
 
 .toolbar-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 0.625rem;
 }
 
 .results-label {
@@ -137,13 +140,13 @@ defineEmits<{
 }
 
 :deep(.sort-select .p-select) {
-    padding: 4px 8px;
+    padding: 0.25rem 0.5rem;
 }
 
 .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.375rem;
 }
 
 .toolbar-btn {
