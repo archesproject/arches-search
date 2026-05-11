@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
 import DatePicker from "primevue/datepicker";
 
 import NodeSelection from "@/arches_search/SimpleSearch/components/TimeFilter/components/NodeSelection.vue";
@@ -34,6 +35,9 @@ const emit = defineEmits<{
 }>();
 
 const { $gettext } = useGettext();
+
+const timeFilterLabel = computed(() => $gettext("Time Filter"));
+const timeSpanLabel = computed(() => $gettext("Time Span"));
 
 const selectedRange = ref<[Date, Date]>(defaultRange());
 const selectedNodeAliases = ref<string[]>([]);
@@ -122,13 +126,6 @@ watch(
         }
     },
     { immediate: true },
-);
-
-watch(
-    () => isOpen,
-    (isOpen) => {
-        if (isOpen) isFilterActive.value = true;
-    },
 );
 
 watch(
@@ -230,6 +227,15 @@ function onNodeSelectionUpdate(aliases: string[]): void {
     isFilterActive.value = true;
     selectedNodeAliases.value = aliases;
 }
+
+function onAddTimeFilter(): void {
+    isFilterActive.value = true;
+    const nextClauses = buildClauses();
+    if (nextClauses.length) {
+        lastEmittedJson = JSON.stringify(nextClauses);
+        emit("update:modelValue", nextClauses);
+    }
+}
 </script>
 
 <template>
@@ -239,55 +245,66 @@ function onNodeSelectionUpdate(aliases: string[]): void {
             class="time-filter-content"
         >
             <h3 class="time-filter-title">
-                {{ $gettext("Time Filter") }}
+                {{ timeFilterLabel }}
             </h3>
 
-            <NodeSelection
-                v-if="graphId"
-                :key="graphId"
-                :model-value="selectedNodeAliases"
-                :graph-label="graphLabel"
-                :nodes="graphNodes"
-                :loading="isLoadingNodes"
-                class="time-filter-section"
-                @update:model-value="onNodeSelectionUpdate"
+            <Button
+                v-if="!isFilterActive"
+                :label="$gettext('Add Time Filter')"
+                icon="pi pi-plus"
+                size="small"
+                @click="onAddTimeFilter"
             />
 
-            <section class="time-filter-section">
-                <h4 class="time-filter-section-heading">
-                    {{ $gettext("Time Span") }}
-                </h4>
+            <div
+                class="time-filter-controls"
+                :class="{ 'time-filter-controls-inactive': !isFilterActive }"
+            >
+                <NodeSelection
+                    v-if="graphId"
+                    :key="graphId"
+                    :model-value="selectedNodeAliases"
+                    :graph-label="graphLabel"
+                    :nodes="graphNodes"
+                    :loading="isLoadingNodes"
+                    class="time-filter-section"
+                    @update:model-value="onNodeSelectionUpdate"
+                />
 
-                <div class="time-filter-section-body">
-                    <TimeSlider
-                        :model-value="sliderValue"
-                        :bounds="sliderBounds"
-                        @update:model-value="onSliderUpdate"
-                    />
+                <section class="time-filter-section">
+                    <h4 class="time-filter-section-heading">
+                        {{ timeSpanLabel }}
+                    </h4>
 
-                    <div class="time-filter-calendar-row">
-                        <DatePicker
-                            :model-value="selectedRange[0]"
-                            class="time-filter-date-picker"
-                            :placeholder="$gettext('From...')"
-                            :show-icon="true"
-                            icon-display="input"
-                            date-format="M d, yy"
-                            @update:model-value="onDateFromChange"
+                    <div class="time-filter-section-body">
+                        <TimeSlider
+                            :model-value="sliderValue"
+                            :bounds="sliderBounds"
+                            @update:model-value="onSliderUpdate"
                         />
 
-                        <DatePicker
-                            :model-value="selectedRange[1]"
-                            class="time-filter-date-picker"
-                            :placeholder="$gettext('To...')"
-                            :show-icon="true"
-                            icon-display="input"
-                            date-format="M d, yy"
-                            @update:model-value="onDateToChange"
-                        />
+                        <div class="time-filter-calendar-row">
+                            <DatePicker
+                                :model-value="selectedRange[0]"
+                                class="time-filter-date-picker"
+                                :show-icon="true"
+                                icon-display="input"
+                                date-format="M d, yy"
+                                @update:model-value="onDateFromChange"
+                            />
+
+                            <DatePicker
+                                :model-value="selectedRange[1]"
+                                class="time-filter-date-picker"
+                                :show-icon="true"
+                                icon-display="input"
+                                date-format="M d, yy"
+                                @update:model-value="onDateToChange"
+                            />
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            </div>
         </div>
 
         <span
@@ -371,6 +388,19 @@ function onNodeSelectionUpdate(aliases: string[]): void {
 
 .time-filter-date-picker :deep(.p-datepicker-dropdown) {
     min-width: 3rem;
+}
+
+.time-filter-controls {
+    display: contents;
+}
+
+.time-filter-controls-inactive {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    pointer-events: none;
+    opacity: 0.4;
+    user-select: none;
 }
 
 .time-filter-empty-state {
