@@ -107,14 +107,6 @@ const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
     null,
 );
 
-const activeGraphId = computed<string | null>(
-    () => activeGraph.value?.id ?? null,
-);
-
-const activeGraphLabel = computed<string | null>(
-    () => activeGraph.value?.label ?? null,
-);
-
 const attributeFilterSections = ref<AttributeFilterSection[]>([]);
 const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
 
@@ -216,15 +208,23 @@ function onFilterOptionsChanged(selected: Record<string, string[]>) {
 }
 
 const activeGraphSlug = computed<string | null>(() => {
-    if (!activeGraphId.value) {
-        return null;
-    }
+    if (!activeGraph.value) return null;
+    return (
+        graphModels.value.find((m) => m.graphid === activeGraph.value!.id)
+            ?.slug ?? null
+    );
+});
 
-    const matchingGraph = graphModels.value.find((graphModel) => {
-        return graphModel.graphid === activeGraphId.value;
-    });
-
-    return matchingGraph?.slug ?? null;
+const activeGraphContext = computed<{
+    id: string;
+    slug: string;
+    label: string;
+} | null>(() => {
+    const graphId = activeGraph.value?.id;
+    if (!graphId) return null;
+    const model = graphModels.value.find((m) => m.graphid === graphId);
+    if (!model) return null;
+    return { id: graphId, slug: model.slug, label: activeGraph.value!.label };
 });
 
 const timeFilterQuery = computed(
@@ -441,23 +441,20 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                             @remove="onRemoveMapFilter"
                         />
                         <TimeFilter
-                            v-if="isTimeFilterActive"
-                            :graph-slug="activeGraphSlug"
-                            :graph-id="activeGraphId"
-                            :graph-label="activeGraphLabel"
-                            :is-open="isTimeFilterOpen"
+                            v-show="isTimeFilterActive"
+                            :graph="activeGraphContext"
                             :model-value="selectedTimeFilterClause"
                             @update:model-value="onTimeFilterUpdate"
                             @remove="onRemoveTimeFilter"
                         />
                         <AttributeFilters
-                            v-else-if="isAttributeFiltersActive"
+                            v-show="isAttributeFiltersActive"
                             :sections="attributeFilterSections"
-                            :selected-options="selectedFilterOptions"
-                            @update:selected-options="onFilterOptionsChanged"
+                            :model-value="selectedFilterOptions"
+                            @update:model-value="onFilterOptionsChanged"
                         />
                         <SavedSearchPanel
-                            v-else-if="isSavedSearchesActive"
+                            v-show="isSavedSearchesActive"
                             ref="savedSearchPanelRef"
                             @run-query="onRunSavedQuery"
                         />

@@ -13,19 +13,19 @@ const { $gettext } = useGettext();
 
 const props = defineProps<{
     sections: AttributeFilterSection[];
-    selectedOptions: Record<string, string[]>;
+    modelValue: Record<string, string[]>;
 }>();
 
 const emit = defineEmits<{
-    (event: "update:selectedOptions", value: Record<string, string[]>): void;
+    (event: "update:modelValue", value: Record<string, string[]>): void;
 }>();
 
 function isChecked(sectionId: string, optionId: string): boolean {
-    return (props.selectedOptions[sectionId] || []).includes(optionId);
+    return (props.modelValue[sectionId] || []).includes(optionId);
 }
 
 function toggleOption(sectionId: string, optionId: string) {
-    const updated = { ...props.selectedOptions };
+    const updated = { ...props.modelValue };
     const current = [...(updated[sectionId] || [])];
     const idx = current.indexOf(optionId);
 
@@ -36,7 +36,7 @@ function toggleOption(sectionId: string, optionId: string) {
     }
 
     updated[sectionId] = current;
-    emit("update:selectedOptions", updated);
+    emit("update:modelValue", updated);
 }
 </script>
 

@@ -21,11 +21,8 @@ import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
 const EMIT_DEBOUNCE_MS = 400;
 const SLIDER_START_DATE = "1967-04-01";
 
-const { graphSlug, graphId, graphLabel, isOpen, modelValue } = defineProps<{
-    graphSlug: string | null;
-    graphId: string | null;
-    graphLabel: string | null;
-    isOpen: boolean;
+const { graph, modelValue } = defineProps<{
+    graph: { id: string; slug: string; label: string } | null;
     modelValue: LiteralClause | null;
 }>();
 
@@ -100,7 +97,7 @@ watch(
 );
 
 watch(
-    () => graphId,
+    () => graph?.id,
     async (id) => {
         const thisLoad = ++nodeLoadId;
         selectedNodeAliases.value = [];
@@ -129,9 +126,9 @@ watch(
 );
 
 watch(
-    [selectedRange, () => graphSlug, selectedNodeAliases, () => isOpen],
+    [selectedRange, () => graph?.slug, selectedNodeAliases],
     () => {
-        if (!graphSlug || !isFilterActive.value) return;
+        if (!graph?.slug || !isFilterActive.value) return;
 
         const nextClauses = buildClauses();
         if (!nextClauses.length) return;
@@ -178,7 +175,7 @@ function defaultRange(): [Date, Date] {
 }
 
 function buildClauses(): LiteralClause[] {
-    const slug = graphSlug;
+    const slug = graph?.slug ?? null;
     if (!slug) return [];
 
     const [rangeStart, rangeEnd] = normalizeRange(
@@ -241,7 +238,7 @@ function onAddTimeFilter(): void {
 <template>
     <div class="time-filter">
         <div
-            v-if="graphSlug"
+            v-if="graph?.slug"
             class="time-filter-content"
         >
             <h3 class="time-filter-title">
@@ -261,10 +258,10 @@ function onAddTimeFilter(): void {
                 :class="{ 'time-filter-controls-inactive': !isFilterActive }"
             >
                 <NodeSelection
-                    v-if="graphId"
-                    :key="graphId"
+                    v-if="graph?.id"
+                    :key="graph?.id"
                     :model-value="selectedNodeAliases"
-                    :graph-label="graphLabel"
+                    :graph-label="graph?.label ?? null"
                     :nodes="graphNodes"
                     :loading="isLoadingNodes"
                     class="time-filter-section"
