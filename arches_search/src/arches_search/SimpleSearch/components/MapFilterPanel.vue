@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTemplateRef, watch } from "vue";
+import { nextTick, useTemplateRef, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
@@ -31,10 +31,8 @@ const mapWidgetRef =
 
 watch(resultsTileUrl, (tileUrl) => setSearchTiles(tileUrl));
 
-function onOverlaysUpdate() {
-    requestAnimationFrame(() => {
-        setSearchTiles(resultsTileUrl.value);
-    });
+function onOverlaysUpdated() {
+    nextTick(() => setSearchTiles(resultsTileUrl.value));
 }
 
 function setSearchTiles(tileUrl: string | null) {
@@ -82,7 +80,7 @@ function onEditorUpdate(
             mode="edit"
             :render-context="SEARCH_RENDER_CONTEXT"
             :aliased-node-data="aliasedNodeData()"
-            @update:overlays="onOverlaysUpdate"
+            @update:overlays="onOverlaysUpdated"
             @update:value="onEditorUpdate"
         />
     </div>
