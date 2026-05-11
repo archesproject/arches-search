@@ -32,16 +32,16 @@ def build_search_queryset(body):
         else:
             initial_match_ids = None
             for term in terms:
-                sq = SearchQuery(term["text"], search_type="plain")
+                term_search_query = SearchQuery(term["text"], search_type="plain")
                 if initial_match_ids is None:
                     initial_match_ids = TermSearch.objects.filter(
-                        search_vector=sq
+                        search_vector=term_search_query
                     ).values_list("resourceinstanceid", flat=True)
                 else:
                     initial_match_ids = initial_match_ids.intersection(
-                        TermSearch.objects.filter(search_vector=sq).values_list(
-                            "resourceinstanceid", flat=True
-                        )
+                        TermSearch.objects.filter(
+                            search_vector=term_search_query
+                        ).values_list("resourceinstanceid", flat=True)
                     )
             results_queryset = ResourceInstance.objects.filter(
                 resourceinstanceid__in=initial_match_ids
@@ -49,10 +49,10 @@ def build_search_queryset(body):
 
     if query:
         if results_queryset is None:
-            base = ResourceInstance.objects.all()
+            base_queryset = ResourceInstance.objects.all()
             if graph_id:
-                base = base.filter(graph_id=graph_id)
-            results_queryset = base
+                base_queryset = base_queryset.filter(graph_id=graph_id)
+            results_queryset = base_queryset
         results_queryset = AdvancedSearchQueryCompiler(query).compile(results_queryset)
 
     if not terms and not query:
@@ -85,7 +85,7 @@ class SimpleSearchAPI(APIBase):
         page_size = body.get("page_size", 20)
 
         paginator = Paginator(results_queryset, page_size)
-        page = paginator.page(page_number)
+        results_page = paginator.page(page_number)
 
         raw_aggregations = body.get("aggregations")
 
@@ -95,14 +95,14 @@ class SimpleSearchAPI(APIBase):
 
         return JSONResponse(
             {
-                "resources": list(page.object_list),
+                "resources": list(results_page.object_list),
                 "pagination": {
-                    "page": page.number,
+                    "page": results_page.number,
                     "page_size": page_size,
                     "total_results": paginator.count,
                     "num_pages": paginator.num_pages,
-                    "has_next": page.has_next(),
-                    "has_previous": page.has_previous(),
+                    "has_next": results_page.has_next(),
+                    "has_previous": results_page.has_previous(),
                 },
                 "aggregations": aggregations,
             }

@@ -26,9 +26,9 @@ def _locmem_fallback():
 
 
 def _get_mvt_cache():
-    for alias in ("searchresults", "default"):
+    for cache_alias in ("searchresults", "default"):
         try:
-            backend = caches[alias]
+            backend = caches[cache_alias]
             if not isinstance(backend, DummyCache):
                 return backend
         except Exception:
@@ -61,25 +61,27 @@ class SearchMVTContextAPI(APIBase):
 
 class SearchMVTAPI(APIBase):
     def get(self, request, context_id, zoom, x, y):
-        cache = _get_mvt_cache()
-        body = cache.get(_context_cache_key(context_id))
+        mvt_cache = _get_mvt_cache()
+        body = mvt_cache.get(_context_cache_key(context_id))
         if body is None:
             raise Http404()
 
         tile_key = _tile_cache_key(context_id, zoom, x, y)
-        cached_tile = cache.get(tile_key)
+        cached_tile = mvt_cache.get(tile_key)
         if cached_tile is not None:
             return HttpResponse(cached_tile, content_type="application/x-protobuf")
 
-        qs = build_search_queryset(body).values("resourceinstanceid")
-        tile = self._generate_tile(qs, zoom, x, y)
+        search_results_queryset = build_search_queryset(body).values(
+            "resourceinstanceid"
+        )
+        mvt_tile = self._generate_tile(search_results_queryset, zoom, x, y)
 
-        cache.set(tile_key, tile, settings.TILE_CACHE_TIMEOUT)
+        mvt_cache.set(tile_key, mvt_tile, settings.TILE_CACHE_TIMEOUT)
 
-        return HttpResponse(tile, content_type="application/x-protobuf")
+        return HttpResponse(mvt_tile, content_type="application/x-protobuf")
 
-    def _generate_tile(self, qs, zoom, x, y):
-        compiler = qs.query.get_compiler(using="default")
+    def _generate_tile(self, search_results_queryset, zoom, x, y):
+        compiler = search_results_queryset.query.get_compiler(using="default")
         sub_sql, sub_params = compiler.as_sql()
 
         with connection.cursor() as cursor:
@@ -104,5 +106,5 @@ class SearchMVTAPI(APIBase):
                 """,
                 [MVT_LAYER_NAME, zoom, x, y, *sub_params, zoom, x, y],
             )
-            row = cursor.fetchone()
-        return bytes(row[0]) if row and row[0] else b""
+            mvt_query_row = cursor.fetchone()
+        return bytes(mvt_query_row[0]) if mvt_query_row and mvt_query_row[0] else b""
