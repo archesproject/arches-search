@@ -18,6 +18,7 @@ defineProps<{
     showTime: boolean;
     hasTimeFilter: boolean;
     showSavedSearches: boolean;
+    showExportPanel: boolean;
     hideFiltersButton?: boolean;
 }>();
 
@@ -102,11 +103,13 @@ defineEmits<{
                 @click="$emit('toggle-saved-searches')"
             />
             <Button
-                :label="$gettext('Export')"
+                :label="
+                    showExportPanel ? $gettext('Hide Export') : $gettext('Export')
+                "
                 icon="pi pi-upload"
                 icon-pos="left"
                 size="small"
-                class="toolbar-btn"
+                :class="['toolbar-btn', { active: showExportPanel }]"
                 @click="$emit('export')"
             />
         </div>
