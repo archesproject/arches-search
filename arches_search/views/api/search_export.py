@@ -28,4 +28,3 @@ class SearchExportAPI(APIBase):
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
-

@@ -10,7 +10,7 @@ import type { SortOption } from "@/arches_search/SimpleSearch/types.ts";
 
 const { $gettext } = useGettext();
 
-defineProps<{
+const props = defineProps<{
     sortValue: string | null;
     showFilters: boolean;
     showMap: boolean;
@@ -26,6 +26,10 @@ const sortOptions = computed<SortOption[]>(() => [
     { label: $gettext("A to Z"), value: "aToZ" },
     { label: $gettext("Z to A"), value: "zToA" },
 ]);
+
+const exportButtonLabel = computed(() =>
+    props.showExportPanel ? $gettext("Hide Export") : $gettext("Export"),
+);
 
 defineEmits<{
     (event: "update:sortValue", value: string | null): void;
@@ -103,9 +107,7 @@ defineEmits<{
                 @click="$emit('toggle-saved-searches')"
             />
             <Button
-                :label="
-                    showExportPanel ? $gettext('Hide Export') : $gettext('Export')
-                "
+                :label="exportButtonLabel"
                 icon="pi pi-upload"
                 icon-pos="left"
                 size="small"

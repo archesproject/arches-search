@@ -87,8 +87,7 @@ export function useSidePanel() {
     );
 
     const isExportPanelOpen = computed<boolean>(
-        () =>
-            hasOpenSidePanel.value && activeSidePanel.value === EXPORT_PANEL,
+        () => hasOpenSidePanel.value && activeSidePanel.value === EXPORT_PANEL,
     );
 
     const resultsPanelSize = computed<number>(
