@@ -1,5 +1,4 @@
 from django.http import HttpResponse
-from django.utils.translation import get_language
 
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.views.api import APIBase
@@ -18,9 +17,8 @@ class SearchExportAPI(APIBase):
 
         queryset = build_search_queryset(body)
 
-        language = request.LANGUAGE_CODE or get_language() or "en"
         exporter = SearchExcelExporter()
-        excel_bytes = exporter.export(queryset, language=language)
+        excel_bytes = exporter.export(queryset)
 
         response = HttpResponse(
             excel_bytes.getvalue(),
@@ -30,3 +28,4 @@ class SearchExportAPI(APIBase):
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
