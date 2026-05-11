@@ -228,10 +228,6 @@ const activeGraphSlug = computed<string | null>(() => {
     return matchingGraph?.slug ?? null;
 });
 
-const hasTimeFilter = computed<boolean>(
-    () => timeFilterClauses.value.length > 0,
-);
-
 const selectedTimeFilterClause = computed<LiteralClause | null>(() => {
     return timeFilterClauses.value[0] ?? null;
 });
@@ -383,7 +379,6 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
             :show-map="isMapFilterOpen"
             :has-map-filter="mapFilter !== null"
             :show-time="isTimeFilterOpen"
-            :has-time-filter="hasTimeFilter"
             :show-saved-searches="isSavedSearchesOpen"
             @update:sort-value="onSortValueUpdate"
             @save-search="showSaveDialog = true"
@@ -508,10 +503,10 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
     flex: 1;
     overflow-y: auto;
     opacity: 0;
-    translate: 1.25rem 0;
+    translate: 0.5rem 0;
     transition:
-        opacity 180ms ease,
-        translate 240ms ease;
+        opacity 150ms ease-out,
+        translate 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .simple-search .side-panel-content.side-panel-content-open {
