@@ -24,7 +24,11 @@ from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 from arches_search.views.api.saved_search import SavedSearchAPI
 from arches_search.views.api.search_config import NodeFilterConfigAPI
 from arches_search.views.api.term_suggestions import TermSuggestionView
-from arches_search.views.api.search_mvt import SearchMVTAPI, SearchMVTContextAPI
+from arches_search.views.api.search_mvt import (
+    EmptySearchTileAPI,
+    SearchMVTAPI,
+    SearchMVTContextAPI,
+)
 from arches_search.views.api.simple_search import SimpleSearchAPI
 
 urlpatterns = [
@@ -103,6 +107,11 @@ urlpatterns = [
         "api/arches-search/mvt-context",
         SearchMVTContextAPI.as_view(),
         name="search_mvt_context",
+    ),
+    path(
+        "api/arches-search/mvt/empty/<int:zoom>/<int:x>/<int:y>.pbf",
+        EmptySearchTileAPI.as_view(),
+        name="search_mvt_empty",
     ),
     path(
         "api/arches-search/mvt/<str:context_id>/<int:zoom>/<int:x>/<int:y>.pbf",

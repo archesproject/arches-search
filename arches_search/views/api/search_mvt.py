@@ -44,6 +44,11 @@ def _tile_cache_key(context_id, zoom, x, y):
     return f"search:mvt:tile:{context_id}:{zoom}:{x}:{y}"
 
 
+class EmptySearchTileAPI(APIBase):
+    def get(self, request, **_):
+        return HttpResponse(b"", content_type="application/x-protobuf")
+
+
 class SearchMVTContextAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)

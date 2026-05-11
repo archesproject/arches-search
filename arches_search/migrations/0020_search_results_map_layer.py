@@ -18,7 +18,7 @@ def add_map_layer(apps, schema_editor):
         defaults={
             "source": {
                 "type": "vector",
-                "tiles": [],
+                "tiles": ["/api/arches-search/mvt/empty/{z}/{x}/{y}.pbf"],
                 "minzoom": 0,
                 "maxzoom": 22,
             }

@@ -43,11 +43,12 @@ watch(
 );
 
 function setSearchTiles(tileUrl: string | null) {
+    if (!tileUrl) return;
     const source = mapWidgetRef.value?.map?.getSource(SEARCH_RESULTS_SOURCE);
     if (!source) return;
-    (source as unknown as { setTiles: (tiles: string[]) => void }).setTiles(
-        tileUrl ? [tileUrl] : [],
-    );
+    (source as unknown as { setTiles: (tiles: string[]) => void }).setTiles([
+        tileUrl,
+    ]);
 }
 
 function aliasedNodeData(): GeoJSONFeatureCollectionValue | null {
@@ -85,7 +86,9 @@ function onEditorUpdate(
             ref="mapWidget"
             mode="edit"
             :aliased-node-data="aliasedNodeData()"
-            @update:overlays="() => setSearchTiles(resultsTileUrl)"
+            @update:overlays="
+                () => nextTick(() => setSearchTiles(resultsTileUrl))
+            "
             @update:value="onEditorUpdate"
         />
     </div>
