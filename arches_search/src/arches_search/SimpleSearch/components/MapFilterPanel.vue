@@ -42,6 +42,12 @@ watch(
     },
 );
 
+function onOverlaysUpdate() {
+    requestAnimationFrame(() => {
+        nextTick(() => setSearchTiles(resultsTileUrl.value));
+    });
+}
+
 function setSearchTiles(tileUrl: string | null) {
     if (!tileUrl) return;
     const source = mapWidgetRef.value?.map?.getSource(SEARCH_RESULTS_SOURCE);
@@ -86,9 +92,7 @@ function onEditorUpdate(
             ref="mapWidget"
             mode="edit"
             :aliased-node-data="aliasedNodeData()"
-            @update:overlays="
-                () => nextTick(() => setSearchTiles(resultsTileUrl))
-            "
+            @update:overlays="onOverlaysUpdate"
             @update:value="onEditorUpdate"
         />
     </div>
