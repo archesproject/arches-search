@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
@@ -16,6 +16,10 @@ const isExporting = ref(false);
 const exportError = ref<string | null>(null);
 const filename = ref("search_export");
 const selectedFormat = ref("simple");
+
+const downloadButtonLabel = computed(() =>
+    isExporting.value ? $gettext("Downloading...") : $gettext("Download"),
+);
 
 async function onExport() {
     isExporting.value = true;
@@ -107,11 +111,13 @@ async function onExport() {
             </div>
 
             <Button
-                :label="isExporting ? $gettext('Downloading...') : $gettext('Download')"
+                :label="downloadButtonLabel"
                 icon="pi pi-download"
                 icon-pos="left"
                 :loading="isExporting"
-                :disabled="isExporting || searchResults.pagination.total_results === 0"
+                :disabled="
+                    isExporting || searchResults.pagination.total_results === 0
+                "
                 class="download-btn"
                 @click="onExport"
             />

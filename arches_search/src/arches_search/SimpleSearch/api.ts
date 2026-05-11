@@ -228,12 +228,11 @@ export async function exportSearchResults({
         throw new Error(response.statusText);
     }
 
-    const downloadFilename = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = downloadFilename;
+    anchor.download = filename;
     anchor.click();
     window.URL.revokeObjectURL(url);
 }

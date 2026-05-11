@@ -4,6 +4,7 @@ from django.db.models import F, Func
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
+
 class SearchExcelExporter:
     BASE_COLUMNS = ["resourceinstanceid", "graph_slug", "name"]
 
@@ -43,7 +44,7 @@ class SearchExcelExporter:
                 description = descriptor.get("description", "") if descriptor else ""
                 if description == "Undefined":
                     description = ""
-                
+
                 worksheet.cell(
                     row=row_index,
                     column=col_offset,
@@ -58,8 +59,7 @@ class SearchExcelExporter:
     @staticmethod
     def _collect_languages(queryset):
         return sorted(
-            queryset
-            .filter(descriptors__isnull=False)
+            queryset.filter(descriptors__isnull=False)
             .annotate(lang=Func(F("descriptors"), function="JSONB_OBJECT_KEYS"))
             .values_list("lang", flat=True)
             .distinct()
