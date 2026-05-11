@@ -77,6 +77,8 @@ const {
     isAttributeFiltersOpen,
     isMapFilterActive,
     isMapFilterOpen,
+    isExportPanelActive,
+    isExportPanelOpen,
     isSavedSearchesActive,
     isSavedSearchesOpen,
     isTimeFilterActive,
@@ -91,6 +93,7 @@ const {
     closeSidePanel,
     onToggleAttributeFilters,
     onToggleMapFilter,
+    onToggleExportPanel,
     onToggleSavedSearches,
     onToggleTimeFilter,
     onSplitterResizeStart,
@@ -103,8 +106,6 @@ const toast = useToast();
 const sortValue = ref<string | null>(null);
 const graphModels = ref<GraphModel[]>([]);
 const timeFilterClauses = ref<LiteralClause[]>([]);
-const showSavedSearches = ref(false);
-const showExportPanel = ref(false);
 const showSaveDialog = ref(false);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
 const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
@@ -398,13 +399,15 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             :show-time="isTimeFilterOpen"
             :has-time-filter="hasTimeFilter"
             :show-saved-searches="isSavedSearchesOpen"
+            :show-export-panel="isExportPanelOpen"
+            :hide-filters-button="!activeGraph"
             @update:sort-value="onSortValueUpdate"
             @save-search="showSaveDialog = true"
             @toggle-filters="onToggleAttributeFilters"
             @toggle-map="onToggleMapFilter"
             @toggle-time="onToggleTimeFilter"
-            @toggle-saved-searches="showSavedSearches = !showSavedSearches"
-            @export="showExportPanel = !showExportPanel"
+            @toggle-saved-searches="onToggleSavedSearches"
+            @export="onToggleExportPanel"
         />
 
         <div class="body">
@@ -466,26 +469,10 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                             ref="savedSearchPanelRef"
                             @run-query="onRunSavedQuery"
                         />
+                        <ExportPanel v-else-if="isExportPanelActive" />
                     </div>
                 </SplitterPanel>
             </Splitter>
-
-            <aside
-                v-if="showSavedSearches"
-                class="saved-searches-pane"
-            >
-                <SavedSearchPanel
-                    ref="savedSearchPanelRef"
-                    @run-query="onRunSavedQuery"
-                />
-            </aside>
-
-            <aside
-                v-if="showExportPanel"
-                class="export-pane"
-            >
-                <ExportPanel />
-            </aside>
         </div>
     </div>
 
@@ -553,19 +540,5 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
     .splitter.side-panel-closed
     :deep(.results-pane + .p-splitter-gutter) {
     display: none;
-}
-
-.saved-searches-pane {
-    width: 20rem;
-    flex-shrink: 0;
-    border-left: 0.125rem solid var(--p-content-border-color);
-    overflow-y: auto;
-}
-
-.export-pane {
-    width: 20rem;
-    flex-shrink: 0;
-    border-left: 0.125rem solid var(--p-content-border-color);
-    overflow-y: auto;
 }
 </style>
