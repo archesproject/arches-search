@@ -73,13 +73,13 @@ async function onExport() {
                         for="format-simple"
                         class="item-name"
                     >
-                        {{ $gettext("Simple Export") }}
+                        {{ $gettext("Export Results") }}
                     </label>
                 </div>
                 <p class="item-description">
                     {{
                         $gettext(
-                            "Export resource descriptors, graph slug, and resource instance ID to an Excel file.",
+                            "Export resource name and descriptions to an Excel file.",
                         )
                     }}
                 </p>
