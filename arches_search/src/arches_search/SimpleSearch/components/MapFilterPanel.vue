@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, useTemplateRef, watch } from "vue";
+import { useTemplateRef, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
@@ -12,9 +12,8 @@ import type { GeoJSONFeatureCollectionValue } from "@/arches_component_lab/datat
 
 const SEARCH_RESULTS_SOURCE = "arches-search-results";
 
-const { modelValue, visible } = defineProps<{
+const { modelValue } = defineProps<{
     modelValue: FeatureCollection | null;
-    visible?: boolean;
 }>();
 
 const { resultsTileUrl } = useSearchFilters();
@@ -30,17 +29,6 @@ const mapWidgetRef =
     useTemplateRef<InstanceType<typeof MapWidget>>("mapWidget");
 
 watch(resultsTileUrl, (tileUrl) => setSearchTiles(tileUrl));
-
-watch(
-    () => visible,
-    (isVisible) => {
-        if (isVisible) {
-            nextTick(() => {
-                mapWidgetRef.value?.map?.resize();
-            });
-        }
-    },
-);
 
 function setSearchTiles(tileUrl: string | null) {
     const source = mapWidgetRef.value?.map?.getSource(SEARCH_RESULTS_SOURCE);
