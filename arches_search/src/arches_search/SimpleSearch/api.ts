@@ -12,17 +12,41 @@ import type {
     SortSpec,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
+import type { FeatureCollection } from "geojson";
+
+export async function createSearchMVTContext(params: {
+    terms?: { type: string; text: string; inverted: boolean }[];
+    query?: GroupPayload;
+    graphId?: string | null;
+    mapFilter?: FeatureCollection | null;
+}): Promise<{ context_id: string }> {
+    const url = generateArchesURL("arches_search:search_mvt_context");
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": Cookies.get("csrftoken") || "",
+        },
+        body: JSON.stringify(params),
+    });
+    if (!response.ok) {
+        throw new Error(response.statusText);
+    }
+    return await response.json();
+}
 
 export async function fetchSearchResults({
     terms = [],
     query = {} as GroupPayload,
     graphId = null,
+    mapFilter = null,
     page = 1,
     sort,
 }: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
     graphId?: string | null;
+    mapFilter?: FeatureCollection | null;
     page?: number;
     sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
@@ -30,6 +54,7 @@ export async function fetchSearchResults({
         graphId: graphId,
         terms: terms,
         query: query,
+        mapFilter: mapFilter,
         page: page,
     };
 

@@ -5,6 +5,7 @@ from django.contrib.gis.geos import GEOSGeometry
 from django.db.models import OuterRef, Q, Subquery
 from django.utils.translation import gettext as _
 
+from arches_search.utils.geo_utils import GeoUtils
 from arches_search.utils.advanced_search.constants import (
     AGGREGATE_KIND_SET_EQUAL,
     AGGREGATE_KIND_SET_SUPERSET,
@@ -190,7 +191,12 @@ class PredicateBuilder:
                 value = operand_item["value"]
                 if isinstance(value, dict):
                     value = json.dumps(value)
-                normalized_values.append(GEOSGeometry(value, srid=4326))
+                geom = GEOSGeometry(value, srid=4326)
+                split = GeoUtils().split_polygon_at_antimeridian(geom)
+                if len(split) > 1:
+                    geom = split[0].union(split[1])
+                    geom.srid = 4326
+                normalized_values.append(geom)
                 continue
 
             if operand_type == OPERAND_TYPE_PATH:

@@ -19,13 +19,14 @@
         "vitest": "vitest --run --coverage"
     },
     "dependencies": {
-        "arches": "archesproject/arches#dev/8.1.x"
-    },
-    "devDependencies": {
-"arches-component-lab": "archesproject/arches-component-lab#main",
+        "arches": "archesproject/arches#dev/8.1.x",
+        "arches-component-lab": "archesproject/arches-component-lab#main",
         "arches-controlled-lists": "archesproject/arches-controlled-lists#dev/1.1.x",
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#dev/8.1.x",
         "arches-modular-reports": "archesproject/arches-modular-reports#main"
+    },
+    "devDependencies": {
+        "geojson": "npm:@types/geojson@^7946.0.16"
     },
     "nodeModulesPaths": {},
     "overrides": {

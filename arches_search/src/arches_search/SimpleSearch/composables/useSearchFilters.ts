@@ -1,6 +1,10 @@
 import { computed, inject, provide, ref } from "vue";
 
-import { fetchSearchResults } from "@/arches_search/SimpleSearch/api.ts";
+import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import {
+    createSearchMVTContext,
+    fetchSearchResults,
+} from "@/arches_search/SimpleSearch/api.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
 import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
@@ -13,6 +17,7 @@ import type {
     ResourceType,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
+import type { FeatureCollection } from "geojson";
 
 interface SearchRequestTerm {
     type: string;
@@ -25,13 +30,17 @@ interface SearchFilters {
     activeGraph: Ref<ResourceType | null>;
     currentPage: Ref<number>;
     isSearching: Ref<boolean>;
+    mapFilter: Ref<FeatureCollection | null>;
+    resultsTileUrl: ComputedRef<string | null>;
     resultsGraph: Ref<ResourceType | null>;
     searchResults: Ref<SearchResults>;
     sort: Ref<SortSpec[]>;
+    clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
     search(page?: number): void;
     setGraph(graph: ResourceType | null): void;
+    setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
     setSort(next: SortSpec[]): void;
     setTermFilter(
@@ -53,13 +62,26 @@ const DEFAULT_SORT: SortSpec[] = [];
 function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
+    const mapFilter = ref<FeatureCollection | null>(null);
     const activeGraph = ref<ResourceType | null>(null);
     const resultsGraph = ref<ResourceType | null>(null);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
     const isSearching = ref(false);
     const currentPage = ref(FIRST_SEARCH_PAGE);
+    const mvtContextId = ref<string | null>(null);
     const sort = ref<SortSpec[]>(DEFAULT_SORT);
     let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const resultsTileUrl = computed<string | null>(() => {
+        if (!mvtContextId.value) return null;
+        const path = generateArchesURL("arches_search:search_mvt", {
+            context_id: mvtContextId.value,
+            zoom: "{z}",
+            x: "{x}",
+            y: "{y}",
+        });
+        return `${window.location.origin}${path}`;
+    });
 
     const activeFilters = computed<ActiveFilter[]>(() => {
         return [...terms.value.values()];
@@ -107,6 +129,17 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function setMapFilter(featureCollection: FeatureCollection): void {
+        mapFilter.value = featureCollection;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function clearMapFilter(): void {
+        mapFilter.value = null;
+        search();
+    }
+
     function setGraph(graph: ResourceType | null): void {
         activeGraph.value = graph;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -130,13 +163,24 @@ function createSearchFilters(): SearchFilters {
 
             try {
                 const requestGraph = activeGraph.value;
-                const results = await fetchSearchResults({
+                const searchParams = {
                     terms: getRequestTerms(),
                     query: getRequestQuery(),
                     page,
                     graphId: requestGraph ? requestGraph.id : null,
+                    mapFilter: mapFilter.value,
                     sort: sort.value,
-                });
+                };
+
+                const { page: _page, sort: _sort, ...mvtParams } = searchParams;
+                const [results, context] = await Promise.all([
+                    fetchSearchResults(searchParams),
+                    createSearchMVTContext(mvtParams).catch((error) => {
+                        throw new Error(
+                            `Failed to create MVT context: ${error.message}`,
+                        );
+                    }),
+                ]);
 
                 if (page > FIRST_SEARCH_PAGE) {
                     searchResults.value = {
@@ -151,6 +195,7 @@ function createSearchFilters(): SearchFilters {
                 }
 
                 resultsGraph.value = requestGraph;
+                mvtContextId.value = context?.context_id ?? null;
             } finally {
                 isSearching.value = false;
             }
@@ -183,14 +228,18 @@ function createSearchFilters(): SearchFilters {
     return {
         activeFilters,
         activeGraph,
+        clearMapFilter,
         clearQuery,
         clearTermFilter,
         currentPage,
         isSearching,
+        mapFilter,
+        resultsTileUrl,
         resultsGraph,
         search,
         searchResults,
         setGraph,
+        setMapFilter,
         setQuery,
         setSort,
         setTermFilter,

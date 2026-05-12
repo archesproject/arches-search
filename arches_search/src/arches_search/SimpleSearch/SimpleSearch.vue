@@ -15,6 +15,7 @@ import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolb
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
 import SaveDialog from "@/arches_search/SimpleSearch/components/SaveDialog.vue";
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
+import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
 
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
@@ -31,6 +32,7 @@ import {
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 
+import type { FeatureCollection } from "geojson";
 import type {
     GraphModel,
     GroupPayload,
@@ -55,12 +57,15 @@ defineEmits<{
 const {
     activeFilters,
     activeGraph,
+    clearMapFilter,
     clearQuery,
     clearTermFilter,
     isSearching,
+    mapFilter,
     search,
     searchResults,
     setGraph,
+    setMapFilter,
     setQuery,
     setSort,
     setTermFilter,
@@ -69,6 +74,10 @@ const {
 const {
     isAttributeFiltersActive,
     isAttributeFiltersOpen,
+    isMapFilterActive,
+    isMapFilterOpen,
+    isSavedSearchesActive,
+    isSavedSearchesOpen,
     isTimeFilterActive,
     isTimeFilterOpen,
     hasOpenSidePanel,
@@ -80,6 +89,8 @@ const {
     sidePanelStyle,
     closeSidePanel,
     onToggleAttributeFilters,
+    onToggleMapFilter,
+    onToggleSavedSearches,
     onToggleTimeFilter,
     onSplitterResizeStart,
     onSplitterResize,
@@ -91,7 +102,6 @@ const toast = useToast();
 const sortValue = ref<string | null>(null);
 const graphModels = ref<GraphModel[]>([]);
 const timeFilterClauses = ref<LiteralClause[]>([]);
-const showSavedSearches = ref(false);
 const showSaveDialog = ref(false);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
 const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
@@ -240,7 +250,6 @@ async function loadGraphModels(): Promise<void> {
         graphModels.value = await getGraphs();
     } catch {
         graphModels.value = [];
-        // Non-fatal: time filter degrades gracefully without graph models.
     }
 }
 
@@ -288,6 +297,14 @@ function onRemoveTimeFilter(): void {
     timeFilterClauses.value = [];
     closeSidePanel();
     clearQuery(TIME_FILTER_QUERY_KEY);
+}
+
+function onMapFilterUpdate(featureCollection: FeatureCollection): void {
+    setMapFilter(featureCollection);
+}
+
+function onRemoveMapFilter(): void {
+    clearMapFilter();
 }
 
 function buildQueryDefinition(): Record<string, unknown> {
@@ -363,16 +380,17 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
         <ResultsToolbar
             :sort-value="sortValue"
             :show-filters="isAttributeFiltersOpen"
+            :show-map="isMapFilterOpen"
+            :has-map-filter="mapFilter !== null"
             :show-time="isTimeFilterOpen"
             :has-time-filter="hasTimeFilter"
-            :show-saved-searches="showSavedSearches"
-            :hide-filters-button="!activeGraph"
+            :show-saved-searches="isSavedSearchesOpen"
             @update:sort-value="onSortValueUpdate"
             @save-search="showSaveDialog = true"
             @toggle-filters="onToggleAttributeFilters"
-            @toggle-map="() => {}"
+            @toggle-map="onToggleMapFilter"
             @toggle-time="onToggleTimeFilter"
-            @toggle-saved-searches="showSavedSearches = !showSavedSearches"
+            @toggle-saved-searches="onToggleSavedSearches"
             @export="() => {}"
         />
 
@@ -408,6 +426,12 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
                         :class="sidePanelContentClass"
                         :aria-hidden="!hasOpenSidePanel"
                     >
+                        <MapFilterPanel
+                            v-show="isMapFilterActive"
+                            :model-value="mapFilter"
+                            @update:model-value="onMapFilterUpdate"
+                            @remove="onRemoveMapFilter"
+                        />
                         <TimeFilter
                             v-if="isTimeFilterActive"
                             :graph-slug="activeGraphSlug"
@@ -424,19 +448,14 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
                             :selected-options="selectedFilterOptions"
                             @update:selected-options="onFilterOptionsChanged"
                         />
+                        <SavedSearchPanel
+                            v-else-if="isSavedSearchesActive"
+                            ref="savedSearchPanelRef"
+                            @run-query="onRunSavedQuery"
+                        />
                     </div>
                 </SplitterPanel>
             </Splitter>
-
-            <aside
-                v-if="showSavedSearches"
-                class="saved-searches-pane"
-            >
-                <SavedSearchPanel
-                    ref="savedSearchPanelRef"
-                    @run-query="onRunSavedQuery"
-                />
-            </aside>
         </div>
     </div>
 
@@ -477,12 +496,16 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
 }
 
 .simple-search .side-panel {
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     border-inline-start: 0.0625rem solid var(--p-content-border-color);
 }
 
 .simple-search .side-panel-content {
-    block-size: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
     overflow-y: auto;
     opacity: 0;
     translate: 1.25rem 0;
@@ -500,12 +523,5 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
     .splitter.side-panel-closed
     :deep(.results-pane + .p-splitter-gutter) {
     display: none;
-}
-
-.saved-searches-pane {
-    width: 320px;
-    flex-shrink: 0;
-    border-left: 0.125rem solid var(--p-content-border-color);
-    overflow-y: auto;
 }
 </style>
