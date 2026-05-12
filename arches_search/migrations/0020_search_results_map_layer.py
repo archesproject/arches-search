@@ -84,6 +84,7 @@ def add_map_layer(apps, schema_editor):
             "activated": True,
             "icon": "fa fa-map-marker",
             "sortorder": 0,
+            "searchonly": True,
         },
     )
 

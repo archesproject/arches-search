@@ -4,6 +4,7 @@ import { nextTick, useTemplateRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import MapWidget from "@/arches_component_lab/widgets/MapWidget/MapWidget.vue";
+const SEARCH_RENDER_CONTEXT = "search";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
@@ -91,6 +92,7 @@ function onEditorUpdate(
         <MapWidget
             ref="mapWidget"
             mode="edit"
+            :render-context="SEARCH_RENDER_CONTEXT"
             :aliased-node-data="aliasedNodeData()"
             @update:overlays="onOverlaysUpdate"
             @update:value="onEditorUpdate"
