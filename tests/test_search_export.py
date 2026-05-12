@@ -9,62 +9,75 @@ from arches_search.utils.search_export import SearchExcelExporter
 
 
 class SearchExcelExporterTest(SimpleTestCase):
-    def _make_resource(self, resourceinstanceid, graph_slug, name, descriptors=None):
+    RESOURCE1_ID = "d5c7e72e-4805-4f32-90d7-0db93176b2c4"
+    RESOURCE2_ID = "db91f6fd-e70d-44e1-9492-00b87018cd78"
+
+    def _make_resource(self, resourceinstanceid, graph_slug, descriptors=None):
         resource = MagicMock()
         resource.resourceinstanceid = resourceinstanceid
         resource.graph.slug = graph_slug
-        resource.name = name
         resource.descriptors = descriptors
         return resource
 
-    def _export_with_resources(self, resources, languages):
+    def _export_with_resources(self, resources, languages, language=None):
         queryset = MagicMock()
         queryset.select_related.return_value.iterator.return_value = resources
         exporter = SearchExcelExporter()
         with patch.object(
             SearchExcelExporter, "_collect_languages", return_value=languages
         ):
-            return exporter.export(queryset)
+            return exporter.export(queryset, language=language)
 
     def _get_row(self, output, row_index):
         ws = load_workbook(filename=output).active
         return [ws.cell(row_index, col).value for col in range(1, ws.max_column + 1)]
 
-    def test_undefined_description_is_blank(self):
+    def test_get_descriptors_of_system_lang(self):
         resource = self._make_resource(
-            "abc-123",
+            self.RESOURCE1_ID,
             "heritage_site",
-            "Parthenon",
-            descriptors={"en": {"description": "Undefined"}},
+            descriptors={
+                "en": {"name": "Parthenon", "description": "An ancient temple"},
+                "fr": {"name": "Parthénon", "description": "Un temple antique"},
+            },
         )
-        output = self._export_with_resources([resource], ["en"])
+        # Passing language="en" should skip _collect_languages and only produce en columns
+        output = self._export_with_resources([resource], languages=[], language="en")
+        headers = self._get_row(output, row_index=1)
         row = self._get_row(output, row_index=2)
-        self.assertFalse(row[3])  # en-description column should be blank
 
-    def test_language_columns_and_missing_descriptors(self):
-        # Resource has "en" but not "fr"; another has None descriptors entirely
-        resource_with_en = self._make_resource(
-            "abc-123",
-            "heritage_site",
-            "Parthenon",
-            descriptors={"en": {"description": "A temple"}},
+        self.assertEqual(
+            headers, ["resourceinstanceid", "graph_slug", "en-name", "en-description"]
         )
-        resource_no_descriptors = self._make_resource(
-            "def-456",
+        self.assertEqual(row[2], "Parthenon")
+        self.assertEqual(row[3], "An ancient temple")
+
+    def test_get_all_descriptors(self):
+        resource_en_only = self._make_resource(
+            self.RESOURCE1_ID,
             "heritage_site",
-            "Colosseum",
-            descriptors={"fr": {"description": "Un amphithéâtre"}},
+            descriptors={"en": {"name": "Parthenon", "description": "A temple"}},
+        )
+        resource_fr_only = self._make_resource(
+            self.RESOURCE2_ID,
+            "heritage_site",
+            descriptors={"fr": {"name": "Parthénon", "description": "Un temple"}},
         )
         output = self._export_with_resources(
-            [resource_with_en, resource_no_descriptors], ["en", "fr"]
+            [resource_en_only, resource_fr_only], ["en", "fr"]
         )
         headers = self._get_row(output, row_index=1)
         row1 = self._get_row(output, row_index=2)
         row2 = self._get_row(output, row_index=3)
 
-        self.assertEqual(headers[3], "en-description")
-        self.assertEqual(headers[4], "fr-description")
-        self.assertEqual(row1[3], "A temple")  # en present
-        self.assertFalse(row1[4])  # fr missing -> blank
-        self.assertFalse(row2[3])  # en missing -> blank
-        self.assertEqual(row2[4], "Un amphithéâtre")  # fr present
+        self.assertEqual(
+            headers[2:], ["en-name", "en-description", "fr-name", "fr-description"]
+        )
+        self.assertEqual(row1[2], "Parthenon")
+        self.assertEqual(row1[3], "A temple")
+        self.assertFalse(row1[4])  # fr-name missing for resource 1
+        self.assertFalse(row1[5])  # fr-description missing for resource 1
+        self.assertFalse(row2[2])  # en-name missing for resource 2
+        self.assertFalse(row2[3])  # en-description missing for resource 2
+        self.assertEqual(row2[4], "Parthénon")
+        self.assertEqual(row2[5], "Un temple")

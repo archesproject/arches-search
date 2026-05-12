@@ -1,4 +1,5 @@
 from django.http import HttpResponse
+from django.utils.translation import get_language
 
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.views.api import APIBase
@@ -11,14 +12,16 @@ class SearchExportAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
         filename = body.get("filename", "search_export")
+        all_descriptors = body.get("allDescriptors", False)
 
         if not filename.endswith(".xlsx"):
             filename = f"{filename}.xlsx"
 
-        queryset = build_search_queryset(body)
+        language = None if all_descriptors else get_language()
+        queryset = queryset = build_search_queryset(body)
 
         exporter = SearchExcelExporter()
-        excel_bytes = exporter.export(queryset)
+        excel_bytes = exporter.export(queryset, language=language)
 
         response = HttpResponse(
             excel_bytes.getvalue(),
