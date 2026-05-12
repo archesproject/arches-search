@@ -24,6 +24,11 @@ class GeoUtils(ArchesGeoUtils):
         using an intersection with polygon for the corresponding hemisphere.
         """
 
+        if geom.srid != 4326:
+            raise ValueError(
+                f"split_polygon_at_antimeridian requires EPSG:4326, got EPSG:{geom.srid}"
+            )
+
         if geom.dims == 2:
             geom_coords = geom.coords[0]
             extends_into_western_hemisphere = max(lon for lon, lat in geom_coords) > 180
