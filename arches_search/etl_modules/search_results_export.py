@@ -4,9 +4,27 @@ from django.db.models import F, Func
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
+details = {
+    "etlmoduleid": "ba7370c2-fa21-4d52-9b1f-48d52b4c536b",
+    "name": "Search Results Export",
+    "description": "Exports search results to an Excel file.",
+    "etl_type": "export",
+    "component": "",
+    "componentname": "search-results-export",
+    "modulename": "search_results_export.py",
+    "classname": "SearchResultsExportModule",
+    "config": {"show": False},
+    "icon": "fa fa-download",
+    "slug": "search-results-export",
+}
 
-class SearchExcelExporter:
+
+class SearchResultsExportModule:
     BASE_COLUMNS = ["resourceinstanceid", "graph_slug"]
+
+    def __init__(self, request=None, loadid=None):
+        self.request = request
+        self.loadid = loadid
 
     def export(self, queryset, *, language=None):
         languages = [language] if language else self._collect_languages(queryset)

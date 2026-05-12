@@ -4,7 +4,7 @@ from django.utils.translation import get_language
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.views.api import APIBase
 
-from arches_search.utils.search_export import SearchExcelExporter
+from arches_search.etl_modules.search_results_export import SearchResultsExportModule
 from arches_search.views.api.simple_search import build_search_queryset
 
 
@@ -18,9 +18,9 @@ class SearchExportAPI(APIBase):
             filename = f"{filename}.xlsx"
 
         language = None if all_descriptors else get_language()
-        queryset = queryset = build_search_queryset(body)
+        queryset = build_search_queryset(body)
 
-        exporter = SearchExcelExporter()
+        exporter = SearchResultsExportModule()
         excel_bytes = exporter.export(queryset, language=language)
 
         response = HttpResponse(

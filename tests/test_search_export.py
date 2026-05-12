@@ -3,12 +3,12 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 from openpyxl import load_workbook
 
-from arches_search.utils.search_export import SearchExcelExporter
+from arches_search.etl_modules.search_results_export import SearchResultsExportModule
 
 # python manage.py test tests.test_search_export --settings="tests.test_settings"
 
 
-class SearchExcelExporterTest(SimpleTestCase):
+class SearchResultsExportModuleTest(SimpleTestCase):
     RESOURCE1_ID = "d5c7e72e-4805-4f32-90d7-0db93176b2c4"
     RESOURCE2_ID = "db91f6fd-e70d-44e1-9492-00b87018cd78"
 
@@ -22,9 +22,9 @@ class SearchExcelExporterTest(SimpleTestCase):
     def _export_with_resources(self, resources, languages, language=None):
         queryset = MagicMock()
         queryset.select_related.return_value.iterator.return_value = resources
-        exporter = SearchExcelExporter()
+        exporter = SearchResultsExportModule()
         with patch.object(
-            SearchExcelExporter, "_collect_languages", return_value=languages
+            SearchResultsExportModule, "_collect_languages", return_value=languages
         ):
             return exporter.export(queryset, language=language)
 
