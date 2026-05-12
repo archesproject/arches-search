@@ -25,10 +25,7 @@
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#dev/8.1.x",
         "arches-modular-reports": "archesproject/arches-modular-reports#main"
     },
-    "devDependencies": {
-        "@mapbox/geojson-extent": "^1.0.1",
-        "@mapbox/mapbox-gl-draw": "^1.4.3"
-    },
+    "devDependencies": {},
     "nodeModulesPaths": {},
     "overrides": {
         "moment-timezone": "^0.5.45",

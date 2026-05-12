@@ -2,6 +2,4 @@
 // Module homepage on npmjs.com uses logos "TS" or "DT" to indicate if typed
 
 import("@/arches/declarations.d.ts");
-
-declare module "@mapbox/mapbox-gl-draw";
-declare module "@mapbox/geojson-extent";
+import("@/arches_component_lab/declarations.d.ts");
