@@ -206,11 +206,13 @@ export async function exportSearchResults({
     query,
     graphId = null,
     filename = "search_export",
+    allDescriptors = false,
 }: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
     graphId?: string | null;
     filename?: string;
+    allDescriptors?: boolean;
 }): Promise<void> {
     const response = await fetch(
         generateArchesURL("arches_search:search_export"),
@@ -220,7 +222,13 @@ export async function exportSearchResults({
                 "Content-Type": "application/json",
                 "X-CSRFToken": Cookies.get("csrftoken") || "",
             },
-            body: JSON.stringify({ terms, query, graphId, filename }),
+            body: JSON.stringify({
+                terms,
+                query,
+                graphId,
+                filename,
+                allDescriptors,
+            }),
         },
     );
 

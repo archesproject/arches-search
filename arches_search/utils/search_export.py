@@ -6,19 +6,22 @@ from openpyxl.styles import Font
 
 
 class SearchExcelExporter:
-    BASE_COLUMNS = ["resourceinstanceid", "graph_slug", "name"]
+    BASE_COLUMNS = ["resourceinstanceid", "graph_slug"]
 
-    def export(self, queryset):
-        languages = self._collect_languages(queryset)
-        columns = self.BASE_COLUMNS + [f"{lang}-description" for lang in languages]
+    def export(self, queryset, *, language=None):
+        languages = [language] if language else self._collect_languages(queryset)
+        descriptor_headers = [
+            col for lang in languages for col in (f"{lang}-name", f"{lang}-description")
+        ]
+        columns = self.BASE_COLUMNS + descriptor_headers
 
         workbook = Workbook()
         worksheet = workbook.active
         worksheet.title = "Search Results"
 
         header_font = Font(bold=True)
-        for col_index, header in enumerate(columns, start=1):
-            cell = worksheet.cell(row=1, column=col_index, value=header)
+        for column_index, header in enumerate(columns, start=1):
+            cell = worksheet.cell(row=1, column=column_index, value=header)
             cell.font = header_font
 
         for row_index, resource in enumerate(
@@ -34,21 +37,19 @@ class SearchExcelExporter:
                 column=2,
                 value=resource.graph.slug if resource.graph else "",
             )
-            worksheet.cell(
-                row=row_index,
-                column=3,
-                value=str(resource.name),
-            )
-            for col_offset, lang in enumerate(languages, start=4):
+            for lang_index, lang in enumerate(languages):
                 descriptor = (resource.descriptors or {}).get(lang)
+                name = descriptor.get("name", "") if descriptor else ""
                 description = descriptor.get("description", "") if descriptor else ""
+                if name == "Undefined":
+                    name = ""
                 if description == "Undefined":
                     description = ""
 
+                column_index = 3 + lang_index * 2
+                worksheet.cell(row=row_index, column=column_index, value=name)
                 worksheet.cell(
-                    row=row_index,
-                    column=col_offset,
-                    value=description,
+                    row=row_index, column=column_index + 1, value=description
                 )
 
         output = BytesIO()

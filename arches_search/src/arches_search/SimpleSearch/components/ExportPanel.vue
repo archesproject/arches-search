@@ -5,6 +5,7 @@ import { useGettext } from "vue3-gettext";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import RadioButton from "primevue/radiobutton";
+import ToggleSwitch from "primevue/toggleswitch";
 
 import { exportSearchResults } from "@/arches_search/SimpleSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -16,6 +17,7 @@ const isExporting = ref(false);
 const exportError = ref<string | null>(null);
 const filename = ref("search_export");
 const selectedFormat = ref("simple");
+const allDescriptors = ref(false);
 
 const downloadButtonLabel = computed(() =>
     isExporting.value ? $gettext("Downloading...") : $gettext("Download"),
@@ -30,6 +32,7 @@ async function onExport() {
         await exportSearchResults({
             ...payload,
             filename: filename.value,
+            allDescriptors: allDescriptors.value,
         });
     } catch (error) {
         exportError.value =
@@ -76,13 +79,22 @@ async function onExport() {
                         {{ $gettext("Export Results") }}
                     </label>
                 </div>
-                <p class="item-description">
+                <div class="p item-description">
                     {{
                         $gettext(
                             "Export resource name and descriptions to an Excel file.",
                         )
                     }}
-                </p>
+                </div>
+                <div class="descriptors-toggle">
+                    <ToggleSwitch
+                        v-model="allDescriptors"
+                        input-id="all-descriptors-toggle"
+                    />
+                    <label for="all-descriptors-toggle">
+                        {{ $gettext("Export all descriptors") }}
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -194,6 +206,14 @@ async function onExport() {
 .item-description {
     margin: 0 0 0 1.5rem;
     color: var(--p-surface-500);
+    font-size: 0.85em;
+}
+
+.descriptors-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0 0 1.5rem;
     font-size: 0.85em;
 }
 
