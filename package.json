@@ -25,7 +25,9 @@
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#dev/8.1.x",
         "arches-modular-reports": "archesproject/arches-modular-reports#main"
     },
-    "devDependencies": {},
+    "devDependencies": {
+        "@types/geojson": "^7946.0.16"
+    },
     "nodeModulesPaths": {},
     "overrides": {
         "moment-timezone": "^0.5.45",
