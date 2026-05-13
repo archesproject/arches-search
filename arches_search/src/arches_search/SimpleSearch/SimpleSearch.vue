@@ -231,10 +231,6 @@ const timeFilterQuery = computed(
     () => queries.value.get(TIME_FILTER_QUERY_KEY) ?? null,
 );
 
-const hasTimeFilter = computed<boolean>(
-    () => (timeFilterQuery.value?.clauses.length ?? 0) > 0,
-);
-
 const selectedTimeFilterClause = computed<LiteralClause | null>(
     () => timeFilterQuery.value?.clauses[0] ?? null,
 );
