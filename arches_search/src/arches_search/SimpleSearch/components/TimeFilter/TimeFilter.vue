@@ -388,13 +388,12 @@ function onAddTimeFilter(): void {
 }
 
 .time-filter-controls {
-    display: contents;
-}
-
-.time-filter-controls-inactive {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+}
+
+.time-filter-controls-inactive {
     pointer-events: none;
     opacity: 0.4;
     user-select: none;
