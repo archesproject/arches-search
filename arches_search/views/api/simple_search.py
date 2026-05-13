@@ -106,4 +106,3 @@ class SimpleSearchAPI(APIBase):
                 "aggregations": aggregations,
             }
         )
-

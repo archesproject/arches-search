@@ -22,7 +22,7 @@ type SidePanelType =
     | typeof MAP_FILTER_PANEL
     | typeof SAVED_SEARCHES_PANEL
     | typeof EXPORT_PANEL;
-    
+
 const PANEL_SIZES: Record<SidePanelType, number> = {
     [ATTRIBUTE_FILTERS_PANEL]: 27,
     [TIME_FILTER_PANEL]: SIDE_PANEL_SIZE,
