@@ -48,6 +48,7 @@ interface SearchFilters {
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
     getExportPayload(): ExportPayload;
+    getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
     setGraph(graph: ResourceType | null): void;
     setMapFilter(featureCollection: FeatureCollection): void;
