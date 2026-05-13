@@ -10,6 +10,7 @@ const ATTRIBUTE_FILTERS_PANEL = "attribute-filters" as const;
 const TIME_FILTER_PANEL = "time-filter" as const;
 const MAP_FILTER_PANEL = "map-filter" as const;
 const SAVED_SEARCHES_PANEL = "saved-searches" as const;
+const EXPORT_PANEL = "export" as const;
 
 interface SplitterResizeEvent {
     sizes?: number[];
@@ -19,13 +20,15 @@ type SidePanelType =
     | typeof ATTRIBUTE_FILTERS_PANEL
     | typeof TIME_FILTER_PANEL
     | typeof MAP_FILTER_PANEL
-    | typeof SAVED_SEARCHES_PANEL;
+    | typeof SAVED_SEARCHES_PANEL
+    | typeof EXPORT_PANEL;
 
 const PANEL_SIZES: Record<SidePanelType, number> = {
     [ATTRIBUTE_FILTERS_PANEL]: 27,
     [TIME_FILTER_PANEL]: SIDE_PANEL_SIZE,
     [MAP_FILTER_PANEL]: 65,
     [SAVED_SEARCHES_PANEL]: 27,
+    [EXPORT_PANEL]: 27,
 };
 
 export function useSidePanel() {
@@ -77,6 +80,14 @@ export function useSidePanel() {
 
     const isSavedSearchesActive = computed<boolean>(
         () => activeSidePanel.value === SAVED_SEARCHES_PANEL,
+    );
+
+    const isExportPanelActive = computed<boolean>(
+        () => activeSidePanel.value === EXPORT_PANEL,
+    );
+
+    const isExportPanelOpen = computed<boolean>(
+        () => hasOpenSidePanel.value && activeSidePanel.value === EXPORT_PANEL,
     );
 
     const resultsPanelSize = computed<number>(
@@ -203,6 +214,10 @@ export function useSidePanel() {
         toggleSidePanel(SAVED_SEARCHES_PANEL);
     }
 
+    function onToggleExportPanel(): void {
+        toggleSidePanel(EXPORT_PANEL);
+    }
+
     onUnmounted(clearSwitchTimer);
 
     return {
@@ -210,6 +225,8 @@ export function useSidePanel() {
         isAttributeFiltersOpen,
         isMapFilterActive,
         isMapFilterOpen,
+        isExportPanelActive,
+        isExportPanelOpen,
         isSavedSearchesActive,
         isSavedSearchesOpen,
         isTimeFilterActive,
@@ -224,6 +241,7 @@ export function useSidePanel() {
         closeSidePanel,
         onToggleAttributeFilters,
         onToggleMapFilter,
+        onToggleExportPanel,
         onToggleSavedSearches,
         onToggleTimeFilter,
         onSplitterResizeStart,

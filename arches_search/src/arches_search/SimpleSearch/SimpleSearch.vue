@@ -10,6 +10,7 @@ import SplitterPanel from "primevue/splitterpanel";
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
 import AttributeFilters from "@/arches_search/SimpleSearch/components/AttributeFilters.vue";
+import ExportPanel from "@/arches_search/SimpleSearch/components/ExportPanel.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
@@ -76,6 +77,8 @@ const {
     isAttributeFiltersOpen,
     isMapFilterActive,
     isMapFilterOpen,
+    isExportPanelActive,
+    isExportPanelOpen,
     isSavedSearchesActive,
     isSavedSearchesOpen,
     isTimeFilterActive,
@@ -90,6 +93,7 @@ const {
     closeSidePanel,
     onToggleAttributeFilters,
     onToggleMapFilter,
+    onToggleExportPanel,
     onToggleSavedSearches,
     onToggleTimeFilter,
     onSplitterResizeStart,
@@ -393,13 +397,15 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             :has-map-filter="mapFilter !== null"
             :show-time="isTimeFilterOpen"
             :show-saved-searches="isSavedSearchesOpen"
+            :show-export-panel="isExportPanelOpen"
+            :hide-filters-button="!activeGraph"
             @update:sort-value="onSortValueUpdate"
             @save-search="showSaveDialog = true"
             @toggle-filters="onToggleAttributeFilters"
             @toggle-map="onToggleMapFilter"
             @toggle-time="onToggleTimeFilter"
             @toggle-saved-searches="onToggleSavedSearches"
-            @export="() => {}"
+            @export="onToggleExportPanel"
         />
 
         <div class="body">
@@ -458,6 +464,7 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                             ref="savedSearchPanelRef"
                             @run-query="onRunSavedQuery"
                         />
+                        <ExportPanel v-else-if="isExportPanelActive" />
                     </div>
                 </SplitterPanel>
             </Splitter>

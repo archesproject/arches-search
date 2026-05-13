@@ -200,3 +200,47 @@ export async function deleteSavedSearch(savedsearchid: string): Promise<void> {
         throw new Error(response.statusText);
     }
 }
+
+export async function exportSearchResults({
+    terms = [],
+    query,
+    graphId = null,
+    filename = "search_export",
+    allDescriptors = false,
+}: {
+    terms?: { type: string; text: string; inverted: boolean }[];
+    query?: GroupPayload;
+    graphId?: string | null;
+    filename?: string;
+    allDescriptors?: boolean;
+}): Promise<void> {
+    const response = await fetch(
+        generateArchesURL("arches_search:search_export"),
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify({
+                terms,
+                query,
+                graphId,
+                filename,
+                allDescriptors,
+            }),
+        },
+    );
+
+    if (!response.ok) {
+        throw new Error(response.statusText);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+}

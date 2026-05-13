@@ -1,6 +1,5 @@
-from django.core.paginator import Paginator
 from django.contrib.postgres.search import SearchQuery
-
+from django.core.paginator import Paginator
 
 from arches.app.models.models import (
     ResourceInstance,
@@ -71,7 +70,7 @@ def build_search_queryset(body):
                 resourceinstanceid__in=spatial_ids
             )
 
-    return results_queryset
+    return results_queryset.exclude(graph__slug="arches_system_settings")
 
 
 class SimpleSearchAPI(APIBase):
