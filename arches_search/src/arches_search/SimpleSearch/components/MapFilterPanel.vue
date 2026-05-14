@@ -4,6 +4,7 @@ import { nextTick, useTemplateRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import MapWidget from "@/arches_component_lab/widgets/MapWidget/MapWidget.vue";
+import { getMapboxDraw } from "@/arches_component_lab/widgets/MapWidget/utils.ts";
 const SEARCH_RENDER_CONTEXT = "search";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -30,6 +31,15 @@ const mapWidgetRef =
     useTemplateRef<InstanceType<typeof MapWidget>>("mapWidget");
 
 watch(resultsTileUrl, (tileUrl) => setSearchTiles(tileUrl));
+
+watch(
+    () => modelValue,
+    (newValue) => {
+        if (newValue === null && mapWidgetRef.value?.map) {
+            getMapboxDraw(mapWidgetRef.value.map)?.deleteAll();
+        }
+    },
+);
 
 function onOverlaysUpdated() {
     nextTick(() => setSearchTiles(resultsTileUrl.value));

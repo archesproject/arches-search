@@ -135,7 +135,10 @@ function buildTree(
     for (const summary of nodeSummaries) {
         nodeById[summary.id] = {
             key: summary.id,
-            label: getPathLabel(summary),
+            label:
+                summary.card_x_node_x_widget_label ||
+                summary.name ||
+                summary.alias,
             data: summary,
             children: [],
             selectable: isNodeSelectable(summary),
