@@ -14,6 +14,7 @@ export interface SearchDefinition {
     version: 1;
     terms: SerializedTerm[];
     queries: Record<string, GroupPayload>;
+    timeFilter: GroupPayload | null;
     graphId: string | null;
 }
 

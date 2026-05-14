@@ -39,6 +39,7 @@ interface SearchFilters {
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
+    timeFilter: Ref<GroupPayload | null>;
     resultsTileUrl: ComputedRef<string | null>;
     resultsGraph: Ref<ResourceType | null>;
     searchResults: Ref<SearchResults>;
@@ -46,6 +47,7 @@ interface SearchFilters {
     applySearchDefinition(definition: SearchDefinition): void;
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
+    clearTimeFilter(): void;
     clearTermFilter(key: string): void;
     getExportPayload(): ExportPayload;
     getSearchDefinition(): SearchDefinition;
@@ -53,6 +55,7 @@ interface SearchFilters {
     setGraph(graph: ResourceType | null): void;
     setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
+    setTimeFilter(payload: GroupPayload): void;
     setSort(next: SortSpec[]): void;
     setTermFilter(
         key: string,
@@ -74,6 +77,7 @@ function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const mapFilter = ref<FeatureCollection | null>(null);
+    const timeFilter = ref<GroupPayload | null>(null);
     const activeGraph = ref<ResourceType | null>(null);
     const resultsGraph = ref<ResourceType | null>(null);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
@@ -155,6 +159,17 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function setTimeFilter(payload: GroupPayload): void {
+        timeFilter.value = payload;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function clearTimeFilter(): void {
+        timeFilter.value = null;
+        search();
+    }
+
     function setGraph(graph: ResourceType | null): void {
         activeGraph.value = graph;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -227,6 +242,7 @@ function createSearchFilters(): SearchFilters {
 
     function getRequestQuery(): GroupPayload | undefined {
         const queryList = [...queries.value.values()];
+        if (timeFilter.value) queryList.push(timeFilter.value);
         if (queryList.length === 0) return undefined;
         if (queryList.length === 1) return queryList[0];
         return {
@@ -255,6 +271,7 @@ function createSearchFilters(): SearchFilters {
             version: 1,
             terms: serializedTerms,
             queries: Object.fromEntries(queries.value),
+            timeFilter: timeFilter.value,
             graphId: activeGraph.value?.id ?? null,
         };
     }
@@ -268,6 +285,7 @@ function createSearchFilters(): SearchFilters {
         for (const filterKey of [...queries.value.keys()]) {
             clearQuery(filterKey);
         }
+        clearTimeFilter();
 
         if (definition.graphId) {
             setGraph({ id: definition.graphId, label: "", icon: "" });
@@ -286,6 +304,9 @@ function createSearchFilters(): SearchFilters {
         for (const [filterKey, payload] of Object.entries(definition.queries)) {
             setQuery(filterKey, payload);
         }
+        if (definition.timeFilter) {
+            setTimeFilter(definition.timeFilter);
+        }
     }
 
     function getExportPayload(): ExportPayload {
@@ -303,6 +324,7 @@ function createSearchFilters(): SearchFilters {
         clearMapFilter,
         clearQuery,
         clearTermFilter,
+        clearTimeFilter,
         currentPage,
         getSearchDefinition,
         getExportPayload,
@@ -318,7 +340,9 @@ function createSearchFilters(): SearchFilters {
         setQuery,
         setSort,
         setTermFilter,
+        setTimeFilter,
         sort,
+        timeFilter,
     };
 }
 

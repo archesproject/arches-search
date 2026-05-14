@@ -48,7 +48,6 @@ import type {
 
 const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced";
 const TERM_FILTER_KEY = "termfilter";
-const TIME_FILTER_QUERY_KEY = "timeFilter";
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
 
@@ -61,15 +60,17 @@ const {
     applySearchDefinition,
     clearMapFilter,
     clearQuery,
+    clearTimeFilter,
     getSearchDefinition,
     isSearching,
     mapFilter,
-    queries,
     search,
     searchResults,
     setMapFilter,
     setQuery,
     setSort,
+    setTimeFilter,
+    timeFilter,
 } = provideSearchFilters();
 
 const {
@@ -231,16 +232,8 @@ const activeGraphContext = computed<{
     return { id: graphId, slug: model.slug, label: activeGraph.value!.label };
 });
 
-const timeFilterQuery = computed(
-    () => queries.value.get(TIME_FILTER_QUERY_KEY) ?? null,
-);
-
-const hasTimeFilter = computed<boolean>(
-    () => (timeFilterQuery.value?.clauses.length ?? 0) > 0,
-);
-
 const selectedTimeFilterClause = computed<LiteralClause | null>(
-    () => timeFilterQuery.value?.clauses[0] ?? null,
+    () => timeFilter.value?.clauses[0] ?? null,
 );
 
 watchEffect(() => {
@@ -283,11 +276,11 @@ function sortSpecForValue(value: string | null): SortSpec[] {
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {
     const graphSlug = activeGraphSlug.value;
     if (!graphSlug || clauses.length === 0) {
-        clearQuery(TIME_FILTER_QUERY_KEY);
+        clearTimeFilter();
         return;
     }
 
-    setQuery(TIME_FILTER_QUERY_KEY, {
+    setTimeFilter({
         graph_slug: graphSlug,
         scope: GraphScopeToken.RESOURCE,
         logic: LogicToken.OR,
@@ -300,7 +293,7 @@ function onTimeFilterUpdate(clauses: LiteralClause[]): void {
 
 function onRemoveTimeFilter(): void {
     closeSidePanel();
-    clearQuery(TIME_FILTER_QUERY_KEY);
+    clearTimeFilter();
 }
 
 function onMapFilterUpdate(featureCollection: FeatureCollection): void {
@@ -373,10 +366,16 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             ? (raw.queries as SearchDefinition["queries"])
             : {};
 
+    const timeFilterIn =
+        raw.timeFilter && typeof raw.timeFilter === "object"
+            ? (raw.timeFilter as SearchDefinition["timeFilter"])
+            : null;
+
     return {
         version: 1,
         terms,
         queries: queriesIn,
+        timeFilter: timeFilterIn,
         graphId: typeof raw.graphId === "string" ? raw.graphId : null,
     };
 }
@@ -394,7 +393,6 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             :sort-value="sortValue"
             :show-filters="isAttributeFiltersOpen"
             :show-map="isMapFilterOpen"
-            :has-map-filter="mapFilter !== null"
             :show-time="isTimeFilterOpen"
             :show-saved-searches="isSavedSearchesOpen"
             :show-export-panel="isExportPanelOpen"
@@ -464,7 +462,7 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                             ref="savedSearchPanelRef"
                             @run-query="onRunSavedQuery"
                         />
-                        <ExportPanel v-else-if="isExportPanelActive" />
+                        <ExportPanel v-show="isExportPanelActive" />
                     </div>
                 </SplitterPanel>
             </Splitter>

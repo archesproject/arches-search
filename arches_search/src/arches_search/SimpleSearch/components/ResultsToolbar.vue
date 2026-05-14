@@ -14,7 +14,6 @@ const props = defineProps<{
     sortValue: string | null;
     showFilters: boolean;
     showMap: boolean;
-    hasMapFilter: boolean;
     showTime: boolean;
     showSavedSearches: boolean;
     showExportPanel: boolean;
@@ -84,7 +83,7 @@ defineEmits<{
                 icon="pi pi-map"
                 icon-pos="left"
                 size="small"
-                :class="['toolbar-btn', { active: showMap || hasMapFilter }]"
+                :class="['toolbar-btn', { active: showMap }]"
                 @click="$emit('toggle-map')"
             />
             <Button
