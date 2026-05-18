@@ -15,10 +15,24 @@ const emit = defineEmits<{
     (event: typeof CLEAR_ALL_EVENT): void;
 }>();
 
-const { $gettext } = useGettext();
-const { activeFilters, resultsGraph, searchResults } = useSearchFilters();
+const { $gettext, $ngettext, interpolate } = useGettext();
+const {
+    activeFilters,
+    clearMapFilter,
+    clearTimeFilter,
+    mapFilter,
+    timeFilter,
+    resultsGraph,
+    searchResults,
+} = useSearchFilters();
 
-const hasActiveFilters = computed(() => activeFilters.value.length > 0);
+const hasFilterChips = computed(() => activeFilters.value.length > 0);
+const hasMapFilter = computed(() => mapFilter.value !== null);
+const hasTimeFilter = computed(() => timeFilter.value !== null);
+const hasActiveFilters = computed(
+    () => hasFilterChips.value || hasMapFilter.value || hasTimeFilter.value,
+);
+
 const totalResults = computed(
     () => searchResults.value.pagination?.total_results ?? 0,
 );
@@ -26,10 +40,14 @@ const resourceTypeLabel = computed(
     () => resultsGraph.value?.label ?? $gettext("Items"),
 );
 const resultsCountText = computed(() =>
-    $gettext("%{totalResults} %{resourceType} match", {
-        totalResults: String(totalResults.value),
-        resourceType: resourceTypeLabel.value,
-    }),
+    interpolate(
+        $ngettext(
+            "%{count} %{type} matches",
+            "%{count} %{type} match",
+            totalResults.value,
+        ),
+        { count: String(totalResults.value), type: resourceTypeLabel.value },
+    ),
 );
 
 function clearFilter(activeFilter: ActiveFilter): void {
@@ -40,7 +58,8 @@ function clearAllFilters(): void {
     for (const activeFilter of activeFilters.value) {
         clearFilter(activeFilter);
     }
-
+    if (hasMapFilter.value) clearMapFilter();
+    if (hasTimeFilter.value) clearTimeFilter();
     emit(CLEAR_ALL_EVENT);
 }
 </script>
@@ -63,6 +82,20 @@ function clearAllFilters(): void {
                 :removable="true"
                 :style="activeFilter.options?.style"
                 @remove="clearFilter(activeFilter)"
+            />
+            <Chip
+                v-if="hasMapFilter"
+                :label="$gettext('Map Filter')"
+                :removable="true"
+                class="filter-chip"
+                @remove="clearMapFilter"
+            />
+            <Chip
+                v-if="hasTimeFilter"
+                :label="$gettext('Time Filter')"
+                :removable="true"
+                class="filter-chip"
+                @remove="clearTimeFilter"
             />
         </div>
 

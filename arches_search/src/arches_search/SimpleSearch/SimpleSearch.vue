@@ -48,7 +48,6 @@ import type {
 
 const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced";
 const TERM_FILTER_KEY = "termfilter";
-const TIME_FILTER_QUERY_KEY = "timeFilter";
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
 
@@ -61,15 +60,17 @@ const {
     applySearchDefinition,
     clearMapFilter,
     clearQuery,
+    clearTimeFilter,
     getSearchDefinition,
     isSearching,
     mapFilter,
-    queries,
     search,
     searchResults,
     setMapFilter,
     setQuery,
     setSort,
+    setTimeFilter,
+    timeFilter,
 } = provideSearchFilters();
 
 const {
@@ -109,14 +110,6 @@ const showSaveDialog = ref(false);
 const selectedFilterOptions = ref<Record<string, string[]>>({});
 const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
     null,
-);
-
-const activeGraphId = computed<string | null>(
-    () => activeGraph.value?.id ?? null,
-);
-
-const activeGraphLabel = computed<string | null>(
-    () => activeGraph.value?.label ?? null,
 );
 
 const attributeFilterSections = ref<AttributeFilterSection[]>([]);
@@ -220,27 +213,27 @@ function onFilterOptionsChanged(selected: Record<string, string[]>) {
 }
 
 const activeGraphSlug = computed<string | null>(() => {
-    if (!activeGraphId.value) {
-        return null;
-    }
-
-    const matchingGraph = graphModels.value.find((graphModel) => {
-        return graphModel.graphid === activeGraphId.value;
-    });
-
-    return matchingGraph?.slug ?? null;
+    if (!activeGraph.value) return null;
+    return (
+        graphModels.value.find((m) => m.graphid === activeGraph.value!.id)
+            ?.slug ?? null
+    );
 });
 
-const timeFilterQuery = computed(
-    () => queries.value.get(TIME_FILTER_QUERY_KEY) ?? null,
-);
-
-const hasTimeFilter = computed<boolean>(
-    () => (timeFilterQuery.value?.clauses.length ?? 0) > 0,
-);
+const activeGraphContext = computed<{
+    id: string;
+    slug: string;
+    label: string;
+} | null>(() => {
+    const graphId = activeGraph.value?.id;
+    if (!graphId) return null;
+    const model = graphModels.value.find((m) => m.graphid === graphId);
+    if (!model) return null;
+    return { id: graphId, slug: model.slug, label: activeGraph.value!.label };
+});
 
 const selectedTimeFilterClause = computed<LiteralClause | null>(
-    () => timeFilterQuery.value?.clauses[0] ?? null,
+    () => timeFilter.value?.clauses[0] ?? null,
 );
 
 watchEffect(() => {
@@ -283,11 +276,11 @@ function sortSpecForValue(value: string | null): SortSpec[] {
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {
     const graphSlug = activeGraphSlug.value;
     if (!graphSlug || clauses.length === 0) {
-        clearQuery(TIME_FILTER_QUERY_KEY);
+        clearTimeFilter();
         return;
     }
 
-    setQuery(TIME_FILTER_QUERY_KEY, {
+    setTimeFilter({
         graph_slug: graphSlug,
         scope: GraphScopeToken.RESOURCE,
         logic: LogicToken.OR,
@@ -300,7 +293,7 @@ function onTimeFilterUpdate(clauses: LiteralClause[]): void {
 
 function onRemoveTimeFilter(): void {
     closeSidePanel();
-    clearQuery(TIME_FILTER_QUERY_KEY);
+    clearTimeFilter();
 }
 
 function onMapFilterUpdate(featureCollection: FeatureCollection): void {
@@ -373,10 +366,16 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             ? (raw.queries as SearchDefinition["queries"])
             : {};
 
+    const timeFilterIn =
+        raw.timeFilter && typeof raw.timeFilter === "object"
+            ? (raw.timeFilter as SearchDefinition["timeFilter"])
+            : null;
+
     return {
         version: 1,
         terms,
         queries: queriesIn,
+        timeFilter: timeFilterIn,
         graphId: typeof raw.graphId === "string" ? raw.graphId : null,
     };
 }
@@ -394,9 +393,7 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             :sort-value="sortValue"
             :show-filters="isAttributeFiltersOpen"
             :show-map="isMapFilterOpen"
-            :has-map-filter="mapFilter !== null"
             :show-time="isTimeFilterOpen"
-            :has-time-filter="hasTimeFilter"
             :show-saved-searches="isSavedSearchesOpen"
             :show-export-panel="isExportPanelOpen"
             :hide-filters-button="!activeGraph"
@@ -448,27 +445,24 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                             @remove="onRemoveMapFilter"
                         />
                         <TimeFilter
-                            v-if="isTimeFilterActive"
-                            :graph-slug="activeGraphSlug"
-                            :graph-id="activeGraphId"
-                            :graph-label="activeGraphLabel"
-                            :is-open="isTimeFilterOpen"
+                            v-show="isTimeFilterActive"
+                            :graph="activeGraphContext"
                             :model-value="selectedTimeFilterClause"
                             @update:model-value="onTimeFilterUpdate"
                             @remove="onRemoveTimeFilter"
                         />
                         <AttributeFilters
-                            v-else-if="isAttributeFiltersActive"
+                            v-show="isAttributeFiltersActive"
                             :sections="attributeFilterSections"
-                            :selected-options="selectedFilterOptions"
-                            @update:selected-options="onFilterOptionsChanged"
+                            :model-value="selectedFilterOptions"
+                            @update:model-value="onFilterOptionsChanged"
                         />
                         <SavedSearchPanel
-                            v-else-if="isSavedSearchesActive"
+                            v-show="isSavedSearchesActive"
                             ref="savedSearchPanelRef"
                             @run-query="onRunSavedQuery"
                         />
-                        <ExportPanel v-else-if="isExportPanelActive" />
+                        <ExportPanel v-show="isExportPanelActive" />
                     </div>
                 </SplitterPanel>
             </Splitter>
@@ -524,10 +518,10 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
     flex: 1;
     overflow-y: auto;
     opacity: 0;
-    translate: 1.25rem 0;
+    translate: 0.5rem 0;
     transition:
-        opacity 180ms ease,
-        translate 240ms ease;
+        opacity 150ms ease-out,
+        translate 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .simple-search .side-panel-content.side-panel-content-open {
