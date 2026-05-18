@@ -110,15 +110,17 @@ function handleGenericWidgetUpdate(updatedWidgetValue: unknown): void {
 
 <template>
     <div class="clause-operand-builder">
-        <GenericWidget
-            class="clause-operand-editor"
-            mode="edit"
-            :graph-slug="subjectTerminalGraph.slug"
-            :node-alias="subjectTerminalNode.alias"
-            :should-show-label="false"
-            :node-value="initialAliasedNodeData || undefined"
-            @update:value="handleGenericWidgetUpdate"
-        />
+        <div class="clause-operand-editor">
+            <GenericWidget
+                mode="edit"
+                :graph-slug="subjectTerminalGraph.slug"
+                :node-alias="subjectTerminalNode.alias"
+                :should-show-label="false"
+                :aliased-node-data="initialAliasedNodeData || undefined"
+                :should-emit-simplified-value="true"
+                @update:value="handleGenericWidgetUpdate"
+            />
+        </div>
     </div>
 </template>
 
