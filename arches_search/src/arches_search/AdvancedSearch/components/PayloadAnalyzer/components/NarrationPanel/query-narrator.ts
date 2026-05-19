@@ -19,6 +19,7 @@ export type DescribeQueryOptions = {
         Record<string, AdvancedSearchFacet[]>
     >;
     gettext: (msgid: string, params?: Record<string, unknown>) => string;
+    currentLanguage?: string;
     nodeMetadata?: NodeMetadataMap;
     resourceNames?: Readonly<Record<string, string>>;
 };
@@ -34,6 +35,7 @@ export function describeAdvancedSearchQuery(
         graphs,
         datatypesToAdvancedSearchFacets,
         gettext,
+        currentLanguage,
         nodeMetadata,
         resourceNames,
     } = options;
@@ -324,9 +326,26 @@ export function describeAdvancedSearchQuery(
         }
 
         if (Array.isArray(rawValue)) {
-            const resolvedNames = (rawValue as unknown[])
-                .filter((item): item is string => typeof item === "string")
-                .map((resourceId) => resourceNames?.[resourceId] || resourceId);
+            const shortLanguage = currentLanguage?.split("-")[0];
+            const resolvedNames = (rawValue as unknown[]).map((item) => {
+                if (typeof item === "string") {
+                    return resourceNames?.[item] || item;
+                }
+                const labels = (
+                    item as {
+                        labels: Array<{ value: string; language_id: string }>;
+                    }
+                ).labels;
+                const matchingLabel =
+                    labels.find(
+                        (label) => label.language_id === currentLanguage,
+                    ) ??
+                    labels.find(
+                        (label) => label.language_id === shortLanguage,
+                    ) ??
+                    labels[0];
+                return matchingLabel?.value ?? "";
+            });
             return formatValueList(resolvedNames);
         }
 

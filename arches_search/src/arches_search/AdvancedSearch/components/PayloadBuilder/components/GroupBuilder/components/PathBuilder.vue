@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from "vue";
+import { computed, inject, nextTick, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Message from "primevue/message";
@@ -60,6 +60,7 @@ const emit = defineEmits<{ "update:selectedNode": [PathSelection | null] }>();
 let currentLoad = 0;
 
 const isLoading = ref(false);
+const isTreeRendered = ref(false);
 const configurationError = ref<Error | null>(null);
 const nodeOptions = ref<PathNode[]>([]);
 
@@ -356,6 +357,12 @@ async function loadNodes(): Promise<void> {
     }
 }
 
+function onShow(): void {
+    nextTick(() => {
+        isTreeRendered.value = true;
+    });
+}
+
 function getGraphLabelPrefix(treeSelectValue: unknown): string {
     const firstSelectedNode = (
         treeSelectValue as Array<{ data?: NodeSummary }>
@@ -393,10 +400,11 @@ function getGraphLabelPrefix(treeSelectValue: unknown): string {
             :disabled="!hasSelectableNodes"
             filter
             :filter-placeholder="$gettext('Search nodes...')"
-            :loading="isLoading"
+            :loading="isLoading || !isTreeRendered"
             :placeholder="$gettext('Select node...')"
-            :expanded-keys="expandedKeys"
+            :expanded-keys="isTreeRendered ? expandedKeys : {}"
             :options="nodeOptions"
+            @show="onShow"
         >
             <template #value="valueSlotProps">
                 <span

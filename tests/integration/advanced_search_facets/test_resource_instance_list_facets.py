@@ -400,8 +400,8 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                         {
                             "type": "LITERAL",
                             "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
+                                self.link_to_a,
+                                self.link_to_b,
                             ],
                         }
                     ],
@@ -441,8 +441,8 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                         {
                             "type": "LITERAL",
                             "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
+                                self.link_to_a,
+                                self.link_to_b,
                             ],
                         }
                     ],
@@ -482,8 +482,8 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                         {
                             "type": "LITERAL",
                             "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
+                                self.link_to_a,
+                                self.link_to_b,
                             ],
                         }
                     ],
@@ -523,8 +523,8 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                         {
                             "type": "LITERAL",
                             "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
+                                self.link_to_a,
+                                self.link_to_b,
                             ],
                         }
                     ],
@@ -608,3 +608,41 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
 
         self.assertEqual(result, {self.resource_with_value.resourceinstanceid})
+
+    def test_references_any_with_list_of_resource_reference_dicts(self):
+        """Operand value is a list of resource-reference dicts as emitted by ResourceInstanceMultiselectWidgetEditor."""
+        payload = {
+            "graph_slug": self.any_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.any_graph.slug,
+                        "node_alias": self.any_resource_instance_list_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_ANY",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.link_to_a, self.link_to_b],
+                        }
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.any_match_resource.resourceinstanceid})

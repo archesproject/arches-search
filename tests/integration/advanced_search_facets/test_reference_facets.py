@@ -477,7 +477,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "REFERENCES_ANY",
-                    "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.reference_a, self.reference_b],
+                        }
+                    ],
                 }
             ],
             "groups": [],
@@ -510,7 +515,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "REFERENCES_ALL",
-                    "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.reference_a, self.reference_b],
+                        }
+                    ],
                 }
             ],
             "groups": [],
@@ -543,7 +553,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "REFERENCES_ONLY",
-                    "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.reference_a, self.reference_b],
+                        }
+                    ],
                 }
             ],
             "groups": [],
@@ -576,7 +591,12 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "REFERENCES_NONE_OF",
-                    "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.reference_a, self.reference_b],
+                        }
+                    ],
                 }
             ],
             "groups": [],
@@ -609,7 +629,7 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "DESCENDANT_OF",
-                    "operands": [{"type": "LITERAL", "value": ["ref-child"]}],
+                    "operands": [{"type": "LITERAL", "value": [self.reference_child]}],
                 }
             ],
             "groups": [],
@@ -642,7 +662,7 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "ANCESTOR_OF",
-                    "operands": [{"type": "LITERAL", "value": ["ref-parent"]}],
+                    "operands": [{"type": "LITERAL", "value": [self.reference_parent]}],
                 }
             ],
             "groups": [],
