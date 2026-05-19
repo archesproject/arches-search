@@ -14,7 +14,8 @@ class DateIndexing(BaseIndexing):
         nodeid = str(node.nodeid)
         document = {"dates": [], "date_ranges": []}
         date_value = tile.data[nodeid]
-        date_components = date_value.split("-")
+        # remove time component if it exists
+        date_components = date_value.split(" ")[0].split("-")
         search_items = []
         if len(date_components[0]) == 4 and len(date_components) == 3:
             # date parsing with the edtf library is slow, so for known
