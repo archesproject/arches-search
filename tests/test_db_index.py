@@ -62,8 +62,7 @@ class DbIndexTestCaseBase(TestCase):
 
 
 class ReindexHappyPathTests(DbIndexTestCaseBase):
-    """End-to-end behavior of `db_index reindex_database`.
-    """
+    """End-to-end behavior of `db_index reindex_database`."""
 
     def test_reindex_populates_term_search_for_string_tile(self):
         call_command("db_index", "reindex_database", stdout=io.StringIO())
