@@ -331,6 +331,15 @@ export function describeAdvancedSearchQuery(
                 if (typeof item === "string") {
                     return resourceNames?.[item] || item;
                 }
+                if (
+                    typeof item === "object" &&
+                    item !== null &&
+                    "resourceId" in item
+                ) {
+                    const resourceId = (item as { resourceId: string })
+                        .resourceId;
+                    return resourceNames?.[resourceId] || resourceId;
+                }
                 const labels = (
                     item as {
                         labels: Array<{ value: string; language_id: string }>;

@@ -32,6 +32,12 @@ def _collect_uuid_strings_from_group_payload(
             for item in operand_value:
                 if isinstance(item, str) and _is_valid_uuid_string(item):
                     uuid_strings_found.append(item)
+                elif isinstance(item, dict):
+                    resource_id = item.get("resourceId")
+                    if isinstance(resource_id, str) and _is_valid_uuid_string(
+                        resource_id
+                    ):
+                        uuid_strings_found.append(resource_id)
 
     for child_group in group_payload.get("groups", []):
         uuid_strings_found.extend(_collect_uuid_strings_from_group_payload(child_group))
