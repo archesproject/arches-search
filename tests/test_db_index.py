@@ -3,7 +3,6 @@
 import io
 import uuid
 
-from django.conf import settings
 from django.core.management import call_command
 from django.test import TestCase
 
@@ -14,6 +13,7 @@ from arches.app.models.models import (
     ResourceInstance,
     TileModel,
 )
+from arches.app.models.system_settings import settings
 
 from arches_search.management.commands.db_index import (
     SEARCH_MODELS,

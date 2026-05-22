@@ -28,10 +28,10 @@ from django.apps import apps
 if not apps.ready:
     django.setup()
 
-from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import connection, connections
 from arches.app.models.models import TileModel, Node
+from arches.app.models.system_settings import settings
 from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
