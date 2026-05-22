@@ -269,7 +269,7 @@ class Command(BaseCommand):
 
         connections.close_all()
 
-        progress = multiprocessing.Value("q", 0) 
+        progress = multiprocessing.Value("q", 0)
         errors = []
 
         def on_done(result):
