@@ -17,7 +17,6 @@ from arches.app.models.models import (
 
 from arches_search.management.commands.db_index import (
     SEARCH_MODELS,
-    SYSTEM_SETTINGS_GRAPH,
     _build_nodegroup_cache,
 )
 from arches_search.models.models import TermSearch
@@ -131,7 +130,10 @@ class BuildNodegroupCacheTests(DbIndexTestCaseBase):
 
         for nodes in cache.values():
             for node in nodes:
-                self.assertNotEqual(str(node.graph_id), SYSTEM_SETTINGS_GRAPH)
+                self.assertNotEqual(
+                    str(node.graph_id),
+                    str(settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID),
+                )
 
 
 class HashShardingPartitionTests(DbIndexTestCaseBase):

@@ -45,8 +45,6 @@ from arches_search.models.models import (
     UUIDSearch,
 )
 
-SYSTEM_SETTINGS_GRAPH = "ff623370-fa12-11e6-b98b-6c4008b05c4c"
-
 SEARCH_MODELS = [
     TermSearch,
     NumericSearch,
@@ -61,9 +59,9 @@ SEARCH_MODELS = [
 
 def _build_nodegroup_cache():
     cache = {}
-    for node in Node.objects.exclude(graph_id=SYSTEM_SETTINGS_GRAPH).select_related(
-        "graph"
-    ):
+    for node in Node.objects.exclude(
+        graph_id=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID
+    ).select_related("graph"):
         cache.setdefault(node.nodegroup_id, []).append(node)
     return cache
 
