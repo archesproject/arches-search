@@ -108,9 +108,7 @@ class TransactionDetectionTests(DbIndexTestCaseBase):
         """If keep-indexes is set explicitly, no transaction-detection notice
         should fire (the check short-circuits)."""
         out = io.StringIO()
-        call_command(
-            "db_index", "reindex_database", "--keep-indexes", stdout=out
-        )
+        call_command("db_index", "reindex_database", "--keep-indexes", stdout=out)
         output = out.getvalue()
 
         self.assertNotIn("Detected open transaction", output)
