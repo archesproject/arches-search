@@ -57,7 +57,6 @@ SEARCH_MODELS = [
 ]
 
 
-
 def _build_nodegroup_cache():
     cache = {}
     for node in Node.objects.exclude(
