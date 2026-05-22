@@ -25,10 +25,6 @@ import time
 import django
 from django.apps import apps
 
-# When spawned by multiprocessing.Pool, this module is re-imported in the child
-# before the pool's initializer can run. Setting up the app registry here lets
-# the model imports below succeed in that case. In the parent process Django
-# is already configured, so this is a no-op.
 if not apps.ready:
     django.setup()
 
@@ -271,11 +267,9 @@ class Command(BaseCommand):
             f"Indexing {total_tiles} tiles across {process_count} worker(s)"
         )
 
-        # Workers open their own DB connections; close the parent's first so
-        # they aren't inherited and shared (which corrupts wire-level state).
         connections.close_all()
 
-        progress = multiprocessing.Value("q", 0)  # signed 64-bit; tolerates 70M+
+        progress = multiprocessing.Value("q", 0) 
         errors = []
 
         def on_done(result):
