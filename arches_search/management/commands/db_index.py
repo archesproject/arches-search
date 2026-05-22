@@ -195,6 +195,16 @@ class Command(BaseCommand):
         self.delete_indexes()
         indexing_start = datetime.datetime.now()
 
+        # do not remove this block or tests will fail.  open transactions
+        # will interfere with dropping/recreating indexes, so skip that
+        # if any are open
+        if not keep_indexes and connection.in_atomic_block:
+            self.stdout.write(
+                "Detected open transaction; keeping indexes in place "
+                "(drop/recreate would conflict with pending trigger events)."
+            )
+            keep_indexes = True
+
         dropped_indexes = [] if keep_indexes else self._drop_indexes()
         try:
             if use_multiprocessing:
