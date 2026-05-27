@@ -285,7 +285,7 @@ class FileListAdvancedSearchFacetIntegrationTestCase(TestCase):
             provisionaledits=None,
         )
 
-        call_command("db_index", "reindex_database")
+        call_command("arches_search", "reindex_database")
 
     def test_file_size_greater_than_prefers_the_larger_indexed_value(self):
         payload = {

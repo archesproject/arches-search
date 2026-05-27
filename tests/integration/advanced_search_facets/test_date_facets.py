@@ -124,7 +124,7 @@ class DateAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
         cls.tile_without_date.save()
 
-        call_command("db_index", "reindex_database")
+        call_command("arches_search", "reindex_database")
 
     def test_equals_matches_the_same_date(self):
         """This checks that the equals facet returns only the resource whose indexed date exactly matches the requested day."""
