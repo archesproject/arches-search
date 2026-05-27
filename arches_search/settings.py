@@ -290,6 +290,10 @@ HIDE_EMPTY_NODES_IN_REPORT = False
 BYPASS_UNIQUE_CONSTRAINT_TILE_VALIDATION = False
 BYPASS_REQUIRED_VALUE_TILE_VALIDATION = False
 
+# Batch size for the arches_search `reindex_database` management command:
+# tiles are read and bulk-inserted in chunks of this size by each worker.
+INDEX_BATCH_SIZE = 2000
+
 DATE_IMPORT_EXPORT_FORMAT = (
     "%Y-%m-%d"  # Custom date format for dates imported from and exported to csv
 )

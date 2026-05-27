@@ -355,7 +355,7 @@ class EdtfAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
         cls.tile_without_edtf.save()
 
-        call_command("db_index", "reindex_database")
+        call_command("search", "reindex_database")
 
     def test_equals_matches_the_same_interval(self):
         """This checks whether the equals facet returns the resource whose EDTF row should match the requested value."""

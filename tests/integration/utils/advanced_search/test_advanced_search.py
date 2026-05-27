@@ -782,7 +782,7 @@ class AdvancedSearchSetupMixin:
 
     @classmethod
     def _reindex_advanced_search_tables(cls):
-        call_command("db_index", "reindex_database")
+        call_command("search", "reindex_database")
 
     @classmethod
     def _create_new_datatype_search_rows(cls):

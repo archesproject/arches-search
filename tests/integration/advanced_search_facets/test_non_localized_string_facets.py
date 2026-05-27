@@ -258,7 +258,7 @@ class NonLocalizedStringAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
         cls.tile_without_value.save()
 
-        call_command("db_index", "reindex_database")
+        call_command("search", "reindex_database")
 
     def test_like_matches_a_substring(self):
         """This checks that the like facet returns only the resource whose indexed text contains the requested substring."""

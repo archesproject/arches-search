@@ -82,7 +82,7 @@ def _init_worker(progress_counter=None):
 
 def _index_tile_shard(worker_id, num_workers):
     """Index the tiles whose tileid hashes into this worker's shard."""
-    batch_size = settings.BULK_IMPORT_BATCH_SIZE
+    batch_size = settings.INDEX_BATCH_SIZE
     values_to_index = {model: [] for model in SEARCH_MODELS}
     tile_count = 0
     since_last_report = 0
@@ -212,19 +212,19 @@ class Command(BaseCommand):
         finally:
             if dropped_indexes:
                 self.stdout.write(
-                    f"Rebuilding {len(dropped_indexes)} index(es) "
+                    f"Rebuilding {len(dropped_indexes)} postgres index(es) "
                     "(this may take several minutes)..."
                 )
                 rebuild_start = datetime.datetime.now()
                 self._recreate_indexes(dropped_indexes)
                 self.stdout.write(
-                    f"Rebuilt {len(dropped_indexes)} index(es) in "
+                    f"Rebuilt {len(dropped_indexes)} postgres index(es) in "
                     f"{datetime.datetime.now() - rebuild_start}"
                 )
         self.stdout.write(f"Indexing took {datetime.datetime.now() - indexing_start}")
 
     def _reindex_singleprocess(self):
-        batch_size = settings.BULK_IMPORT_BATCH_SIZE
+        batch_size = settings.INDEX_BATCH_SIZE
         nodegroup_cache = _build_nodegroup_cache()
         values_to_index = {model: [] for model in SEARCH_MODELS}
         indexing_factory = IndexingFactory()
@@ -349,7 +349,9 @@ class Command(BaseCommand):
                     editor.remove_index(model, index)
                     dropped.append((model, index))
         if dropped:
-            self.stdout.write(f"Dropped {len(dropped)} index(es) for bulk load")
+            self.stdout.write(
+                f"Dropped {len(dropped)} postgres index(es) for bulk load"
+            )
         return dropped
 
     def _recreate_indexes(self, dropped):

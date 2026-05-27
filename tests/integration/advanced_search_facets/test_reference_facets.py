@@ -458,7 +458,7 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
         cls.tile_without_value.save()
 
-        call_command("db_index", "reindex_database")
+        call_command("search", "reindex_database")
 
     def test_references_any_matches_when_any_requested_reference_is_present(self):
         """This checks that the references any facet returns only the resource that contains at least one requested reference label."""
