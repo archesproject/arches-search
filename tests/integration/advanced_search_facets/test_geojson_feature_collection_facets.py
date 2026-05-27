@@ -144,7 +144,7 @@ class GeojsonFeatureCollectionAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
         cls.tile_without_geojson.save()
 
-        call_command("search", "reindex_database")
+        call_command("arches_search", "reindex_database")
 
     def test_geo_contains_with_point_finds_the_polygon_that_contains_the_point(self):
         """GEO_CONTAINS returns only the resource whose stored polygon contains the search point."""

@@ -114,7 +114,7 @@ class BooleanAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
         cls.tile_without_value.save()
 
-        call_command("search", "reindex_database")
+        call_command("arches_search", "reindex_database")
 
     def test_is_true_matches_the_resource_with_a_true_boolean_value(self):
         """This checks that the is true facet returns only the resource whose indexed boolean value is true."""

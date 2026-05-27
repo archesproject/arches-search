@@ -1,4 +1,4 @@
-"""Tests for the search management command."""
+"""Tests for the arches_search management command."""
 
 import io
 import uuid
@@ -15,7 +15,7 @@ from arches.app.models.models import (
 )
 from arches.app.models.system_settings import settings
 
-from arches_search.management.commands.search import (
+from arches_search.management.commands.arches_search import (
     SEARCH_MODELS,
     _build_nodegroup_cache,
 )
@@ -62,10 +62,10 @@ class SearchCommandTestCaseBase(TestCase):
 
 
 class ReindexHappyPathTests(SearchCommandTestCaseBase):
-    """End-to-end behavior of `search reindex_database`."""
+    """End-to-end behavior of `arches_search reindex_database`."""
 
     def test_reindex_populates_term_search_for_string_tile(self):
-        call_command("search", "reindex_database", stdout=io.StringIO())
+        call_command("arches_search", "reindex_database", stdout=io.StringIO())
 
         rows = TermSearch.objects.filter(tileid=self.tile.tileid)
         self.assertTrue(rows.exists())
@@ -80,7 +80,7 @@ class TransactionDetectionTests(SearchCommandTestCaseBase):
 
     def test_open_transaction_triggers_keep_indexes_fallback(self):
         out = io.StringIO()
-        call_command("search", "reindex_database", stdout=out)
+        call_command("arches_search", "reindex_database", stdout=out)
         output = out.getvalue()
 
         self.assertIn("Detected open transaction", output)
@@ -93,7 +93,7 @@ class TransactionDetectionTests(SearchCommandTestCaseBase):
         """If keep-indexes is set explicitly, no transaction-detection notice
         should fire (the check short-circuits)."""
         out = io.StringIO()
-        call_command("search", "reindex_database", "--keep-indexes", stdout=out)
+        call_command("arches_search", "reindex_database", "--keep-indexes", stdout=out)
         output = out.getvalue()
 
         self.assertNotIn("Detected open transaction", output)
@@ -189,7 +189,7 @@ class DeleteIndexesTests(SearchCommandTestCaseBase):
         subsequent TRUNCATE), but we can at least verify the call doesn't
         error against each table name in SEARCH_MODELS.
         """
-        from arches_search.management.commands.search import Command
+        from arches_search.management.commands.arches_search import Command
 
         Command().delete_indexes()
 
