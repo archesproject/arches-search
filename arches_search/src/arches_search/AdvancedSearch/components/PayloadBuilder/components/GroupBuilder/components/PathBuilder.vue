@@ -20,6 +20,7 @@ type NodeSummary = {
     semantic_parent_id: string | null;
     graph_slug?: string;
     config?: unknown;
+    selectable?: boolean;
     [key: string]: unknown;
 };
 
@@ -201,7 +202,7 @@ function isNodeSelectable(
     node: NodeSummary,
     graphPair: [string, string] | undefined,
 ): boolean {
-    if (node.datatype === DATATYPE_SEMANTIC) {
+    if (node.datatype === DATATYPE_SEMANTIC || node.selectable === false) {
         return false;
     }
 
@@ -252,17 +253,6 @@ function buildTree(
             (parentNode?.children ?? roots).push(treeNode);
         } else {
             roots.push(treeNode);
-        }
-    }
-
-    // Card-group wrapper nodes share the same alias as their first child — not user-selectable
-    for (const node of Object.values(nodeKeyToPathNode)) {
-        if (
-            node.children.some((child) => {
-                return child.data.alias === node.data.alias;
-            })
-        ) {
-            node.selectable = false;
         }
     }
 
