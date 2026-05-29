@@ -205,7 +205,11 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
             semantic_parent_id = card_representative_id_by_nodegroup_id.get(
                 node.nodegroup_id
             )
-            node_sortorder = node.sortorder
+            node_sortorder = (
+                primary_card_node_widget.sortorder
+                if primary_card_node_widget
+                else node.sortorder
+            )
 
         serialized_nodes.append(
             {
