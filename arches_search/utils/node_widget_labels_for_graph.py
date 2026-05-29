@@ -30,7 +30,9 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
         if nodegroup_id is not None
     }
 
-    card_title_by_nodegroup_id = _fetch_card_titles(nodegroup_ids_in_graph)
+    card_title_by_nodegroup_id, card_sortorder_by_nodegroup_id = _fetch_card_metadata(
+        nodegroup_ids_in_graph
+    )
     parent_nodegroup_id_by_nodegroup_id, cardinality_by_nodegroup_id = (
         _fetch_nodegroup_metadata(nodegroup_ids_in_graph)
     )
@@ -85,7 +87,9 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
                 "description": "",
                 "datatype": "semantic",
                 "graph_id": str(graph_id),
-                "sortorder": node_sortorder_by_node_id.get(nodegroup_id, 0),
+                "sortorder": card_sortorder_by_nodegroup_id.get(
+                    nodegroup_id, node_sortorder_by_node_id.get(nodegroup_id, 0)
+                ),
                 "config": None,
                 "card_x_node_x_widget_label": card_label,
                 "semantic_parent_id": card_representative_id_by_nodegroup_id.get(
@@ -154,7 +158,9 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
                     "description": str(node.description or ""),
                     "datatype": node.datatype,
                     "graph_id": str(node.graph_id),
-                    "sortorder": node.sortorder,
+                    "sortorder": card_sortorder_by_nodegroup_id.get(
+                        node.nodegroup_id, node.sortorder
+                    ),
                     "config": None,
                     "card_x_node_x_widget_label": card_group_label,
                     "semantic_parent_id": card_representative_id_by_nodegroup_id.get(
@@ -191,11 +197,15 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
             semantic_parent_id = card_representative_id_by_nodegroup_id.get(
                 parent_nodegroup_id
             )
+            node_sortorder = card_sortorder_by_nodegroup_id.get(
+                node.nodegroup_id, node.sortorder
+            )
         else:
             node_display_label = primary_widget_label or str(node.name)
             semantic_parent_id = card_representative_id_by_nodegroup_id.get(
                 node.nodegroup_id
             )
+            node_sortorder = node.sortorder
 
         serialized_nodes.append(
             {
@@ -205,7 +215,7 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
                 "description": str(node.description or ""),
                 "datatype": node.datatype,
                 "graph_id": str(node.graph_id),
-                "sortorder": node.sortorder,
+                "sortorder": node_sortorder,
                 "config": node.config,
                 "card_x_node_x_widget_label": node_display_label,
                 "semantic_parent_id": semantic_parent_id,
@@ -216,14 +226,17 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
     return serialized_nodes
 
 
-def _fetch_card_titles(nodegroup_ids):
-    return {
-        row["nodegroup_id"]: str(row["name"])
-        for row in arches_models.Card.objects.filter(nodegroup_id__in=nodegroup_ids)
+def _fetch_card_metadata(nodegroup_ids):
+    rows = list(
+        arches_models.Card.objects.filter(nodegroup_id__in=nodegroup_ids)
         .order_by("nodegroup_id", "sortorder")
         .distinct("nodegroup_id")
-        .values("nodegroup_id", "name")
-    }
+        .values("nodegroup_id", "name", "sortorder")
+    )
+    return (
+        {row["nodegroup_id"]: str(row["name"]) for row in rows},
+        {row["nodegroup_id"]: row["sortorder"] for row in rows},
+    )
 
 
 def _fetch_nodegroup_metadata(nodegroup_ids):
