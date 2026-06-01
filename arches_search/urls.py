@@ -11,6 +11,9 @@ from arches_search.views.api.advanced_search_facet import (
 )
 from arches_search.views.api.graph_models import GraphModelsAPI
 from arches_search.views.api.node_metadata_for_payload import NodeMetadataForPayloadAPI
+from arches_search.views.api.node_date_bounds_for_graph import (
+    NodeDateBoundsForGraphAPI,
+)
 from arches_search.views.api.nodes_with_widget_labels_for_graph import (
     NodesWithWidgetLabelsForGraphAPI,
 )
@@ -73,6 +76,11 @@ urlpatterns = [
         "api/advanced-search/graph/<uuid:graph_id>/relatable-nodes-tree",
         RelatableNodesTreeForGraphAPI.as_view(),
         name="api-relatable-nodes-tree-for-graph",
+    ),
+    path(
+        "api/advanced-search/graph/<uuid:graph_id>/date-bounds",
+        NodeDateBoundsForGraphAPI.as_view(),
+        name="node_date_bounds_for_graph",
     ),
     path(
         "api/advanced-search/graph/<uuid:graph_id>/search-config",

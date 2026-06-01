@@ -360,6 +360,10 @@ class DateRangeSearch(models.Model):
                     "end_value",
                 ]
             ),
+            models.Index(
+                fields=["graph_slug", "node_alias", "end_value"],
+                name="as_dr_end_val_idx",
+            ),
         ]
 
     normalize_operands = DateSearch.normalize_operands
