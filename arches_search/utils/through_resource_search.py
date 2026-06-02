@@ -18,7 +18,7 @@ def get_related_resources_by_text(search_terms, target_graphid):
     result = None
 
     for term in search_terms:
-        sq = SearchQuery(term, search_type="plain")
+        sq = SearchQuery(term, search_type="plain", config="english")
 
         # Resources matching this search term (any graph)
         initial_match_ids = TermSearch.objects.filter(search_vector=sq).values(
