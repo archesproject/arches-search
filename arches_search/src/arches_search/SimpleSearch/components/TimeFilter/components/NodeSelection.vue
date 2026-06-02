@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Chip from "primevue/chip";
@@ -9,6 +9,11 @@ import type {
     TimeFilterNodeSummary,
     TimeFilterTreeNode,
 } from "@/arches_search/SimpleSearch/components/TimeFilter/types.ts";
+
+type CheckboxState = Record<
+    string,
+    { checked: boolean; partialChecked: boolean }
+>;
 
 const DATE_DATATYPES = ["date", "edtf"] as const;
 const NODE_SELECT_ID = "simple-search-time-filter-node-selection";
@@ -25,8 +30,6 @@ const emit = defineEmits<{
 }>();
 
 const { $gettext, interpolate } = useGettext();
-
-const transientSelectedKeys = ref<Record<string, boolean>>({});
 
 const nodeOptions = computed<TimeFilterTreeNode[]>(() =>
     buildTree(props.nodes),
@@ -47,10 +50,6 @@ const expandedKeys = computed<Record<string, boolean>>(() => {
     return keys;
 });
 
-const nodeLabelByAlias = computed<Record<string, string>>(() =>
-    Object.fromEntries(props.nodes.map((n) => [n.alias, getDisplayLabel(n)])),
-);
-
 const nodeByKey = computed<Map<string, TimeFilterTreeNode>>(() => {
     const map = new Map<string, TimeFilterTreeNode>();
     function collect(nodes: TimeFilterTreeNode[]): void {
@@ -63,30 +62,86 @@ const nodeByKey = computed<Map<string, TimeFilterTreeNode>>(() => {
     return map;
 });
 
-const selectedKeys = computed<Record<string, boolean>>({
-    get(): Record<string, boolean> {
-        return transientSelectedKeys.value;
-    },
-    set(newKeys: unknown): void {
-        const keys = Object(newKeys) as Record<string, boolean>;
-        transientSelectedKeys.value = keys;
+const nodePathByAlias = computed<Record<string, string>>(() => {
+    const nodeById = new Map(props.nodes.map((node) => [node.id, node]));
 
-        const selectedKey = Object.keys(keys).find((k) => keys[k] === true);
-        if (selectedKey) {
-            const node = nodeByKey.value.get(selectedKey);
-            if (node?.selectable !== false) {
-                const alias = node!.data.alias;
-                if (!props.modelValue.includes(alias)) {
-                    emit("update:modelValue", [...props.modelValue, alias]);
-                }
+    function buildPath(node: TimeFilterNodeSummary): string {
+        const labels: string[] = [];
+        let current: TimeFilterNodeSummary | undefined = node;
+        while (current) {
+            labels.unshift(getDisplayLabel(current));
+            if (!current.semantic_parent_id) break;
+            current = nodeById.get(current.semantic_parent_id);
+        }
+        return labels.join(" > ");
+    }
+
+    return Object.fromEntries(
+        props.nodes
+            .filter((node) => node.alias)
+            .map((node) => [node.alias, buildPath(node)]),
+    );
+});
+
+const selectedKeys = computed<CheckboxState>(() => {
+    const selectedAliasSet = new Set(props.modelValue);
+
+    function processNode(node: TimeFilterTreeNode): {
+        state: CheckboxState;
+        selected: number;
+        total: number;
+    } {
+        if (node.children.length === 0) {
+            const isChecked = selectedAliasSet.has(node.data.alias);
+            const state: CheckboxState = {};
+            if (isChecked) {
+                state[node.key] = { checked: true, partialChecked: false };
             }
+            return { state, selected: isChecked ? 1 : 0, total: 1 };
         }
 
-        void nextTick(() => {
-            transientSelectedKeys.value = {};
-        });
-    },
+        let selected = 0;
+        let total = 0;
+        const childState: CheckboxState = {};
+        for (const child of node.children) {
+            const childStats = processNode(child);
+            selected += childStats.selected;
+            total += childStats.total;
+            Object.assign(childState, childStats.state);
+        }
+
+        const parentState: CheckboxState = {};
+        if (selected === total && total > 0) {
+            parentState[node.key] = { checked: true, partialChecked: false };
+        } else if (selected > 0) {
+            parentState[node.key] = { checked: false, partialChecked: true };
+        }
+
+        return { state: { ...childState, ...parentState }, selected, total };
+    }
+
+    const result: CheckboxState = {};
+
+    for (const root of nodeOptions.value) {
+        Object.assign(result, processNode(root).state);
+    }
+
+    return result;
 });
+
+function onKeysChanged(newKeys: CheckboxState): void {
+    const aliases: string[] = [];
+    for (const [key, node] of nodeByKey.value) {
+        if (
+            node.selectable !== false &&
+            node.data.alias &&
+            newKeys[key]?.checked
+        ) {
+            aliases.push(node.data.alias);
+        }
+    }
+    emit("update:modelValue", aliases);
+}
 
 function isNodeSelectable(node: TimeFilterNodeSummary): boolean {
     return (DATE_DATATYPES as readonly string[]).includes(node.datatype);
@@ -96,18 +151,24 @@ function getDisplayLabel(node: TimeFilterNodeSummary): string {
     return node.card_x_node_x_widget_label || node.name || node.alias;
 }
 
-function compareNodes(a: TimeFilterTreeNode, b: TimeFilterTreeNode): number {
-    const sortDiff = (a.data.sortorder ?? 0) - (b.data.sortorder ?? 0);
-    return sortDiff !== 0 ? sortDiff : a.label.localeCompare(b.label);
+function compareNodes(
+    nodeA: TimeFilterTreeNode,
+    nodeB: TimeFilterTreeNode,
+): number {
+    const sortDiff = (nodeA.data.sortorder ?? 0) - (nodeB.data.sortorder ?? 0);
+    if (sortDiff !== 0) return sortDiff;
+    return nodeA.label.localeCompare(nodeB.label);
 }
 
 function pruneUnselectable(nodes: TimeFilterTreeNode[]): TimeFilterTreeNode[] {
-    return nodes.flatMap((node) => {
-        const children = pruneUnselectable(node.children);
-        return node.selectable !== false || children.length > 0
-            ? [{ ...node, children }]
-            : [];
-    });
+    return nodes
+        .map((node) => ({
+            ...node,
+            children: pruneUnselectable(node.children),
+        }))
+        .filter(
+            (node) => node.selectable !== false || node.children.length > 0,
+        );
 }
 
 function buildTree(
@@ -128,10 +189,11 @@ function buildTree(
 
     for (const summary of nodeSummaries) {
         const node = nodeById[summary.id]!;
-        if (summary.semantic_parent_id) {
-            (nodeById[summary.semantic_parent_id]?.children ?? roots).push(
-                node,
-            );
+        if (
+            summary.semantic_parent_id &&
+            nodeById[summary.semantic_parent_id]
+        ) {
+            nodeById[summary.semantic_parent_id]!.children.push(node);
         } else {
             roots.push(node);
         }
@@ -154,14 +216,10 @@ function buildTree(
     return pruneUnselectable(roots);
 }
 
-function getNodeLabel(alias: string): string {
-    return nodeLabelByAlias.value[alias] ?? alias;
-}
-
 function removeNode(alias: string): void {
     emit(
         "update:modelValue",
-        props.modelValue.filter((v) => v !== alias),
+        props.modelValue.filter((selectedAlias) => selectedAlias !== alias),
     );
 }
 </script>
@@ -181,9 +239,9 @@ function removeNode(alias: string): void {
             </label>
 
             <TreeSelect
-                v-model="selectedKeys"
+                :model-value="selectedKeys"
                 :input-id="NODE_SELECT_ID"
-                selection-mode="single"
+                selection-mode="checkbox"
                 style="font-size: 1.2rem"
                 :disabled="!hasSelectableNodes"
                 filter
@@ -193,10 +251,11 @@ function removeNode(alias: string): void {
                 :expanded-keys="expandedKeys"
                 :options="nodeOptions"
                 class="node-selection__select"
+                @update:model-value="onKeysChanged"
             >
-                <template #value="{ value, placeholder }">
-                    <span v-if="value && value.length > 0">
-                        {{ value[0].label }}
+                <template #value="{ value: selectedNodes, placeholder }">
+                    <span v-if="selectedNodes && selectedNodes.length > 0">
+                        {{ selectedNodes[0].label }}
                     </span>
                     <span v-else>{{ placeholder }}</span>
                 </template>
@@ -212,7 +271,7 @@ function removeNode(alias: string): void {
             <Chip
                 v-for="alias in props.modelValue"
                 :key="alias"
-                :label="getNodeLabel(alias)"
+                :label="nodePathByAlias[alias] ?? alias"
                 removable
                 remove-icon="pi pi-times"
                 class="node-selection__chip"

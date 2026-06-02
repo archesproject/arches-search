@@ -150,6 +150,34 @@ export async function getAdvancedSearchFacets() {
     return parsed;
 }
 
+export async function getDateBoundsForGraphId(
+    graphId: string,
+    nodeAliases: string[] = [],
+): Promise<{ min_value: number | null; max_value: number | null }> {
+    const baseUrl = generateArchesURL(
+        "arches_search:node_date_bounds_for_graph",
+        { graph_id: graphId },
+    );
+
+    let url = baseUrl;
+    if (nodeAliases.length > 0) {
+        const params = new URLSearchParams();
+        for (const alias of nodeAliases) {
+            params.append("node_alias", alias);
+        }
+        url = `${baseUrl}?${params.toString()}`;
+    }
+
+    const response = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+    });
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+    return parsed;
+}
+
 export async function getGraphs() {
     const response = await fetch(
         generateArchesURL("arches_search:graph_models"),

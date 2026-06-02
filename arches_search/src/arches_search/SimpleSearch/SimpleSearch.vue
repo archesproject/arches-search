@@ -126,8 +126,19 @@ watch(
     () => activeGraph.value,
     async (graph) => {
         if (!graph || !graph.id) {
+            for (const node of nodeFilterConfigNodes.value) {
+                clearQuery(node.node_alias);
+            }
+            clearQuery(TIME_FILTER_QUERY_KEY);
+
+            selectedFilterOptions.value = {};
             attributeFilterSections.value = [];
             nodeFilterConfigNodes.value = [];
+
+            if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
+                closeSidePanel();
+            }
+
             return;
         }
         try {
@@ -400,6 +411,7 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             :show-saved-searches="isSavedSearchesOpen"
             :show-export-panel="isExportPanelOpen"
             :hide-filters-button="!activeGraph"
+            :hide-time-button="!activeGraph"
             @update:sort-value="onSortValueUpdate"
             @save-search="showSaveDialog = true"
             @toggle-filters="onToggleAttributeFilters"
@@ -452,7 +464,6 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                             :graph-slug="activeGraphSlug"
                             :graph-id="activeGraphId"
                             :graph-label="activeGraphLabel"
-                            :is-open="isTimeFilterOpen"
                             :model-value="selectedTimeFilterClause"
                             @update:model-value="onTimeFilterUpdate"
                             @remove="onRemoveTimeFilter"

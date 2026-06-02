@@ -20,6 +20,7 @@ const props = defineProps<{
     showSavedSearches: boolean;
     showExportPanel: boolean;
     hideFiltersButton?: boolean;
+    hideTimeButton?: boolean;
 }>();
 
 const sortOptions = computed<SortOption[]>(() => [
@@ -81,14 +82,7 @@ defineEmits<{
                 @click="$emit('toggle-filters')"
             />
             <Button
-                :label="showMap ? $gettext('Hide Map') : $gettext('Show Map')"
-                icon="pi pi-map"
-                icon-pos="left"
-                size="small"
-                :class="['toolbar-btn', { active: showMap || hasMapFilter }]"
-                @click="$emit('toggle-map')"
-            />
-            <Button
+                v-if="!hideTimeButton"
                 :label="
                     showTime ? $gettext('Hide Time') : $gettext('Show Time')
                 "
@@ -97,6 +91,14 @@ defineEmits<{
                 size="small"
                 :class="['toolbar-btn', { active: showTime || hasTimeFilter }]"
                 @click="$emit('toggle-time')"
+            />
+            <Button
+                :label="showMap ? $gettext('Hide Map') : $gettext('Show Map')"
+                icon="pi pi-map"
+                icon-pos="left"
+                size="small"
+                :class="['toolbar-btn', { active: showMap || hasMapFilter }]"
+                @click="$emit('toggle-map')"
             />
             <Button
                 :label="$gettext('Saved Searches')"

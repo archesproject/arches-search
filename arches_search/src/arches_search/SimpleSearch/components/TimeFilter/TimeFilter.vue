@@ -1,30 +1,44 @@
 <script setup lang="ts">
 import dayjs from "dayjs";
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import DatePicker from "primevue/datepicker";
+import InputNumber from "primevue/inputnumber";
+import Message from "primevue/message";
+import Skeleton from "primevue/skeleton";
 
 import NodeSelection from "@/arches_search/SimpleSearch/components/TimeFilter/components/NodeSelection.vue";
 import TimeSlider from "@/arches_search/SimpleSearch/components/TimeFilter/components/TimeSlider.vue";
+import {
+    addDays,
+    clamp,
+    countDaysBetween,
+    endOfYear,
+    normalizeRange,
+    parseSortableDate,
+    startOfYear,
+    toLocalISODateString,
+} from "@/arches_search/SimpleSearch/components/TimeFilter/date-utils.ts";
 import {
     buildDateSearchClause,
     buildNodeDateSearchClause,
     parseStoredDate,
 } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
-import { getNodesForGraphId } from "@/arches_search/AdvancedSearch/api.ts";
+import {
+    getDateBoundsForGraphId,
+    getNodesForGraphId,
+} from "@/arches_search/AdvancedSearch/api.ts";
+
+import { HISTORICAL_CUTOFF_YEAR } from "@/arches_search/SimpleSearch/components/TimeFilter/constants.ts";
 
 import type { TimeFilterNodeSummary } from "@/arches_search/SimpleSearch/components/TimeFilter/types.ts";
 import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
 
-const EMIT_DEBOUNCE_MS = 400;
-const SLIDER_START_DATE = "1967-04-01";
-
-const { graphSlug, graphId, graphLabel, isOpen, modelValue } = defineProps<{
+const { graphSlug, graphId, graphLabel, modelValue } = defineProps<{
     graphSlug: string | null;
     graphId: string | null;
     graphLabel: string | null;
-    isOpen: boolean;
     modelValue: LiteralClause | null;
 }>();
 
@@ -35,267 +49,319 @@ const emit = defineEmits<{
 
 const { $gettext } = useGettext();
 
-const selectedRange = ref<[Date, Date]>(defaultRange());
+const selectedRange = ref<[Date, Date]>([new Date(), new Date()]);
 const selectedNodeAliases = ref<string[]>([]);
 const graphNodes = ref<TimeFilterNodeSummary[]>([]);
 const isLoadingNodes = ref(false);
-const isFilterActive = ref(false);
+const isLoadingBounds = ref(false);
+const noBoundsData = ref(false);
+const hasGraphDateData = ref(true);
+const isUserInitiated = ref(false);
+const sliderBounds = ref<[Date, Date]>([new Date(), new Date()]);
 
-let emitTimer: ReturnType<typeof setTimeout> | null = null;
-let lastEmittedJson = "";
-let nodeLoadId = 0;
-
-const sliderBounds = computed<[Date, Date]>(() => [
-    dayjs(SLIDER_START_DATE).startOf("day").toDate(),
-    dayjs().startOf("day").toDate(),
-]);
+const isLoading = computed<boolean>(
+    () => isLoadingNodes.value || isLoadingBounds.value,
+);
 
 const sliderValue = computed<[number, number]>(() => {
-    const start = sliderBounds.value[0];
-    const total = dayjs(sliderBounds.value[1]).diff(start, "day");
+    const startDate = sliderBounds.value[0];
+    const totalDays = countDaysBetween(startDate, sliderBounds.value[1]);
     return [
-        clamp(dayjs(selectedRange.value[0]).diff(start, "day"), 0, total),
-        clamp(dayjs(selectedRange.value[1]).diff(start, "day"), 0, total),
+        clamp(
+            countDaysBetween(startDate, selectedRange.value[0]),
+            0,
+            totalDays,
+        ),
+        clamp(
+            countDaysBetween(startDate, selectedRange.value[1]),
+            0,
+            totalDays,
+        ),
     ];
 });
+
+const isSingleDay = computed<boolean>(() =>
+    dayjs(sliderBounds.value[0]).isSame(sliderBounds.value[1], "day"),
+);
+
+const fromYear = computed<number>(() => selectedRange.value[0].getFullYear());
+const toYear = computed<number>(() => selectedRange.value[1].getFullYear());
+const isHistoricalFrom = computed<boolean>(
+    () => fromYear.value < HISTORICAL_CUTOFF_YEAR,
+);
+const isHistoricalTo = computed<boolean>(
+    () => toYear.value < HISTORICAL_CUTOFF_YEAR,
+);
+
+const noBoundsDataMessage = computed<string>(() => {
+    if (hasGraphDateData.value) {
+        return $gettext(
+            "No date data found for the selected nodes. Try changing your node selection.",
+        );
+    }
+    return $gettext("This resource type has no date data.");
+});
+
+watch(
+    [() => graphSlug, selectedRange, selectedNodeAliases, isUserInitiated],
+    () => emit("update:modelValue", buildClauses()),
+    { immediate: true },
+);
 
 watch(
     () => modelValue,
     (clause) => {
-        isFilterActive.value = Boolean(clause);
-        lastEmittedJson = "";
+        if (clause) isUserInitiated.value = true;
+
+        const [boundsStart, boundsEnd] = sliderBounds.value;
+
+        let from: Date;
+        let to: Date;
 
         if (clause) {
-            lastEmittedJson = JSON.stringify([clause]);
-        }
-
-        const [defaultFrom, defaultTo] = defaultRange();
-        let from = defaultFrom;
-        let to = defaultTo;
-
-        if (clause) {
-            from = parseStoredDate(clause.operands[0]?.value) ?? defaultFrom;
+            from = parseStoredDate(clause.operands[0]?.value) ?? boundsStart;
             to = parseStoredDate(clause.operands[1]?.value) ?? from;
+        } else {
+            from = boundsStart;
+            to = boundsEnd;
         }
+        const [nextFrom, nextTo] = normalizeRange(from, to);
 
-        const next = normalizeRange(
-            dayjs(from).startOf("day").toDate(),
-            dayjs(to).startOf("day").toDate(),
-        );
+        const unchanged =
+            dayjs(nextFrom).isSame(selectedRange.value[0], "day") &&
+            dayjs(nextTo).isSame(selectedRange.value[1], "day");
+        if (unchanged) return;
 
-        if (
-            dayjs(next[0]).isSame(selectedRange.value[0], "day") &&
-            dayjs(next[1]).isSame(selectedRange.value[1], "day")
-        ) {
-            return;
-        }
-
-        selectedRange.value = next;
+        selectedRange.value = [nextFrom, nextTo];
     },
     { immediate: true },
 );
 
 watch(
     () => graphId,
-    async (id) => {
-        const thisLoad = ++nodeLoadId;
+    async (incomingGraphId, previousGraphId) => {
         selectedNodeAliases.value = [];
+        isUserInitiated.value = false;
 
-        if (!id) {
+        if (!incomingGraphId) {
             graphNodes.value = [];
             isLoadingNodes.value = false;
+            isLoadingBounds.value = false;
+            noBoundsData.value = false;
             return;
         }
 
+        hasGraphDateData.value = true;
         isLoadingNodes.value = true;
-        try {
-            const nodesMap = await getNodesForGraphId(id);
-            if (thisLoad !== nodeLoadId) return;
+        isLoadingBounds.value = true;
+
+        const [nodesResult] = await Promise.allSettled([
+            getNodesForGraphId(incomingGraphId),
+            loadBoundsForAliases(
+                incomingGraphId,
+                [],
+                Boolean(previousGraphId) || !modelValue,
+            ),
+        ]);
+
+        isLoadingNodes.value = false;
+        if (nodesResult.status === "fulfilled") {
             graphNodes.value = Object.values(
-                nodesMap,
+                nodesResult.value,
             ) as TimeFilterNodeSummary[];
-        } catch {
-            if (thisLoad !== nodeLoadId) return;
+        } else {
             graphNodes.value = [];
-        } finally {
-            if (thisLoad === nodeLoadId) isLoadingNodes.value = false;
         }
     },
     { immediate: true },
 );
 
-watch(
-    () => isOpen,
-    (isOpen) => {
-        if (isOpen) isFilterActive.value = true;
-    },
-);
+async function loadBoundsForAliases(
+    id: string,
+    aliases: string[],
+    resetRange: boolean,
+): Promise<void> {
+    isLoadingBounds.value = true;
+    noBoundsData.value = false;
+    try {
+        const bounds = await getDateBoundsForGraphId(id, aliases);
 
-watch(
-    [selectedRange, () => graphSlug, selectedNodeAliases, () => isOpen],
-    () => {
-        if (!graphSlug || !isFilterActive.value) return;
+        if (bounds.min_value === null || bounds.max_value === null) {
+            noBoundsData.value = true;
+            if (aliases.length === 0) hasGraphDateData.value = false;
+            return;
+        }
 
-        const nextClauses = buildClauses();
-        if (!nextClauses.length) return;
-
-        const nextJson = JSON.stringify(nextClauses);
-        if (nextJson === lastEmittedJson) return;
-
-        if (emitTimer !== null) clearTimeout(emitTimer);
-        emitTimer = setTimeout(() => {
-            lastEmittedJson = nextJson;
-            emit("update:modelValue", nextClauses);
-            emitTimer = null;
-        }, EMIT_DEBOUNCE_MS);
-    },
-    { immediate: true },
-);
-
-onUnmounted(() => {
-    if (emitTimer !== null) clearTimeout(emitTimer);
-});
-
-function clamp(value: number, min: number, max: number): number {
-    return Math.min(Math.max(value, min), max);
-}
-
-function normalizeRange(a: Date, b: Date): [Date, Date] {
-    const start = dayjs(a).startOf("day");
-    const end = dayjs(b).startOf("day");
-
-    if (start.isAfter(end)) {
-        return [end.toDate(), start.toDate()];
+        const minDate = parseSortableDate(bounds.min_value);
+        const maxDate = parseSortableDate(bounds.max_value);
+        sliderBounds.value = [minDate, maxDate];
+        if (resetRange) selectedRange.value = [minDate, maxDate];
+    } finally {
+        isLoadingBounds.value = false;
     }
-
-    return [start.toDate(), end.toDate()];
-}
-
-function defaultRange(): [Date, Date] {
-    const boundsStart = dayjs(SLIDER_START_DATE).startOf("day");
-    const total = dayjs().startOf("day").diff(boundsStart, "day");
-    return [
-        boundsStart.add(Math.floor(total / 3), "day").toDate(),
-        boundsStart.add(Math.ceil((total * 2) / 3), "day").toDate(),
-    ];
 }
 
 function buildClauses(): LiteralClause[] {
-    const slug = graphSlug;
-    if (!slug) return [];
+    if (!graphSlug || !isUserInitiated.value) return [];
 
     const [rangeStart, rangeEnd] = normalizeRange(
         selectedRange.value[0],
         selectedRange.value[1],
     );
-    const from = dayjs(rangeStart).format("YYYY-MM-DD");
-    const to = dayjs(rangeEnd).format("YYYY-MM-DD");
+    const from = toLocalISODateString(rangeStart);
+    const to = toLocalISODateString(rangeEnd);
+    const nodeAliases = selectedNodeAliases.value;
 
-    if (selectedNodeAliases.value.length === 0) {
-        return [buildDateSearchClause(slug, "BETWEEN", from, to)];
+    if (nodeAliases.length === 0) {
+        return [buildDateSearchClause(graphSlug, "BETWEEN", from, to)];
     }
-
-    return selectedNodeAliases.value.map((alias) =>
-        buildNodeDateSearchClause(slug, alias, "BETWEEN", from, to),
+    return nodeAliases.map((alias) =>
+        buildNodeDateSearchClause(graphSlug, alias, "BETWEEN", from, to),
     );
 }
 
 function onDateFromChange(value: unknown): void {
     if (!(value instanceof Date)) return;
-    isFilterActive.value = true;
+    isUserInitiated.value = true;
     selectedRange.value = normalizeRange(value, selectedRange.value[1]);
 }
 
 function onDateToChange(value: unknown): void {
     if (!(value instanceof Date)) return;
-    isFilterActive.value = true;
+    isUserInitiated.value = true;
     selectedRange.value = normalizeRange(selectedRange.value[0], value);
 }
 
+function onYearFromChange(year: number | null): void {
+    if (year === null) return;
+    isUserInitiated.value = true;
+    selectedRange.value = normalizeRange(
+        startOfYear(year),
+        selectedRange.value[1],
+    );
+}
+
+function onYearToChange(year: number | null): void {
+    if (year === null) return;
+    isUserInitiated.value = true;
+    selectedRange.value = normalizeRange(
+        selectedRange.value[0],
+        endOfYear(year),
+    );
+}
+
 function onSliderUpdate(offsets: [number, number]): void {
-    isFilterActive.value = true;
+    isUserInitiated.value = true;
     selectedRange.value = [
-        dayjs(sliderBounds.value[0])
-            .add(offsets[0], "day")
-            .startOf("day")
-            .toDate(),
-        dayjs(sliderBounds.value[0])
-            .add(offsets[1], "day")
-            .startOf("day")
-            .toDate(),
+        addDays(sliderBounds.value[0], offsets[0]),
+        addDays(sliderBounds.value[0], offsets[1]),
     ];
 }
 
-function onNodeSelectionUpdate(aliases: string[]): void {
-    isFilterActive.value = true;
+async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
+    isUserInitiated.value = true;
     selectedNodeAliases.value = aliases;
+    if (graphId) await loadBoundsForAliases(graphId, aliases, true);
 }
 </script>
 
 <template>
     <div class="time-filter">
-        <div
-            v-if="graphSlug"
-            class="time-filter-content"
-        >
-            <h3 class="time-filter-title">
-                {{ $gettext("Time Filter") }}
-            </h3>
+        <h3 class="time-filter-title">
+            {{ $gettext("Time Filter") }}
+        </h3>
 
-            <NodeSelection
-                v-if="graphId"
-                :key="graphId"
-                :model-value="selectedNodeAliases"
-                :graph-label="graphLabel"
-                :nodes="graphNodes"
-                :loading="isLoadingNodes"
-                class="time-filter-section"
-                @update:model-value="onNodeSelectionUpdate"
+        <Transition name="loading-skeleton">
+            <Skeleton
+                v-if="isLoading"
+                style="height: 100%"
             />
+        </Transition>
 
-            <section class="time-filter-section">
+        <template v-if="!isLoading">
+            <section
+                v-if="graphId && hasGraphDateData"
+                class="time-filter-section"
+            >
+                <NodeSelection
+                    :key="graphId"
+                    :model-value="selectedNodeAliases"
+                    :graph-label="graphLabel"
+                    :nodes="graphNodes"
+                    :loading="isLoadingNodes"
+                    @update:model-value="onNodeSelectionUpdate"
+                />
+            </section>
+
+            <Message
+                v-if="noBoundsData"
+                severity="warn"
+                :closable="false"
+                class="time-filter-no-data-message"
+            >
+                {{ noBoundsDataMessage }}
+            </Message>
+
+            <section
+                v-else
+                class="time-filter-section"
+            >
                 <h4 class="time-filter-section-heading">
                     {{ $gettext("Time Span") }}
                 </h4>
-
                 <div class="time-filter-section-body">
                     <TimeSlider
                         :model-value="sliderValue"
                         :bounds="sliderBounds"
+                        :disabled="isSingleDay"
                         @update:model-value="onSliderUpdate"
                     />
-
                     <div class="time-filter-calendar-row">
+                        <InputNumber
+                            v-if="isHistoricalFrom"
+                            :model-value="fromYear"
+                            class="time-filter-year-input"
+                            :placeholder="$gettext('From year...')"
+                            :use-grouping="false"
+                            :disabled="isSingleDay"
+                            @update:model-value="onYearFromChange"
+                        />
                         <DatePicker
+                            v-else
                             :model-value="selectedRange[0]"
                             class="time-filter-date-picker"
                             :placeholder="$gettext('From...')"
                             :show-icon="true"
                             icon-display="input"
                             date-format="M d, yy"
+                            :disabled="isSingleDay"
                             @update:model-value="onDateFromChange"
                         />
 
+                        <InputNumber
+                            v-if="isHistoricalTo"
+                            :model-value="toYear"
+                            class="time-filter-year-input"
+                            :placeholder="$gettext('To year...')"
+                            :use-grouping="false"
+                            :disabled="isSingleDay"
+                            @update:model-value="onYearToChange"
+                        />
                         <DatePicker
+                            v-else
                             :model-value="selectedRange[1]"
                             class="time-filter-date-picker"
                             :placeholder="$gettext('To...')"
                             :show-icon="true"
                             icon-display="input"
                             date-format="M d, yy"
+                            :disabled="isSingleDay"
                             @update:model-value="onDateToChange"
                         />
                     </div>
                 </div>
             </section>
-        </div>
-
-        <span
-            v-else
-            class="time-filter-empty-state"
-        >
-            {{ $gettext("Select a resource type to use the time filter.") }}
-        </span>
+        </template>
     </div>
 </template>
 
@@ -308,12 +374,7 @@ function onNodeSelectionUpdate(aliases: string[]): void {
     background-color: var(--p-content-background);
     font-size: 1rem;
     line-height: 1.45;
-}
-
-.time-filter-content {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
+    height: 100%;
 }
 
 .time-filter-title {
@@ -359,26 +420,39 @@ function onNodeSelectionUpdate(aliases: string[]): void {
     font-size: 1rem;
 }
 
-.time-filter-date-picker :deep(.p-inputtext),
-.time-filter-date-picker :deep(.p-datepicker-dropdown) {
-    font-size: 1rem;
+.time-filter-date-picker :deep(.p-datepicker) {
+    width: 100%;
 }
 
 .time-filter-date-picker :deep(.p-inputtext) {
+    font-size: 1rem;
+    min-height: 3rem;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+.time-filter-year-input {
+    flex: 1 1 10rem;
+    min-width: 10rem;
+    font-size: 1rem;
+}
+
+.time-filter-year-input :deep(.p-inputtext) {
+    font-size: 1rem;
     min-height: 3rem;
     padding: 0 1rem;
 }
 
-.time-filter-date-picker :deep(.p-datepicker-dropdown) {
-    min-width: 3rem;
+.time-filter-no-data-message {
+    margin: 0;
 }
 
-.time-filter-empty-state {
-    padding: 1rem;
-    border: 0.125rem solid var(--p-content-border-color);
-    border-radius: 0.5rem;
-    font-size: 1rem;
-    color: var(--p-text-muted-color);
-    line-height: 1.5;
+.loading-skeleton-enter-active {
+    transition: opacity 150ms ease;
+    transition-delay: 200ms;
+}
+
+.loading-skeleton-enter-from {
+    opacity: 0;
 }
 </style>
