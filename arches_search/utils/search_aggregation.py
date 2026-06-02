@@ -270,8 +270,10 @@ def build_aggregations(
         # Apply metric annotations and group-by fields
         if metric_annotations:
             group_fields = [g["alias"] for g in group_bys]
-            local_queryset = local_queryset.values(*group_fields).annotate(
-                **metric_annotations
+            local_queryset = (
+                local_queryset.order_by()
+                .values(*group_fields)
+                .annotate(**metric_annotations)
             )
 
         if where_clause:
