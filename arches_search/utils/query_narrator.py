@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from django.conf import settings
 from django.utils import translation
-from django.utils.translation import get_language, gettext as _
+from django.utils.translation import get_language, get_language_bidi, gettext as _
 
 from arches.app.models import models as arches_models
 
@@ -13,9 +13,6 @@ from arches_search.utils.node_alias_metadata import (
 from arches_search.utils.resource_names_for_payload import (
     build_resource_names_for_payload,
 )
-
-
-_RTL_LOCALES = frozenset({"ar", "he", "ur", "fa", "yi"})
 
 
 @dataclass(frozen=True)
@@ -33,12 +30,12 @@ def narrate_query(payload: dict, language_code: str | None = None) -> str:
         return ""
     active_language = language_code or get_language() or settings.LANGUAGE_CODE
     with translation.override(active_language):
-        ctx = _build_context(payload, active_language)
-        lines = _describe_group(payload, ctx, depth=0)
+        ctx = _build_context(payload)
+        lines = _describe_group(payload, ctx, 0)
         return _render(payload, lines, ctx)
 
 
-def _build_context(payload: dict, language_code: str) -> NarrationContext:
+def _build_context(payload: dict) -> NarrationContext:
     node_meta = build_node_alias_metadata_for_payload_query(payload)
     resource_names = build_resource_names_for_payload(payload)
     graph_names = {
@@ -60,7 +57,7 @@ def _build_context(payload: dict, language_code: str) -> NarrationContext:
         node_datatypes={key: meta["datatype"] for key, meta in node_meta.items()},
         operator_labels=operator_labels,
         resource_names=resource_names,
-        is_rtl=language_code.split("-")[0].lower() in _RTL_LOCALES,
+        is_rtl=get_language_bidi(),
     )
 
 
@@ -89,9 +86,7 @@ def _render(payload: dict, lines: list, ctx: NarrationContext) -> str:
     graph_slug = payload["graph_slug"]
     graph_label = ctx.graph_names.get(graph_slug, graph_slug)
     if not lines:
-        # Translators: e.g. 'All "Heritage Site" records.'
         return _('All "%(graph)s" records.') % {"graph": graph_label}
-    # Translators: e.g. 'All "Heritage Site" records where:'
     intro = _('All "%(graph)s" records where:') % {"graph": graph_label}
     return intro + "\n" + "\n".join(lines)
 
@@ -103,6 +98,7 @@ def _indent_prefix(depth: int, is_rtl: bool) -> str:
 
 def _describe_group(group: dict, ctx: NarrationContext, depth: int) -> list:
     logic = group.get("logic", "AND")
+    prefix = _indent_prefix(depth, ctx.is_rtl)
     result = []
 
     clause_phrases = [
@@ -111,9 +107,7 @@ def _describe_group(group: dict, ctx: NarrationContext, depth: int) -> list:
         if (phrase := _describe_clause(clause, ctx))
     ]
     for index, phrase in enumerate(clause_phrases):
-        prefix = _indent_prefix(depth, ctx.is_rtl)
         if logic == "OR" and index > 0:
-            # Translators: e.g. 'OR: "Name" equals "Temple"'
             result.append(prefix + _("OR: %(condition)s") % {"condition": phrase})
         else:
             result.append(prefix + phrase)
@@ -128,7 +122,6 @@ def _describe_group(group: dict, ctx: NarrationContext, depth: int) -> list:
         rel_phrase = _describe_relationship(relationship, linked_graph_slug, ctx)
 
         if rel_phrase:
-            prefix = _indent_prefix(depth, ctx.is_rtl)
             inner_lines = (
                 _describe_group(inner_group, ctx, depth + 1) if inner_group else []
             )
@@ -173,13 +166,11 @@ def _describe_clause(clause: dict, ctx: NarrationContext) -> str:
     )
 
     if value_phrase:
-        # Translators: e.g. '"Name" equals "Acropolis"'
         return _('"%(field)s" %(operator)s %(value)s') % {
             "field": field_label,
             "operator": operator_label,
             "value": value_phrase,
         }
-    # Translators: e.g. '"Status" has any value'
     return _('"%(field)s" %(operator)s') % {
         "field": field_label,
         "operator": operator_label,
@@ -188,21 +179,23 @@ def _describe_clause(clause: dict, ctx: NarrationContext) -> str:
 
 def _resolve_clause_field_label(clause: dict, ctx: NarrationContext) -> str:
     subject = clause.get("subject", {})
+    subject_type = subject.get("type")
     graph_slug = subject.get("graph_slug")
     if not graph_slug:
         return ""
 
-    if subject.get("type") == "NODE":
+    if subject_type == "NODE":
         node_alias = subject.get("node_alias")
         if node_alias:
             return ctx.node_labels.get((graph_slug, node_alias), "") or node_alias
 
-    if subject.get("type") == "SEARCH_MODELS" and subject.get("search_models"):
+    if subject_type == "SEARCH_MODELS" and subject.get("search_models"):
         graph_label = ctx.graph_names.get(graph_slug, graph_slug)
-        if graph_label:
-            # Translators: e.g. 'any field in "Heritage Site"'
-            return _('any field in "%(graph)s"') % {"graph": graph_label}
-        return _("any field")
+        return (
+            _('any field in "%(graph)s"') % {"graph": graph_label}
+            if graph_label
+            else _("any field")
+        )
 
     return ""
 
@@ -234,9 +227,7 @@ def _describe_operand(
         if not isinstance(text, str) or not text.strip():
             return ""
         text = text.strip()
-        language_code = language_code.strip()
         if language_code:
-            # Translators: e.g. '"Temple" (en)'
             return _('"%(value)s" (%(language)s)') % {
                 "value": text,
                 "language": language_code,
@@ -259,14 +250,13 @@ def _describe_path_value(value, ctx: NarrationContext) -> str:
     if not isinstance(last_entry, list) or len(last_entry) < 2:
         return ""
 
-    path_graph_slug, path_node_alias = str(last_entry[0]), str(last_entry[1])
+    path_graph_slug, path_node_alias = last_entry[0], last_entry[1]
     graph_label = ctx.graph_names.get(path_graph_slug, path_graph_slug)
     field_label = (
         ctx.node_labels.get((path_graph_slug, path_node_alias), "") or path_node_alias
     )
 
     if graph_label and field_label:
-        # Translators: e.g. 'the "Name" field in "Heritage Site"'
         return _('the "%(field)s" field in "%(graph)s"') % {
             "field": field_label,
             "graph": graph_label,
@@ -274,7 +264,6 @@ def _describe_path_value(value, ctx: NarrationContext) -> str:
     if graph_label:
         return f'"{graph_label}"'
     if field_label:
-        # Translators: e.g. 'the "Name" field'
         return _('the "%(field)s" field') % {"field": field_label}
     return ""
 
@@ -286,12 +275,10 @@ def _format_value_list(values: list) -> str:
     if len(non_empty) == 1:
         return non_empty[0]
     if len(non_empty) == 2:
-        # Translators: two values, e.g. '"Temple" and "Acropolis"'
         return _("%(first)s and %(second)s") % {
             "first": non_empty[0],
             "second": non_empty[1],
         }
-    # Translators: Oxford-comma list, e.g. '"Temple", "Acropolis", and "Parthenon"'
     return _("%(items)s, and %(last)s") % {
         "items": ", ".join(non_empty[:-1]),
         "last": non_empty[-1],
@@ -302,10 +289,8 @@ def _describe_relationship(
     relationship: dict, linked_graph_slug: str, ctx: NarrationContext
 ) -> str:
     path = relationship.get("path", {})
-    graph_slug = path.get("graph_slug")  # source graph, used for field label
+    graph_slug = path.get("graph_slug")  # source graph, used for field label lookup
     node_alias = path.get("node_alias")
-    if not graph_slug or not node_alias:
-        return ""
 
     params = {
         "graph": ctx.graph_names.get(linked_graph_slug, linked_graph_slug),
@@ -318,22 +303,16 @@ def _describe_relationship(
 
     if not is_inverse:
         if quantifier == "ALL":
-            # Translators: e.g. 'where all linked "Activity" records (via "related site") match'
             return (
                 _('where all linked "%(graph)s" records (via "%(field)s") match')
                 % params
             )
         if quantifier == "NONE":
-            # Translators: e.g. 'with no linked "Activity" records (via "related site")'
             return _('with no linked "%(graph)s" records (via "%(field)s")') % params
-        # Translators: e.g. 'with at least one linked "Activity" (via "related site")'
         return _('with at least one linked "%(graph)s" (via "%(field)s")') % params
 
     if quantifier == "ALL":
-        # Translators: e.g. 'referenced by all "Monument" records (via "mentioned site")'
         return _('referenced by all "%(graph)s" records (via "%(field)s")') % params
     if quantifier == "NONE":
-        # Translators: e.g. 'not referenced by any "Monument" (via "mentioned site")'
         return _('not referenced by any "%(graph)s" (via "%(field)s")') % params
-    # Translators: e.g. 'referenced by at least one "Monument" (via "mentioned site")'
     return _('referenced by at least one "%(graph)s" (via "%(field)s")') % params
