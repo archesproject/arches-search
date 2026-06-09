@@ -27,11 +27,6 @@ import type {
     GroupPayload,
     SearchResults as SearchResultsPayload,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import {
-    ClauseSubjectTypeToken,
-    GraphScopeToken,
-    LogicToken,
-} from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
 
@@ -39,138 +34,12 @@ const { query } = defineProps<{
     query?: GroupPayload;
 }>();
 
-const exampleQuery: GroupPayload = {
-    graph_slug: "photograph",
-    scope: GraphScopeToken.RESOURCE,
-    logic: LogicToken.AND,
-    clauses: [
-        {
-            type: "LITERAL",
-            quantifier: "ANY",
-            subject: {
-                type: ClauseSubjectTypeToken.NODE,
-                graph_slug: "photograph",
-                node_alias: "date_taken",
-                search_models: [],
-            },
-            operator: "BETWEEN",
-            operands: [
-                {
-                    type: "LITERAL",
-                    value: 19000101,
-                },
-                {
-                    type: "LITERAL",
-                    value: 19990101,
-                },
-            ],
-        },
-    ],
-    groups: [
-        {
-            graph_slug: "photograph",
-            scope: GraphScopeToken.RESOURCE,
-            logic: LogicToken.AND,
-            clauses: [],
-            groups: [
-                {
-                    graph_slug: "person",
-                    scope: GraphScopeToken.RESOURCE,
-                    logic: LogicToken.AND,
-                    clauses: [
-                        {
-                            type: "LITERAL",
-                            quantifier: "ANY",
-                            subject: {
-                                type: ClauseSubjectTypeToken.NODE,
-                                graph_slug: "person",
-                                node_alias: "occupation",
-                                search_models: [],
-                            },
-                            operator: "REFERENCES_ANY",
-                            operands: [
-                                {
-                                    type: "LITERAL",
-                                    value: ["Physicist"],
-                                },
-                            ],
-                        },
-                    ],
-                    groups: [
-                        {
-                            graph_slug: "person",
-                            scope: GraphScopeToken.RESOURCE,
-                            logic: LogicToken.AND,
-                            clauses: [],
-                            groups: [
-                                {
-                                    graph_slug: "country",
-                                    scope: GraphScopeToken.RESOURCE,
-                                    logic: LogicToken.AND,
-                                    clauses: [
-                                        {
-                                            type: "LITERAL",
-                                            quantifier: "ANY",
-                                            subject: {
-                                                type: ClauseSubjectTypeToken.NODE,
-                                                graph_slug: "country",
-                                                node_alias: "name",
-                                                search_models: [],
-                                            },
-                                            operator: "LIKE",
-                                            operands: [
-                                                {
-                                                    type: "LITERAL",
-                                                    value: {
-                                                        en: "France",
-                                                    },
-                                                },
-                                            ],
-                                        },
-                                    ],
-                                    groups: [],
-                                    aggregations: [],
-                                    relationship: null,
-                                },
-                            ],
-                            aggregations: [],
-                            relationship: {
-                                path: {
-                                    type: ClauseSubjectTypeToken.NODE,
-                                    graph_slug: "person",
-                                    node_alias: "nationality",
-                                },
-                                is_inverse: false,
-                                traversal_quantifier: "ANY",
-                            },
-                        },
-                    ],
-                    aggregations: [],
-                    relationship: null,
-                },
-            ],
-            aggregations: [],
-            relationship: {
-                path: {
-                    type: ClauseSubjectTypeToken.NODE,
-                    graph_slug: "photograph",
-                    node_alias: "depicts",
-                },
-                is_inverse: false,
-                traversal_quantifier: "ANY",
-            },
-        },
-    ],
-    aggregations: [],
-    relationship: null,
-};
-
 const isLoading = ref(true);
 const isSearching = ref(false);
 const loadError = ref<Error | null>(null);
 const searchError = ref<Error | null>(null);
 
-const searchPayload = ref<GroupPayload | undefined>(query ?? exampleQuery);
+const searchPayload = ref<GroupPayload | undefined>(query);
 
 const datatypesToAdvancedSearchFacets = ref<
     Record<string, AdvancedSearchFacet[]>
@@ -348,6 +217,10 @@ function onRequestPage(nextPageNumber: number) {
 
             <PayloadAnalyzer
                 v-if="searchPayload"
+                :datatypes-to-advanced-search-facets="
+                    datatypesToAdvancedSearchFacets
+                "
+                :graphs="graphs"
                 :payload="searchPayload"
                 :visible="shouldShowPayloadAnalyzer"
                 @update:visible="onUpdatePayloadAnalyzerVisible"
