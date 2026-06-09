@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 from django.conf import settings
 from django.utils import translation
 from django.utils.translation import gettext as _
@@ -46,20 +47,17 @@ def _get_language():
 def _build_context(payload: dict, language_code: str) -> NarrationContext:
     node_meta = build_node_alias_metadata_for_payload_query(payload)
     resource_names = build_resource_names_for_payload(payload)
-
-    slugs = _collect_graph_slugs(payload)
     graph_names = {
         str(graph.slug): str(graph.name)
-        for graph in arches_models.GraphModel.objects.filter(slug__in=slugs)
+        for graph in arches_models.GraphModel.objects.filter(
+            slug__in=_collect_graph_slugs(payload)
+        )
     }
-
     operator_labels = {
         facet.operator: str(facet.label)
         for facet in AdvancedSearchFacet.objects.all()
         if facet.operator and str(facet.label)
     }
-
-    base_lang = language_code.split("-")[0].lower() if language_code else ""
     return NarrationContext(
         graph_names=graph_names,
         node_labels={
@@ -68,72 +66,67 @@ def _build_context(payload: dict, language_code: str) -> NarrationContext:
         node_datatypes={key: meta["datatype"] for key, meta in node_meta.items()},
         operator_labels=operator_labels,
         resource_names=resource_names,
-        is_rtl=base_lang in _RTL_LOCALES,
+        is_rtl=(
+            language_code.split("-")[0].lower() in _RTL_LOCALES
+            if language_code
+            else False
+        ),
     )
 
 
 def _collect_graph_slugs(payload: dict) -> set:
     slugs = set()
 
-    slug = (payload.get("graph_slug") or "").strip()
-    if slug:
-        slugs.add(slug)
+    def add(slug):
+        if cleaned := (slug or "").strip():
+            slugs.add(cleaned)
 
+    add(payload.get("graph_slug"))
     for clause in payload.get("clauses", []):
-        subject_slug = (clause.get("subject", {}).get("graph_slug") or "").strip()
-        if subject_slug:
-            slugs.add(subject_slug)
+        add(clause.get("subject", {}).get("graph_slug"))
         for operand in clause.get("operands", []):
             if operand.get("type") == "PATH":
-                value = operand.get("value")
-                if isinstance(value, list) and value:
-                    last_entry = value[-1]
-                    if isinstance(last_entry, list) and last_entry:
-                        path_slug = str(last_entry[0]).strip()
-                        if path_slug:
-                            slugs.add(path_slug)
-
-    relationship = payload.get("relationship") or {}
-    rel_slug = (relationship.get("path", {}).get("graph_slug") or "").strip()
-    if rel_slug:
-        slugs.add(rel_slug)
-
+                path = operand.get("value") or []
+                if (
+                    isinstance(path, list)
+                    and path
+                    and isinstance(path[-1], list)
+                    and path[-1]
+                ):
+                    add(path[-1][0])
+    add((payload.get("relationship") or {}).get("path", {}).get("graph_slug"))
     for subgroup in payload.get("groups", []):
         slugs.update(_collect_graph_slugs(subgroup))
-
     return slugs
 
 
 def _render(payload: dict, lines: list, ctx: NarrationContext) -> str:
-    graph_slug = payload.get("graph_slug", "")
-    graph_label = ctx.graph_names.get(graph_slug, graph_slug)
-
+    graph_label = ctx.graph_names.get(
+        payload.get("graph_slug", ""), payload.get("graph_slug", "")
+    )
     if not lines:
         # Translators: e.g. 'All "Heritage Site" records.'
         return _('All "%(graph)s" records.') % {"graph": graph_label}
-
     # Translators: e.g. 'All "Heritage Site" records where:'
-    intro = _('All "%(graph)s" records where:') % {"graph": graph_label}
-    return intro + "\n" + "\n".join(lines)
+    return (
+        _('All "%(graph)s" records where:') % {"graph": graph_label}
+        + "\n"
+        + "\n".join(lines)
+    )
 
 
 def _indent_prefix(depth: int, is_rtl: bool) -> str:
     # U+200F anchors bidi base direction so the bullet renders at the right edge in RTL.
-    rtl_mark = "‏" if is_rtl else ""
-    return rtl_mark + "  " * depth + "• "
+    return ("‏" if is_rtl else "") + "  " * depth + "• "
 
 
 def _describe_group(group: dict, ctx: NarrationContext, depth: int) -> list:
     logic = group.get("logic", "AND")
     result = []
 
-    clause_phrases = []
-    for clause in group.get("clauses", []):
-        phrase = _describe_clause(clause, ctx)
-        if phrase:
-            clause_phrases.append(phrase)
-
-    for index, phrase in enumerate(clause_phrases):
+    for index, phrase in enumerate(
+        filter(None, [_describe_clause(c, ctx) for c in group.get("clauses", [])])
+    ):
         prefix = _indent_prefix(depth, ctx.is_rtl)
         if logic == "OR" and index > 0:
             # Translators: e.g. 'OR: "Name" equals "Temple"'
@@ -141,83 +134,66 @@ def _describe_group(group: dict, ctx: NarrationContext, depth: int) -> list:
         else:
             result.append(prefix + phrase)
 
+    clause_count = len(result)
     relationship = group.get("relationship") or {}
     subgroups = group.get("groups", [])
     rel_path = relationship.get("path", {})
-    has_relationship = bool(
+
+    if (
         rel_path.get("graph_slug", "").strip()
         and rel_path.get("node_alias", "").strip()
-    )
-
-    if has_relationship:
+    ):
         inner_group = subgroups[0] if subgroups else None
         linked_graph_slug = (
             (inner_group.get("graph_slug") or "").strip() if inner_group else ""
         )
         rel_phrase = _describe_relationship(relationship, linked_graph_slug, ctx)
-        remaining_groups = subgroups[1:]
 
         if rel_phrase:
             prefix = _indent_prefix(depth, ctx.is_rtl)
-            has_prior = bool(clause_phrases)
             inner_lines = (
                 _describe_group(inner_group, ctx, depth + 1) if inner_group else []
             )
             full_phrase = rel_phrase + (":" if inner_lines else "")
-
-            if logic == "OR" and has_prior:
+            if logic == "OR" and clause_count:
                 result.append(
                     prefix + _("OR: %(condition)s") % {"condition": full_phrase}
                 )
             else:
                 result.append(prefix + full_phrase)
-
             result.extend(inner_lines)
 
-        for nested_group in remaining_groups:
-            result.extend(_describe_group(nested_group, ctx, depth))
+        for subgroup in subgroups[1:]:
+            result.extend(_describe_group(subgroup, ctx, depth))
     else:
-        for nested_group in subgroups:
-            result.extend(_describe_group(nested_group, ctx, depth))
+        for subgroup in subgroups:
+            result.extend(_describe_group(subgroup, ctx, depth))
 
     return result
 
 
 def _describe_clause(clause: dict, ctx: NarrationContext) -> str:
-    subject = clause.get("subject", {})
-    subject_graph_slug = (subject.get("graph_slug") or "").strip()
-    if not subject_graph_slug:
-        return ""
-
     field_label = _resolve_clause_field_label(clause, ctx)
-    if not field_label:
+    operator = (clause.get("operator") or "").strip()
+    if not field_label or not operator:
         return ""
 
-    raw_operator = (clause.get("operator") or "").strip()
-    if not raw_operator:
-        return ""
-    operator_label = ctx.operator_labels.get(raw_operator, raw_operator).strip()
-    if not operator_label:
-        return ""
+    operator_label = ctx.operator_labels.get(operator, operator)
 
-    subject_node_alias = (
-        (subject.get("node_alias") or "").strip()
-        if subject.get("type") == "NODE"
-        else ""
+    subject = clause.get("subject", {})
+    datatype = ""
+    if subject.get("type") == "NODE":
+        node_alias = (subject.get("node_alias") or "").strip()
+        graph_slug = (subject.get("graph_slug") or "").strip()
+        datatype = ctx.node_datatypes.get((graph_slug, node_alias), "")
+
+    value_phrase = _format_value_list(
+        [
+            description
+            for operand in clause.get("operands", [])
+            if (description := _describe_operand(operand, datatype, ctx))
+        ]
     )
-    subject_datatype = (
-        ctx.node_datatypes.get((subject_graph_slug, subject_node_alias), "")
-        if subject_node_alias
-        else ""
-    )
-
-    operand_descriptions = []
-    for operand in clause.get("operands", []):
-        desc = _describe_operand(operand, subject_datatype, ctx)
-        if desc:
-            operand_descriptions.append(desc)
-
-    value_phrase = _format_value_list(operand_descriptions).strip()
 
     if value_phrase:
         # Translators: e.g. '"Name" equals "Acropolis"'
@@ -226,7 +202,6 @@ def _describe_clause(clause: dict, ctx: NarrationContext) -> str:
             "operator": operator_label,
             "value": value_phrase,
         }
-
     # Translators: e.g. '"Status" has any value'
     return _('"%(field)s" %(operator)s') % {
         "field": field_label,
@@ -237,21 +212,20 @@ def _describe_clause(clause: dict, ctx: NarrationContext) -> str:
 def _resolve_clause_field_label(clause: dict, ctx: NarrationContext) -> str:
     subject = clause.get("subject", {})
     subject_type = subject.get("type", "")
-    subject_graph_slug = (subject.get("graph_slug") or "").strip()
+    graph_slug = (subject.get("graph_slug") or "").strip()
 
-    if not subject_graph_slug:
+    if not graph_slug:
         return ""
 
     if subject_type == "NODE":
         node_alias = (subject.get("node_alias") or "").strip()
         if node_alias:
-            label = ctx.node_labels.get((subject_graph_slug, node_alias), "").strip()
-            return label or node_alias
+            return (
+                ctx.node_labels.get((graph_slug, node_alias), "").strip() or node_alias
+            )
 
     if subject_type == "SEARCH_MODELS" and subject.get("search_models"):
-        graph_label = ctx.graph_names.get(
-            subject_graph_slug, subject_graph_slug
-        ).strip()
+        graph_label = ctx.graph_names.get(graph_slug, graph_slug).strip()
         if graph_label:
             # Translators: e.g. 'any field in "Heritage Site"'
             return _('any field in "%(graph)s"') % {"graph": graph_label}
@@ -266,79 +240,70 @@ def _describe_operand(
     if operand.get("type") == "PATH":
         return _describe_path_value(operand.get("value"), ctx)
 
-    raw_value = operand.get("display_value")
-    if raw_value is None:
-        raw_value = operand.get("value")
-
-    if raw_value is None:
+    raw = operand.get("display_value")
+    if raw is None:
+        raw = operand.get("value")
+    if raw is None:
         return ""
 
-    if isinstance(raw_value, list):
-        resolved = []
-        for item in raw_value:
-            if isinstance(item, str):
-                name = ctx.resource_names.get(item, item)
-                resolved.append(f'"{name}"')
-        return _format_value_list(resolved)
+    if isinstance(raw, list):
+        return _format_value_list(
+            [
+                f'"{ctx.resource_names.get(item, item)}"'
+                for item in raw
+                if isinstance(item, str)
+            ]
+        )
 
-    if (
-        subject_datatype == "string"
-        and isinstance(raw_value, dict)
-        and len(raw_value) == 1
-    ):
-        # Localized string value: {language_code: text}
-        language_code, localized_value = next(iter(raw_value.items()))
-        if isinstance(localized_value, str):
-            trimmed_value = localized_value.strip()
-            trimmed_lang = language_code.strip()
-            if trimmed_value and trimmed_lang:
-                # Translators: e.g. '"Temple" (en)'
-                return _('"%(value)s" (%(language)s)') % {
-                    "value": trimmed_value,
-                    "language": trimmed_lang,
-                }
-            if trimmed_value:
-                return f'"{trimmed_value}"'
-        return ""
+    if subject_datatype == "string" and isinstance(raw, dict) and len(raw) == 1:
+        # Localized string value: {lang_code: text}
+        ((language_code, text),) = raw.items()
+        if not isinstance(text, str) or not (text := text.strip()):
+            return ""
+        language_code = language_code.strip()
+        if language_code:
+            # Translators: e.g. '"Temple" (en)'
+            return _('"%(value)s" (%(language)s)') % {
+                "value": text,
+                "language": language_code,
+            }
+        return f'"{text}"'
 
-    # bool check must precede int because isinstance(True, int) is True in Python
-    if isinstance(raw_value, bool):
-        return "true" if raw_value else "false"
-
-    if isinstance(raw_value, (int, float)):
-        return str(raw_value)
-
-    text = str(raw_value).strip()
+    # bool must be checked before int: isinstance(True, int) is True
+    if isinstance(raw, bool):
+        return "true" if raw else "false"
+    if isinstance(raw, (int, float)):
+        return str(raw)
+    text = str(raw).strip()
     return f'"{text}"' if text else ""
 
 
 def _describe_path_value(value, ctx: NarrationContext) -> str:
     if not isinstance(value, list) or not value:
         return ""
-
     last_entry = value[-1]
     if not isinstance(last_entry, list) or len(last_entry) < 2:
         return ""
 
     path_graph_slug = str(last_entry[0]).strip()
     path_node_alias = str(last_entry[1]).strip()
-    path_graph_label = ctx.graph_names.get(path_graph_slug, path_graph_slug).strip()
-    path_field_label = (
+    graph_label = ctx.graph_names.get(path_graph_slug, path_graph_slug).strip()
+    field_label = (
         ctx.node_labels.get((path_graph_slug, path_node_alias), "").strip()
         or path_node_alias
     )
 
-    if path_graph_label and path_field_label:
+    if graph_label and field_label:
         # Translators: e.g. 'the "Name" field in "Heritage Site"'
         return _('the "%(field)s" field in "%(graph)s"') % {
-            "field": path_field_label,
-            "graph": path_graph_label,
+            "field": field_label,
+            "graph": graph_label,
         }
-    if path_graph_label:
-        return f'"{path_graph_label}"'
-    if path_field_label:
+    if graph_label:
+        return f'"{graph_label}"'
+    if field_label:
         # Translators: e.g. 'the "Name" field'
-        return _('the "%(field)s" field') % {"field": path_field_label}
+        return _('the "%(field)s" field') % {"field": field_label}
     return ""
 
 
@@ -369,7 +334,6 @@ def _describe_relationship(
         path.get("graph_slug") or ""
     ).strip()  # source graph, used for field label
     node_alias = (path.get("node_alias") or "").strip()
-
     if not graph_slug or not node_alias:
         return ""
 
@@ -377,7 +341,6 @@ def _describe_relationship(
     field_label = (
         ctx.node_labels.get((graph_slug, node_alias), "").strip() or node_alias
     )
-
     is_inverse = relationship.get("is_inverse", False)
     quantifier = relationship.get("traversal_quantifier", "ANY")
     if quantifier not in ("ALL", "NONE"):
