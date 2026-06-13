@@ -9,7 +9,7 @@ import SplitterPanel from "primevue/splitterpanel";
 
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
-import AttributeFilters from "@/arches_search/SimpleSearch/components/AttributeFilters.vue";
+import AttributeFilters from "@/arches_search/SimpleSearch/components/attribute-filters/AttributeFilters.vue";
 import ExportPanel from "@/arches_search/SimpleSearch/components/ExportPanel.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
@@ -21,26 +21,23 @@ import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeF
 
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
-    ClauseSubjectTypeToken,
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import {
     createSavedSearch,
     fetchNodeFilterConfig,
-    fetchControlledListItems,
 } from "@/arches_search/SimpleSearch/api.ts";
+import { buildAttributeFilterQuery } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 
 import type { FeatureCollection } from "geojson";
 import type {
     GraphModel,
-    GroupPayload,
     LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
-    AttributeFilterSection,
     NodeFilterConfigNode,
     SearchDefinition,
     SortSpec,
@@ -106,7 +103,7 @@ const toast = useToast();
 const sortValue = ref<string | null>(null);
 const graphModels = ref<GraphModel[]>([]);
 const showSaveDialog = ref(false);
-const selectedFilterOptions = ref<Record<string, string[]>>({});
+const filterValues = ref<Record<string, unknown>>({});
 const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
     null,
 );
@@ -119,103 +116,55 @@ const activeGraphLabel = computed<string | null>(
     () => activeGraph.value?.label ?? null,
 );
 
-const attributeFilterSections = ref<AttributeFilterSection[]>([]);
 const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
 
 watch(
     () => activeGraph.value,
-    async (graph) => {
+    (graph) => {
+        // Drop any attribute-filter queries from the previously active graph.
+        for (const node of nodeFilterConfigNodes.value) {
+            clearQuery(node.node_alias);
+        }
+        filterValues.value = {};
+
         if (!graph || !graph.id) {
-            attributeFilterSections.value = [];
             nodeFilterConfigNodes.value = [];
             return;
         }
-        try {
-            const config = await fetchNodeFilterConfig(graph.id);
-            nodeFilterConfigNodes.value = config.nodes;
-            attributeFilterSections.value = config.nodes.map((node) => ({
-                id: node.node_alias,
-                label: node.label,
-                options: [],
-            }));
 
-            // Populate options from controlled lists for reference nodes
-            const sections = [...attributeFilterSections.value];
-            await Promise.all(
-                config.nodes.map(async (node, index) => {
-                    if (
-                        node.datatype !== "reference" ||
-                        !node.config?.controlledList
-                    ) {
-                        return;
-                    }
-                    const items = await fetchControlledListItems(
-                        node.config.controlledList as string,
-                    );
-                    sections[index] = {
-                        ...sections[index],
-                        options: items.map((item) => ({
-                            id: item.uri,
-                            label: item.label,
-                        })),
-                    };
-                }),
-            );
-            attributeFilterSections.value = sections;
-        } catch (err) {
-            console.error("[SimpleSearch] error loading filter config:", err);
-            attributeFilterSections.value = [];
-            nodeFilterConfigNodes.value = [];
-        }
+        void loadNodeFilterConfig(graph.id);
     },
 );
 
-function onFilterOptionsChanged(selected: Record<string, string[]>) {
-    selectedFilterOptions.value = selected;
+async function loadNodeFilterConfig(graphId: string): Promise<void> {
+    try {
+        const config = await fetchNodeFilterConfig(graphId);
+        nodeFilterConfigNodes.value = config.nodes;
+    } catch (err) {
+        console.error("[SimpleSearch] error loading filter config:", err);
+        nodeFilterConfigNodes.value = [];
+    }
+}
 
-    // Clear all existing attribute filter queries
-    for (const node of nodeFilterConfigNodes.value) {
-        clearQuery(node.node_alias);
+// Each attribute-filter widget emits a datatype-specific value; the registry
+// turns it into a query (or null to clear). Query-shape logic lives in the
+// per-datatype builders, so this handler stays datatype-agnostic.
+function onAttributeFilterChange(nodeAlias: string, value: unknown): void {
+    filterValues.value = { ...filterValues.value, [nodeAlias]: value };
+
+    const node = nodeFilterConfigNodes.value.find(
+        (candidate) => candidate.node_alias === nodeAlias,
+    );
+    const graphSlug = activeGraphSlug.value;
+    if (!node || !graphSlug) {
+        return;
     }
 
-    // Set a query for each section that has selections
-    for (const [nodeAlias, values] of Object.entries(selected)) {
-        if (values.length === 0) continue;
-
-        const section = attributeFilterSections.value.find(
-            (s) => s.id === nodeAlias,
-        );
-        const resolvedValues = values.map((val) => {
-            const opt = section?.options.find((o) => o.id === val);
-            return opt?.label ?? val;
-        });
-
-        const query: GroupPayload = {
-            graph_slug: activeGraphSlug.value!,
-            scope: GraphScopeToken.RESOURCE,
-            logic: LogicToken.AND,
-            clauses: [
-                {
-                    type: "LITERAL" as const,
-                    quantifier: "ANY" as const,
-                    subject: {
-                        type: ClauseSubjectTypeToken.NODE,
-                        graph_slug: activeGraphSlug.value!,
-                        node_alias: nodeAlias,
-                        search_models: [],
-                    },
-                    operator: "REFERENCES_ANY",
-                    operands: [
-                        { type: "LITERAL" as const, value: resolvedValues },
-                    ],
-                },
-            ],
-            groups: [],
-            aggregations: [],
-            relationship: null,
-        };
-
+    const query = buildAttributeFilterQuery(node, value, graphSlug);
+    if (query) {
         setQuery(nodeAlias, query);
+    } else {
+        clearQuery(nodeAlias);
     }
 }
 
@@ -337,7 +286,7 @@ async function onSaveSearch(payload: { name: string; description: string }) {
 
 function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
     applySearchDefinition(parseSearchDefinition(queryDefinition));
-    selectedFilterOptions.value = {};
+    filterValues.value = {};
 }
 
 // Tolerant parser so older saved rows (which only stored `terms` + `graphId`)
@@ -459,9 +408,9 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                         />
                         <AttributeFilters
                             v-else-if="isAttributeFiltersActive"
-                            :sections="attributeFilterSections"
-                            :selected-options="selectedFilterOptions"
-                            @update:selected-options="onFilterOptionsChanged"
+                            :nodes="nodeFilterConfigNodes"
+                            :values="filterValues"
+                            @update:value="onAttributeFilterChange"
                         />
                         <SavedSearchPanel
                             v-else-if="isSavedSearchesActive"

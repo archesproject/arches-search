@@ -65,18 +65,6 @@ export type SortDirection = "asc" | "desc";
 
 export type SortSpec = { type: "primary_name"; direction: SortDirection };
 
-export interface AttributeFilterOption {
-    id: string;
-    label: string;
-    count?: number;
-}
-
-export interface AttributeFilterSection {
-    id: string;
-    label: string;
-    options: AttributeFilterOption[];
-}
-
 export interface SavedSearch {
     savedsearchid: string;
     name: string;
