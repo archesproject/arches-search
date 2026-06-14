@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
 import DatePicker from "primevue/datepicker";
 
 import NodeSelection from "@/arches_search/SimpleSearch/components/TimeFilter/components/NodeSelection.vue";
@@ -20,11 +21,8 @@ import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
 const EMIT_DEBOUNCE_MS = 400;
 const SLIDER_START_DATE = "1967-04-01";
 
-const { graphSlug, graphId, graphLabel, isOpen, modelValue } = defineProps<{
-    graphSlug: string | null;
-    graphId: string | null;
-    graphLabel: string | null;
-    isOpen: boolean;
+const { graph, modelValue } = defineProps<{
+    graph: { id: string; slug: string; label: string } | null;
     modelValue: LiteralClause | null;
 }>();
 
@@ -34,6 +32,9 @@ const emit = defineEmits<{
 }>();
 
 const { $gettext } = useGettext();
+
+const timeFilterLabel = computed(() => $gettext("Time Filter"));
+const timeSpanLabel = computed(() => $gettext("Time Span"));
 
 const selectedRange = ref<[Date, Date]>(defaultRange());
 const selectedNodeAliases = ref<string[]>([]);
@@ -96,7 +97,7 @@ watch(
 );
 
 watch(
-    () => graphId,
+    () => graph?.id,
     async (id) => {
         const thisLoad = ++nodeLoadId;
         selectedNodeAliases.value = [];
@@ -125,16 +126,9 @@ watch(
 );
 
 watch(
-    () => isOpen,
-    (isOpen) => {
-        if (isOpen) isFilterActive.value = true;
-    },
-);
-
-watch(
-    [selectedRange, () => graphSlug, selectedNodeAliases, () => isOpen],
+    [selectedRange, () => graph?.slug, selectedNodeAliases],
     () => {
-        if (!graphSlug || !isFilterActive.value) return;
+        if (!graph?.slug || !isFilterActive.value) return;
 
         const nextClauses = buildClauses();
         if (!nextClauses.length) return;
@@ -181,7 +175,7 @@ function defaultRange(): [Date, Date] {
 }
 
 function buildClauses(): LiteralClause[] {
-    const slug = graphSlug;
+    const slug = graph?.slug ?? null;
     if (!slug) return [];
 
     const [rangeStart, rangeEnd] = normalizeRange(
@@ -230,64 +224,84 @@ function onNodeSelectionUpdate(aliases: string[]): void {
     isFilterActive.value = true;
     selectedNodeAliases.value = aliases;
 }
+
+function onAddTimeFilter(): void {
+    isFilterActive.value = true;
+    const nextClauses = buildClauses();
+    if (nextClauses.length) {
+        lastEmittedJson = JSON.stringify(nextClauses);
+        emit("update:modelValue", nextClauses);
+    }
+}
 </script>
 
 <template>
     <div class="time-filter">
         <div
-            v-if="graphSlug"
+            v-if="graph?.slug"
             class="time-filter-content"
         >
             <h3 class="time-filter-title">
-                {{ $gettext("Time Filter") }}
+                {{ timeFilterLabel }}
             </h3>
 
-            <NodeSelection
-                v-if="graphId"
-                :key="graphId"
-                :model-value="selectedNodeAliases"
-                :graph-label="graphLabel"
-                :nodes="graphNodes"
-                :loading="isLoadingNodes"
-                class="time-filter-section"
-                @update:model-value="onNodeSelectionUpdate"
+            <Button
+                v-if="!isFilterActive"
+                :label="$gettext('Add Time Filter')"
+                icon="pi pi-plus"
+                size="small"
+                @click="onAddTimeFilter"
             />
 
-            <section class="time-filter-section">
-                <h4 class="time-filter-section-heading">
-                    {{ $gettext("Time Span") }}
-                </h4>
+            <div
+                class="time-filter-controls"
+                :class="{ 'time-filter-controls-inactive': !isFilterActive }"
+            >
+                <NodeSelection
+                    v-if="graph?.id"
+                    :key="graph?.id"
+                    :model-value="selectedNodeAliases"
+                    :graph-label="graph?.label ?? null"
+                    :nodes="graphNodes"
+                    :loading="isLoadingNodes"
+                    class="time-filter-section"
+                    @update:model-value="onNodeSelectionUpdate"
+                />
 
-                <div class="time-filter-section-body">
-                    <TimeSlider
-                        :model-value="sliderValue"
-                        :bounds="sliderBounds"
-                        @update:model-value="onSliderUpdate"
-                    />
+                <section class="time-filter-section">
+                    <h4 class="time-filter-section-heading">
+                        {{ timeSpanLabel }}
+                    </h4>
 
-                    <div class="time-filter-calendar-row">
-                        <DatePicker
-                            :model-value="selectedRange[0]"
-                            class="time-filter-date-picker"
-                            :placeholder="$gettext('From...')"
-                            :show-icon="true"
-                            icon-display="input"
-                            date-format="M d, yy"
-                            @update:model-value="onDateFromChange"
+                    <div class="time-filter-section-body">
+                        <TimeSlider
+                            :model-value="sliderValue"
+                            :bounds="sliderBounds"
+                            @update:model-value="onSliderUpdate"
                         />
 
-                        <DatePicker
-                            :model-value="selectedRange[1]"
-                            class="time-filter-date-picker"
-                            :placeholder="$gettext('To...')"
-                            :show-icon="true"
-                            icon-display="input"
-                            date-format="M d, yy"
-                            @update:model-value="onDateToChange"
-                        />
+                        <div class="time-filter-calendar-row">
+                            <DatePicker
+                                :model-value="selectedRange[0]"
+                                class="time-filter-date-picker"
+                                :show-icon="true"
+                                icon-display="input"
+                                date-format="M d, yy"
+                                @update:model-value="onDateFromChange"
+                            />
+
+                            <DatePicker
+                                :model-value="selectedRange[1]"
+                                class="time-filter-date-picker"
+                                :show-icon="true"
+                                icon-display="input"
+                                date-format="M d, yy"
+                                @update:model-value="onDateToChange"
+                            />
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            </div>
         </div>
 
         <span
@@ -371,6 +385,18 @@ function onNodeSelectionUpdate(aliases: string[]): void {
 
 .time-filter-date-picker :deep(.p-datepicker-dropdown) {
     min-width: 3rem;
+}
+
+.time-filter-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.time-filter-controls-inactive {
+    pointer-events: none;
+    opacity: 0.4;
+    user-select: none;
 }
 
 .time-filter-empty-state {

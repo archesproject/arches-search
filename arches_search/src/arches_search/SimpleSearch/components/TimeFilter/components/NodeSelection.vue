@@ -47,8 +47,14 @@ const expandedKeys = computed<Record<string, boolean>>(() => {
     return keys;
 });
 
+const nodeSummaryById = computed<Record<string, TimeFilterNodeSummary>>(() =>
+    Object.fromEntries(props.nodes.map((node) => [node.id, node])),
+);
+
 const nodeLabelByAlias = computed<Record<string, string>>(() =>
-    Object.fromEntries(props.nodes.map((n) => [n.alias, getDisplayLabel(n)])),
+    Object.fromEntries(
+        props.nodes.map((node) => [node.alias, getPathLabel(node)]),
+    ),
 );
 
 const nodeByKey = computed<Map<string, TimeFilterTreeNode>>(() => {
@@ -92,8 +98,18 @@ function isNodeSelectable(node: TimeFilterNodeSummary): boolean {
     return (DATE_DATATYPES as readonly string[]).includes(node.datatype);
 }
 
-function getDisplayLabel(node: TimeFilterNodeSummary): string {
-    return node.card_x_node_x_widget_label || node.name || node.alias;
+function getPathLabel(node: TimeFilterNodeSummary): string {
+    const segments: string[] = [];
+    let current: TimeFilterNodeSummary | undefined = node;
+    while (current) {
+        segments.unshift(
+            current.card_x_node_x_widget_label || current.name || current.alias,
+        );
+        current = current.semantic_parent_id
+            ? nodeSummaryById.value[current.semantic_parent_id]
+            : undefined;
+    }
+    return segments.join(" > ");
 }
 
 function compareNodes(a: TimeFilterTreeNode, b: TimeFilterTreeNode): number {
@@ -119,7 +135,10 @@ function buildTree(
     for (const summary of nodeSummaries) {
         nodeById[summary.id] = {
             key: summary.id,
-            label: getDisplayLabel(summary),
+            label:
+                summary.card_x_node_x_widget_label ||
+                summary.name ||
+                summary.alias,
             data: summary,
             children: [],
             selectable: isNodeSelectable(summary),

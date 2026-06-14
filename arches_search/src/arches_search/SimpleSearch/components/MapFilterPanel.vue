@@ -4,6 +4,7 @@ import { nextTick, useTemplateRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import MapWidget from "@/arches_component_lab/widgets/MapWidget/MapWidget.vue";
+import { getMapboxDraw } from "@/arches_component_lab/widgets/MapWidget/utils.ts";
 const SEARCH_RENDER_CONTEXT = "search";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -13,9 +14,8 @@ import type { GeoJSONFeatureCollectionValue } from "@/arches_component_lab/datat
 
 const SEARCH_RESULTS_SOURCE = "arches-search-results";
 
-const { modelValue, visible } = defineProps<{
+const { modelValue } = defineProps<{
     modelValue: FeatureCollection | null;
-    visible?: boolean;
 }>();
 
 const { resultsTileUrl } = useSearchFilters();
@@ -33,20 +33,16 @@ const mapWidgetRef =
 watch(resultsTileUrl, (tileUrl) => setSearchTiles(tileUrl));
 
 watch(
-    () => visible,
-    (isVisible) => {
-        if (isVisible) {
-            nextTick(() => {
-                mapWidgetRef.value?.map?.resize();
-            });
+    () => modelValue,
+    (newValue) => {
+        if (newValue === null && mapWidgetRef.value?.map) {
+            getMapboxDraw(mapWidgetRef.value.map)?.deleteAll();
         }
     },
 );
 
-function onOverlaysUpdate() {
-    requestAnimationFrame(() => {
-        nextTick(() => setSearchTiles(resultsTileUrl.value));
-    });
+function onOverlaysUpdated() {
+    nextTick(() => setSearchTiles(resultsTileUrl.value));
 }
 
 function setSearchTiles(tileUrl: string | null) {
@@ -94,7 +90,7 @@ function onEditorUpdate(
             mode="edit"
             :render-context="SEARCH_RENDER_CONTEXT"
             :aliased-node-data="aliasedNodeData()"
-            @update:overlays="onOverlaysUpdate"
+            @update:overlays="onOverlaysUpdated"
             @update:value="onEditorUpdate"
         />
     </div>
