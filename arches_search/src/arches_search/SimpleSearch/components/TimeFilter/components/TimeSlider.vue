@@ -72,7 +72,7 @@ function formatYear(date: Date): string {
     const year = date.getFullYear();
 
     if (year >= HISTORICAL_CUTOFF_YEAR) {
-        return dayjs(date).format("MMM D, YYYY");
+        return dayjs(date).format("YYYY-MM-DD");
     }
 
     // ISO 8601: year 0 = 1 BCE, year -1 = 2 BCE, so BCE display = 1 - year
