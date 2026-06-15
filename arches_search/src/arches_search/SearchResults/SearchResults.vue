@@ -40,6 +40,8 @@ const descriptorsByResourceId = ref<Record<string, ResourceDescriptorData>>({});
 const configsByGraphId = ref<Map<string, SearchReportConfig | null>>(new Map());
 const isPageRequestInFlight = ref(false);
 
+const requestedDescriptorIds = new Set<string>();
+
 const visibleResources = computed<ResourceData[]>(() => {
     if (!filterText) return results.resources;
     const needle = filterText.toLowerCase();
@@ -56,17 +58,22 @@ watch(
     async (resources: ResourceData[]) => {
         if (!resources.length) return;
 
-        const ids = resources.map((r) => r.resourceinstanceid);
+        const idsToFetch = resources
+            .map((r) => r.resourceinstanceid)
+            .filter((id) => !requestedDescriptorIds.has(id));
 
-        // Batch-fetch all descriptors (and graph_ids) for this page
-        try {
-            const descriptors = await fetchResourceDescriptors(ids);
-            descriptorsByResourceId.value = {
-                ...descriptorsByResourceId.value,
-                ...descriptors,
-            };
-        } catch (error) {
-            console.error("Failed to fetch resource descriptors:", error);
+        if (idsToFetch.length) {
+            idsToFetch.forEach((id) => requestedDescriptorIds.add(id));
+            try {
+                const descriptors = await fetchResourceDescriptors(idsToFetch);
+                descriptorsByResourceId.value = {
+                    ...descriptorsByResourceId.value,
+                    ...descriptors,
+                };
+            } catch (error) {
+                console.error("Failed to fetch resource descriptors:", error);
+                idsToFetch.forEach((id) => requestedDescriptorIds.delete(id));
+            }
         }
 
         // Deduplicate by graph_id, fetch one search config per unique graph

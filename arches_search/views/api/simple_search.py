@@ -31,7 +31,9 @@ def build_search_queryset(body):
         else:
             initial_match_ids = None
             for term in terms:
-                term_search_query = SearchQuery(term["text"], search_type="plain")
+                term_search_query = SearchQuery(
+                    term["text"], search_type="plain", config="english"
+                )
                 if initial_match_ids is None:
                     initial_match_ids = TermSearch.objects.filter(
                         search_vector=term_search_query

@@ -46,7 +46,7 @@ class TermSuggestionView(View):
         if not query:
             return JsonResponse({"results": []})
 
-        search_query = SearchQuery(query)
+        search_query = SearchQuery(query, config="english")
         results = (
             TermSearch.objects.values(
                 "id", "datatype", "value", "node_alias", "tileid", "resourceinstanceid"

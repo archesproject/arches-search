@@ -143,6 +143,7 @@ handler500 = "arches.app.views.main.custom_500"
 urlpatterns.append(path("", include("arches_controlled_lists.urls")))
 urlpatterns.append(path("", include("arches_component_lab.urls")))
 urlpatterns.append(path("", include("arches_querysets.urls")))
+urlpatterns.append(path("", include("arches_modular_reports.urls")))
 
 urlpatterns.append(path("", include("arches.urls")))
 
