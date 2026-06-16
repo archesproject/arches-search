@@ -343,10 +343,7 @@ class ResourceInstanceAdvancedSearchFacetIntegrationTestCase(TestCase):
                     "operands": [
                         {
                             "type": "LITERAL",
-                            "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
-                            ],
+                            "value": [self.link_to_a, self.link_to_b],
                         }
                     ],
                 }
@@ -384,10 +381,7 @@ class ResourceInstanceAdvancedSearchFacetIntegrationTestCase(TestCase):
                     "operands": [
                         {
                             "type": "LITERAL",
-                            "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
-                            ],
+                            "value": [self.link_to_a, self.link_to_b],
                         }
                     ],
                 }
@@ -425,10 +419,7 @@ class ResourceInstanceAdvancedSearchFacetIntegrationTestCase(TestCase):
                     "operands": [
                         {
                             "type": "LITERAL",
-                            "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
-                            ],
+                            "value": [self.link_to_a, self.link_to_b],
                         }
                     ],
                 }
@@ -466,10 +457,7 @@ class ResourceInstanceAdvancedSearchFacetIntegrationTestCase(TestCase):
                     "operands": [
                         {
                             "type": "LITERAL",
-                            "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
-                            ],
+                            "value": [self.link_to_a, self.link_to_b],
                         }
                     ],
                 }
@@ -552,3 +540,79 @@ class ResourceInstanceAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
 
         self.assertEqual(result, {self.resource_with_value.resourceinstanceid})
+
+    def test_references_any_with_single_resource_reference_dict(self):
+        """Operand value is a single resource-reference dict as emitted by ResourceInstanceSelectWidgetEditor."""
+        payload = {
+            "graph_slug": self.any_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.any_graph.slug,
+                        "node_alias": self.any_resource_instance_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_ANY",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": self.link_to_a,
+                        }
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.any_match_resource.resourceinstanceid})
+
+    def test_references_any_with_list_of_resource_reference_dicts(self):
+        """Operand value is a list of resource-reference dicts as emitted by ResourceInstanceSelectWidgetEditor (multi-value)."""
+        payload = {
+            "graph_slug": self.any_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.any_graph.slug,
+                        "node_alias": self.any_resource_instance_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_ANY",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.link_to_a, self.link_to_b],
+                        }
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.any_match_resource.resourceinstanceid})

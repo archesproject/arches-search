@@ -153,6 +153,14 @@ class TermSearch(models.Model):
                     language_value = language_value["value"]
                 normalized_items.append({**operand_item, "value": language_value})
 
+            elif isinstance(raw_value, list):
+                label_texts = [
+                    label["value"]
+                    for reference in raw_value
+                    for label in reference["labels"]
+                ]
+                normalized_items.append({**operand_item, "value": label_texts})
+
             else:
                 normalized_items.append(operand_item)
         return normalized_items, resolved_language
@@ -250,6 +258,25 @@ class UUIDSearch(models.Model):
     node_alias = models.TextField()
     datatype = models.TextField()
     value = models.UUIDField()
+
+    @classmethod
+    def normalize_operands(cls, operand_items):
+        normalized_items = []
+        for operand_item in operand_items:
+            raw_value = operand_item.get("value")
+            if isinstance(raw_value, (dict, list)):
+                resource_refs = (
+                    raw_value if isinstance(raw_value, list) else [raw_value]
+                )
+                normalized_items.append(
+                    {
+                        **operand_item,
+                        "value": [ref["resourceId"] for ref in resource_refs],
+                    }
+                )
+            else:
+                normalized_items.append(operand_item)
+        return normalized_items, None
 
     class Meta:
         managed = True
