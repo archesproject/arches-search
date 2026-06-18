@@ -362,7 +362,7 @@ class DateRangeSearch(models.Model):
             ),
             models.Index(
                 fields=["graph_slug", "node_alias", "end_value"],
-                name="as_dr_end_val_idx",
+                name="arches_sear_graph_s_end_value_idx",
             ),
         ]
 
