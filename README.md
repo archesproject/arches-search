@@ -29,13 +29,13 @@ pip install arches-search
 
 1. If you don't already have an Arches project, you'll need to create one by following the instructions in the Arches [documentation](http://archesproject.org/documentation/).
 
-2. When your project is ready, add `arches_search` and its companion applications to INSTALLED_APPS **below** the name of your project. Order matters — `arches_search` must be listed before the other Arches applications:
+2. When your project is ready, add `arches_search` and its companion applications to INSTALLED_APPS **below** the name of your project. `arches_search` ships templates (`index.htm`, `arches_urls.htm`, the custom email templates, etc.) that override arches core, so it must be listed **above** core arches — which is why core (`arches.app`) is added last, after all applications:
 
     ```
     INSTALLED_APPS = (
         ...
         "my_project_name",
-        "arches_search",  # listed before any other arches applications
+        "arches_search",
         "arches_modular_reports",
         "arches_component_lab",
         "arches_controlled_lists",
