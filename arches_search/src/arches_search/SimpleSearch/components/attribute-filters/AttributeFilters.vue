@@ -29,9 +29,23 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 
 <template>
     <div class="attribute-filters">
-        <h3 class="filters-heading">{{ $gettext("Attribute Filters") }}</h3>
+        <h3 class="attribute-filters-title">
+            {{ $gettext("Attribute Filters") }}
+        </h3>
+
+        <span
+            v-if="nodes.length === 0"
+            class="attribute-filters-empty-state"
+        >
+            {{
+                $gettext(
+                    "No filters have been configured for this resource type.",
+                )
+            }}
+        </span>
 
         <Accordion
+            v-else
             multiple
             :value="[]"
         >
@@ -74,8 +88,23 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
     padding: 1.2rem 1.6rem;
 }
 
-.filters-heading {
+.attribute-filters-title {
     margin: 0 0 1.2rem 0;
+    padding-bottom: 0.75rem;
+    border-bottom: 0.125rem solid var(--p-content-border-color);
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: var(--p-text-color);
+}
+
+.attribute-filters-empty-state {
+    display: block;
+    padding: 1rem;
+    border: 0.125rem solid var(--p-content-border-color);
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    color: var(--p-text-muted-color);
+    line-height: 1.5;
 }
 
 .unsupported {
