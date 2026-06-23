@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
             model_name="daterangesearch",
             index=models.Index(
                 fields=["graph_slug", "node_alias", "end_value"],
-                name="arches_sear_graph_s_end_value_idx",
+                name="arches_sear_graph_s_end_val_idx",
             ),
         ),
     ]
