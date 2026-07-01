@@ -1,0 +1,1 @@
+export const HISTORICAL_CUTOFF_YEAR = 1900;

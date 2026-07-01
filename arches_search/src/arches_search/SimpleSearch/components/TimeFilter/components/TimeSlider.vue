@@ -4,11 +4,14 @@ import { computed } from "vue";
 
 import Slider from "primevue/slider";
 
+import { HISTORICAL_CUTOFF_YEAR } from "@/arches_search/SimpleSearch/components/TimeFilter/constants.ts";
+
 const LABEL_OVERLAP_THRESHOLD = 25;
 
 const props = defineProps<{
     modelValue: [number, number];
     bounds: [Date, Date];
+    disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -28,12 +31,12 @@ const handleEndDate = computed<Date>(() =>
     dayjs(props.bounds[0]).add(props.modelValue[1], "day").toDate(),
 );
 
-const boundsStartLabel = computed<string>(() => formatDate(props.bounds[0]));
-const boundsEndLabel = computed<string>(() => formatDate(props.bounds[1]));
+const boundsStartLabel = computed<string>(() => formatYear(props.bounds[0]));
+const boundsEndLabel = computed<string>(() => formatYear(props.bounds[1]));
 const handleStartLabel = computed<string>(() =>
-    formatDate(handleStartDate.value),
+    formatYear(handleStartDate.value),
 );
-const handleEndLabel = computed<string>(() => formatDate(handleEndDate.value));
+const handleEndLabel = computed<string>(() => formatYear(handleEndDate.value));
 
 const handleStartPercent = computed<number>(() =>
     percentFor(props.modelValue[0], 0),
@@ -55,8 +58,8 @@ const combinedLabelPercent = computed<number>(
 );
 
 const combinedLabel = computed<string>(() => {
-    const startLabel = formatDate(handleStartDate.value);
-    const endLabel = formatDate(handleEndDate.value);
+    const startLabel = formatYear(handleStartDate.value);
+    const endLabel = formatYear(handleEndDate.value);
 
     if (dayjs(handleStartDate.value).isSame(handleEndDate.value, "day")) {
         return startLabel;
@@ -65,8 +68,15 @@ const combinedLabel = computed<string>(() => {
     return `${startLabel} – ${endLabel}`;
 });
 
-function formatDate(date: Date): string {
-    return dayjs(date).format("MMM D, YYYY");
+function formatYear(date: Date): string {
+    const year = date.getFullYear();
+
+    if (year >= HISTORICAL_CUTOFF_YEAR) {
+        return dayjs(date).format("YYYY-MM-DD");
+    }
+
+    // ISO 8601: year 0 = 1 BCE, year -1 = 2 BCE, so BCE display = 1 - year
+    return year <= 0 ? `${1 - year} BCE` : String(year);
 }
 
 function percentFor(value: number, fallback: number): number {
@@ -113,7 +123,8 @@ function onSliderUpdate(value: number | number[]): void {
                 :max="totalDays"
                 :step="1"
                 :range="true"
-                @update:model-value="onSliderUpdate"
+                :disabled="disabled"
+                @change="onSliderUpdate"
             />
         </div>
 

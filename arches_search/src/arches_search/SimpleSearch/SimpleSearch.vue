@@ -129,6 +129,11 @@ watch(
 
         if (!graph || !graph.id) {
             nodeFilterConfigNodes.value = [];
+
+            if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
+                closeSidePanel();
+            }
+
             return;
         }
 
@@ -349,6 +354,7 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             :show-saved-searches="isSavedSearchesOpen"
             :show-export-panel="isExportPanelOpen"
             :hide-filters-button="!activeGraph"
+            :hide-time-button="!activeGraph"
             @update:sort-value="onSortValueUpdate"
             @save-search="showSaveDialog = true"
             @toggle-filters="onToggleAttributeFilters"
@@ -401,7 +407,6 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                             :graph-slug="activeGraphSlug"
                             :graph-id="activeGraphId"
                             :graph-label="activeGraphLabel"
-                            :is-open="isTimeFilterOpen"
                             :model-value="selectedTimeFilterClause"
                             @update:model-value="onTimeFilterUpdate"
                             @remove="onRemoveTimeFilter"
