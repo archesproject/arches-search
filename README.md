@@ -37,7 +37,7 @@ pip install arches-search
         "my_project_name",
         "arches_search",
         "arches_modular_reports",
-        "arches_component_lab",
+        "arches_vue_components",
         "arches_controlled_lists",
         "arches_querysets",
     )
@@ -48,7 +48,7 @@ pip install arches-search
     ```
     "dependencies": {
         "arches": "archesproject/arches#dev/8.1.x",
-        "arches-component-lab": "archesproject/arches-component-lab#main",
+        "arches-vue-components": "archesproject/arches-vue-components#dev/1.0.x",
         "arches-controlled-lists": "archesproject/arches-controlled-lists#dev/1.1.x",
         "arches-modular-reports": "archesproject/arches-modular-reports#main",
         "arches-search": "archesproject/arches-search#main"

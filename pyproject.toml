@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
     "arches<8.3.0,>=8.1.0",
-    "arches-component-lab>=0.0.1a13",
+    "arches-vue-components<3.0.0,>=1.0.1",
     "arches-controlled-lists>=1.1.0a0",
     "arches-modular-reports>=1.0.0b7",
 ]
