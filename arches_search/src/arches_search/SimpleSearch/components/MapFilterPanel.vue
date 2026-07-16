@@ -3,15 +3,15 @@ import { nextTick, useTemplateRef, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import MapWidget from "@/arches_component_lab/widgets/MapWidget/MapWidget.vue";
-const SEARCH_RENDER_CONTEXT = "search";
+import MapWidget from "@/arches_vue_components/widgets/MapWidget/MapWidget.vue";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import type { FeatureCollection } from "geojson";
-import type { GeoJSONFeatureCollectionValue } from "@/arches_component_lab/datatypes/geojson-feature-collection/types";
+import type { GeoJSONFeatureCollectionValue } from "@/arches_vue_components/datatypes/geojson-feature-collection/types";
 
 const SEARCH_RESULTS_SOURCE = "arches-search-results";
+const SEARCH_RENDER_CONTEXT = "search";
 
 const { modelValue, visible } = defineProps<{
     modelValue: FeatureCollection | null;
