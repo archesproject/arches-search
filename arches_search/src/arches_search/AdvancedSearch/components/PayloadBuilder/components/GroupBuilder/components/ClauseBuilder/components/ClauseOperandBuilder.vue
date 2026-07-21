@@ -29,7 +29,7 @@ const { modelValue, subjectTerminalNode, subjectTerminalGraph, operandType } =
 
 const operandValue = ref<unknown>(null);
 const displayValue = ref<string | undefined>(undefined);
-const initialAliasedNodeData = ref<Record<string, unknown> | null>(null);
+const initialValue = ref<Record<string, unknown> | null>(null);
 const hasInitializedFromModel = ref(false);
 
 watchEffect(() => {
@@ -40,7 +40,7 @@ watchEffect(() => {
     if (modelValue === null || modelValue.value === undefined) {
         operandValue.value = null;
         displayValue.value = undefined;
-        initialAliasedNodeData.value = null;
+        initialValue.value = null;
         hasInitializedFromModel.value = true;
         return;
     }
@@ -49,12 +49,9 @@ watchEffect(() => {
     displayValue.value = modelValue.display_value;
 
     if (operandType === OPERAND_TYPE_LITERAL) {
-        initialAliasedNodeData.value = modelValue.value as Record<
-            string,
-            unknown
-        >;
+        initialValue.value = modelValue.value as Record<string, unknown>;
     } else {
-        initialAliasedNodeData.value = null;
+        initialValue.value = null;
     }
 
     hasInitializedFromModel.value = true;
@@ -76,12 +73,9 @@ function handleOperandTypeChange(
         displayValue.value = undefined;
 
         if (modelValue !== null && modelValue.value !== undefined) {
-            initialAliasedNodeData.value = modelValue.value as Record<
-                string,
-                unknown
-            >;
+            initialValue.value = modelValue.value as Record<string, unknown>;
         } else {
-            initialAliasedNodeData.value = null;
+            initialValue.value = null;
         }
 
         return;
@@ -89,7 +83,7 @@ function handleOperandTypeChange(
 
     operandValue.value = [];
     displayValue.value = undefined;
-    initialAliasedNodeData.value = null;
+    initialValue.value = null;
 }
 
 function emitUpdatedOperand(): void {
@@ -116,8 +110,7 @@ function handleGenericWidgetUpdate(updatedWidgetValue: unknown): void {
                 :graph-slug="subjectTerminalGraph.slug"
                 :node-alias="subjectTerminalNode.alias"
                 :should-show-label="false"
-                :aliased-node-data="initialAliasedNodeData || undefined"
-                :should-emit-simplified-value="true"
+                :value="initialValue ?? undefined"
                 @update:value="handleGenericWidgetUpdate"
             />
         </div>
