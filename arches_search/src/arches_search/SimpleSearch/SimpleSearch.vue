@@ -43,15 +43,10 @@ import type {
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced";
 const TERM_FILTER_KEY = "termfilter";
 const TIME_FILTER_QUERY_KEY = "timeFilter";
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
-
-defineEmits<{
-    (event: typeof SWITCH_TO_ADVANCED_EVENT): void;
-}>();
 
 const {
     activeGraph,
