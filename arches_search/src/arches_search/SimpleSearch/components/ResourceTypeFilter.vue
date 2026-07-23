@@ -11,9 +11,10 @@ import type { GraphModel } from "@/arches_search/AdvancedSearch/types.ts";
 import type { ResourceType } from "@/arches_search/SimpleSearch/types.ts";
 
 const RESOURCE_TYPE_FALLBACK_KEY = "__all__";
+const COUNT_ABBREVIATION_THRESHOLD = 1000;
 
 const { $gettext } = useGettext();
-const { setGraph, activeGraph } = useSearchFilters();
+const { setGraph, activeGraph, searchResults } = useSearchFilters();
 
 const resourceTypes = ref<ResourceType[]>([]);
 const hasResourceTypeLoadError = ref(false);
@@ -21,6 +22,29 @@ const hasResourceTypeLoadError = ref(false);
 const resourceTypeLoadErrorMessage = computed(() =>
     $gettext("Resource type filters are unavailable."),
 );
+
+const allResourceType = computed<ResourceType>(() => ({
+    id: null,
+    label: $gettext("All"),
+    icon: "",
+}));
+
+const displayedResourceTypes = computed<ResourceType[]>(() => [
+    allResourceType.value,
+    ...resourceTypes.value,
+]);
+
+const resourceTypeCountsByGraphId = computed<Map<string, number>>(() => {
+    const countsByGraphId = new Map<string, number>();
+    for (const resourceTypeCount of searchResults.value.resource_type_counts ??
+        []) {
+        countsByGraphId.set(
+            resourceTypeCount.graph_id,
+            resourceTypeCount.count,
+        );
+    }
+    return countsByGraphId;
+});
 
 watchEffect(async () => {
     await loadResourceTypes();
@@ -50,36 +74,75 @@ function getResourceTypeButtonKey(resourceType: ResourceType): string {
 }
 
 function isResourceTypeSelected(resourceType: ResourceType): boolean {
+    if (resourceType.id === null) {
+        return activeGraph.value === null;
+    }
+
     return activeGraph.value?.id === resourceType.id;
 }
 
-function selectGraph(graph: ResourceType | null): void {
-    if (activeGraph.value?.id === graph?.id) {
+function selectGraph(resourceType: ResourceType): void {
+    if (resourceType.id === null || activeGraph.value?.id === resourceType.id) {
         setGraph(null);
 
         return;
     }
 
-    setGraph(graph);
+    setGraph(resourceType);
+}
+
+function getResourceTypeCount(resourceType: ResourceType): number {
+    if (resourceType.id === null) {
+        return searchResults.value.all_resource_count ?? 0;
+    }
+
+    return resourceTypeCountsByGraphId.value.get(resourceType.id) ?? 0;
+}
+
+function getResourceTypeCountLabel(resourceType: ResourceType): string {
+    const count = getResourceTypeCount(resourceType);
+
+    if (count < COUNT_ABBREVIATION_THRESHOLD) {
+        return String(count);
+    }
+
+    return $gettext("%{count}k", {
+        count: (count / 1000).toFixed(1),
+    });
+}
+
+function getResourceTypeTooltip(resourceType: ResourceType): string {
+    return $gettext("%{label} — %{count} records", {
+        label: resourceType.label,
+        count: getResourceTypeCount(resourceType).toLocaleString(),
+    });
 }
 </script>
 
 <template>
     <div class="resource-type-filter">
         <Button
-            v-for="resourceType in resourceTypes"
+            v-for="resourceType in displayedResourceTypes"
             :key="getResourceTypeButtonKey(resourceType)"
             class="type-btn"
-            icon-pos="left"
             severity="secondary"
             size="large"
             type="button"
             variant="outlined"
             :class="{ active: isResourceTypeSelected(resourceType) }"
-            :icon="resourceType.icon"
-            :label="resourceType.label"
+            :title="getResourceTypeTooltip(resourceType)"
             @click="selectGraph(resourceType)"
-        />
+        >
+            <i
+                v-if="resourceType.icon"
+                class="type-icon"
+                :class="resourceType.icon"
+            />
+            <span class="type-label">{{ resourceType.label }}</span>
+            <span class="type-count"
+                >({{ getResourceTypeCountLabel(resourceType) }})</span
+            >
+        </Button>
 
         <span
             v-if="hasResourceTypeLoadError"
@@ -97,7 +160,7 @@ function selectGraph(graph: ResourceType | null): void {
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    padding: 0 1.6rem 1.4rem;
+    padding: 0.2rem 1.6rem 1.4rem;
     overflow-x: auto;
     scrollbar-width: none;
 }
@@ -109,6 +172,12 @@ function selectGraph(graph: ResourceType | null): void {
 .resource-type-filter .type-btn {
     display: inline-flex;
     align-items: center;
+    /* !important: PrimeVue's own .p-button sets justify-content at the same
+       specificity (and/or via its runtime-injected stylesheet, which loads
+       after this component's own styles), so on a tie it wins by source
+       order and left-aligns the icon/label/count group instead of
+       centering it — same root cause as the color/border rules below. */
+    justify-content: center !important;
     /* PrimeVue's own .p-button has overflow:hidden by default, which makes
        this button's automatic min-width resolve to 0 as a flex item (per
        the flexbox spec) — without flex-shrink:0 it would shrink below its
@@ -116,7 +185,7 @@ function selectGraph(graph: ResourceType | null): void {
        to overflow into its intended horizontal scroll. */
     flex-shrink: 0;
     gap: 0.5rem;
-    padding: 0.5rem 1.2rem;
+    padding: 0.7rem 1.2rem;
     border: 0.15rem solid var(--arches-search-chip-border);
     border-radius: 999rem;
     background: var(--p-content-background);
@@ -128,7 +197,7 @@ function selectGraph(graph: ResourceType | null): void {
        ResultsToolbar.vue. */
     color: var(--arches-search-sec-btn-text) !important;
     font-size: 1.2rem;
-    font-weight: 500;
+    font-weight: 600;
     white-space: nowrap;
     cursor: pointer;
     user-select: none;
@@ -164,8 +233,14 @@ function selectGraph(graph: ResourceType | null): void {
     color: var(--p-primary-contrast-color) !important;
 }
 
-.resource-type-filter .type-btn :deep(.p-button-icon) {
+.resource-type-filter .type-btn .type-icon {
     font-size: 1.1rem;
+}
+
+.resource-type-filter .type-btn .type-count {
+    margin-inline-start: 0.1rem;
+    font-size: 1rem;
+    font-weight: 500;
 }
 
 .resource-type-filter .load-error {

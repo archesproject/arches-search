@@ -15,6 +15,12 @@ const router = createRouter({
 export default ko.components.register('arches-search', {
     viewModel: function () {
         createVueApplication({ component: SearchApp, themeConfiguration: SearchTheme }).then(vueApp => {
+            // Force light mode: createVueApplication() (arches-vue-components) auto-applies
+            // dark mode from the OS/localStorage preference before this resolves; undo that here
+            // rather than in the shared package, since other Arches apps still want that behavior.
+            const darkModeClass = SearchTheme.theme.options.darkModeSelector.substring(1);
+            document.documentElement.classList.remove(darkModeClass);
+
             vueApp.use(router);
             vueApp.mount('#arches-search-mounting-point');
         });

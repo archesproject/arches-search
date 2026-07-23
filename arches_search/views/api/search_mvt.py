@@ -11,7 +11,7 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.views.api.simple_search import build_search_queryset
+from arches_search.utils.search_queryset import build_search_queryset
 
 
 MVT_LAYER_NAME = "search-results"
