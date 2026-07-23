@@ -2,75 +2,72 @@ import { computed, onUnmounted, ref } from "vue";
 import type { CSSProperties } from "vue";
 
 const SIDE_PANEL_SIZE = 40;
+const IDLE_PANEL_SIZE = 27;
 const SIDE_PANEL_MIN_SIZE = 15;
+// PrimeVue's Splitter (default gutterSize=4, unless overridden via a
+// gutter-size prop on <Splitter> — this app doesn't set one) always writes
+// flex-basis as `calc(X% - gutterCount * gutterSize px)`, never a bare
+// percentage, both on init and on every drag frame. Splitter re-renders
+// itself on every mousemove regardless of whether we listen to its "resize"
+// event (its own internal prevSize is reactive), which re-evaluates this
+// slot and reasserts sidePanelStyle's own flex-basis right after PrimeVue's
+// write. A bare percentage here loses that fight on every single frame,
+// snapping the panel edge a few px back and reading as stutter on a slow
+// drag — matching PrimeVue's own compensated value exactly makes the
+// reassertion a no-op instead. Two panels means exactly one gutter.
+const SPLITTER_GUTTER_SIZE_PX = 4;
 const FLEX_TRANSITION = "240ms ease" as const;
 const BORDER_TRANSITION = "180ms ease" as const;
 const SIDE_PANEL_SWITCH_DELAY_MS = 240;
+const IDLE_PANEL = "idle" as const;
 const ATTRIBUTE_FILTERS_PANEL = "attribute-filters" as const;
 const TIME_FILTER_PANEL = "time-filter" as const;
 const MAP_FILTER_PANEL = "map-filter" as const;
 const SAVED_SEARCHES_PANEL = "saved-searches" as const;
-const EXPORT_PANEL = "export" as const;
 
 interface SplitterResizeEvent {
     sizes?: number[];
 }
 
 type SidePanelType =
+    | typeof IDLE_PANEL
     | typeof ATTRIBUTE_FILTERS_PANEL
     | typeof TIME_FILTER_PANEL
     | typeof MAP_FILTER_PANEL
-    | typeof SAVED_SEARCHES_PANEL
-    | typeof EXPORT_PANEL;
+    | typeof SAVED_SEARCHES_PANEL;
 
 const PANEL_SIZES: Record<SidePanelType, number> = {
+    [IDLE_PANEL]: IDLE_PANEL_SIZE,
     [ATTRIBUTE_FILTERS_PANEL]: 27,
     [TIME_FILTER_PANEL]: SIDE_PANEL_SIZE,
     [MAP_FILTER_PANEL]: 65,
     [SAVED_SEARCHES_PANEL]: 27,
-    [EXPORT_PANEL]: 27,
 };
 
 export function useSidePanel() {
-    const activeSidePanel = ref<SidePanelType | null>(null);
-    const isSidePanelOpen = ref(false);
-    const sidePanelBasis = ref(SIDE_PANEL_SIZE);
+    // The side panel always shows *something* — it defaults to the idle
+    // "explore your results" tile grid rather than collapsing away, so
+    // activeSidePanel is never null.
+    const activeSidePanel = ref<SidePanelType>(IDLE_PANEL);
+    const sidePanelBasis = ref(PANEL_SIZES[IDLE_PANEL]);
     const isSplitterResizing = ref(false);
+    const isSidePanelVisible = ref(true);
 
     let switchTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const hasOpenSidePanel = computed<boolean>(
-        () => isSidePanelOpen.value && activeSidePanel.value !== null,
+    const isIdle = computed<boolean>(
+        () => activeSidePanel.value === IDLE_PANEL,
     );
 
     const isAttributeFiltersOpen = computed<boolean>(
-        () =>
-            hasOpenSidePanel.value &&
-            activeSidePanel.value === ATTRIBUTE_FILTERS_PANEL,
-    );
-
-    const isTimeFilterOpen = computed<boolean>(
-        () =>
-            hasOpenSidePanel.value &&
-            activeSidePanel.value === TIME_FILTER_PANEL,
-    );
-
-    const isMapFilterOpen = computed<boolean>(
-        () =>
-            hasOpenSidePanel.value &&
-            activeSidePanel.value === MAP_FILTER_PANEL,
-    );
-
-    // Stay true during the close animation so the panel component stays mounted.
-    const isAttributeFiltersActive = computed<boolean>(
         () => activeSidePanel.value === ATTRIBUTE_FILTERS_PANEL,
     );
 
-    const isTimeFilterActive = computed<boolean>(
+    const isTimeFilterOpen = computed<boolean>(
         () => activeSidePanel.value === TIME_FILTER_PANEL,
     );
 
-    const isMapFilterActive = computed<boolean>(
+    const isMapFilterOpen = computed<boolean>(
         () => activeSidePanel.value === MAP_FILTER_PANEL,
     );
 
@@ -78,36 +75,21 @@ export function useSidePanel() {
         () => activeSidePanel.value === SAVED_SEARCHES_PANEL,
     );
 
-    const isSavedSearchesActive = computed<boolean>(
-        () => activeSidePanel.value === SAVED_SEARCHES_PANEL,
-    );
+    // Kept as separate names for the SimpleSearch.vue v-if chain; identical
+    // to the "*Open" computeds now that the panel never fully unmounts.
+    const isAttributeFiltersActive = isAttributeFiltersOpen;
+    const isTimeFilterActive = isTimeFilterOpen;
+    const isMapFilterActive = isMapFilterOpen;
+    const isSavedSearchesActive = isSavedSearchesOpen;
 
-    const isExportPanelActive = computed<boolean>(
-        () => activeSidePanel.value === EXPORT_PANEL,
-    );
+    const resultsPanelSize = computed<number>(() => 100 - sidePanelBasis.value);
 
-    const isExportPanelOpen = computed<boolean>(
-        () => hasOpenSidePanel.value && activeSidePanel.value === EXPORT_PANEL,
-    );
+    const visibleSidePanelSize = computed<number>(() => sidePanelBasis.value);
 
-    const resultsPanelSize = computed<number>(
-        () => 100 - (hasOpenSidePanel.value ? sidePanelBasis.value : 0),
-    );
-
-    const visibleSidePanelSize = computed<number>(() =>
-        hasOpenSidePanel.value ? sidePanelBasis.value : 0,
-    );
-
-    const sidePanelMinSize = computed<number>(() =>
-        hasOpenSidePanel.value ? SIDE_PANEL_MIN_SIZE : 0,
-    );
-
-    const splitterStateClass = computed<string>(() =>
-        hasOpenSidePanel.value ? "side-panel-open" : "side-panel-closed",
-    );
+    const sidePanelMinSize = computed<number>(() => SIDE_PANEL_MIN_SIZE);
 
     const sidePanelContentClass = computed<Record<string, boolean>>(() => ({
-        "side-panel-content-open": hasOpenSidePanel.value,
+        "side-panel-content-open": isSidePanelVisible.value,
     }));
 
     const sidePanelTransition = computed<string>(() => {
@@ -122,19 +104,16 @@ export function useSidePanel() {
     });
 
     const sidePanelStyle = computed<CSSProperties>(() => {
-        const isOpen = hasOpenSidePanel.value;
-        const panelSize = isOpen ? `${sidePanelBasis.value}%` : "0";
+        const panelSize = `calc(${sidePanelBasis.value}% - ${SPLITTER_GUTTER_SIZE_PX}px)`;
         return {
             flexGrow: "0",
             flexShrink: "0",
             flexBasis: panelSize,
             maxWidth: panelSize,
             minWidth: "0",
-            borderInlineStartColor: isOpen
-                ? "var(--p-content-border-color)"
-                : "transparent",
+            borderInlineStartColor: "var(--p-content-border-color)",
             transition: sidePanelTransition.value,
-            pointerEvents: isOpen ? "auto" : "none",
+            pointerEvents: "auto",
         };
     });
 
@@ -145,46 +124,37 @@ export function useSidePanel() {
         }
     }
 
-    function applyPanel(nextPanel: SidePanelType | null): void {
+    function applyPanel(nextPanel: SidePanelType): void {
         activeSidePanel.value = nextPanel;
-        if (nextPanel !== null) sidePanelBasis.value = PANEL_SIZES[nextPanel];
-        isSidePanelOpen.value = nextPanel !== null;
+        sidePanelBasis.value = PANEL_SIZES[nextPanel];
+        isSidePanelVisible.value = true;
     }
 
-    function closeSidePanel(nextPanel: SidePanelType | null = null): void {
+    function switchToPanel(nextPanel: SidePanelType): void {
         clearSwitchTimer();
 
-        if (!hasOpenSidePanel.value) {
-            applyPanel(nextPanel);
-            return;
-        }
+        if (nextPanel === activeSidePanel.value) return;
 
-        isSidePanelOpen.value = false;
+        isSidePanelVisible.value = false;
         switchTimer = setTimeout(() => {
             applyPanel(nextPanel);
             switchTimer = null;
         }, SIDE_PANEL_SWITCH_DELAY_MS);
     }
 
-    function openSidePanel(panelType: SidePanelType): void {
-        clearSwitchTimer();
-        sidePanelBasis.value = PANEL_SIZES[panelType];
-        activeSidePanel.value = panelType;
-        isSidePanelOpen.value = true;
+    function closeSidePanel(): void {
+        switchToPanel(IDLE_PANEL);
     }
 
     function toggleSidePanel(panelType: SidePanelType): void {
-        if (hasOpenSidePanel.value) {
-            const next = activeSidePanel.value === panelType ? null : panelType;
-            closeSidePanel(next);
-            return;
-        }
-        openSidePanel(panelType);
+        const next =
+            activeSidePanel.value === panelType ? IDLE_PANEL : panelType;
+        switchToPanel(next);
     }
 
     function onSplitterResize(event: SplitterResizeEvent): void {
         const size = event.sizes?.[1];
-        if (hasOpenSidePanel.value && typeof size === "number" && size > 0) {
+        if (typeof size === "number" && size > 0) {
             sidePanelBasis.value = size;
         }
     }
@@ -214,36 +184,46 @@ export function useSidePanel() {
         toggleSidePanel(SAVED_SEARCHES_PANEL);
     }
 
-    function onToggleExportPanel(): void {
-        toggleSidePanel(EXPORT_PANEL);
+    // Non-toggling opens, distinct from the onToggle* functions above: an
+    // active-filter chip's click-to-edit action must always land on its
+    // panel, even if that panel is already open — toggling would close it.
+    function openAttributeFilters(): void {
+        switchToPanel(ATTRIBUTE_FILTERS_PANEL);
+    }
+
+    function openTimeFilter(): void {
+        switchToPanel(TIME_FILTER_PANEL);
+    }
+
+    function openMapFilter(): void {
+        switchToPanel(MAP_FILTER_PANEL);
     }
 
     onUnmounted(clearSwitchTimer);
 
     return {
+        isIdle,
         isAttributeFiltersActive,
         isAttributeFiltersOpen,
         isMapFilterActive,
         isMapFilterOpen,
-        isExportPanelActive,
-        isExportPanelOpen,
         isSavedSearchesActive,
         isSavedSearchesOpen,
         isTimeFilterActive,
         isTimeFilterOpen,
-        hasOpenSidePanel,
         resultsPanelSize,
         visibleSidePanelSize,
         sidePanelMinSize,
-        splitterStateClass,
         sidePanelContentClass,
         sidePanelStyle,
         closeSidePanel,
         onToggleAttributeFilters,
         onToggleMapFilter,
-        onToggleExportPanel,
         onToggleSavedSearches,
         onToggleTimeFilter,
+        openAttributeFilters,
+        openMapFilter,
+        openTimeFilter,
         onSplitterResizeStart,
         onSplitterResize,
         onSplitterResizeEnd,

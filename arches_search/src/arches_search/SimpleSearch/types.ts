@@ -31,11 +31,22 @@ export interface TermSuggestion {
     addtional_info?: Record<string, unknown>;
 }
 
+export type ActiveFilterKind =
+    | "term"
+    | "resource-type"
+    | "time"
+    | "map"
+    | "attribute";
+
 export interface ActiveFilter {
     id: string;
     text: string;
     clear: () => void;
     inverted: boolean;
+    kind: ActiveFilterKind;
+    category: string;
+    icon: string;
+    onEdit?: () => void;
     options?: Record<string, unknown>;
 }
 

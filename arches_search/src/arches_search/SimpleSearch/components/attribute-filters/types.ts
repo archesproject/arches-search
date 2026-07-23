@@ -36,4 +36,8 @@ export interface AttributeFilterEntry {
         value: unknown,
         graphSlug: string,
     ): GroupPayload | null;
+    // Renders the widget's current value as chip-friendly display text (for
+    // the active-filters row) — kept per-datatype here alongside buildQuery
+    // since both are just different views of the same datatype-specific value.
+    formatValue(value: unknown): string;
 }
