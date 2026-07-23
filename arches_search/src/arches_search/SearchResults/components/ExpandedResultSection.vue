@@ -63,10 +63,14 @@ watch(isExpanded, async (expanded) => {
 </template>
 
 <style scoped>
+/* The components rendered inside are arbitrary server-configured report
+   sections (tables, rich text, etc.), not fixed short label/value fields —
+   so this stays a plain stack rather than a grid, letting each component
+   render at its own natural width instead of being squeezed into columns. */
 .expanded-result-section {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-    gap: 0.6rem 1.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     border-top: 0.1rem dashed var(--p-content-border-color);
     padding: 1rem 1.6rem;
     background-color: var(--arches-search-page-bg);

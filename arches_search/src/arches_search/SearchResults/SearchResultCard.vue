@@ -89,6 +89,10 @@ watchEffect(() => {
 
 <style scoped>
 .search-result-card {
+    /* overflow:hidden below makes flex's auto min-height resolve to 0
+       instead of content size, so without flex-shrink:0 the card gets
+       squished (and its content clipped) inside the scrolling list. */
+    flex-shrink: 0;
     border: 0.15rem solid var(--p-content-border-color);
     border-radius: 0.8rem;
     background: var(--arches-search-card-bg);

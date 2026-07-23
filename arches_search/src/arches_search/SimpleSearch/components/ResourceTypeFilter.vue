@@ -97,7 +97,7 @@ function selectGraph(graph: ResourceType | null): void {
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    padding: 0 0 1.4rem;
+    padding: 0 1.6rem 1.4rem;
     overflow-x: auto;
     scrollbar-width: none;
 }
@@ -109,12 +109,24 @@ function selectGraph(graph: ResourceType | null): void {
 .resource-type-filter .type-btn {
     display: inline-flex;
     align-items: center;
+    /* PrimeVue's own .p-button has overflow:hidden by default, which makes
+       this button's automatic min-width resolve to 0 as a flex item (per
+       the flexbox spec) — without flex-shrink:0 it would shrink below its
+       label's natural width and clip the text instead of forcing the row
+       to overflow into its intended horizontal scroll. */
+    flex-shrink: 0;
     gap: 0.5rem;
     padding: 0.5rem 1.2rem;
-    border: 0.15rem solid var(--p-content-border-color);
+    border: 0.15rem solid var(--arches-search-chip-border);
     border-radius: 999rem;
     background: var(--p-content-background);
-    color: var(--p-text-color);
+    /* !important: PrimeVue's own .p-button-outlined.p-button-secondary sets
+       color at the same 2-class specificity as this selector, so on a tie
+       its own token wins by source order (its stylesheet is injected at
+       runtime, after this component's own styles) — same root cause as the
+       hover rule below and as .toolbar-right .toolbar-btn in
+       ResultsToolbar.vue. */
+    color: var(--arches-search-sec-btn-text) !important;
     font-size: 1.2rem;
     font-weight: 500;
     white-space: nowrap;
@@ -126,16 +138,30 @@ function selectGraph(graph: ResourceType | null): void {
         color 0.12s;
 }
 
+/* !important + explicit border shorthand (not just border-color) because
+   PrimeVue's own outlined/secondary :hover styling otherwise wins on
+   properties this rule doesn't pin, including border width — which was
+   making the chips visibly grow/shift on hover. Same reasoning as
+   .toolbar-right .toolbar-btn:hover in ResultsToolbar.vue. */
 .resource-type-filter .type-btn:hover {
-    background: var(--p-content-hover-background);
-    border-color: var(--p-text-muted-color);
+    background: var(--p-content-hover-background) !important;
+    border: 0.15rem solid var(--p-text-muted-color) !important;
+    color: var(--arches-search-sec-btn-text) !important;
 }
 
-.resource-type-filter .type-btn.active,
-.resource-type-filter .type-btn.active:hover {
+/* color needs !important here too, purely to beat the resting rule above
+   now that it's !important — this selector already outranks PrimeVue's own
+   2-class outlined/secondary rule on plain specificity (3 classes vs 2). */
+.resource-type-filter .type-btn.active {
     background: var(--p-primary-color);
     border-color: var(--p-primary-color);
-    color: var(--p-primary-contrast-color);
+    color: var(--p-primary-contrast-color) !important;
+}
+
+.resource-type-filter .type-btn.active:hover {
+    background: var(--p-primary-color) !important;
+    border: 0.15rem solid var(--p-primary-color) !important;
+    color: var(--p-primary-contrast-color) !important;
 }
 
 .resource-type-filter .type-btn :deep(.p-button-icon) {

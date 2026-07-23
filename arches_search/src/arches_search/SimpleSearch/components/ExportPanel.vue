@@ -3,12 +3,21 @@ import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
+import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import RadioButton from "primevue/radiobutton";
 import ToggleSwitch from "primevue/toggleswitch";
 
 import { exportSearchResults } from "@/arches_search/SimpleSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+
+defineProps<{
+    visible: boolean;
+}>();
+
+const emit = defineEmits<{
+    (event: "update:visible", value: boolean): void;
+}>();
 
 const { $gettext } = useGettext();
 const { searchResults, getExportPayload } = useSearchFilters();
@@ -34,6 +43,7 @@ async function onExport() {
             filename: filename.value,
             allDescriptors: allDescriptors.value,
         });
+        emit("update:visible", false);
     } catch (error) {
         exportError.value =
             error instanceof Error ? error.message : $gettext("Export failed");
@@ -44,18 +54,20 @@ async function onExport() {
 </script>
 
 <template>
-    <div class="export-panel">
-        <div class="panel-tabs">
-            <button class="panel-tab active">
-                {{ $gettext("Export Results") }}
-            </button>
-        </div>
-
+    <Dialog
+        :visible="visible"
+        :header="$gettext('Export Results')"
+        modal
+        :closable="true"
+        class="export-panel"
+        @update:visible="$emit('update:visible', $event)"
+    >
         <div class="panel-list">
             <div class="item-meta">
+                <i class="pi pi-database" />
                 <span class="item-type">
                     {{
-                        $gettext("%{count} results", {
+                        $gettext("%{count} results will be exported", {
                             count: String(
                                 searchResults.pagination.total_results,
                             ),
@@ -79,7 +91,7 @@ async function onExport() {
                         {{ $gettext("Export Results") }}
                     </label>
                 </div>
-                <div class="p item-description">
+                <div class="item-description">
                     {{
                         $gettext(
                             "Export resource name and descriptions to an Excel file.",
@@ -96,9 +108,7 @@ async function onExport() {
                     </label>
                 </div>
             </div>
-        </div>
 
-        <div class="panel-footer">
             <div class="filename-row">
                 <label
                     for="export-filename"
@@ -121,7 +131,14 @@ async function onExport() {
                 <i class="pi pi-exclamation-triangle" />
                 {{ exportError }}
             </div>
+        </div>
 
+        <template #footer>
+            <Button
+                :label="$gettext('Cancel')"
+                severity="secondary"
+                @click="$emit('update:visible', false)"
+            />
             <Button
                 :label="downloadButtonLabel"
                 icon="pi pi-download"
@@ -133,46 +150,23 @@ async function onExport() {
                 class="download-btn"
                 @click="onExport"
             />
-        </div>
-    </div>
+        </template>
+    </Dialog>
 </template>
 
 <style scoped>
 .export-panel {
+    width: 44rem;
+    max-width: 90vw;
+}
+
+:deep(.p-dialog-content) {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    font-size: var(--p-arches-search-font-size);
-    background: var(--arches-search-card-bg);
-}
-
-.panel-tabs {
-    display: flex;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
-}
-
-.panel-tab {
-    flex: 1;
-    padding: 1rem 1.25rem;
-    background: none;
-    border: none;
-    border-bottom: 0.2rem solid transparent;
-    cursor: pointer;
-    font-size: var(--p-arches-search-font-size);
-    font-family: inherit;
-    font-weight: 500;
-    text-align: center;
-}
-
-.panel-tab.active {
-    border-bottom-color: var(--p-primary-color);
-    font-weight: 700;
+    gap: 1rem;
 }
 
 .panel-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1.25rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -181,12 +175,16 @@ async function onExport() {
 .item-meta {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.8rem;
     padding: 0.625rem 0.75rem;
     background: var(--p-surface-100);
-    border-radius: 0.375rem;
-    font-size: 0.85em;
+    border-radius: 0.6rem;
+    font-size: 1.3rem;
     color: var(--p-text-color);
+}
+
+.item-meta .pi {
+    color: var(--p-primary-color);
 }
 
 .export-item {
@@ -218,7 +216,7 @@ async function onExport() {
 }
 
 .item-description {
-    margin: 0 0 0 1.5rem;
+    margin-inline-start: 1.5rem;
     color: var(--p-text-muted-color);
     font-size: 0.85em;
 }
@@ -227,16 +225,9 @@ async function onExport() {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin: 0.5rem 0 0 1.5rem;
+    margin-block-start: 0.5rem;
+    margin-inline-start: 1.5rem;
     font-size: 0.85em;
-}
-
-.panel-footer {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.875rem 1.25rem;
-    border-top: 0.125rem solid var(--p-content-border-color);
 }
 
 .filename-row {
