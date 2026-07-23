@@ -135,6 +135,13 @@ export type NodeMetadataEntry = {
 
 export type NodeMetadataMap = Readonly<Record<string, NodeMetadataEntry>>;
 
+export interface ResourceTypeCount {
+    graph_id: string;
+    name: string;
+    icon: string;
+    count: number;
+}
+
 export type SearchResults = {
     resources: ResourceData[];
     aggregations: { [key: string]: unknown };
@@ -146,6 +153,8 @@ export type SearchResults = {
         has_next: boolean;
         has_previous: boolean;
     };
+    resource_type_counts?: ResourceTypeCount[];
+    all_resource_count?: number;
 };
 
 export interface ResourceData {
