@@ -113,11 +113,28 @@ function buildNumericQuery(
     };
 }
 
+function formatReferenceValue(value: unknown): string {
+    const selected = (value as ReferenceFilterValue | null) ?? [];
+    return selected.map((option) => option.label).join(", ");
+}
+
+function formatNumericValue(value: unknown): string {
+    return (value as NumericFilterValue | null)?.text ?? "";
+}
+
 // Maps an Arches node datatype to its filter widget + query builder. Add a new
 // datatype by registering one entry here and dropping in its widget component.
 const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry> = {
-    reference: { component: ReferenceFilter, buildQuery: buildReferenceQuery },
-    number: { component: NumericFilter, buildQuery: buildNumericQuery },
+    reference: {
+        component: ReferenceFilter,
+        buildQuery: buildReferenceQuery,
+        formatValue: formatReferenceValue,
+    },
+    number: {
+        component: NumericFilter,
+        buildQuery: buildNumericQuery,
+        formatValue: formatNumericValue,
+    },
 };
 
 export function getAttributeFilterEntry(
@@ -138,4 +155,11 @@ export function buildAttributeFilterQuery(
             graphSlug,
         ) ?? null
     );
+}
+
+export function formatAttributeFilterValue(
+    node: NodeFilterConfigNode,
+    value: unknown,
+): string {
+    return getAttributeFilterEntry(node.datatype)?.formatValue(value) ?? "";
 }

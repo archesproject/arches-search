@@ -17,6 +17,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
         <template #header>
             <header class="simple-search-header">
                 <h1 class="search-title">
+                    <i class="pi pi-search" />
                     {{ $gettext("Search the Collection") }}
                 </h1>
                 <nav
@@ -74,12 +75,14 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     align-items: center;
     justify-content: space-between;
     gap: 1.6rem;
-    padding: 2rem 2.4rem;
+    padding: 2rem 2rem 0;
     background-color: var(--arches-search-card-bg);
-    border-bottom: 0.1rem solid var(--p-content-border-color);
 }
 
 .search-title {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
     margin: 0;
     color: var(--p-text-color);
     font-size: 2.2rem;
@@ -87,14 +90,24 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     letter-spacing: -0.02em;
 }
 
+.search-title .pi {
+    font-size: 1.8rem;
+    color: var(--p-primary-color);
+}
+
 :deep(.p-card-body) {
+    display: flex;
+    flex-direction: column;
     flex: 1;
+    min-block-size: 0;
     padding: 0;
+    overflow-x: hidden;
     overflow-y: hidden;
 }
 
 :deep(.p-card-content) {
-    height: 100%;
+    flex: 1;
+    min-block-size: 0;
 }
 
 .header-nav {

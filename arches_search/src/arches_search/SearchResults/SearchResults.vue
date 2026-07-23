@@ -146,6 +146,12 @@ function handleScroll(event: Event): void {
 
     requestNextPage();
 }
+
+const endOfResultsText = computed(() =>
+    $gettext("%{count} results", {
+        count: String(results.pagination.total_results),
+    }),
+);
 </script>
 
 <template>
@@ -180,6 +186,13 @@ function handleScroll(event: Event): void {
                 "
             />
         </div>
+
+        <div
+            v-if="results.resources.length > 0"
+            class="search-results-footer"
+        >
+            — {{ endOfResultsText }} —
+        </div>
     </div>
 </template>
 
@@ -208,5 +221,13 @@ function handleScroll(event: Event): void {
     padding: 1.6rem 2.4rem;
     overflow-y: auto;
     min-height: 0;
+}
+
+.search-results-footer {
+    flex-shrink: 0;
+    text-align: center;
+    padding: 1.6rem 2.4rem;
+    font-size: 1.2rem;
+    color: var(--p-text-muted-color);
 }
 </style>

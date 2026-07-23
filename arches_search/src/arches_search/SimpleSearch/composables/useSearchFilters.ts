@@ -1,4 +1,5 @@
 import { computed, inject, provide, ref } from "vue";
+import { useGettext } from "vue3-gettext";
 
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 import {
@@ -71,6 +72,7 @@ const SEARCH_FILTERS_KEY: InjectionKey<SearchFilters> = Symbol("searchFilters");
 const DEFAULT_SORT: SortSpec[] = [];
 
 function createSearchFilters(): SearchFilters {
+    const { $gettext } = useGettext();
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const mapFilter = ref<FeatureCollection | null>(null);
@@ -114,6 +116,9 @@ function createSearchFilters(): SearchFilters {
             text,
             clear,
             inverted: false,
+            kind: "term",
+            category: $gettext("Search"),
+            icon: "pi pi-search",
             options,
         });
         terms.value = next;
