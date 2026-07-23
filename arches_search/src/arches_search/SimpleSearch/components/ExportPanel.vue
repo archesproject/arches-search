@@ -143,6 +143,7 @@ async function onExport() {
     flex-direction: column;
     height: 100%;
     font-size: var(--p-arches-search-font-size);
+    background: var(--arches-search-card-bg);
 }
 
 .panel-tabs {
@@ -152,7 +153,7 @@ async function onExport() {
 
 .panel-tab {
     flex: 1;
-    padding: 0.8rem;
+    padding: 1rem 1.25rem;
     background: none;
     border: none;
     border-bottom: 0.2rem solid transparent;
@@ -165,30 +166,43 @@ async function onExport() {
 
 .panel-tab.active {
     border-bottom-color: var(--p-primary-color);
-    font-weight: 600;
+    font-weight: 700;
 }
 
 .panel-list {
     flex: 1;
     overflow-y: auto;
-    padding: 0.8rem;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 .item-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    background: var(--p-surface-100);
+    border-radius: 0.375rem;
     font-size: 0.85em;
-    color: var(--p-surface-500);
-    margin-bottom: 0.6rem;
+    color: var(--p-text-color);
 }
 
 .export-item {
-    padding: 0.6rem;
-    border: 0.0625rem solid var(--p-content-border-color);
-    border-radius: 0.25rem;
+    padding: 0.625rem 0.75rem;
+    border: 0.125rem solid var(--p-content-border-color);
+    border-radius: 0.4375rem;
+    background: var(--arches-search-page-bg);
     cursor: pointer;
+    transition:
+        border-color 0.12s,
+        background 0.12s;
 }
 
 .export-item:hover {
-    background-color: var(--p-surface-50);
+    border-color: var(--p-primary-color);
+    background: var(--p-primary-50);
 }
 
 .item-header {
@@ -205,7 +219,7 @@ async function onExport() {
 
 .item-description {
     margin: 0 0 0 1.5rem;
-    color: var(--p-surface-500);
+    color: var(--p-text-muted-color);
     font-size: 0.85em;
 }
 
@@ -220,8 +234,8 @@ async function onExport() {
 .panel-footer {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    padding: 0.8rem;
+    gap: 0.5rem;
+    padding: 0.875rem 1.25rem;
     border-top: 0.125rem solid var(--p-content-border-color);
 }
 

@@ -1,40 +1,45 @@
-import { definePreset } from "@primeuix/themes";
+import { definePreset, palette } from "@primeuix/themes";
 import Aura from "@primeuix/themes/aura";
 
 import { compileGlobalCss } from "@/arches_modular_reports/utils.ts";
 
+const archesSearchTeal = "#0d9488";
+
+// Design tokens with no PrimeVue/Aura equivalent, for concepts this app's
+// real (not mocked-up) components actually render today. Neutrals aside
+// from the page/card two-tier surface, and the primary color, are handled
+// via Aura's own semantic tokens below, so components should prefer those
+// (--p-surface-*, --p-text-*, --p-content-*, --p-primary-*) and only reach
+// for the custom properties here for one of these specific categories.
 const cssOverrides = {
-    // examples of how to override styles in modular report components
-    // ".section-table-header h4": {
-    //     padding: "0 2rem !important",
-    //     "font-size": "1.5rem !important",
-    // },
-    // ".linked-section-container": {
-    //     margin: "0 1.5rem !important",
-    // },
-    // ".linked-section-container .p-panel-header h3": {
-    //     "font-size": "2.5rem !important",
-    // },
-    // ".linked-section-button-container .p-button-label": {
-    //     color: "#1857e5",
-    // },
-    // ".p-card-content h2": {
-    //     "font-size": "3rem !important",
-    // },
-    // ".node-container strong": {
-    //     "font-size": "1.7rem !important",
-    // },
-    // "button.p-tab": {
-    //     "font-size": "1.6rem !important",
-    // },
-    // ".p-tabpanels": {
-    //     "background-color": "#e9ebed",
-    // },
-    // ".data-container": {
-    //     border: "0",
-    //     margin: "0 4.5rem 3rem !important",
-    //     "grid-template-columns": "repeat(4, 1fr) !important",
-    // },
+    ":root": {
+        "--arches-search-page-bg": "#f6f7f9",
+        "--arches-search-card-bg": "#ffffff",
+
+        "--arches-search-chip-search-bg": "#f1f5f9",
+        "--arches-search-chip-search-border": "#cbd5e1",
+        "--arches-search-chip-search-text": "#334155",
+
+        "--arches-search-highlight-bg": "#e0f2fe",
+        "--arches-search-highlight-text": "#0369a1",
+
+        "--arches-search-live-bg": "#dcfce7",
+        "--arches-search-live-text": "#15803d",
+    },
+    ".p-theme-dark": {
+        "--arches-search-page-bg": "#0a0e15",
+        "--arches-search-card-bg": "#111827",
+
+        "--arches-search-chip-search-bg": "#1e293b",
+        "--arches-search-chip-search-border": "#334155",
+        "--arches-search-chip-search-text": "#cbd5e1",
+
+        "--arches-search-highlight-bg": "#082f49",
+        "--arches-search-highlight-text": "#7dd3fc",
+
+        "--arches-search-live-bg": "#052e16",
+        "--arches-search-live-text": "#4ade80",
+    },
 };
 
 // TODO: when dropping support for 7.6, just import from arches 8.
@@ -58,49 +63,7 @@ const ArchesSearchPreset = definePreset(Aura, {
         },
     },
     semantic: {
-        primary: {
-            50: "{amber.50}",
-            100: "{amber.100}",
-            200: "{amber.200}",
-            300: "{amber.300}",
-            400: "{amber.400}",
-            500: "{amber.500}",
-            600: "{amber.600}",
-            700: "{amber.700}",
-            800: "{amber.800}",
-            900: "{amber.900}",
-            950: "{amber.950}",
-        },
-        colorScheme: {
-            light: {
-                // primary: {
-                //     color: "{amber.600}",
-                //     inverseColor: "#ffffff",
-                //     hoverColor: "{amber.900}",
-                //     activeColor: "{amber.800}",
-                // },
-                // highlight: {
-                //     background: "{sky.300}",
-                //     focusBackground: "{sky.700}",
-                //     color: "#ffffff",
-                //     focusColor: "#ffffff",
-                // }
-            },
-            dark: {
-                // primary: {
-                //     color: "{amber.400}",
-                //     inverseColor: "{amber.950}",
-                //     hoverColor: "{amber.100}",
-                //     activeColor: "{amber.200}",
-                // },
-                // highlight: {
-                //     background: "rgba(250, 250, 250, .16)",
-                //     focusBackground: "rgba(250, 250, 250, .24)",
-                //     color: "rgba(255,255,255,.87)",
-                //     focusColor: "rgba(255,255,255,.87)",
-                // },
-            },
-        },
+        primary: palette(archesSearchTeal),
     },
     css: compileGlobalCss(cssOverrides),
     components: {},

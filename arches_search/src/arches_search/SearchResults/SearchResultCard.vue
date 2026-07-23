@@ -89,6 +89,20 @@ watchEffect(() => {
 
 <style scoped>
 .search-result-card {
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    border: 0.15rem solid var(--p-content-border-color);
+    border-radius: 0.8rem;
+    background: var(--arches-search-card-bg);
+    overflow: hidden;
+    cursor: pointer;
+    transition:
+        box-shadow 0.15s,
+        border-color 0.15s;
+}
+
+.search-result-card:hover {
+    box-shadow:
+        0 0.4rem 1.2rem rgba(0, 0, 0, 0.09),
+        0 0.2rem 0.4rem rgba(0, 0, 0, 0.05);
+    border-color: var(--p-primary-color);
 }
 </style>

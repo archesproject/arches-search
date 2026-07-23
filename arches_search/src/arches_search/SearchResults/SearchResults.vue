@@ -194,13 +194,19 @@ function handleScroll(event: Event): void {
 }
 
 .search-results-empty {
-    margin: 5rem;
+    padding: 4rem 2.4rem;
+    text-align: center;
+    font-size: 1.4rem;
+    color: var(--p-text-muted-color);
 }
 
 .search-results-body {
     display: flex;
     flex-direction: column;
+    gap: 1rem;
     flex: 1;
+    padding: 1.6rem 2.4rem;
     overflow-y: auto;
+    min-height: 0;
 }
 </style>

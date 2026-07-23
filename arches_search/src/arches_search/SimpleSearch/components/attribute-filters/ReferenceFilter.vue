@@ -127,13 +127,14 @@ function toggleOption(option: ReferenceFilterOption): void {
 
 .option-label {
     flex: 1;
-    color: var(--p-surface-800);
+    color: var(--p-text-color);
 }
 
 .no-options,
 .status {
-    font-size: var(--p-arches-search-font-size);
-    color: var(--p-surface-400);
+    font-size: 1.3rem;
+    color: var(--p-text-muted-color);
     padding: 0.4rem 0 0.8rem 0;
+    line-height: 1.5;
 }
 </style>

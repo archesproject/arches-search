@@ -95,21 +95,51 @@ function selectGraph(graph: ResourceType | null): void {
 <style scoped>
 .resource-type-filter {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    padding: 0.8rem 1.6rem;
-    background-color: var(--p-content-background);
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0 0 1.4rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.resource-type-filter::-webkit-scrollbar {
+    display: none;
 }
 
 .resource-type-filter .type-btn {
-    font-size: var(--p-arches-search-font-size);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.2rem;
+    border: 0.15rem solid var(--p-content-border-color);
+    border-radius: 999rem;
+    background: var(--p-content-background);
+    color: var(--p-text-color);
+    font-size: 1.2rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition:
+        background 0.12s,
+        border-color 0.12s,
+        color 0.12s;
+}
+
+.resource-type-filter .type-btn:hover {
+    background: var(--p-content-hover-background);
+    border-color: var(--p-text-muted-color);
 }
 
 .resource-type-filter .type-btn.active,
-.resource-type-filter .type-btn.active:hover,
-.resource-type-filter .p-button-outlined.p-button-secondary.type-btn:hover {
-    background-color: var(--p-button-primary-background);
+.resource-type-filter .type-btn.active:hover {
+    background: var(--p-primary-color);
+    border-color: var(--p-primary-color);
+    color: var(--p-primary-contrast-color);
+}
+
+.resource-type-filter .type-btn :deep(.p-button-icon) {
+    font-size: 1.1rem;
 }
 
 .resource-type-filter .load-error {

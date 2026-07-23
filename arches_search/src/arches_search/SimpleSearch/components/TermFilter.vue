@@ -61,7 +61,7 @@ watch(
                     selectedTerm.text,
                     () => removeTerm(selectedTerm.text),
                     {
-                        style: "background-color: var(--p-sky-500);",
+                        style: "background-color: var(--arches-search-chip-search-bg);",
                     },
                 );
             }
@@ -172,6 +172,7 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
             <AutoComplete
                 v-model="inputText"
                 class="search-input"
+                overlay-class="term-filter-overlay"
                 option-label="text"
                 :auto-option-focus="true"
                 :empty-search-message="emptySearchMessage"
@@ -238,14 +239,24 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     display: flex;
     align-items: center;
     flex: 1;
-    border: 0.125rem solid var(--p-surface-300);
-    border-radius: 0.4rem;
-    padding: 0 1rem;
+    gap: 1rem;
+    background-color: var(--arches-search-page-bg);
+    border: 0.15rem solid var(--p-content-border-color);
+    border-radius: 0.8rem;
+    padding: 0 1.4rem;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+
+.search-bar .search-bar-inner:focus-within {
+    border-color: var(--p-primary-color);
+    box-shadow: 0 0 0 0.3rem var(--p-primary-100);
 }
 
 .search-bar .search-icon {
-    font-size: var(--p-arches-search-font-size);
-    margin-inline-end: 0.8rem;
+    font-size: 1.5rem;
+    color: var(--p-text-muted-color);
     flex-shrink: 0;
 }
 
@@ -256,10 +267,10 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 .search-bar :deep(.search-input .p-autocomplete-input) {
     border: none;
     box-shadow: none;
-    padding: 1rem 2rem;
+    padding: 1rem 0;
     font-size: var(--p-arches-search-font-size);
     width: 100%;
-    background-color: var(--p-content-background);
+    background-color: transparent;
 }
 
 .search-bar :deep(.search-input .p-autocomplete-input:focus) {
@@ -270,7 +281,7 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 .search-bar .search-button {
     font-size: var(--p-arches-search-font-size);
     padding: 1rem 2rem;
-    border-radius: 0.4rem;
+    border-radius: 0.8rem;
     white-space: nowrap;
 }
 
