@@ -101,8 +101,14 @@ function messageForError(error: NumericParseError): string {
     padding: 0.4rem 0 0.8rem 0;
 }
 
+.numeric-input {
+    width: 100%;
+}
+
 .numeric-hint {
-    color: var(--p-surface-400);
-    font-size: var(--p-arches-search-font-size);
+    color: var(--p-text-muted-color);
+    font-size: 1.3rem;
+    line-height: 1.5;
+    margin: 0;
 }
 </style>

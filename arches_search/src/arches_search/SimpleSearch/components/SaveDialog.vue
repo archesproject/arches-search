@@ -95,13 +95,16 @@ function onCancel() {
 .save-form {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 1rem;
     min-width: 20rem;
 }
 
 .form-label {
-    font-weight: 500;
-    font-size: var(--p-arches-search-font-size);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--p-text-muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 :deep(.form-input .p-inputtext),
@@ -112,7 +115,7 @@ function onCancel() {
 
 .dialog-footer {
     display: flex;
-    gap: 0.6rem;
+    gap: 0.5rem;
     justify-content: flex-end;
 }
 </style>

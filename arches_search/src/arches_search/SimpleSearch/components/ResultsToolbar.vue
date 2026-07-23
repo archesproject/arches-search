@@ -125,16 +125,28 @@ defineEmits<{
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 16px;
+    gap: 1.2rem;
+    padding: 1rem 2.4rem;
+    border-top: 0.1rem solid var(--p-content-border-color);
+    border-bottom: 0.1rem solid var(--p-content-border-color);
+    background: var(--arches-search-page-bg);
+    min-height: 5.5rem;
 }
 
 .toolbar-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 1rem;
 }
 
 .results-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.4rem 1rem;
+    background: var(--p-surface-100);
+    color: var(--p-text-muted-color);
+    border-radius: 999rem;
+    font-size: 1.2rem;
     font-weight: 600;
     white-space: nowrap;
 }
@@ -144,28 +156,55 @@ defineEmits<{
 }
 
 :deep(.sort-select .p-select) {
-    padding: 4px 8px;
+    padding: 0.4rem 0.8rem;
 }
 
+/* segmented view-toggle button bar */
 .toolbar-right {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 0;
+    border: 0.15rem solid var(--p-content-border-color);
+    border-radius: 0.6rem;
+    overflow: hidden;
+    background: var(--p-content-background);
 }
 
 .toolbar-btn {
-    font-size: var(--p-arches-search-font-size);
+    font-size: 1.2rem;
+}
+
+.toolbar-right .toolbar-btn {
+    padding: 0.7rem 1rem;
+    font-weight: 500;
+    border: none;
+    border-inline-end: 0.1rem solid var(--p-content-border-color);
+    border-radius: 0;
+    background: transparent;
+    color: var(--p-text-muted-color);
+    transition:
+        background 0.12s,
+        color 0.12s;
+}
+
+.toolbar-right .toolbar-btn:last-child {
+    border-inline-end: none;
+}
+
+.toolbar-right .toolbar-btn:hover {
+    background: var(--p-content-hover-background);
 }
 
 .toolbar-btn.active {
-    background-color: var(--p-button-primary-hover-background);
-    border-color: var(--p-button-primary-hover-border-color);
-    color: var(--p-button-primary-hover-color);
+    background-color: var(--arches-search-highlight-bg);
+    border-color: var(--arches-search-highlight-bg);
+    color: var(--arches-search-highlight-text);
 }
 
 .save-search-btn {
     background-color: var(--p-primary-color);
     border-color: var(--p-primary-color);
     color: var(--p-primary-contrast-color);
+    border-radius: 0.6rem;
 }
 </style>

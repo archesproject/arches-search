@@ -371,7 +371,7 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
     flex-direction: column;
     gap: 1.25rem;
     padding: 2rem;
-    background-color: var(--p-content-background);
+    background-color: var(--arches-search-card-bg);
     font-size: 1rem;
     line-height: 1.45;
     height: 100%;

@@ -215,6 +215,9 @@ function onSliderUpdate(value: number | number[]): void {
     position: relative;
     z-index: 1;
     width: 100%;
+    --p-slider-range-background: var(--p-primary-color);
+    --p-slider-handle-background: var(--p-primary-color);
+    --p-slider-handle-hover-background: var(--p-primary-hover-color);
 }
 
 .time-slider-label-track {
