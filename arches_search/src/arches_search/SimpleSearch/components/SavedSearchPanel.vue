@@ -164,12 +164,15 @@ defineExpose({ loadSearches });
             >
                 <div class="item-header">
                     <i
-                        :class="
+                        :class="[
                             isDynamicQuery(search)
                                 ? 'pi pi-bolt'
-                                : 'pi pi-database'
-                        "
-                        class="item-icon"
+                                : 'pi pi-database',
+                            isDynamicQuery(search)
+                                ? 'chip-live'
+                                : 'chip-snapshot',
+                        ]"
+                        class="item-icon query-type-chip"
                     />
                     <span class="item-name">{{ search.name }}</span>
                 </div>
@@ -241,41 +244,58 @@ defineExpose({ loadSearches });
     flex-direction: column;
     height: 100%;
     font-size: var(--p-arches-search-font-size);
+    background: var(--arches-search-card-bg);
 }
 
 .panel-tabs {
     display: flex;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    flex-shrink: 0;
+    padding: 0.3125rem 0.75rem;
+    border-bottom: 0.0625rem solid var(--p-content-border-color);
 }
 
 .panel-tab {
     flex: 1;
-    padding: 0.8rem;
+    padding: 0.5rem 0.625rem;
     background: none;
     border: none;
-    border-bottom: 0.2rem solid transparent;
+    border-bottom: 0.125rem solid transparent;
     cursor: pointer;
     font-size: var(--p-arches-search-font-size);
     font-family: inherit;
     font-weight: 500;
     text-align: center;
+    white-space: nowrap;
+    color: var(--p-text-muted-color);
+    transition:
+        background-color 0.12s,
+        color 0.12s,
+        border-color 0.12s;
 }
 
 .panel-tab.active {
     border-bottom-color: var(--p-primary-color);
+    color: var(--p-text-color);
     font-weight: 600;
 }
 
 .panel-tab:hover:not(.active) {
-    background-color: var(--p-surface-100);
+    background-color: var(--p-content-hover-background);
+    color: var(--p-text-color);
 }
 
 .panel-controls {
     display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    padding: 0.8rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem 0.5rem;
+    flex-shrink: 0;
     border-bottom: 0.125rem solid var(--p-content-border-color);
+}
+
+.filter-input {
+    flex: 1;
+    min-width: 0;
 }
 
 :deep(.filter-input .p-inputtext),
@@ -286,6 +306,7 @@ defineExpose({ loadSearches });
 .sort-row {
     display: flex;
     justify-content: flex-end;
+    flex-shrink: 0;
 }
 
 :deep(.sort-select .p-select-label) {
@@ -293,6 +314,8 @@ defineExpose({ loadSearches });
 }
 
 :deep(.sort-select) {
+    width: 13rem;
+    flex-shrink: 0;
     border: none;
     box-shadow: none;
     background: transparent;
@@ -300,22 +323,36 @@ defineExpose({ loadSearches });
 
 .panel-list {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
 .panel-empty {
     padding: 1.6rem;
     text-align: center;
-    color: var(--p-surface-400);
+    color: var(--p-text-muted-color);
 }
 
 .saved-search-item {
-    padding: 0.8rem;
-    border-bottom: 0.0625rem solid var(--p-content-border-color);
+    border: 0.15rem solid var(--p-content-border-color);
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    background: var(--arches-search-page-bg);
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    transition:
+        border-color 0.12s,
+        box-shadow 0.12s;
 }
 
 .saved-search-item:hover {
-    background-color: var(--p-surface-50);
+    border-color: var(--p-primary-color);
+    box-shadow: 0 0.1rem 0.3rem rgba(0, 0, 0, 0.08);
 }
 
 .item-header {
@@ -329,37 +366,75 @@ defineExpose({ loadSearches });
     color: var(--p-primary-color);
 }
 
+.item-icon.query-type-chip {
+    font-size: 1rem;
+    padding: 0.25rem;
+    border-radius: 999rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.item-icon.query-type-chip.chip-live {
+    background: var(--arches-search-live-bg);
+    color: var(--arches-search-live-text);
+}
+
+.item-icon.query-type-chip.chip-snapshot {
+    background: var(--arches-search-highlight-bg);
+    color: var(--arches-search-highlight-text);
+}
+
 .item-name {
     font-weight: 600;
-    color: var(--p-primary-color);
+    color: var(--p-text-color);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .item-meta {
     display: flex;
     gap: 0.6rem;
     font-size: 0.85em;
-    color: var(--p-surface-500);
+    color: var(--p-text-muted-color);
     margin-bottom: 0.2rem;
 }
 
 .item-description {
     margin: 0.2rem 0 0.4rem;
-    color: var(--p-surface-700);
+    color: var(--p-text-muted-color);
 }
 
 .item-no-description {
     font-style: italic;
-    color: var(--p-surface-400);
+    color: var(--p-text-muted-color);
 }
 
 .item-actions {
     display: flex;
     gap: 0.4rem;
+    margin-top: 0.125rem;
 }
 
 .action-btn {
-    font-size: var(--p-arches-search-font-size);
-    padding: 0.2rem 0.4rem;
+    font-size: 0.85em;
+    padding: 0.3rem 0.9rem;
+    background: var(--p-content-background);
+    border: 0.1rem solid var(--p-content-border-color);
+    border-radius: 0.5rem;
+    color: var(--p-text-muted-color);
+    transition:
+        background-color 0.12s,
+        color 0.12s;
+}
+
+.action-btn:hover {
+    background: var(--p-content-hover-background);
+    color: var(--p-text-color);
 }
 
 .action-delete {

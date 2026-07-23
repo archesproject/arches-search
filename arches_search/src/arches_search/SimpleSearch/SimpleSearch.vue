@@ -443,11 +443,13 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
 .simple-search .body {
     display: flex;
     flex: 1;
+    min-block-size: 0;
     overflow: hidden;
 }
 
 .simple-search .splitter {
     flex: 1;
+    min-block-size: 0;
     overflow: hidden;
     border-radius: 0;
 }
@@ -464,14 +466,16 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-inline-start: 0.0625rem solid var(--p-content-border-color);
+    border-inline-start: 0.5rem solid var(--p-content-border-color);
 }
 
 .simple-search .side-panel-content {
     display: flex;
     flex-direction: column;
     flex: 1;
+    min-inline-size: 32rem;
     overflow-y: auto;
+    background-color: var(--arches-search-card-bg);
     opacity: 0;
     translate: 1.25rem 0;
     transition:
@@ -482,6 +486,7 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
 .simple-search .side-panel-content.side-panel-content-open {
     opacity: 1;
     translate: 0 0;
+    border-inline-start: 0.1rem solid var(--p-content-border-color);
 }
 
 .simple-search
