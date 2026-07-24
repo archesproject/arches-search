@@ -522,7 +522,28 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 /* PrimeVue's own overlay/list already provide the rounded, bordered,
    shadowed panel via design tokens, but Aura's defaults (1px border, 6px
    radius, a flat/tight shadow) all read noticeably smaller/flatter than
-   the mockup's, so they're overridden explicitly below. */
+   the mockup's, so they're overridden explicitly below.
+
+   max-width: PrimeVue's own .p-autocomplete-overlay only sets
+   min-width: 100% (matching the trigger), with no upper bound. Every
+   .suggestion-label already truncates with an ellipsis once its container
+   is constrained (see width: 100% comment below), but with nothing capping
+   the overlay itself, a single long record/term name has no container to
+   be constrained by — the panel just grows to fit it, off the edge of the
+   screen if need be. The viewport term keeps that from happening even when
+   the search bar sits near the edge of a narrow window.
+
+   margin-inline-start: append-to="self" positions the overlay flush with
+   the raw <input> (PrimeVue always measures $refs.focusInput, not
+   configurable), but the visible search-bar box starts well to the left of
+   that — .search-bar-inner's own border + padding, then the search icon,
+   then the flex gap, all sit before the input. Left as-is, the overlay
+   renders that whole distance to the right of the visible box instead of
+   flush with it. This shift is the negative sum of those same values (keep
+   in sync with .search-bar-inner and .search-icon above if either changes):
+   border-width 0.1512rem + padding-inline-start 1.4rem + icon width
+   1.5121rem (icon glyphs render at 1em, matching .search-icon's font-size)
+   + gap 1rem. */
 .search-bar :deep(.term-filter-overlay) {
     overflow: hidden;
     border-width: 0.1512rem;
@@ -530,6 +551,8 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     box-shadow:
         0 0.8065rem 2.4194rem rgba(0, 0, 0, 0.12),
         0 0.2016rem 0.6048rem rgba(0, 0, 0, 0.07);
+    max-width: 80vw;
+    margin-inline-start: calc(-1 * (0.1512rem + 1.4rem + 1.5121rem + 1rem));
 }
 
 .search-bar :deep(.term-filter-overlay .p-autocomplete-list) {
