@@ -17,10 +17,14 @@ export interface SearchDefinition {
     graphId: string | null;
 }
 
+export type TermKind = "controlled-term" | "record";
+
 export interface SerializedTerm {
     id: string;
     text: string;
     inverted: boolean;
+    termKind?: TermKind;
+    icon?: string;
     options?: Record<string, unknown>;
 }
 
@@ -29,10 +33,15 @@ export interface TermSuggestion {
     datatype: string;
     text: string;
     addtional_info?: Record<string, unknown>;
+    resourceinstanceid?: string;
+    graph_icon?: string;
+    graph_name?: string;
 }
 
 export type ActiveFilterKind =
     | "term"
+    | "controlled-term"
+    | "record"
     | "resource-type"
     | "time"
     | "map"

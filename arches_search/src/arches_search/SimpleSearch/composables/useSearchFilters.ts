@@ -18,6 +18,7 @@ import type {
     ResourceType,
     SearchDefinition,
     SortSpec,
+    TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
 
@@ -60,6 +61,8 @@ interface SearchFilters {
         text: string,
         clear: () => void,
         options?: Record<string, unknown>,
+        termKind?: TermKind,
+        icon?: string,
     ): void;
 }
 
@@ -104,11 +107,33 @@ function createSearchFilters(): SearchFilters {
         () => queries.value,
     );
 
+    function getTermFilterCategory(termKind?: TermKind): string {
+        if (termKind === "controlled-term") {
+            return $gettext("Term");
+        }
+        if (termKind === "record") {
+            return $gettext("Record");
+        }
+        return $gettext("Search");
+    }
+
+    function getTermFilterIcon(termKind?: TermKind): string {
+        if (termKind === "controlled-term") {
+            return "pi pi-tag";
+        }
+        if (termKind === "record") {
+            return "pi pi-database";
+        }
+        return "pi pi-search";
+    }
+
     function setTermFilter(
         key: string,
         text: string,
         clear: () => void,
         options?: Record<string, unknown>,
+        termKind?: TermKind,
+        icon?: string,
     ): void {
         const next = new Map(terms.value);
         next.set(key, {
@@ -116,9 +141,9 @@ function createSearchFilters(): SearchFilters {
             text,
             clear,
             inverted: false,
-            kind: "term",
-            category: $gettext("Search"),
-            icon: "pi pi-search",
+            kind: termKind ?? "term",
+            category: getTermFilterCategory(termKind),
+            icon: icon || getTermFilterIcon(termKind),
             options,
         });
         terms.value = next;
@@ -249,10 +274,14 @@ function createSearchFilters(): SearchFilters {
         // Strip the `clear` closure off each ActiveFilter — closures aren't
         // serializable, and the restore path rebuilds them from `id`.
         const serializedTerms = [...terms.value.values()].map(
-            ({ id, text, inverted, options }) => ({
+            ({ id, text, inverted, kind, icon, options }) => ({
                 id,
                 text,
                 inverted,
+                ...(kind === "controlled-term" || kind === "record"
+                    ? { termKind: kind }
+                    : {}),
+                ...(kind === "record" ? { icon } : {}),
                 ...(options !== undefined ? { options } : {}),
             }),
         );
@@ -286,6 +315,8 @@ function createSearchFilters(): SearchFilters {
                 term.text,
                 () => clearTermFilter(term.id),
                 term.options,
+                term.termKind,
+                term.icon,
             );
         }
         for (const [filterKey, payload] of Object.entries(definition.queries)) {
