@@ -33,8 +33,11 @@ defineProps<{
 }>();
 
 const sortOptions = computed<SortOption[]>(() => [
-    { label: $gettext("A to Z"), value: "aToZ" },
-    { label: $gettext("Z to A"), value: "zToA" },
+    { label: $gettext("Relevance"), value: "relevance" },
+    { label: $gettext("Name A to Z"), value: "aToZ" },
+    { label: $gettext("Name Z to A"), value: "zToA" },
+    { label: $gettext("Newest first"), value: "newest" },
+    { label: $gettext("Oldest first"), value: "oldest" },
 ]);
 
 defineEmits<{
@@ -56,8 +59,8 @@ defineEmits<{
                 option-label="label"
                 option-value="value"
                 :placeholder="$gettext('Sort by...')"
-                show-clear
                 class="sort-select"
+                overlay-class="sort-select-overlay"
                 @update:model-value="$emit('update:sortValue', $event)"
             />
         </div>

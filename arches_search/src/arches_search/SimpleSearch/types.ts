@@ -83,7 +83,9 @@ export interface NodeFilterConfigNode {
 
 export type SortDirection = "asc" | "desc";
 
-export type SortSpec = { type: "primary_name"; direction: SortDirection };
+export type SortSpec =
+    | { type: "primary_name"; direction: SortDirection }
+    | { type: "created_time"; direction: SortDirection };
 
 export interface SavedSearch {
     savedsearchid: string;

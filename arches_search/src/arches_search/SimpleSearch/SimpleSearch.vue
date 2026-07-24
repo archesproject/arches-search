@@ -97,7 +97,7 @@ const {
     onSplitterResizeEnd,
 } = useSidePanel();
 
-const sortValue = ref<string | null>(null);
+const sortValue = ref<string | null>("relevance");
 const graphModels = ref<GraphModel[]>([]);
 const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
@@ -223,6 +223,10 @@ function sortSpecForValue(value: string | null): SortSpec[] {
             return [{ type: "primary_name", direction: "asc" }];
         case "zToA":
             return [{ type: "primary_name", direction: "desc" }];
+        case "newest":
+            return [{ type: "created_time", direction: "desc" }];
+        case "oldest":
+            return [{ type: "created_time", direction: "asc" }];
         default:
             return [];
     }
