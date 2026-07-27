@@ -24,9 +24,15 @@ const ATTRIBUTE_FILTERS_PANEL = "attribute-filters" as const;
 const TIME_FILTER_PANEL = "time-filter" as const;
 const MAP_FILTER_PANEL = "map-filter" as const;
 const SAVED_SEARCHES_PANEL = "saved-searches" as const;
+const RELATED_RESOURCES_PANEL = "related-resources" as const;
 
 interface SplitterResizeEvent {
     sizes?: number[];
+}
+
+export interface RelatedResource {
+    id: string;
+    title: string;
 }
 
 type SidePanelType =
@@ -34,7 +40,8 @@ type SidePanelType =
     | typeof ATTRIBUTE_FILTERS_PANEL
     | typeof TIME_FILTER_PANEL
     | typeof MAP_FILTER_PANEL
-    | typeof SAVED_SEARCHES_PANEL;
+    | typeof SAVED_SEARCHES_PANEL
+    | typeof RELATED_RESOURCES_PANEL;
 
 const PANEL_SIZES: Record<SidePanelType, number> = {
     [IDLE_PANEL]: IDLE_PANEL_SIZE,
@@ -42,6 +49,7 @@ const PANEL_SIZES: Record<SidePanelType, number> = {
     [TIME_FILTER_PANEL]: SIDE_PANEL_SIZE,
     [MAP_FILTER_PANEL]: 65,
     [SAVED_SEARCHES_PANEL]: 27,
+    [RELATED_RESOURCES_PANEL]: SIDE_PANEL_SIZE,
 };
 
 export function useSidePanel() {
@@ -52,6 +60,7 @@ export function useSidePanel() {
     const sidePanelBasis = ref(PANEL_SIZES[IDLE_PANEL]);
     const isSplitterResizing = ref(false);
     const isSidePanelVisible = ref(true);
+    const relatedResource = ref<RelatedResource | null>(null);
 
     let switchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -73,6 +82,10 @@ export function useSidePanel() {
 
     const isSavedSearchesOpen = computed<boolean>(
         () => activeSidePanel.value === SAVED_SEARCHES_PANEL,
+    );
+
+    const isRelatedResourcesOpen = computed<boolean>(
+        () => activeSidePanel.value === RELATED_RESOURCES_PANEL,
     );
 
     // Kept as separate names for the SimpleSearch.vue v-if chain; identical
@@ -143,7 +156,17 @@ export function useSidePanel() {
     }
 
     function closeSidePanel(): void {
+        relatedResource.value = null;
         switchToPanel(IDLE_PANEL);
+    }
+
+    // Distinct from toggleSidePanel: clicking Related always lands on the
+    // clicked resource's own related view, even if a different resource's
+    // related view is already open — toggling would close it instead of
+    // swapping to the newly clicked one.
+    function viewRelatedResource(resource: RelatedResource): void {
+        relatedResource.value = resource;
+        switchToPanel(RELATED_RESOURCES_PANEL);
     }
 
     function toggleSidePanel(panelType: SidePanelType): void {
@@ -211,12 +234,15 @@ export function useSidePanel() {
         isSavedSearchesOpen,
         isTimeFilterActive,
         isTimeFilterOpen,
+        isRelatedResourcesOpen,
+        relatedResource,
         resultsPanelSize,
         visibleSidePanelSize,
         sidePanelMinSize,
         sidePanelContentClass,
         sidePanelStyle,
         closeSidePanel,
+        viewRelatedResource,
         onToggleAttributeFilters,
         onToggleMapFilter,
         onToggleSavedSearches,

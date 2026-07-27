@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from "vue";
+import { computed, provide, ref, watch, watchEffect } from "vue";
 import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
 import Toast from "primevue/toast";
@@ -12,6 +12,7 @@ import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters
 import AttributeFilters from "@/arches_search/SimpleSearch/components/attribute-filters/AttributeFilters.vue";
 import ExportPanel from "@/arches_search/SimpleSearch/components/ExportPanel.vue";
 import IdleInfoTiles from "@/arches_search/SimpleSearch/components/IdleInfoTiles.vue";
+import RelatedResourcesPanel from "@/arches_search/SimpleSearch/components/RelatedResourcesPanel.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
@@ -79,12 +80,15 @@ const {
     isSavedSearchesOpen,
     isTimeFilterActive,
     isTimeFilterOpen,
+    isRelatedResourcesOpen,
+    relatedResource,
     resultsPanelSize,
     visibleSidePanelSize,
     sidePanelMinSize,
     sidePanelContentClass,
     sidePanelStyle,
     closeSidePanel,
+    viewRelatedResource,
     onToggleAttributeFilters,
     onToggleMapFilter,
     onToggleSavedSearches,
@@ -96,6 +100,12 @@ const {
     onSplitterResize,
     onSplitterResizeEnd,
 } = useSidePanel();
+
+// Reachable from anywhere in the results-card subtree (SearchResultCard,
+// DescriptorSection, etc.) without threading a prop/emit chain through
+// SearchResults.vue and SearchResultCard.vue — the side panel this opens
+// lives here, several layers up from where "Related" is clicked.
+provide("viewRelatedResource", viewRelatedResource);
 
 const sortValue = ref<string | null>("relevance");
 const graphModels = ref<GraphModel[]>([]);
@@ -469,6 +479,7 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                         :results="searchResults"
                         :is-searching="isSearching"
                         :filter-text="''"
+                        :graph-models="graphModels"
                         @request-page="onRequestPage"
                     />
                 </SplitterPanel>
@@ -490,8 +501,13 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                             @remove="onRemoveMapFilter"
                             @close="closeSidePanel()"
                         />
+                        <RelatedResourcesPanel
+                            v-if="isRelatedResourcesOpen"
+                            :resource-title="relatedResource?.title ?? ''"
+                            @close="closeSidePanel()"
+                        />
                         <TimeFilter
-                            v-if="isTimeFilterActive"
+                            v-else-if="isTimeFilterActive"
                             :graph-slug="activeGraphSlug"
                             :graph-id="activeGraphId"
                             :graph-label="activeGraphLabel"

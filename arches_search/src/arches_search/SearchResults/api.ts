@@ -4,6 +4,7 @@ import arches from "arches";
 
 import type {
     ResourceDescriptorData,
+    ResourceInstanceLifecycleState,
     SearchReportConfig,
 } from "@/arches_search/SearchResults/types.ts";
 
@@ -24,6 +25,22 @@ export async function fetchResourceDescriptors(
         "?" +
         params.toString();
 
+    const response = await fetch(url);
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+    return parsed;
+}
+
+// The full set of lifecycle-state definitions is bounded by admin
+// configuration, not by how many resources exist, so this is fetched once
+// and joined against resources client-side rather than resolved per-result
+// server-side.
+export async function fetchResourceInstanceLifecycleStates(): Promise<
+    ResourceInstanceLifecycleState[]
+> {
+    const url = generateArchesURL(
+        "arches:api_resource_instance_lifecycle_states",
+    );
     const response = await fetch(url);
     const parsed = await response.json();
     if (!response.ok) throw new Error(parsed.message || response.statusText);
