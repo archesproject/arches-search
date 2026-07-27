@@ -16,6 +16,7 @@ from arches.app.models.models import (
     TileModel,
 )
 
+from arches_search.functions.search_indexing import SearchIndexingFunction
 from arches_search.indexing.index_descriptor import (
     DESCRIPTOR_NODE_ALIAS,
     index_resource_descriptors,
@@ -71,6 +72,20 @@ class DescriptorIndexingTestCase(TestCase):
 
         index_resource_descriptors(self.resource)  # must not duplicate
         self.assertEqual(self._rows().count(), 1)
+
+    def test_function_indexes_descriptor_on_commit(self):
+        """Tile.save() recomputes descriptors after post_save, so the function
+        must defer to commit and pick up the *new* name, not the stale one."""
+        with self.captureOnCommitCallbacks(execute=True):
+            SearchIndexingFunction().post_save(self.tile)
+            # stand in for Tile.save()'s later save_descriptors() call
+            ResourceInstance.objects.filter(
+                pk=self.resource.resourceinstanceid
+            ).update(descriptors={"en": {"name": "HER-99999 Renamed"}})
+
+        self.assertEqual(
+            [row.value for row in self._rows()], ["HER-99999 Renamed"]
+        )
 
     def test_skips_undefined_and_empty_names(self):
         self.resource.descriptors = {"en": {"name": "Undefined"}, "fr": {"name": ""}}
