@@ -6,6 +6,7 @@ tileid is NOT NULL but a descriptor is per-resource: prefer the descriptor's nam
 nodegroup tile when configured, else any tile (tileid is only an FK anchor here).
 """
 from arches.app.models.models import FunctionXGraph, TileModel
+from arches.app.models.system_settings import settings
 
 from arches_search.models.models import TermSearch
 
@@ -46,6 +47,8 @@ def _descriptor_tile(resource):
 
 def build_descriptor_terms(resource):
     """Return the TermSearch rows for this resource's descriptor name(s), or []."""
+    if str(resource.graph_id) == str(settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID):
+        return []
     descriptors = resource.descriptors or {}
     if not descriptors:
         return []
