@@ -6,10 +6,6 @@ class ArchesSearchConfig(AppConfig):
     is_arches_application = True
 
     def ready(self):
-        from arches_search import signals
-
-        signals.connect()
-
         from arches_modular_reports.config_generator_registry import register
 
         register(
