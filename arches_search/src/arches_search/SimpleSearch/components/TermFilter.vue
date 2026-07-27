@@ -9,7 +9,10 @@ import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts"
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import type { AutoCompleteCompleteEvent } from "primevue/autocomplete";
-import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    TermKind,
+    TermSuggestion,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 interface TermSuggestionSelectEvent {
     value: TermSuggestion;
@@ -26,16 +29,51 @@ const props = defineProps<{
 const { $gettext } = useGettext();
 const { setTermFilter, clearTermFilter } = useSearchFilters();
 
+type TypeaheadPanel = "records" | "vocab";
+
+interface HighlightSegment {
+    text: string;
+    matched: boolean;
+}
+
 const suggestions = ref<Array<TermSuggestion>>([]);
 const selectedTerms = ref<Array<TermSuggestion>>([]);
 const inputText = ref("");
 const isOverlayShown = ref(false);
 const hasSuggestionLoadError = ref(false);
+const typeaheadPanel = ref<TypeaheadPanel>("records");
+const recordsTabButton = ref<HTMLButtonElement | null>(null);
+const vocabTabButton = ref<HTMLButtonElement | null>(null);
+
+// Not reactive on purpose — only used to detect a stale onComplete response,
+// never rendered. Two requests can be in flight at once (a debounced search
+// doesn't cancel an already-sent request, only a still-pending timer), and
+// without this, a slower response for an earlier keystroke can land after a
+// faster response for the current one and overwrite it with stale results.
+let latestSuggestionRequestId = 0;
 
 const emptySearchMessage = computed(() =>
     hasSuggestionLoadError.value
         ? $gettext("Search suggestions are unavailable.")
         : undefined,
+);
+
+const recordSuggestions = computed<Array<TermSuggestion>>(() =>
+    suggestions.value.filter(
+        (suggestion) => suggestion.datatype !== "reference",
+    ),
+);
+
+const vocabSuggestions = computed<Array<TermSuggestion>>(() =>
+    suggestions.value.filter(
+        (suggestion) => suggestion.datatype === "reference",
+    ),
+);
+
+const activeSuggestions = computed<Array<TermSuggestion>>(() =>
+    typeaheadPanel.value === "records"
+        ? recordSuggestions.value
+        : vocabSuggestions.value,
 );
 
 watch(
@@ -56,13 +94,14 @@ watch(
 
         for (const selectedTerm of selectedTermValues) {
             if (!previousTermTexts.has(selectedTerm.text)) {
+                const termKind = getTermKind(selectedTerm);
                 setTermFilter(
                     termKey(selectedTerm.text),
                     selectedTerm.text,
                     () => removeTerm(selectedTerm.text),
-                    {
-                        style: "background-color: var(--p-sky-500);",
-                    },
+                    undefined,
+                    termKind,
+                    termKind === "record" ? selectedTerm.graph_icon : undefined,
                 );
             }
         }
@@ -82,6 +121,7 @@ function removeTerm(termValue: string): void {
 
 async function onComplete(event: AutoCompleteCompleteEvent): Promise<void> {
     const trimmedQuery = event.query.trim();
+    const requestId = ++latestSuggestionRequestId;
 
     if (!trimmedQuery) {
         suggestions.value = [];
@@ -91,8 +131,15 @@ async function onComplete(event: AutoCompleteCompleteEvent): Promise<void> {
 
     try {
         hasSuggestionLoadError.value = false;
-        suggestions.value = await fetchSearchTermSuggestions(trimmedQuery);
+        const results = await fetchSearchTermSuggestions(trimmedQuery);
+        if (requestId !== latestSuggestionRequestId) {
+            return;
+        }
+        suggestions.value = results;
     } catch (error) {
+        if (requestId !== latestSuggestionRequestId) {
+            return;
+        }
         console.error(error);
         suggestions.value = [];
         hasSuggestionLoadError.value = true;
@@ -137,14 +184,71 @@ function showOverlay(): void {
 
 function hideOverlay(): void {
     isOverlayShown.value = false;
+    typeaheadPanel.value = "records";
 }
 
 function isConceptSuggestion(suggestion: TermSuggestion): boolean {
     return suggestion.datatype === "reference";
 }
 
-function isTermSuggestion(suggestion: TermSuggestion): boolean {
-    return suggestion.datatype === "term";
+function getTermKind(suggestion: TermSuggestion): TermKind | undefined {
+    if (isConceptSuggestion(suggestion)) {
+        return "controlled-term";
+    }
+    if (suggestion.resourceinstanceid) {
+        return "record";
+    }
+    return undefined;
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getHighlightSegments(text: string, query: string): HighlightSegment[] {
+    const trimmedQuery = query.trim();
+
+    if (!trimmedQuery) {
+        return [{ text, matched: false }];
+    }
+
+    const matchPattern = new RegExp(`(${escapeRegExp(trimmedQuery)})`, "gi");
+    return text
+        .split(matchPattern)
+        .map((segment, index) => ({ text: segment, matched: index % 2 === 1 }))
+        .filter((segment) => segment.text !== "");
+}
+
+function switchTypeaheadPanel(panel: TypeaheadPanel): void {
+    typeaheadPanel.value = panel;
+}
+
+function handleTabChipKeydown(
+    event: KeyboardEvent,
+    currentPanel: TypeaheadPanel,
+): void {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+        return;
+    }
+
+    event.preventDefault();
+    const nextPanel: TypeaheadPanel =
+        currentPanel === "records" ? "vocab" : "records";
+    switchTypeaheadPanel(nextPanel);
+    (nextPanel === "records"
+        ? recordsTabButton
+        : vocabTabButton
+    ).value?.focus();
+}
+
+function getNoResultsMessage(): string {
+    return typeaheadPanel.value === "records"
+        ? $gettext("No matching records for “%{query}”", {
+              query: inputText.value,
+          })
+        : $gettext("No matching controlled terms for “%{query}”", {
+              query: inputText.value,
+          });
 }
 
 function getSuggestionPath(suggestion: TermSuggestion): string | null {
@@ -168,24 +272,73 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 <template>
     <div class="search-bar">
         <span class="search-bar-inner">
-            <i class="pi pi-search search-icon" />
+            <i
+                aria-hidden="true"
+                class="pi pi-search search-icon"
+            ></i>
             <AutoComplete
                 v-model="inputText"
                 class="search-input"
+                overlay-class="term-filter-overlay"
                 option-label="text"
+                scroll-height="32.2581rem"
+                append-to="self"
                 :auto-option-focus="true"
                 :empty-search-message="emptySearchMessage"
                 :fluid="true"
-                :placeholder="$gettext('Find an item, sample, supplier\u2026')"
-                :suggestions="suggestions"
+                :placeholder="$gettext('Find an item, sample, supplier…')"
+                :suggestions="activeSuggestions"
                 @complete="onComplete"
                 @option-select="onSelect"
                 @keydown="onKeydown"
                 @before-show="showOverlay"
                 @before-hide="hideOverlay"
             >
+                <template #header>
+                    <div class="suggestion-tab-bar">
+                        <button
+                            ref="recordsTabButton"
+                            type="button"
+                            class="suggestion-tab-chip"
+                            :class="{ active: typeaheadPanel === 'records' }"
+                            @mousedown.prevent
+                            @click="switchTypeaheadPanel('records')"
+                            @keydown="handleTabChipKeydown($event, 'records')"
+                        >
+                            <i class="pi pi-database"></i>
+                            {{
+                                $gettext("Records (%{count})", {
+                                    count: String(recordSuggestions.length),
+                                })
+                            }}
+                        </button>
+                        <button
+                            ref="vocabTabButton"
+                            type="button"
+                            class="suggestion-tab-chip"
+                            :class="{ active: typeaheadPanel === 'vocab' }"
+                            @mousedown.prevent
+                            @click="switchTypeaheadPanel('vocab')"
+                            @keydown="handleTabChipKeydown($event, 'vocab')"
+                        >
+                            <i class="pi pi-tag"></i>
+                            {{
+                                $gettext("Controlled Terms (%{count})", {
+                                    count: String(vocabSuggestions.length),
+                                })
+                            }}
+                        </button>
+                    </div>
+                </template>
+
                 <template #option="{ option }">
-                    <div class="suggestion-option">
+                    <div
+                        class="suggestion-option"
+                        :class="{
+                            'suggestion-option--vocab':
+                                isConceptSuggestion(option),
+                        }"
+                    >
                         <span
                             v-if="isConceptSuggestion(option)"
                             class="suggestion-icon suggestion-icon--concept"
@@ -193,16 +346,33 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
                             C
                         </span>
                         <i
-                            v-else-if="isTermSuggestion(option)"
-                            class="pi pi-hashtag suggestion-icon suggestion-icon--term"
-                        />
-                        <i
                             v-else
-                            class="pi pi-search suggestion-icon suggestion-icon--string"
+                            :class="[
+                                'suggestion-icon',
+                                'suggestion-icon--record',
+                                option.graph_icon || 'pi pi-search',
+                            ]"
                         />
-                        <div class="suggestion-content">
+
+                        <div
+                            v-if="isConceptSuggestion(option)"
+                            class="suggestion-content"
+                        >
                             <span class="suggestion-label">
-                                {{ option.text }}
+                                <template
+                                    v-for="(
+                                        segment, segmentIndex
+                                    ) in getHighlightSegments(
+                                        option.text,
+                                        inputText,
+                                    )"
+                                    :key="segmentIndex"
+                                >
+                                    <mark v-if="segment.matched">{{
+                                        segment.text
+                                    }}</mark>
+                                    <span v-else>{{ segment.text }}</span>
+                                </template>
                             </span>
                             <span
                                 v-if="getSuggestionPath(option)"
@@ -211,12 +381,46 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
                                 {{ getSuggestionPath(option) }}
                             </span>
                         </div>
+                        <template v-else>
+                            <span
+                                class="suggestion-label suggestion-label--record"
+                            >
+                                <template
+                                    v-for="(
+                                        segment, segmentIndex
+                                    ) in getHighlightSegments(
+                                        option.text,
+                                        inputText,
+                                    )"
+                                    :key="segmentIndex"
+                                >
+                                    <mark v-if="segment.matched">{{
+                                        segment.text
+                                    }}</mark>
+                                    <span v-else>{{ segment.text }}</span>
+                                </template>
+                            </span>
+                            <span
+                                v-if="option.graph_name"
+                                class="suggestion-type"
+                            >
+                                {{ option.graph_name }}
+                            </span>
+                        </template>
                     </div>
+                </template>
+
+                <template #empty>
+                    <span class="typeahead-no-results">{{
+                        getNoResultsMessage()
+                    }}</span>
                 </template>
             </AutoComplete>
         </span>
         <Button
             :label="$gettext('Search')"
+            icon="pi pi-search"
+            icon-pos="left"
             class="search-button"
             type="button"
             @click="submitSearch"
@@ -228,25 +432,47 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 .search-bar {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 1.0081rem;
     padding: 1.2rem 1.6rem;
     background-color: var(--p-content-background);
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+}
+
+.search-bar .search-icon {
+    font-size: 1.5121rem;
+    color: var(--p-text-muted-color, var(--p-surface-500));
+    flex-shrink: 0;
 }
 
 .search-bar .search-bar-inner {
     display: flex;
     align-items: center;
     flex: 1;
-    border: 0.125rem solid var(--p-surface-300);
-    border-radius: 0.4rem;
-    padding: 0 1rem;
+    max-width: 40%;
+    gap: 1rem;
+    background-color: var(--arches-search-page-bg);
+    border: 0.15rem solid var(--p-content-border-color);
+    border-radius: 0.8rem;
+    padding: 0 1.4rem;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
 }
 
-.search-bar .search-icon {
-    font-size: var(--p-arches-search-font-size);
-    margin-inline-end: 0.8rem;
-    flex-shrink: 0;
+/* 40% of a normal desktop-width viewport is comfortably wide, but the same
+   40% of a much narrower effective viewport (e.g. browser zoomed to 200%)
+   reads as cramped, so let it claim more of the row once space is tight.
+   px (not rem) deliberately here: media query units are always resolved
+   against the browser's default root font-size, never against this page's
+   own html{font-size} override, so rem would be misleading here. */
+@media (max-width: 900px) {
+    .search-bar .search-bar-inner {
+        max-width: 100%;
+    }
+}
+
+.search-bar .search-bar-inner:focus-within {
+    border-color: var(--p-primary-color);
+    box-shadow: 0 0 0 0.3rem var(--p-primary-100);
 }
 
 .search-bar .search-input {
@@ -256,28 +482,126 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 .search-bar :deep(.search-input .p-autocomplete-input) {
     border: none;
     box-shadow: none;
-    padding: 1rem 2rem;
-    font-size: var(--p-arches-search-font-size);
+    padding: 1.2097rem 0;
+    font-size: 1.4113rem;
     width: 100%;
-    background-color: var(--p-content-background);
+    background-color: transparent;
 }
 
-.search-bar :deep(.search-input .p-autocomplete-input:focus) {
-    outline: none;
+.search-bar :deep(.search-input .p-autocomplete-input::placeholder) {
+    color: var(--p-text-muted-color, var(--p-surface-500));
+}
+
+/* !important: arches core's _elements.scss has a global, currently-commented-out
+   `input:focus-visible:not(.select2-search__field) { outline: 2px solid ... !important; }`
+   rule. If that's ever re-enabled it would otherwise win regardless of
+   specificity (its !important beats non-important no matter what), colliding
+   with our own custom focus ring on .search-bar-inner above. This input relies
+   entirely on that ring for focus visibility, so the native outline is
+   suppressed here rather than left to double up with it. */
+.search-bar :deep(.search-input .p-autocomplete-input:focus),
+.search-bar :deep(.search-input .p-autocomplete-input:focus-visible) {
+    outline: none !important;
     box-shadow: none;
 }
 
 .search-bar .search-button {
     font-size: var(--p-arches-search-font-size);
+    font-weight: 700;
     padding: 1rem 2rem;
-    border-radius: 0.4rem;
+    border-radius: 0.8rem;
     white-space: nowrap;
 }
 
+.search-bar .search-button :deep(.p-button-icon) {
+    display: inline-flex;
+    align-items: center;
+    font-size: 1.4rem;
+}
+
+/* PrimeVue's own overlay/list already provide the rounded, bordered,
+   shadowed panel via design tokens, but Aura's defaults (1px border, 6px
+   radius, a flat/tight shadow) all read noticeably smaller/flatter than
+   the mockup's, so they're overridden explicitly below.
+
+   max-width: PrimeVue's own .p-autocomplete-overlay only sets
+   min-width: 100% (matching the trigger), with no upper bound. Every
+   .suggestion-label already truncates with an ellipsis once its container
+   is constrained (see width: 100% comment below), but with nothing capping
+   the overlay itself, a single long record/term name has no container to
+   be constrained by — the panel just grows to fit it, off the edge of the
+   screen if need be. The viewport term keeps that from happening even when
+   the search bar sits near the edge of a narrow window.
+
+   margin-inline-start: append-to="self" positions the overlay flush with
+   the raw <input> (PrimeVue always measures $refs.focusInput, not
+   configurable), but the visible search-bar box starts well to the left of
+   that — .search-bar-inner's own border + padding, then the search icon,
+   then the flex gap, all sit before the input. Left as-is, the overlay
+   renders that whole distance to the right of the visible box instead of
+   flush with it. This shift is the negative sum of those same values (keep
+   in sync with .search-bar-inner and .search-icon above if either changes):
+   border-width 0.1512rem + padding-inline-start 1.4rem + icon width
+   1.5121rem (icon glyphs render at 1em, matching .search-icon's font-size)
+   + gap 1rem. */
+.search-bar :deep(.term-filter-overlay) {
+    overflow: hidden;
+    border-width: 0.1512rem;
+    border-radius: 0.8065rem;
+    box-shadow:
+        0 0.8065rem 2.4194rem rgba(0, 0, 0, 0.12),
+        0 0.2016rem 0.6048rem rgba(0, 0, 0, 0.07);
+    max-width: 80vw;
+    margin-inline-start: calc(-1 * (0.1512rem + 1.4rem + 1.5121rem + 1rem));
+}
+
+.search-bar :deep(.term-filter-overlay .p-autocomplete-list) {
+    gap: 0;
+    padding: 0;
+}
+
+.search-bar :deep(.term-filter-overlay .p-autocomplete-option) {
+    border-radius: 0;
+    border-block-end: 0.1rem solid var(--p-content-border-color);
+    padding: 0.8065rem 1.4113rem;
+}
+
+.search-bar :deep(.term-filter-overlay .p-autocomplete-option:last-child) {
+    border-block-end: none;
+}
+
+/* !important: Aura's compiled CSS has a same-specificity rule for the
+   keyboard-focused row (.p-focus, added by PrimeVue itself), so cascade
+   order between its injected theme CSS and this component's scoped styles
+   isn't guaranteed to favor this rule otherwise — same reasoning as the
+   focus-outline override above. Unified with :hover so keyboard nav and
+   mouse hover read as the same state, matching the mockup. */
+.search-bar :deep(.term-filter-overlay .p-autocomplete-option:hover),
+.search-bar :deep(.term-filter-overlay .p-autocomplete-option.p-focus) {
+    background: var(--p-highlight-background) !important;
+}
+
+.search-bar :deep(.term-filter-overlay .p-autocomplete-empty-message) {
+    padding: 1.2097rem 1.4113rem;
+    font-size: 1.3105rem;
+    color: var(--p-text-muted-color, var(--p-surface-500));
+    text-align: center;
+}
+
+/* width:100% is required, not cosmetic: .p-autocomplete-option (the parent)
+   is itself display:flex, so this element is a flex ITEM of that row with
+   no width of its own by default — it shrink-wraps to its content instead
+   of spanning the row, leaving .suggestion-type's margin-inline-start:auto
+   below with no actual space to push against. */
 .search-bar .suggestion-option {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.75rem;
+    width: 100%;
+}
+
+.search-bar .suggestion-option--vocab {
+    align-items: flex-start;
 }
 
 .search-bar .suggestion-icon {
@@ -298,12 +622,7 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     color: var(--p-primary-contrast-color, var(--p-surface-0));
 }
 
-.search-bar .suggestion-icon--term {
-    background-color: var(--p-surface-200);
-    color: var(--p-surface-700);
-}
-
-.search-bar .suggestion-icon--string {
+.search-bar .suggestion-icon--record {
     background-color: var(--p-surface-200);
     color: var(--p-surface-700);
 }
@@ -316,10 +635,76 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 
 .search-bar .suggestion-label {
     font-weight: 500;
+    font-size: 1.3105rem;
     color: var(--p-text-color);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.search-bar .suggestion-label--record {
+    flex: 1;
+    min-width: 0;
+}
+
+/* :deep() not needed here — <mark> is genuine template markup (rendered
+   via getHighlightSegments, not v-html), so it receives the scoped
+   attribute automatically like any other element in this template. */
+.search-bar .suggestion-label mark {
+    background: none;
+    color: var(--p-primary-color);
+    font-weight: 700;
+}
+
+.search-bar .suggestion-type {
+    font-size: 1.0081rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--p-text-muted-color, var(--p-surface-500));
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-inline-start: auto;
+}
+
+.search-bar .suggestion-tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6048rem;
+    padding: 0.8065rem 1.0081rem;
+    border-block-end: 0.1rem solid var(--p-content-border-color);
+    background: var(--arches-search-page-bg);
+}
+
+.search-bar .suggestion-tab-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.504rem;
+    padding: 0.4032rem 1.0081rem;
+    border-radius: 999rem;
+    font-size: 1.2097rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 0.1512rem solid var(--arches-search-chip-border);
+    background: var(--p-content-background);
+    color: var(--arches-search-sec-btn-text);
+    font-family: inherit;
+}
+
+.search-bar .suggestion-tab-chip:hover {
+    background: var(--arches-search-sec-btn-hover-bg);
+}
+
+.search-bar .suggestion-tab-chip:focus-visible {
+    outline: 0.2016rem solid var(--p-primary-color);
+    outline-offset: 0.2016rem;
+}
+
+.search-bar .suggestion-tab-chip.active {
+    background: var(--p-primary-color);
+    border-color: var(--p-primary-color);
+    color: var(--p-primary-contrast-color, var(--p-surface-0));
 }
 
 .search-bar .suggestion-path {

@@ -11,16 +11,20 @@ export interface ResourceType {
 // here — and therefore on `useSearchFilters`. Bump `version` when the
 // shape changes so old saved rows can be migrated.
 export interface SearchDefinition {
-    version: 1;
+    version: 2;
     terms: SerializedTerm[];
     queries: Record<string, GroupPayload>;
-    graphId: string | null;
+    graphIds: string[];
 }
+
+export type TermKind = "controlled-term" | "record";
 
 export interface SerializedTerm {
     id: string;
     text: string;
     inverted: boolean;
+    termKind?: TermKind;
+    icon?: string;
     options?: Record<string, unknown>;
 }
 
@@ -29,13 +33,29 @@ export interface TermSuggestion {
     datatype: string;
     text: string;
     addtional_info?: Record<string, unknown>;
+    resourceinstanceid?: string;
+    graph_icon?: string;
+    graph_name?: string;
 }
+
+export type ActiveFilterKind =
+    | "term"
+    | "controlled-term"
+    | "record"
+    | "resource-type"
+    | "time"
+    | "map"
+    | "attribute";
 
 export interface ActiveFilter {
     id: string;
     text: string;
     clear: () => void;
     inverted: boolean;
+    kind: ActiveFilterKind;
+    category: string;
+    icon: string;
+    onEdit?: () => void;
     options?: Record<string, unknown>;
 }
 
@@ -63,7 +83,9 @@ export interface NodeFilterConfigNode {
 
 export type SortDirection = "asc" | "desc";
 
-export type SortSpec = { type: "primary_name"; direction: SortDirection };
+export type SortSpec =
+    | { type: "primary_name"; direction: SortDirection }
+    | { type: "created_time"; direction: SortDirection };
 
 export interface SavedSearch {
     savedsearchid: string;

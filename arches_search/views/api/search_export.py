@@ -5,7 +5,7 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.views.api import APIBase
 
 from arches_search.etl_modules.search_results_export import SearchResultsExportModule
-from arches_search.views.api.simple_search import build_search_queryset
+from arches_search.utils.search_queryset import build_search_queryset
 
 
 class SearchExportAPI(APIBase):

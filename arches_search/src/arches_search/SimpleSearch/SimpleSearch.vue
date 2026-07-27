@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from "vue";
+import { computed, provide, ref, watch, watchEffect } from "vue";
+import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
-import { useToast } from "primevue/usetoast";
 import Toast from "primevue/toast";
 
 import Splitter from "primevue/splitter";
@@ -11,10 +11,11 @@ import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
 import AttributeFilters from "@/arches_search/SimpleSearch/components/attribute-filters/AttributeFilters.vue";
 import ExportPanel from "@/arches_search/SimpleSearch/components/ExportPanel.vue";
+import IdleInfoTiles from "@/arches_search/SimpleSearch/components/IdleInfoTiles.vue";
+import RelatedResourcesPanel from "@/arches_search/SimpleSearch/components/RelatedResourcesPanel.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
-import SaveDialog from "@/arches_search/SimpleSearch/components/SaveDialog.vue";
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
 import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
@@ -24,13 +25,14 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import { fetchNodeFilterConfig } from "@/arches_search/SimpleSearch/api.ts";
 import {
-    createSavedSearch,
-    fetchNodeFilterConfig,
-} from "@/arches_search/SimpleSearch/api.ts";
-import { buildAttributeFilterQuery } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
+    buildAttributeFilterQuery,
+    formatAttributeFilterValue,
+} from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
+import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 
 import type { FeatureCollection } from "geojson";
 import type {
@@ -38,27 +40,26 @@ import type {
     LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
+    ActiveFilter,
     NodeFilterConfigNode,
+    ResourceType,
     SearchDefinition,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-const SWITCH_TO_ADVANCED_EVENT = "switch-to-advanced";
 const TERM_FILTER_KEY = "termfilter";
 const TIME_FILTER_QUERY_KEY = "timeFilter";
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
 
-defineEmits<{
-    (event: typeof SWITCH_TO_ADVANCED_EVENT): void;
-}>();
+const { $gettext } = useGettext();
 
 const {
-    activeGraph,
+    activeFilters,
+    activeGraphs,
     applySearchDefinition,
     clearMapFilter,
     clearQuery,
-    getSearchDefinition,
     isSearching,
     mapFilter,
     queries,
@@ -67,68 +68,87 @@ const {
     setMapFilter,
     setQuery,
     setSort,
+    toggleGraph,
 } = provideSearchFilters();
 
 const {
+    isIdle,
     isAttributeFiltersActive,
     isAttributeFiltersOpen,
     isMapFilterActive,
     isMapFilterOpen,
-    isExportPanelActive,
-    isExportPanelOpen,
     isSavedSearchesActive,
     isSavedSearchesOpen,
     isTimeFilterActive,
     isTimeFilterOpen,
-    hasOpenSidePanel,
+    isRelatedResourcesOpen,
+    relatedResource,
     resultsPanelSize,
     visibleSidePanelSize,
     sidePanelMinSize,
-    splitterStateClass,
     sidePanelContentClass,
     sidePanelStyle,
     closeSidePanel,
+    viewRelatedResource,
     onToggleAttributeFilters,
     onToggleMapFilter,
-    onToggleExportPanel,
     onToggleSavedSearches,
     onToggleTimeFilter,
+    openAttributeFilters,
+    openMapFilter,
+    openTimeFilter,
     onSplitterResizeStart,
     onSplitterResize,
     onSplitterResizeEnd,
 } = useSidePanel();
 
-const { $gettext } = useGettext();
-const toast = useToast();
-const sortValue = ref<string | null>(null);
+// Reachable from anywhere in the results-card subtree (SearchResultCard,
+// DescriptorSection, etc.) without threading a prop/emit chain through
+// SearchResults.vue and SearchResultCard.vue — the side panel this opens
+// lives here, several layers up from where "Related" is clicked.
+provide("viewRelatedResource", viewRelatedResource);
+
+const sortValue = ref<string | null>("relevance");
 const graphModels = ref<GraphModel[]>([]);
-const showSaveDialog = ref(false);
+const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
-const savedSearchPanelRef = ref<InstanceType<typeof SavedSearchPanel> | null>(
-    null,
+
+const isSingleGraphSelected = computed<boolean>(
+    () => activeGraphs.value.length === 1,
+);
+
+const singleActiveGraph = computed<ResourceType | null>(() =>
+    isSingleGraphSelected.value ? activeGraphs.value[0] : null,
 );
 
 const activeGraphId = computed<string | null>(
-    () => activeGraph.value?.id ?? null,
+    () => singleActiveGraph.value?.id ?? null,
 );
 
 const activeGraphLabel = computed<string | null>(
-    () => activeGraph.value?.label ?? null,
+    () => singleActiveGraph.value?.label ?? null,
 );
 
 const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
 
 watch(
-    () => activeGraph.value,
-    (graph) => {
+    () => activeGraphs.value,
+    (graphs) => {
         // Drop any attribute-filter queries from the previously active graph.
         for (const node of nodeFilterConfigNodes.value) {
             clearQuery(node.node_alias);
         }
         filterValues.value = {};
 
-        if (!graph || !graph.id) {
+        if (graphs.length !== 1) {
             nodeFilterConfigNodes.value = [];
+            // Attribute/time filters are single-graph features and are
+            // unreachable outside the exactly-one-selected state; clear the
+            // time-filter query explicitly rather than relying on
+            // TimeFilter.vue's own prop watcher, since closeSidePanel()
+            // below unmounts it synchronously (and it may already be
+            // unmounted), so that watcher isn't guaranteed to run.
+            clearQuery(TIME_FILTER_QUERY_KEY);
 
             if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
                 closeSidePanel();
@@ -137,7 +157,7 @@ watch(
             return;
         }
 
-        void loadNodeFilterConfig(graph.id);
+        void loadNodeFilterConfig(graphs[0].id as string);
     },
 );
 
@@ -229,6 +249,10 @@ function sortSpecForValue(value: string | null): SortSpec[] {
             return [{ type: "primary_name", direction: "asc" }];
         case "zToA":
             return [{ type: "primary_name", direction: "desc" }];
+        case "newest":
+            return [{ type: "created_time", direction: "desc" }];
+        case "oldest":
+            return [{ type: "created_time", direction: "asc" }];
         default:
             return [];
     }
@@ -265,29 +289,126 @@ function onRemoveMapFilter(): void {
     clearMapFilter();
 }
 
-async function onSaveSearch(payload: { name: string; description: string }) {
-    try {
-        await createSavedSearch(
-            payload.name,
-            payload.description,
-            getSearchDefinition() as unknown as Record<string, unknown>,
-        );
-        showSaveDialog.value = false;
-        savedSearchPanelRef.value?.loadSearches();
-        toast.add({
-            severity: "success",
-            life: 3000,
-            summary: $gettext("Search saved"),
-        });
-    } catch (error) {
-        toast.add({
-            severity: "error",
-            life: 5000,
-            summary: $gettext("Failed to save search"),
-            detail: error instanceof Error ? error.message : undefined,
-        });
+function formatTimeFilterLabel(clause: LiteralClause): string {
+    const from = parseStoredDate(clause.operands[0]?.value);
+    const to = parseStoredDate(clause.operands[1]?.value);
+
+    if (!from || !to) {
+        return $gettext("Custom range");
     }
+
+    const fromText = dayjs(from).format("MMM D, YYYY");
+    if (dayjs(from).isSame(to, "day")) {
+        return fromText;
+    }
+
+    return `${fromText} – ${dayjs(to).format("MMM D, YYYY")}`;
 }
+
+function clearAttributeFilter(nodeAlias: string): void {
+    clearQuery(nodeAlias);
+    const { [nodeAlias]: _removedValue, ...remainingFilterValues } =
+        filterValues.value;
+    filterValues.value = remainingFilterValues;
+}
+
+// The chip row surfaces every active filter, but only term/resource-type
+// filters live in the always-visible top bar — time/map/attribute filters
+// live behind the collapsible side panel, so their chips get an onEdit that
+// reopens it (openXFilter, not onToggleXFilter — a toggle would close an
+// already-open panel instead of keeping it open for editing).
+const resourceTypeActiveFilters = computed<ActiveFilter[]>(() =>
+    activeGraphs.value.map((graph) => {
+        const graphModel = graphModels.value.find(
+            (candidate) => candidate.graphid === graph.id,
+        );
+
+        return {
+            id: `resourceType:${graph.id}`,
+            text: graphModel?.name ?? graph.label,
+            clear: () => toggleGraph(graph),
+            inverted: false,
+            kind: "resource-type",
+            category: $gettext("Type"),
+            icon: graphModel?.iconclass ?? graph.icon,
+        };
+    }),
+);
+
+const timeActiveFilter = computed<ActiveFilter | null>(() => {
+    const clause = selectedTimeFilterClause.value;
+    if (!hasTimeFilter.value || !clause) {
+        return null;
+    }
+
+    return {
+        id: TIME_FILTER_QUERY_KEY,
+        text: formatTimeFilterLabel(clause),
+        clear: onRemoveTimeFilter,
+        inverted: false,
+        kind: "time",
+        category: $gettext("Date"),
+        icon: "pi pi-clock",
+        onEdit: openTimeFilter,
+    };
+});
+
+const mapActiveFilter = computed<ActiveFilter | null>(() => {
+    const featureCount = mapFilter.value?.features.length ?? 0;
+    if (featureCount === 0) {
+        return null;
+    }
+
+    return {
+        id: "mapFilter",
+        text: $gettext("%{count} area(s) selected", {
+            count: String(featureCount),
+        }),
+        clear: onRemoveMapFilter,
+        inverted: false,
+        kind: "map",
+        category: $gettext("Area"),
+        icon: "pi pi-map",
+        onEdit: openMapFilter,
+    };
+});
+
+const attributeActiveFilters = computed<ActiveFilter[]>(() => {
+    return nodeFilterConfigNodes.value.flatMap((node) => {
+        if (!queries.value.has(node.node_alias)) {
+            return [];
+        }
+
+        const text = formatAttributeFilterValue(
+            node,
+            filterValues.value[node.node_alias],
+        );
+        if (!text) {
+            return [];
+        }
+
+        return [
+            {
+                id: node.node_alias,
+                text,
+                clear: () => clearAttributeFilter(node.node_alias),
+                inverted: false,
+                kind: "attribute",
+                category: node.label,
+                icon: "pi pi-filter",
+                onEdit: openAttributeFilters,
+            },
+        ];
+    });
+});
+
+const allActiveFilters = computed<ActiveFilter[]>(() => [
+    ...activeFilters.value,
+    ...resourceTypeActiveFilters.value,
+    ...(timeActiveFilter.value ? [timeActiveFilter.value] : []),
+    ...(mapActiveFilter.value ? [mapActiveFilter.value] : []),
+    ...attributeActiveFilters.value,
+]);
 
 function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
     applySearchDefinition(parseSearchDefinition(queryDefinition));
@@ -328,11 +449,24 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             : {};
 
     return {
-        version: 1,
+        version: 2,
         terms,
         queries: queriesIn,
-        graphId: typeof raw.graphId === "string" ? raw.graphId : null,
+        graphIds: parseGraphIds(raw),
     };
+}
+
+// Legacy rows stored a single `graphId`; new rows store `graphIds`.
+function parseGraphIds(raw: Record<string, unknown>): string[] {
+    if (Array.isArray(raw.graphIds)) {
+        return raw.graphIds.filter(
+            (id): id is string => typeof id === "string",
+        );
+    }
+    if (typeof raw.graphId === "string") {
+        return [raw.graphId];
+    }
+    return [];
 }
 </script>
 
@@ -342,32 +476,11 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
 
         <ResourceTypeFilter />
 
-        <ActiveFilters />
-
-        <ResultsToolbar
-            :sort-value="sortValue"
-            :show-filters="isAttributeFiltersOpen"
-            :show-map="isMapFilterOpen"
-            :has-map-filter="mapFilter !== null"
-            :show-time="isTimeFilterOpen"
-            :has-time-filter="hasTimeFilter"
-            :show-saved-searches="isSavedSearchesOpen"
-            :show-export-panel="isExportPanelOpen"
-            :hide-filters-button="!activeGraph"
-            :hide-time-button="!activeGraph"
-            @update:sort-value="onSortValueUpdate"
-            @save-search="showSaveDialog = true"
-            @toggle-filters="onToggleAttributeFilters"
-            @toggle-map="onToggleMapFilter"
-            @toggle-time="onToggleTimeFilter"
-            @toggle-saved-searches="onToggleSavedSearches"
-            @export="onToggleExportPanel"
-        />
+        <ActiveFilters :active-filters="allActiveFilters" />
 
         <div class="body">
             <Splitter
                 class="splitter"
-                :class="splitterStateClass"
                 @resizestart="onSplitterResizeStart"
                 @resize="onSplitterResize"
                 @resizeend="onSplitterResizeEnd"
@@ -377,10 +490,27 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                     :size="resultsPanelSize"
                     :min-size="RESULTS_PANEL_MIN_SIZE"
                 >
+                    <ResultsToolbar
+                        :sort-value="sortValue"
+                        :show-filters="isAttributeFiltersOpen"
+                        :show-map="isMapFilterOpen"
+                        :has-map-filter="mapFilter !== null"
+                        :show-time="isTimeFilterOpen"
+                        :has-time-filter="hasTimeFilter"
+                        :show-saved-searches="isSavedSearchesOpen"
+                        :hide-filters-button="!isSingleGraphSelected"
+                        :hide-time-button="!isSingleGraphSelected"
+                        @update:sort-value="onSortValueUpdate"
+                        @toggle-filters="onToggleAttributeFilters"
+                        @toggle-map="onToggleMapFilter"
+                        @toggle-time="onToggleTimeFilter"
+                        @toggle-saved-searches="onToggleSavedSearches"
+                    />
                     <SearchResults
                         :results="searchResults"
                         :is-searching="isSearching"
                         :filter-text="''"
+                        :graph-models="graphModels"
                         @request-page="onRequestPage"
                     />
                 </SplitterPanel>
@@ -394,45 +524,58 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                     <div
                         class="side-panel-content"
                         :class="sidePanelContentClass"
-                        :aria-hidden="!hasOpenSidePanel"
                     >
                         <MapFilterPanel
                             v-show="isMapFilterActive"
                             :model-value="mapFilter"
                             @update:model-value="onMapFilterUpdate"
                             @remove="onRemoveMapFilter"
+                            @close="closeSidePanel()"
+                        />
+                        <RelatedResourcesPanel
+                            v-if="isRelatedResourcesOpen"
+                            :resource-title="relatedResource?.title ?? ''"
+                            @close="closeSidePanel()"
                         />
                         <TimeFilter
-                            v-if="isTimeFilterActive"
+                            v-else-if="isTimeFilterActive"
                             :graph-slug="activeGraphSlug"
                             :graph-id="activeGraphId"
                             :graph-label="activeGraphLabel"
                             :model-value="selectedTimeFilterClause"
                             @update:model-value="onTimeFilterUpdate"
                             @remove="onRemoveTimeFilter"
+                            @close="closeSidePanel()"
                         />
                         <AttributeFilters
                             v-else-if="isAttributeFiltersActive"
                             :nodes="nodeFilterConfigNodes"
                             :values="filterValues"
                             @update:value="onAttributeFilterChange"
+                            @close="closeSidePanel()"
                         />
                         <SavedSearchPanel
                             v-else-if="isSavedSearchesActive"
-                            ref="savedSearchPanelRef"
                             @run-query="onRunSavedQuery"
+                            @open-export="showExportModal = true"
+                            @close="closeSidePanel()"
                         />
-                        <ExportPanel v-else-if="isExportPanelActive" />
+                        <IdleInfoTiles
+                            v-else-if="isIdle"
+                            :hide-filters="!isSingleGraphSelected"
+                            :hide-time="!isSingleGraphSelected"
+                            @open-filters="onToggleAttributeFilters"
+                            @open-map="onToggleMapFilter"
+                            @open-time="onToggleTimeFilter"
+                            @open-saved-searches="onToggleSavedSearches"
+                        />
                     </div>
                 </SplitterPanel>
             </Splitter>
         </div>
     </div>
 
-    <SaveDialog
-        v-model:visible="showSaveDialog"
-        @save="onSaveSearch"
-    />
+    <ExportPanel v-model:visible="showExportModal" />
 
     <Toast />
 </template>
@@ -448,11 +591,13 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
 .simple-search .body {
     display: flex;
     flex: 1;
+    min-block-size: 0;
     overflow: hidden;
 }
 
 .simple-search .splitter {
     flex: 1;
+    min-block-size: 0;
     overflow: hidden;
     border-radius: 0;
 }
@@ -469,14 +614,15 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-inline-start: 0.0625rem solid var(--p-content-border-color);
 }
 
 .simple-search .side-panel-content {
     display: flex;
     flex-direction: column;
     flex: 1;
+    min-inline-size: 20rem;
     overflow-y: auto;
+    background-color: var(--arches-search-card-bg);
     opacity: 0;
     translate: 1.25rem 0;
     transition:
@@ -487,11 +633,16 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
 .simple-search .side-panel-content.side-panel-content-open {
     opacity: 1;
     translate: 0 0;
+    border-inline-start: 0.1rem solid var(--p-content-border-color);
 }
 
-.simple-search
-    .splitter.side-panel-closed
-    :deep(.results-pane + .p-splitter-gutter) {
-    display: none;
+.simple-search .splitter :deep(.p-splitter-gutter) {
+    background: var(--p-content-border-color);
+    transition: background 0.12s;
+}
+
+.simple-search .splitter :deep(.p-splitter-gutter:hover),
+.simple-search .splitter :deep(.p-splitter-gutter-handle:hover) {
+    background: var(--p-primary-color);
 }
 </style>

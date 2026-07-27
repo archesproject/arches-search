@@ -1,4 +1,5 @@
 import { computed, inject, provide, ref } from "vue";
+import { useGettext } from "vue3-gettext";
 
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 import {
@@ -17,6 +18,7 @@ import type {
     ResourceType,
     SearchDefinition,
     SortSpec,
+    TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
 
@@ -29,18 +31,18 @@ interface SearchRequestTerm {
 interface ExportPayload {
     terms: SearchRequestTerm[];
     query: GroupPayload | undefined;
-    graphId: string | null;
+    graphIds: string[];
 }
 
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
-    activeGraph: Ref<ResourceType | null>;
+    activeGraphs: Ref<ResourceType[]>;
     currentPage: Ref<number>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
-    resultsGraph: Ref<ResourceType | null>;
+    resultsGraphs: Ref<ResourceType[]>;
     searchResults: Ref<SearchResults>;
     sort: Ref<SortSpec[]>;
     applySearchDefinition(definition: SearchDefinition): void;
@@ -50,7 +52,6 @@ interface SearchFilters {
     getExportPayload(): ExportPayload;
     getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
-    setGraph(graph: ResourceType | null): void;
     setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
     setSort(next: SortSpec[]): void;
@@ -59,7 +60,10 @@ interface SearchFilters {
         text: string,
         clear: () => void,
         options?: Record<string, unknown>,
+        termKind?: TermKind,
+        icon?: string,
     ): void;
+    toggleGraph(resourceType: ResourceType): void;
 }
 
 const FIRST_SEARCH_PAGE = 1;
@@ -71,11 +75,12 @@ const SEARCH_FILTERS_KEY: InjectionKey<SearchFilters> = Symbol("searchFilters");
 const DEFAULT_SORT: SortSpec[] = [];
 
 function createSearchFilters(): SearchFilters {
+    const { $gettext } = useGettext();
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const mapFilter = ref<FeatureCollection | null>(null);
-    const activeGraph = ref<ResourceType | null>(null);
-    const resultsGraph = ref<ResourceType | null>(null);
+    const activeGraphs = ref<ResourceType[]>([]);
+    const resultsGraphs = ref<ResourceType[]>([]);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
     const isSearching = ref(false);
     const currentPage = ref(FIRST_SEARCH_PAGE);
@@ -102,11 +107,33 @@ function createSearchFilters(): SearchFilters {
         () => queries.value,
     );
 
+    function getTermFilterCategory(termKind?: TermKind): string {
+        if (termKind === "controlled-term") {
+            return $gettext("Term");
+        }
+        if (termKind === "record") {
+            return $gettext("Record");
+        }
+        return $gettext("Search");
+    }
+
+    function getTermFilterIcon(termKind?: TermKind): string {
+        if (termKind === "controlled-term") {
+            return "pi pi-tag";
+        }
+        if (termKind === "record") {
+            return "pi pi-database";
+        }
+        return "pi pi-search";
+    }
+
     function setTermFilter(
         key: string,
         text: string,
         clear: () => void,
         options?: Record<string, unknown>,
+        termKind?: TermKind,
+        icon?: string,
     ): void {
         const next = new Map(terms.value);
         next.set(key, {
@@ -114,6 +141,9 @@ function createSearchFilters(): SearchFilters {
             text,
             clear,
             inverted: false,
+            kind: termKind ?? "term",
+            category: getTermFilterCategory(termKind),
+            icon: icon || getTermFilterIcon(termKind),
             options,
         });
         terms.value = next;
@@ -155,10 +185,28 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
-    function setGraph(graph: ResourceType | null): void {
-        activeGraph.value = graph;
+    function setGraphs(graphs: ResourceType[]): void {
+        activeGraphs.value = graphs;
         currentPage.value = FIRST_SEARCH_PAGE;
         search();
+    }
+
+    function toggleGraph(resourceType: ResourceType): void {
+        if (resourceType.id === null) {
+            setGraphs([]);
+            return;
+        }
+
+        const isActive = activeGraphs.value.some(
+            (graph) => graph.id === resourceType.id,
+        );
+        setGraphs(
+            isActive
+                ? activeGraphs.value.filter(
+                      (graph) => graph.id !== resourceType.id,
+                  )
+                : [...activeGraphs.value, resourceType],
+        );
     }
 
     function setSort(next: SortSpec[]): void {
@@ -177,12 +225,12 @@ function createSearchFilters(): SearchFilters {
             isSearching.value = true;
 
             try {
-                const requestGraph = activeGraph.value;
+                const requestGraphs = activeGraphs.value;
                 const searchParams = {
                     terms: getRequestTerms(),
                     query: getRequestQuery(),
                     page,
-                    graphId: requestGraph ? requestGraph.id : null,
+                    graphIds: requestGraphs.map((graph) => graph.id as string),
                     mapFilter: mapFilter.value,
                     sort: sort.value,
                 };
@@ -209,7 +257,7 @@ function createSearchFilters(): SearchFilters {
                     searchResults.value = results;
                 }
 
-                resultsGraph.value = requestGraph;
+                resultsGraphs.value = requestGraphs;
                 mvtContextId.value = context?.context_id ?? null;
             } finally {
                 isSearching.value = false;
@@ -244,18 +292,22 @@ function createSearchFilters(): SearchFilters {
         // Strip the `clear` closure off each ActiveFilter — closures aren't
         // serializable, and the restore path rebuilds them from `id`.
         const serializedTerms = [...terms.value.values()].map(
-            ({ id, text, inverted, options }) => ({
+            ({ id, text, inverted, kind, icon, options }) => ({
                 id,
                 text,
                 inverted,
+                ...(kind === "controlled-term" || kind === "record"
+                    ? { termKind: kind }
+                    : {}),
+                ...(kind === "record" ? { icon } : {}),
                 ...(options !== undefined ? { options } : {}),
             }),
         );
         return {
-            version: 1,
+            version: 2,
             terms: serializedTerms,
             queries: Object.fromEntries(queries.value),
-            graphId: activeGraph.value?.id ?? null,
+            graphIds: activeGraphs.value.map((graph) => graph.id as string),
         };
     }
 
@@ -269,11 +321,9 @@ function createSearchFilters(): SearchFilters {
             clearQuery(filterKey);
         }
 
-        if (definition.graphId) {
-            setGraph({ id: definition.graphId, label: "", icon: "" });
-        } else {
-            setGraph(null);
-        }
+        setGraphs(
+            definition.graphIds.map((id) => ({ id, label: "", icon: "" })),
+        );
 
         for (const term of definition.terms) {
             setTermFilter(
@@ -281,6 +331,8 @@ function createSearchFilters(): SearchFilters {
                 term.text,
                 () => clearTermFilter(term.id),
                 term.options,
+                term.termKind,
+                term.icon,
             );
         }
         for (const [filterKey, payload] of Object.entries(definition.queries)) {
@@ -292,13 +344,13 @@ function createSearchFilters(): SearchFilters {
         return {
             terms: getRequestTerms(),
             query: getRequestQuery(),
-            graphId: activeGraph.value ? activeGraph.value.id : null,
+            graphIds: activeGraphs.value.map((graph) => graph.id as string),
         };
     }
 
     return {
         activeFilters,
-        activeGraph,
+        activeGraphs,
         applySearchDefinition,
         clearMapFilter,
         clearQuery,
@@ -310,15 +362,15 @@ function createSearchFilters(): SearchFilters {
         mapFilter,
         queries: queriesView,
         resultsTileUrl,
-        resultsGraph,
+        resultsGraphs,
         search,
         searchResults,
-        setGraph,
         setMapFilter,
         setQuery,
         setSort,
         setTermFilter,
         sort,
+        toggleGraph,
     };
 }
 
@@ -334,6 +386,8 @@ function createEmptySearchResults(): SearchResults {
             has_next: false,
             has_previous: false,
         },
+        resource_type_counts: [],
+        all_resource_count: 0,
     };
 }
 

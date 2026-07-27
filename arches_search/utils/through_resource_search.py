@@ -1,4 +1,3 @@
-from django.contrib.postgres.search import SearchQuery
 from django.db.models import Q
 
 from arches.app.models.models import (
@@ -7,6 +6,7 @@ from arches.app.models.models import (
 )
 
 from arches_search.models.models import TermSearch
+from arches_search.utils.term_matching import build_term_match_filter
 
 
 def get_related_resources_by_text(search_terms, target_graphid):
@@ -18,12 +18,10 @@ def get_related_resources_by_text(search_terms, target_graphid):
     result = None
 
     for term in search_terms:
-        sq = SearchQuery(term, search_type="plain", config="english")
-
         # Resources matching this search term (any graph)
-        initial_match_ids = TermSearch.objects.filter(search_vector=sq).values(
-            "resourceinstanceid"
-        )
+        initial_match_ids = TermSearch.objects.filter(
+            build_term_match_filter(term)
+        ).values("resourceinstanceid")
 
         # Non-target-graph resources among the initial matches
         non_matching_initial = (

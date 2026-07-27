@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, nextTick, ref } from "vue";
+import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
+import Tag from "primevue/tag";
 
 import arches from "arches";
 
@@ -10,7 +11,11 @@ import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
 import type { Ref } from "vue";
 import type { SectionContent } from "@/arches_modular_reports/ModularReport/types.ts";
-import type { ResourceDescriptorData } from "@/arches_search/SearchResults/types.ts";
+import type { RelatedResource } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
+import type {
+    ResourceDescriptorData,
+    ResourceInstanceLifecycleState,
+} from "@/arches_search/SearchResults/types.ts";
 
 const { $gettext } = useGettext();
 
@@ -22,13 +27,23 @@ const resourceInstanceId = inject("resourceInstanceId") as string;
 const descriptorData = inject("descriptorData") as Ref<
     ResourceDescriptorData | null | undefined
 >;
+const lifecycleState = inject(
+    "lifecycleState",
+) as Ref<ResourceInstanceLifecycleState | null>;
 const isExpanded = inject("searchResultExpanded") as Ref<boolean>;
-
-const shouldShowThumbnailContainer = ref(false);
-const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
+const viewRelatedResource = inject("viewRelatedResource") as (
+    resource: RelatedResource,
+) => void;
 
 function toggleExpanded(): void {
     isExpanded.value = !isExpanded.value;
+}
+
+function onViewRelated(): void {
+    viewRelatedResource({
+        id: resourceInstanceId,
+        title: resourceDisplayName.value,
+    });
 }
 
 const activeDescriptors = computed(function () {
@@ -55,50 +70,24 @@ const resourceReportLink = computed<string>(function () {
     });
 });
 
-onMounted(function () {
-    if (typeof window === "undefined") {
-        return;
-    }
-
-    const thumbnailImageElement = new window.Image();
-
-    thumbnailImageElement.alt = resourceDisplayName.value;
-    thumbnailImageElement.className = "descriptor-section-thumbnail-image";
-
-    thumbnailImageElement.onload = async function () {
-        shouldShowThumbnailContainer.value = true;
-
-        await nextTick();
-
-        if (thumbnailContainerElement.value) {
-            thumbnailContainerElement.value.appendChild(thumbnailImageElement);
-        }
-    };
-
-    thumbnailImageElement.onerror = function () {
-        shouldShowThumbnailContainer.value = false;
-    };
-
-    thumbnailImageElement.src = `/thumbnail/${resourceInstanceId}`;
+// Lifecycle states are fully admin-configurable — an arbitrary number of
+// named states per graph, not a fixed enum — so the badge tone is derived
+// only from the two permission flags every state always has, never from a
+// state's name or id. Mapped to PrimeVue's built-in Tag severities (rather
+// than custom colors) so the badge automatically tracks this app's theme.
+const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
+    const state = lifecycleState?.value;
+    if (!state) return "secondary";
+    if (state.can_delete_resource_instances) return "warn";
+    if (state.can_edit_resource_instances) return "success";
+    return "secondary";
 });
 </script>
 
 <template>
     <div class="descriptor-section">
-        <div class="descriptor-section-header">
-            <div
-                ref="thumbnailContainerElement"
-                class="descriptor-section-thumbnail"
-            >
-                <span
-                    v-if="!shouldShowThumbnailContainer"
-                    class="descriptor-section-thumbnail-placeholder"
-                >
-                    {{ $gettext("Image") }}
-                </span>
-            </div>
-
-            <div class="descriptor-section-content">
+        <div class="descriptor-section-content">
+            <div class="descriptor-section-title-row">
                 <a
                     :href="resourceReportLink"
                     target="_blank"
@@ -106,46 +95,61 @@ onMounted(function () {
                 >
                     {{ resourceDisplayName }}
                 </a>
+                <Tag
+                    v-if="lifecycleState"
+                    class="descriptor-section-lifecycle-tag"
+                    :severity="lifecycleSeverity"
+                    :value="lifecycleState.name"
+                    rounded
+                />
+            </div>
 
-                <div class="descriptor-section-actions">
-                    <Button
-                        :icon="
-                            isExpanded
-                                ? 'pi pi-chevron-down'
-                                : 'pi pi-chevron-right'
-                        "
-                        variant="link"
-                        :label="
-                            isExpanded
-                                ? $gettext('Show less')
-                                : $gettext('Show more')
-                        "
-                        @click="toggleExpanded"
-                    />
-                    <Button
-                        as="a"
-                        icon="pi pi-wrench"
-                        target="_blank"
-                        variant="link"
-                        :href="resourceEditorLink"
-                        :label="$gettext('Edit')"
-                    />
-                    <Button
-                        icon="pi pi-sitemap"
-                        variant="link"
-                        :label="$gettext('Related Resources')"
-                    />
-                </div>
+            <div
+                v-if="resourceDescriptionText"
+                class="descriptor-section-description"
+            >
+                <span class="descriptor-section-description-label">
+                    {{ $gettext("Description:") }}
+                </span>
+                {{ resourceDescriptionText }}
+            </div>
 
-                <div
-                    v-if="resourceDescriptionText"
-                    class="descriptor-section-description"
-                >
-                    <span class="descriptor-section-description-label">
-                        {{ $gettext("Description:") }}
-                    </span>
-                    {{ resourceDescriptionText }}
-                </div>
+            <div class="descriptor-section-actions">
+                <Button
+                    :icon="
+                        isExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'
+                    "
+                    variant="link"
+                    :label="
+                        isExpanded
+                            ? $gettext('Show less')
+                            : $gettext('Show more')
+                    "
+                    @click="toggleExpanded"
+                />
+                <Button
+                    as="a"
+                    class="descriptor-section-view-report-action"
+                    icon="pi pi-external-link"
+                    target="_blank"
+                    variant="link"
+                    :href="resourceReportLink"
+                    :label="$gettext('View Report')"
+                />
+                <Button
+                    as="a"
+                    icon="pi pi-wrench"
+                    target="_blank"
+                    variant="link"
+                    :href="resourceEditorLink"
+                    :label="$gettext('Edit')"
+                />
+                <Button
+                    icon="pi pi-sitemap"
+                    variant="link"
+                    :label="$gettext('Related')"
+                    @click="onViewRelated"
+                />
             </div>
         </div>
     </div>
@@ -153,41 +157,8 @@ onMounted(function () {
 
 <style scoped>
 .descriptor-section {
-    --link-color: var(--p-blue-600, #2563eb);
-
     display: flex;
     flex-direction: column;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
-}
-
-.descriptor-section-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 1.5rem;
-    padding: 1.5rem 2rem;
-}
-
-.descriptor-section-thumbnail {
-    width: 10rem;
-    height: 10rem;
-    flex-shrink: 0;
-    background-color: var(--p-surface-100);
-    border: 0.125rem solid var(--p-surface-300);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.descriptor-section-thumbnail-placeholder {
-    font-size: 1rem;
-    color: var(--p-text-muted-color);
-}
-
-.descriptor-section-thumbnail-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
 }
 
 .descriptor-section-content {
@@ -196,47 +167,89 @@ onMounted(function () {
     gap: 0.625rem;
     flex: 1;
     min-width: 0;
-    padding-top: 0.25rem;
+    padding: 1.5rem 2rem;
+}
+
+.descriptor-section-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .descriptor-section-title {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 600;
-    color: var(--link-color);
+    color: var(--p-primary-color);
     text-decoration: none;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.3;
 }
 
 .descriptor-section-title:hover {
     text-decoration: underline;
 }
 
+.descriptor-section-lifecycle-tag.p-tag {
+    font-size: 1rem;
+    padding: 0.2rem 0.8rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
 .descriptor-section-actions {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.2rem;
+    margin-top: 0.2rem;
 }
 
 .descriptor-section-actions :deep(.p-button) {
-    font-size: 1.5rem;
-    padding-inline: 0;
+    font-size: 1.2rem;
+    padding: 0.3rem 0.8rem;
+    color: var(--p-text-muted-color);
+    text-decoration: none;
+}
+
+/* Aura's own button.label.font.weight token sets font-weight directly on
+   this span, which — being an explicit (not inherited) value — always wins
+   over anything set on the ancestor .p-button above, regardless of
+   specificity. Same reasoning as the toolbar-btn rules in
+   ResultsToolbar.vue. */
+.descriptor-section-actions :deep(.p-button-label) {
+    font-weight: 600;
 }
 
 .descriptor-section-actions :deep(.p-button-icon) {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
+}
+
+/* Mirrors the mockup's .view-btn-card treatment: View Report is the
+   preferred action in this row, set apart from the other muted links. */
+.descriptor-section-actions
+    :deep(.descriptor-section-view-report-action.p-button) {
+    color: var(--p-primary-color);
+}
+
+.descriptor-section-actions
+    :deep(.descriptor-section-view-report-action.p-button .p-button-label) {
+    font-weight: 700;
 }
 
 .descriptor-section-description {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     color: var(--p-text-muted-color);
     line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .descriptor-section-description-label {
     font-weight: 600;
-    color: var(--p-text-color);
-    margin-inline-end: 0.25rem;
+    color: var(--p-text-muted-color);
+    margin-inline-end: 0.4rem;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 </style>

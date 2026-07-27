@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 import Card from "primevue/card";
 
-import AdvancedSearch from "@/arches_search/AdvancedSearch/AdvancedSearch.vue";
-import SimpleSearch from "@/arches_search/SimpleSearch/SimpleSearch.vue";
+import { routeNames } from "@/arches_search/routes.ts";
 
-const SIMPLE = "simple";
-const ADVANCED = "advanced";
-type SearchView = typeof SIMPLE | typeof ADVANCED;
+const router = useRouter();
+const route = useRoute();
 
-const activeView = ref<SearchView>(SIMPLE);
+const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
 </script>
 
 <template>
@@ -18,27 +17,30 @@ const activeView = ref<SearchView>(SIMPLE);
         <template #header>
             <header class="simple-search-header">
                 <h1 class="search-title">
+                    <i class="pi pi-search" />
                     {{ $gettext("Search the Collection") }}
                 </h1>
                 <nav
-                    v-if="activeView === SIMPLE"
+                    v-if="isSimpleSearch"
                     class="header-nav"
                 >
                     <button
                         class="header-link"
-                        @click="activeView = ADVANCED"
+                        @click="
+                            router.push({ name: routeNames.advancedSearch })
+                        "
                     >
                         <i class="pi pi-sliders-h" />
                         {{ $gettext("Advanced Search") }}
                     </button>
                 </nav>
                 <nav
-                    v-if="activeView === ADVANCED"
+                    v-else
                     class="header-nav"
                 >
                     <button
                         class="header-link"
-                        @click="activeView = SIMPLE"
+                        @click="router.push({ name: routeNames.simpleSearch })"
                     >
                         <i class="pi pi-sliders-h" />
                         {{ $gettext("Simple Search") }}
@@ -47,43 +49,65 @@ const activeView = ref<SearchView>(SIMPLE);
             </header>
         </template>
         <template #content>
-            <SimpleSearch v-if="activeView === SIMPLE" />
-            <AdvancedSearch v-else />
+            <router-view />
         </template>
     </Card>
 </template>
 
 <style scoped>
 .search-card {
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
+    display: flex;
+    flex-direction: column;
     height: 100%;
+    overflow: hidden;
+    border: 0.1rem solid var(--p-content-border-color);
+    border-radius: 0;
+    background-color: var(--arches-search-card-bg);
+    box-shadow:
+        0 0.1rem 0.3rem rgba(0, 0, 0, 0.06),
+        0 0.1rem 0.2rem rgba(0, 0, 0, 0.04);
 }
 
 .simple-search-header {
     display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 2rem;
-    background-color: var(--p-content-background);
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    gap: 1.6rem;
+    padding: 2rem 2rem 0.4rem;
+    background-color: var(--arches-search-card-bg);
 }
 
 .search-title {
-    font-size: 2rem;
-    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
     margin: 0;
+    color: var(--p-text-color);
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.search-title .pi {
+    font-size: 1.8rem;
+    color: var(--p-primary-color);
 }
 
 :deep(.p-card-body) {
+    display: flex;
+    flex-direction: column;
     flex: 1;
+    min-block-size: 0;
     padding: 0;
+    overflow-x: hidden;
     overflow-y: hidden;
 }
 
 :deep(.p-card-content) {
-    height: 100%;
+    flex: 1;
+    min-block-size: 0;
 }
 
 .header-nav {
@@ -92,19 +116,28 @@ const activeView = ref<SearchView>(SIMPLE);
 }
 
 .header-link {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: var(--p-arches-search-font-size);
-    text-decoration: none;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
+    gap: 0.6rem;
+    padding: 0.5rem 1.2rem;
+    color: var(--p-primary-color);
+    border: 0.1rem solid
+        color-mix(in srgb, var(--p-primary-color), transparent 60%);
+    border-radius: 999rem;
+    background: var(--p-highlight-background);
     font-family: inherit;
+    font-size: 1.2rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
 }
 
 .header-link:hover {
-    text-decoration: underline;
+    border-color: color-mix(in srgb, var(--p-primary-color), transparent 30%);
+    background: var(--p-highlight-focus-background);
 }
 </style>

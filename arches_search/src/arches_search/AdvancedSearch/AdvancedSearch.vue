@@ -204,6 +204,7 @@ function onRequestPage(nextPageNumber: number) {
                         :results="searchResults"
                         :is-searching="isSearching"
                         :filter-text="searchFilterText"
+                        :graph-models="graphs"
                         @request-page="onRequestPage"
                     />
                 </template>

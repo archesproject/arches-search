@@ -20,6 +20,7 @@ defineProps<{
 
 const emit = defineEmits<{
     (event: "update:value", nodeAlias: string, value: unknown): void;
+    (event: "close"): void;
 }>();
 
 function componentFor(node: NodeFilterConfigNode): Component | null {
@@ -29,9 +30,19 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 
 <template>
     <div class="attribute-filters">
-        <h3 class="attribute-filters-title">
-            {{ $gettext("Attribute Filters") }}
-        </h3>
+        <div class="attribute-filters-header">
+            <h3 class="attribute-filters-title">
+                <i class="pi pi-filter" />
+                {{ $gettext("Attribute Filters") }}
+            </h3>
+            <button
+                class="attribute-filters-close-btn"
+                @click="emit('close')"
+            >
+                <i class="pi pi-times" />
+                {{ $gettext("Close") }}
+            </button>
+        </div>
 
         <span
             v-if="nodes.length === 0"
@@ -85,15 +96,50 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 .attribute-filters {
     height: 100%;
     overflow-y: auto;
-    padding: 1.2rem 1.6rem;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+}
+
+.attribute-filters-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.75rem;
+    border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .attribute-filters-title {
-    margin: 0 0 1.2rem 0;
-    padding-bottom: 0.75rem;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    margin: 0;
     font-weight: 700;
     font-size: 1.5rem;
+    color: var(--p-text-color);
+}
+
+.attribute-filters-title .pi {
+    margin-inline-end: 0.6rem;
+    color: var(--p-primary-color);
+}
+
+.attribute-filters-close-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.8rem;
+    font-family: inherit;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--p-text-muted-color);
+    background: none;
+    border: none;
+    border-radius: 0.4rem;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.attribute-filters-close-btn:hover {
+    background: var(--p-content-hover-background);
     color: var(--p-text-color);
 }
 
@@ -108,8 +154,9 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 }
 
 .unsupported {
-    font-size: var(--p-arches-search-font-size);
-    color: var(--p-surface-400);
+    font-size: 1.3rem;
+    color: var(--p-text-muted-color);
     padding: 0.4rem 0 0.8rem 0;
+    line-height: 1.5;
 }
 </style>
