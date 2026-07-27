@@ -14,7 +14,7 @@ const RESOURCE_TYPE_FALLBACK_KEY = "__all__";
 const COUNT_ABBREVIATION_THRESHOLD = 1000;
 
 const { $gettext } = useGettext();
-const { setGraph, activeGraph, searchResults } = useSearchFilters();
+const { toggleGraph, activeGraphs, searchResults } = useSearchFilters();
 
 const resourceTypes = ref<ResourceType[]>([]);
 const hasResourceTypeLoadError = ref(false);
@@ -75,20 +75,14 @@ function getResourceTypeButtonKey(resourceType: ResourceType): string {
 
 function isResourceTypeSelected(resourceType: ResourceType): boolean {
     if (resourceType.id === null) {
-        return activeGraph.value === null;
+        return activeGraphs.value.length === 0;
     }
 
-    return activeGraph.value?.id === resourceType.id;
+    return activeGraphs.value.some((graph) => graph.id === resourceType.id);
 }
 
 function selectGraph(resourceType: ResourceType): void {
-    if (resourceType.id === null || activeGraph.value?.id === resourceType.id) {
-        setGraph(null);
-
-        return;
-    }
-
-    setGraph(resourceType);
+    toggleGraph(resourceType);
 }
 
 function getResourceTypeCount(resourceType: ResourceType): number {
