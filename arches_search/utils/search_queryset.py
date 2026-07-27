@@ -1,7 +1,9 @@
 from collections import Counter
 from functools import cached_property
 
+from django.core.exceptions import ValidationError
 from django.db.models import Count
+from django.utils.translation import gettext as _
 
 from arches.app.models.models import (
     GraphModel,
@@ -20,12 +22,13 @@ from arches_search.utils.through_resource_search import get_related_resources_by
 class SimpleSearchQuerysetBuilder:
     """
     Lazily builds the querysets a simple-search request needs, each at most
-    once. graphId makes scoped_queryset and type_agnostic_queryset genuinely
-    different searches when a resource type is selected; when it isn't,
-    they're the same search, so type_agnostic_queryset reuses scoped_queryset
-    instead of paying to rebuild it — which relies on nothing downstream
-    (sorting, pagination, aggregation) ever mutating a queryset in place
-    instead of chaining a new one, per normal Django QuerySet convention.
+    once. graphIds makes scoped_queryset and type_agnostic_queryset genuinely
+    different searches when one or more resource types are selected; when
+    none are, they're the same search, so type_agnostic_queryset reuses
+    scoped_queryset instead of paying to rebuild it — which relies on
+    nothing downstream (sorting, pagination, aggregation) ever mutating a
+    queryset in place instead of chaining a new one, per normal Django
+    QuerySet convention.
 
     Copies body so a caller mutating its own dict after construction can't
     invalidate an already-cached property below.
@@ -40,22 +43,43 @@ class SimpleSearchQuerysetBuilder:
 
     @cached_property
     def type_agnostic_queryset(self):
-        if not self.body.get("graphId"):
+        if not self.body.get("graphIds"):
             return self.scoped_queryset
 
-        return build_search_queryset({**self.body, "graphId": None})
+        return build_search_queryset({**self.body, "graphIds": []})
+
+
+def _validate_graph_ids(graph_ids):
+    if not isinstance(graph_ids, list) or not all(
+        isinstance(graph_id, str) for graph_id in graph_ids
+    ):
+        raise ValidationError(_("graphIds must be a list of strings."))
 
 
 def build_search_queryset(body):
     terms = body.get("terms")
     query = body.get("query")
-    graph_id = body.get("graphId")
+    graph_ids = body.get("graphIds", [])
+    _validate_graph_ids(graph_ids)
 
     results_queryset = None
     if terms:
-        if graph_id:
+        if graph_ids:
             term_texts = [term["text"] for term in terms]
-            results_queryset = get_related_resources_by_text(term_texts, graph_id)
+            per_graph_match_ids = [
+                get_related_resources_by_text(term_texts, graph_id).values_list(
+                    "resourceinstanceid", flat=True
+                )
+                for graph_id in graph_ids
+            ]
+            combined_ids = (
+                per_graph_match_ids[0]
+                if len(per_graph_match_ids) == 1
+                else per_graph_match_ids[0].union(*per_graph_match_ids[1:], all=True)
+            )
+            results_queryset = ResourceInstance.objects.filter(
+                resourceinstanceid__in=combined_ids
+            )
         else:
             initial_match_ids = None
             for term in terms:
@@ -77,15 +101,15 @@ def build_search_queryset(body):
     if query:
         if results_queryset is None:
             base_queryset = ResourceInstance.objects.all()
-            if graph_id:
-                base_queryset = base_queryset.filter(graph_id=graph_id)
+            if graph_ids:
+                base_queryset = base_queryset.filter(graph_id__in=graph_ids)
             results_queryset = base_queryset
         results_queryset = AdvancedSearchQueryCompiler(query).compile(results_queryset)
 
     if not terms and not query:
         results_queryset = ResourceInstance.objects.all()
-        if graph_id:
-            results_queryset = results_queryset.filter(graph_id=graph_id)
+        if graph_ids:
+            results_queryset = results_queryset.filter(graph_id__in=graph_ids)
 
     map_filter = body.get("mapFilter")
     if map_filter and map_filter.get("features"):
@@ -107,7 +131,7 @@ def build_resource_type_counts(terms, type_agnostic_queryset):
 
     type_agnostic_queryset should be a
     SimpleSearchQuerysetBuilder.type_agnostic_queryset (or an equivalent
-    build_search_queryset(body) result with graphId cleared) — this function
+    build_search_queryset(body) result with graphIds cleared) — this function
     only consumes it, it never decides how to build one.
     """
     graphs = list(

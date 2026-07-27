@@ -11,10 +11,10 @@ export interface ResourceType {
 // here — and therefore on `useSearchFilters`. Bump `version` when the
 // shape changes so old saved rows can be migrated.
 export interface SearchDefinition {
-    version: 1;
+    version: 2;
     terms: SerializedTerm[];
     queries: Record<string, GroupPayload>;
-    graphId: string | null;
+    graphIds: string[];
 }
 
 export type TermKind = "controlled-term" | "record";

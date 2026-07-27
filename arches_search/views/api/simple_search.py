@@ -29,7 +29,7 @@ class SimpleSearchAPI(APIBase):
         page_size = body.get("page_size", 20)
 
         paginator = Paginator(results_queryset, page_size)
-        if not body.get("graphId"):
+        if not body.get("graphIds"):
             paginator.count = all_resource_count
 
         results_page = paginator.page(page_number)

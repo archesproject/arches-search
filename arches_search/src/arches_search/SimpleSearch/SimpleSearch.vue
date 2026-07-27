@@ -42,6 +42,7 @@ import type {
 import type {
     ActiveFilter,
     NodeFilterConfigNode,
+    ResourceType,
     SearchDefinition,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -55,7 +56,7 @@ const { $gettext } = useGettext();
 
 const {
     activeFilters,
-    activeGraph,
+    activeGraphs,
     applySearchDefinition,
     clearMapFilter,
     clearQuery,
@@ -64,10 +65,10 @@ const {
     queries,
     search,
     searchResults,
-    setGraph,
     setMapFilter,
     setQuery,
     setSort,
+    toggleGraph,
 } = provideSearchFilters();
 
 const {
@@ -112,27 +113,42 @@ const graphModels = ref<GraphModel[]>([]);
 const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
 
+const isSingleGraphSelected = computed<boolean>(
+    () => activeGraphs.value.length === 1,
+);
+
+const singleActiveGraph = computed<ResourceType | null>(() =>
+    isSingleGraphSelected.value ? activeGraphs.value[0] : null,
+);
+
 const activeGraphId = computed<string | null>(
-    () => activeGraph.value?.id ?? null,
+    () => singleActiveGraph.value?.id ?? null,
 );
 
 const activeGraphLabel = computed<string | null>(
-    () => activeGraph.value?.label ?? null,
+    () => singleActiveGraph.value?.label ?? null,
 );
 
 const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
 
 watch(
-    () => activeGraph.value,
-    (graph) => {
+    () => activeGraphs.value,
+    (graphs) => {
         // Drop any attribute-filter queries from the previously active graph.
         for (const node of nodeFilterConfigNodes.value) {
             clearQuery(node.node_alias);
         }
         filterValues.value = {};
 
-        if (!graph || !graph.id) {
+        if (graphs.length !== 1) {
             nodeFilterConfigNodes.value = [];
+            // Attribute/time filters are single-graph features and are
+            // unreachable outside the exactly-one-selected state; clear the
+            // time-filter query explicitly rather than relying on
+            // TimeFilter.vue's own prop watcher, since closeSidePanel()
+            // below unmounts it synchronously (and it may already be
+            // unmounted), so that watcher isn't guaranteed to run.
+            clearQuery(TIME_FILTER_QUERY_KEY);
 
             if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
                 closeSidePanel();
@@ -141,7 +157,7 @@ watch(
             return;
         }
 
-        void loadNodeFilterConfig(graph.id);
+        void loadNodeFilterConfig(graphs[0].id as string);
     },
 );
 
@@ -301,21 +317,23 @@ function clearAttributeFilter(nodeAlias: string): void {
 // live behind the collapsible side panel, so their chips get an onEdit that
 // reopens it (openXFilter, not onToggleXFilter — a toggle would close an
 // already-open panel instead of keeping it open for editing).
-const resourceTypeActiveFilter = computed<ActiveFilter | null>(() => {
-    if (!activeGraph.value) {
-        return null;
-    }
+const resourceTypeActiveFilters = computed<ActiveFilter[]>(() =>
+    activeGraphs.value.map((graph) => {
+        const graphModel = graphModels.value.find(
+            (candidate) => candidate.graphid === graph.id,
+        );
 
-    return {
-        id: "resourceType",
-        text: activeGraph.value.label,
-        clear: () => setGraph(null),
-        inverted: false,
-        kind: "resource-type",
-        category: $gettext("Type"),
-        icon: activeGraph.value.icon,
-    };
-});
+        return {
+            id: `resourceType:${graph.id}`,
+            text: graphModel?.name ?? graph.label,
+            clear: () => toggleGraph(graph),
+            inverted: false,
+            kind: "resource-type",
+            category: $gettext("Type"),
+            icon: graphModel?.iconclass ?? graph.icon,
+        };
+    }),
+);
 
 const timeActiveFilter = computed<ActiveFilter | null>(() => {
     const clause = selectedTimeFilterClause.value;
@@ -386,7 +404,7 @@ const attributeActiveFilters = computed<ActiveFilter[]>(() => {
 
 const allActiveFilters = computed<ActiveFilter[]>(() => [
     ...activeFilters.value,
-    ...(resourceTypeActiveFilter.value ? [resourceTypeActiveFilter.value] : []),
+    ...resourceTypeActiveFilters.value,
     ...(timeActiveFilter.value ? [timeActiveFilter.value] : []),
     ...(mapActiveFilter.value ? [mapActiveFilter.value] : []),
     ...attributeActiveFilters.value,
@@ -431,11 +449,24 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             : {};
 
     return {
-        version: 1,
+        version: 2,
         terms,
         queries: queriesIn,
-        graphId: typeof raw.graphId === "string" ? raw.graphId : null,
+        graphIds: parseGraphIds(raw),
     };
+}
+
+// Legacy rows stored a single `graphId`; new rows store `graphIds`.
+function parseGraphIds(raw: Record<string, unknown>): string[] {
+    if (Array.isArray(raw.graphIds)) {
+        return raw.graphIds.filter(
+            (id): id is string => typeof id === "string",
+        );
+    }
+    if (typeof raw.graphId === "string") {
+        return [raw.graphId];
+    }
+    return [];
 }
 </script>
 
@@ -467,8 +498,8 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                         :show-time="isTimeFilterOpen"
                         :has-time-filter="hasTimeFilter"
                         :show-saved-searches="isSavedSearchesOpen"
-                        :hide-filters-button="!activeGraph"
-                        :hide-time-button="!activeGraph"
+                        :hide-filters-button="!isSingleGraphSelected"
+                        :hide-time-button="!isSingleGraphSelected"
                         @update:sort-value="onSortValueUpdate"
                         @toggle-filters="onToggleAttributeFilters"
                         @toggle-map="onToggleMapFilter"
@@ -531,8 +562,8 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                         />
                         <IdleInfoTiles
                             v-else-if="isIdle"
-                            :hide-filters="!activeGraph"
-                            :hide-time="!activeGraph"
+                            :hide-filters="!isSingleGraphSelected"
+                            :hide-time="!isSingleGraphSelected"
                             @open-filters="onToggleAttributeFilters"
                             @open-map="onToggleMapFilter"
                             @open-time="onToggleTimeFilter"
