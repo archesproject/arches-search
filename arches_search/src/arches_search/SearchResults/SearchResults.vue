@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Skeleton from "primevue/skeleton";
@@ -10,15 +10,18 @@ import SearchResultCard from "@/arches_search/SearchResults/SearchResultCard.vue
 
 import {
     fetchResourceDescriptors,
+    fetchResourceInstanceLifecycleStates,
     fetchSearchReportConfig,
 } from "@/arches_search/SearchResults/api.ts";
 
 import type {
     SearchResults,
     ResourceData,
+    GraphModel,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     ResourceDescriptorData,
+    ResourceInstanceLifecycleState,
     SearchReportConfig,
 } from "@/arches_search/SearchResults/types.ts";
 
@@ -26,11 +29,19 @@ const { $gettext } = useGettext();
 
 const SCROLL_THRESHOLD_PIXELS = 72;
 
-const { results, isSearching, filterText } = defineProps<{
+const { results, isSearching, filterText, graphModels } = defineProps<{
     results: SearchResults;
     isSearching: boolean;
     filterText: string;
+    graphModels: GraphModel[];
 }>();
+
+const graphModelsByGraphId = computed<Map<string, GraphModel>>(
+    () =>
+        new Map(
+            graphModels.map((graphModel) => [graphModel.graphid, graphModel]),
+        ),
+);
 
 const emit = defineEmits<{
     (event: "request-page", page: number): void;
@@ -38,9 +49,32 @@ const emit = defineEmits<{
 
 const descriptorsByResourceId = ref<Record<string, ResourceDescriptorData>>({});
 const configsByGraphId = ref<Map<string, SearchReportConfig | null>>(new Map());
+const lifecycleStatesById = ref<Map<string, ResourceInstanceLifecycleState>>(
+    new Map(),
+);
 const isPageRequestInFlight = ref(false);
 
 const requestedDescriptorIds = new Set<string>();
+
+// The full set of lifecycle-state definitions is small and admin-configured
+// (bounded by graph count, not resource count), so it's fetched once here
+// rather than resolved per result.
+onMounted(async () => {
+    try {
+        const lifecycleStates = await fetchResourceInstanceLifecycleStates();
+        lifecycleStatesById.value = new Map(
+            lifecycleStates.map((lifecycleState) => [
+                lifecycleState.id,
+                lifecycleState,
+            ]),
+        );
+    } catch (error) {
+        console.error(
+            "Failed to fetch resource instance lifecycle states:",
+            error,
+        );
+    }
+});
 
 const visibleResources = computed<ResourceData[]>(() => {
     if (!filterText) return results.resources;
@@ -183,6 +217,18 @@ const endOfResultsText = computed(() =>
                 :report-config="
                     configsByGraphId.get(getGraphIdForResource(resource)) ??
                     null
+                "
+                :report-config-loaded="
+                    configsByGraphId.has(getGraphIdForResource(resource))
+                "
+                :graph-model="
+                    graphModelsByGraphId.get(getGraphIdForResource(resource)) ??
+                    null
+                "
+                :lifecycle-state="
+                    lifecycleStatesById.get(
+                        resource.resource_instance_lifecycle_state_id ?? '',
+                    ) ?? null
                 "
             />
         </div>
