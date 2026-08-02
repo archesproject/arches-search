@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, watchEffect } from "vue";
+import { ref, watch } from "vue";
 
-import GenericWidget from "@/arches_component_lab/generics/GenericWidget/GenericWidget.vue";
+import GenericWidget from "@/arches_vue_components/generics/GenericWidget/GenericWidget.vue";
 
 import type { GraphModel, Node } from "@/arches_search/AdvancedSearch/types.ts";
 
@@ -27,38 +27,11 @@ const { modelValue, subjectTerminalNode, subjectTerminalGraph, operandType } =
         operandType: OperandPayloadTypeToken;
     }>();
 
-const operandValue = ref<unknown>(null);
-const displayValue = ref<string | undefined>(undefined);
-const initialAliasedNodeData = ref<Record<string, unknown> | null>(null);
-const hasInitializedFromModel = ref(false);
-
-watchEffect(() => {
-    if (hasInitializedFromModel.value) {
-        return;
-    }
-
-    if (modelValue === null || modelValue.value === undefined) {
-        operandValue.value = null;
-        displayValue.value = undefined;
-        initialAliasedNodeData.value = null;
-        hasInitializedFromModel.value = true;
-        return;
-    }
-
-    operandValue.value = modelValue.value;
-    displayValue.value = modelValue.display_value;
-
-    if (operandType === OPERAND_TYPE_LITERAL) {
-        initialAliasedNodeData.value = modelValue.value as Record<
-            string,
-            unknown
-        >;
-    } else {
-        initialAliasedNodeData.value = null;
-    }
-
-    hasInitializedFromModel.value = true;
-});
+const operandValue = ref<unknown>(modelValue?.value ?? null);
+const displayValue = ref<string | undefined>(modelValue?.display_value);
+const initialValue = ref<unknown>(
+    operandType === OPERAND_TYPE_LITERAL ? modelValue?.value ?? null : null,
+);
 
 watch(
     () => operandType,
@@ -74,22 +47,11 @@ function handleOperandTypeChange(
     if (updatedOperandType === OPERAND_TYPE_LITERAL) {
         operandValue.value = null;
         displayValue.value = undefined;
-
-        if (modelValue !== null && modelValue.value !== undefined) {
-            initialAliasedNodeData.value = modelValue.value as Record<
-                string,
-                unknown
-            >;
-        } else {
-            initialAliasedNodeData.value = null;
-        }
-
         return;
     }
 
     operandValue.value = [];
     displayValue.value = undefined;
-    initialAliasedNodeData.value = null;
 }
 
 function emitUpdatedOperand(): void {
@@ -116,8 +78,7 @@ function handleGenericWidgetUpdate(updatedWidgetValue: unknown): void {
                 :graph-slug="subjectTerminalGraph.slug"
                 :node-alias="subjectTerminalNode.alias"
                 :should-show-label="false"
-                :aliased-node-data="initialAliasedNodeData || undefined"
-                :should-emit-simplified-value="true"
+                :value="initialValue"
                 @update:value="handleGenericWidgetUpdate"
             />
         </div>

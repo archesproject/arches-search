@@ -148,7 +148,7 @@ INSTALLED_APPS = (
     # "silk",
     "arches_search",  # Ensure the project is listed before any other arches applications
     "arches_modular_reports",
-    "arches_component_lab",
+    "arches_vue_components",
     "arches_controlled_lists",
     "arches_querysets",
 )

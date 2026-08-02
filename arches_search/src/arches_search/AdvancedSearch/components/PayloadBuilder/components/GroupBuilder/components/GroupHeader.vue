@@ -14,7 +14,11 @@ type RelationshipState = GroupPayload["relationship"];
 
 const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs");
 
-const { groupPayload, isRoot, relationshipToParent } = defineProps<{
+const {
+    groupPayload,
+    isRoot,
+    relationshipToParent = null,
+} = defineProps<{
     groupPayload: GroupPayload;
     isRoot?: boolean;
     relationshipToParent?: RelationshipState;
