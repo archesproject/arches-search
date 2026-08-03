@@ -276,10 +276,6 @@ function buildTree(
         node.children.sort(compareNodes);
     }
 
-    if (!graphPair) {
-        return roots;
-    }
-
     function pruneUnselectable(nodes: PathNode[]): PathNode[] {
         return nodes.flatMap((node) => {
             const prunedChildren = pruneUnselectable(node.children);
