@@ -23,6 +23,9 @@ const UPDATE_EVENT = "update:modelValue" as const;
 const REMOVE_EVENT = "remove" as const;
 
 const { modelValue, graphSlug } = defineProps<{
+    // No default: absence means "no date filter configured yet" (see the
+    // `if (!clause) return;` guard below), distinct from any real clause.
+    // eslint-disable-next-line vue/require-default-prop
     modelValue?: LiteralClause;
     graphSlug: string;
 }>();
