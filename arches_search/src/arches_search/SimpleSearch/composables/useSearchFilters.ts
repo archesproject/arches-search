@@ -1,6 +1,6 @@
 import { computed, inject, provide, ref } from "vue";
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application";
 import {
     createSearchMVTContext,
     fetchSearchResults,

@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 import Card from "primevue/card";
 
-import AdvancedSearch from "@/arches_search/AdvancedSearch/AdvancedSearch.vue";
-import SimpleSearch from "@/arches_search/SimpleSearch/SimpleSearch.vue";
+import { routeNames } from "@/arches_search/routes.ts";
 
-const SIMPLE = "simple";
-const ADVANCED = "advanced";
-type SearchView = typeof SIMPLE | typeof ADVANCED;
+const router = useRouter();
+const route = useRoute();
 
-const activeView = ref<SearchView>(SIMPLE);
+const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
 </script>
 
 <template>
@@ -21,24 +20,26 @@ const activeView = ref<SearchView>(SIMPLE);
                     {{ $gettext("Search the Collection") }}
                 </h1>
                 <nav
-                    v-if="activeView === SIMPLE"
+                    v-if="isSimpleSearch"
                     class="header-nav"
                 >
                     <button
                         class="header-link"
-                        @click="activeView = ADVANCED"
+                        @click="
+                            router.push({ name: routeNames.advancedSearch })
+                        "
                     >
                         <i class="pi pi-sliders-h" />
                         {{ $gettext("Advanced Search") }}
                     </button>
                 </nav>
                 <nav
-                    v-if="activeView === ADVANCED"
+                    v-else
                     class="header-nav"
                 >
                     <button
                         class="header-link"
-                        @click="activeView = SIMPLE"
+                        @click="router.push({ name: routeNames.simpleSearch })"
                     >
                         <i class="pi pi-sliders-h" />
                         {{ $gettext("Simple Search") }}
@@ -47,8 +48,7 @@ const activeView = ref<SearchView>(SIMPLE);
             </header>
         </template>
         <template #content>
-            <SimpleSearch v-if="activeView === SIMPLE" />
-            <AdvancedSearch v-else />
+            <router-view />
         </template>
     </Card>
 </template>

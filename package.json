@@ -23,7 +23,8 @@
         "arches-vue-components": "archesproject/arches-vue-components#stable/2.0.2",
         "arches-controlled-lists": "archesproject/arches-controlled-lists#stable/1.2.0",
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.1.4",
-        "arches-modular-reports": "archesproject/arches-modular-reports#stable/2.0.0"
+        "arches-modular-reports": "archesproject/arches-modular-reports#stable/2.0.0",
+        "vue-router": "4.4.3"
     },
     "devDependencies": {
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#dev/8.1.x",
