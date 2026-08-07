@@ -33,8 +33,11 @@ defineProps<{
 }>();
 
 const sortOptions = computed<SortOption[]>(() => [
-    { label: $gettext("A to Z"), value: "aToZ" },
-    { label: $gettext("Z to A"), value: "zToA" },
+    { label: $gettext("Relevance"), value: "relevance" },
+    { label: $gettext("Name A to Z"), value: "aToZ" },
+    { label: $gettext("Name Z to A"), value: "zToA" },
+    { label: $gettext("Newest first"), value: "newest" },
+    { label: $gettext("Oldest first"), value: "oldest" },
 ]);
 
 defineEmits<{
@@ -56,8 +59,8 @@ defineEmits<{
                 option-label="label"
                 option-value="value"
                 :placeholder="$gettext('Sort by...')"
-                show-clear
                 class="sort-select"
+                overlay-class="sort-select-overlay"
                 @update:model-value="$emit('update:sortValue', $event)"
             />
         </div>
@@ -172,7 +175,7 @@ defineEmits<{
 .toolbar-right .toolbar-btn {
     padding: 0.7rem 1rem;
     font-size: 1.2rem;
-    font-weight: 500;
+    font-weight: 600;
     border: none;
     border-inline-end: 0.1rem solid var(--p-content-border-color);
     border-radius: 0;
@@ -188,6 +191,14 @@ defineEmits<{
    "sm" scale, noticeably out of step with the label text next to it. */
 .toolbar-right .toolbar-btn :deep(.p-button-icon) {
     font-size: 1.2rem;
+}
+
+/* PrimeVue's Aura button preset sets font-weight directly on .p-button-label
+   (500), which wins over the inherited value from .toolbar-btn above since
+   inheritance loses to any explicit same-specificity rule — same root cause
+   as the icon rule above and the color/border !important rules below. */
+.toolbar-right .toolbar-btn :deep(.p-button-label) {
+    font-weight: 600;
 }
 
 .toolbar-right .toolbar-btn:last-child {

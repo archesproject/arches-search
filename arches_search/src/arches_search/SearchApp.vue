@@ -75,7 +75,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     align-items: center;
     justify-content: space-between;
     gap: 1.6rem;
-    padding: 2rem 2rem 0;
+    padding: 2rem 2rem 0.4rem;
     background-color: var(--arches-search-card-bg);
 }
 
@@ -121,9 +121,10 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     gap: 0.6rem;
     padding: 0.5rem 1.2rem;
     color: var(--p-primary-color);
-    border: 0.1rem solid var(--p-primary-200);
+    border: 0.1rem solid
+        color-mix(in srgb, var(--p-primary-color), transparent 60%);
     border-radius: 999rem;
-    background: var(--p-primary-50);
+    background: var(--p-highlight-background);
     font-family: inherit;
     font-size: 1.2rem;
     font-weight: 600;
@@ -136,7 +137,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
 }
 
 .header-link:hover {
-    border-color: var(--p-primary-300);
-    background: var(--p-primary-100);
+    border-color: color-mix(in srgb, var(--p-primary-color), transparent 30%);
+    background: var(--p-highlight-focus-background);
 }
 </style>

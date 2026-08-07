@@ -8,11 +8,12 @@ from django.utils.translation import get_language, gettext as _
 
 
 SORT_TYPE_PRIMARY_NAME = "primary_name"
+SORT_TYPE_CREATED_TIME = "created_time"
 DIRECTION_ASC = "asc"
 DIRECTION_DESC = "desc"
 
 ALLOWED_DIRECTIONS = {DIRECTION_ASC, DIRECTION_DESC}
-ALLOWED_SORT_TYPES = {SORT_TYPE_PRIMARY_NAME}
+ALLOWED_SORT_TYPES = {SORT_TYPE_PRIMARY_NAME, SORT_TYPE_CREATED_TIME}
 
 # Applied when no sort is supplied in the payload. Empty = no user-visible
 # ordering (the id tie-break still runs for stable pagination). Populate with
@@ -32,6 +33,9 @@ class SortResolver:
       - "primary_name": sort by descriptors[active-language].name
         (case-insensitive). Numbers and symbols fall wherever Postgres places
         them in standard text ordering.
+      - "created_time": sort by ResourceInstance.createdtime (the resource's
+        actual creation timestamp — there is no "last modified" field to
+        sort by instead).
 
     The resolver always appends a stable tie-break on resourceinstanceid so
     paginated results are deterministic.
@@ -50,6 +54,8 @@ class SortResolver:
             if spec["type"] == SORT_TYPE_PRIMARY_NAME:
                 queryset, ordering = self._apply_primary_name(queryset, spec, index)
                 order_expressions.append(ordering)
+            elif spec["type"] == SORT_TYPE_CREATED_TIME:
+                order_expressions.append(self._apply_created_time(spec))
 
         order_expressions.append(F("resourceinstanceid").asc())
         return queryset.order_by(*order_expressions)
@@ -71,6 +77,16 @@ class SortResolver:
         name_field = F(name_annotation)
         ordering = name_field.asc() if direction == DIRECTION_ASC else name_field.desc()
         return queryset, ordering
+
+    @staticmethod
+    def _apply_created_time(spec: Dict[str, Any]):
+        direction = spec.get("direction", DIRECTION_ASC)
+        created_time_field = F("createdtime")
+        return (
+            created_time_field.asc()
+            if direction == DIRECTION_ASC
+            else created_time_field.desc()
+        )
 
     @staticmethod
     def _validate(sort_specs: Any) -> None:
