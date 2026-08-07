@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
+import { useToast } from "primevue/usetoast";
 
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
+import Textarea from "primevue/textarea";
 
 import {
+    createSavedSearch,
     getSavedSearches,
     deleteSavedSearch,
 } from "@/arches_search/SimpleSearch/api.ts";
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import type {
     SavedSearch,
@@ -17,16 +21,57 @@ import type {
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const { $gettext } = useGettext();
+const toast = useToast();
+const { getSearchDefinition } = useSearchFilters();
 
 const emit = defineEmits<{
     (event: "run-query", queryDefinition: Record<string, unknown>): void;
+    (event: "open-export"): void;
+    (event: "close"): void;
 }>();
 
-const activeTab = ref<"mine" | "shared">("mine");
+const activeTab = ref<"save" | "mine" | "shared">("save");
 const filterText = ref("");
 const sortValue = ref("aToZ");
 const searches = ref<SavedSearch[]>([]);
 const isLoading = ref(false);
+
+const saveSearchName = ref("");
+const saveSearchDescription = ref("");
+const isSaving = ref(false);
+
+async function onSaveSearch(): Promise<void> {
+    const name = saveSearchName.value.trim();
+    if (!name) return;
+
+    isSaving.value = true;
+    try {
+        await createSavedSearch(
+            name,
+            saveSearchDescription.value.trim(),
+            getSearchDefinition() as unknown as Record<string, unknown>,
+        );
+        saveSearchName.value = "";
+        saveSearchDescription.value = "";
+        toast.add({
+            severity: "success",
+            life: 3000,
+            summary: $gettext("Search saved"),
+        });
+        if (activeTab.value === "mine") {
+            await loadSearches();
+        }
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("Failed to save search"),
+            detail: error instanceof Error ? error.message : undefined,
+        });
+    } finally {
+        isSaving.value = false;
+    }
+}
 
 const sortOptions: SortOption[] = [
     { label: $gettext("Sort A to Z"), value: "aToZ" },
@@ -36,6 +81,8 @@ const sortOptions: SortOption[] = [
 ];
 
 async function loadSearches() {
+    if (activeTab.value === "save") return;
+
     isLoading.value = true;
     try {
         const results = await getSavedSearches(
@@ -103,13 +150,31 @@ watch(sortValue, () => {
 });
 
 onMounted(() => loadSearches());
-
-defineExpose({ loadSearches });
 </script>
 
 <template>
     <div class="saved-search-panel">
+        <div class="panel-header">
+            <span class="panel-header-title">
+                <i class="pi pi-bookmark-fill" />
+                {{ $gettext("Save/Export Search") }}
+            </span>
+            <button
+                class="panel-close-btn"
+                @click="emit('close')"
+            >
+                <i class="pi pi-times" />
+                {{ $gettext("Close") }}
+            </button>
+        </div>
+
         <div class="panel-tabs">
+            <button
+                :class="['panel-tab', { active: activeTab === 'save' }]"
+                @click="activeTab = 'save'"
+            >
+                {{ $gettext("Save/Export this search") }}
+            </button>
             <button
                 :class="['panel-tab', { active: activeTab === 'mine' }]"
                 @click="activeTab = 'mine'"
@@ -124,117 +189,178 @@ defineExpose({ loadSearches });
             </button>
         </div>
 
-        <div class="panel-controls">
-            <InputText
-                v-model="filterText"
-                :placeholder="$gettext('Find...')"
-                class="filter-input"
-                fluid
-            />
-            <div class="sort-row">
-                <Select
-                    v-model="sortValue"
-                    :options="sortOptions"
-                    option-label="label"
-                    option-value="value"
-                    class="sort-select"
-                    variant="filled"
+        <div
+            v-if="activeTab === 'save'"
+            class="save-form"
+        >
+            <p class="save-form-hint">
+                {{
+                    $gettext(
+                        "Give this search a name to save it to your account.",
+                    )
+                }}
+            </p>
+            <div class="save-form-field">
+                <label
+                    for="save-search-name"
+                    class="save-form-label"
+                >
+                    {{ $gettext("Search name") }}
+                </label>
+                <InputText
+                    id="save-search-name"
+                    v-model="saveSearchName"
+                    class="save-form-input"
+                    fluid
+                    @keydown.enter="onSaveSearch"
+                />
+            </div>
+            <div class="save-form-field">
+                <label
+                    for="save-search-description"
+                    class="save-form-label"
+                >
+                    {{ $gettext("Description") }}
+                </label>
+                <Textarea
+                    id="save-search-description"
+                    v-model="saveSearchDescription"
+                    class="save-form-input"
+                    fluid
+                    rows="3"
+                />
+            </div>
+            <div class="save-form-actions">
+                <Button
+                    :label="$gettext('Save')"
+                    icon="pi pi-check"
+                    :loading="isSaving"
+                    :disabled="isSaving || !saveSearchName.trim()"
+                    @click="onSaveSearch"
+                />
+                <Button
+                    :label="$gettext('Export')"
+                    icon="pi pi-upload"
+                    severity="secondary"
+                    class="export-trigger-btn"
+                    @click="emit('open-export')"
                 />
             </div>
         </div>
 
-        <div class="panel-list">
-            <div
-                v-if="isLoading"
-                class="panel-empty"
-            >
-                {{ $gettext("Loading...") }}
-            </div>
-            <div
-                v-else-if="searches.length === 0"
-                class="panel-empty"
-            >
-                {{ $gettext("No saved searches found") }}
-            </div>
-            <div
-                v-for="search in searches"
-                v-else
-                :key="search.savedsearchid"
-                class="saved-search-item"
-            >
-                <div class="item-header">
-                    <i
-                        :class="[
-                            isDynamicQuery(search)
-                                ? 'pi pi-bolt'
-                                : 'pi pi-database',
-                            isDynamicQuery(search)
-                                ? 'chip-live'
-                                : 'chip-snapshot',
-                        ]"
-                        class="item-icon query-type-chip"
+        <template v-else>
+            <div class="panel-controls">
+                <InputText
+                    v-model="filterText"
+                    :placeholder="$gettext('Find...')"
+                    class="filter-input"
+                    fluid
+                />
+                <div class="sort-row">
+                    <Select
+                        v-model="sortValue"
+                        :options="sortOptions"
+                        option-label="label"
+                        option-value="value"
+                        class="sort-select"
+                        variant="filled"
                     />
-                    <span class="item-name">{{ search.name }}</span>
                 </div>
-                <div class="item-meta">
-                    <span class="item-type">
-                        {{
-                            isDynamicQuery(search)
-                                ? $gettext("Dynamic query")
-                                : $gettext("Saved Results")
-                        }}
-                    </span>
-                    <span class="item-date">
-                        {{ $gettext("Saved:") }}
-                        {{ formatDate(search.created_at) }}
-                    </span>
-                </div>
-                <p
-                    v-if="search.description"
-                    class="item-description"
+            </div>
+
+            <div class="panel-list">
+                <div
+                    v-if="isLoading"
+                    class="panel-empty"
                 >
-                    {{ search.description }}
-                </p>
-                <p
+                    {{ $gettext("Loading...") }}
+                </div>
+                <div
+                    v-else-if="searches.length === 0"
+                    class="panel-empty"
+                >
+                    {{ $gettext("No saved searches found") }}
+                </div>
+                <div
+                    v-for="search in searches"
                     v-else
-                    class="item-description item-no-description"
+                    :key="search.savedsearchid"
+                    class="saved-search-item"
                 >
-                    {{ $gettext("No description provided") }}
-                </p>
-                <div class="item-actions">
-                    <Button
-                        v-if="isDynamicQuery(search)"
-                        :label="$gettext('Run query')"
-                        icon="pi pi-play"
-                        icon-pos="left"
-                        size="small"
-                        text
-                        class="action-btn"
-                        @click="emit('run-query', search.query_definition)"
-                    />
-                    <Button
+                    <div class="item-header">
+                        <i
+                            :class="[
+                                isDynamicQuery(search)
+                                    ? 'pi pi-bolt'
+                                    : 'pi pi-database',
+                                isDynamicQuery(search)
+                                    ? 'chip-live'
+                                    : 'chip-snapshot',
+                            ]"
+                            class="item-icon query-type-chip"
+                        />
+                        <span class="item-name">{{ search.name }}</span>
+                    </div>
+                    <div class="item-meta">
+                        <span class="item-type">
+                            {{
+                                isDynamicQuery(search)
+                                    ? $gettext("Dynamic query")
+                                    : $gettext("Saved Results")
+                            }}
+                        </span>
+                        <span class="item-date">
+                            {{ $gettext("Saved:") }}
+                            {{ formatDate(search.created_at) }}
+                        </span>
+                    </div>
+                    <p
+                        v-if="search.description"
+                        class="item-description"
+                    >
+                        {{ search.description }}
+                    </p>
+                    <p
                         v-else
-                        :label="$gettext('Show results')"
-                        icon="pi pi-play"
-                        icon-pos="left"
-                        size="small"
-                        text
-                        disabled
-                        class="action-btn"
-                    />
-                    <Button
-                        v-if="activeTab === 'mine'"
-                        :label="$gettext('Delete')"
-                        icon="pi pi-times"
-                        icon-pos="left"
-                        size="small"
-                        text
-                        class="action-btn action-delete"
-                        @click="onDelete(search)"
-                    />
+                        class="item-description item-no-description"
+                    >
+                        {{ $gettext("No description provided") }}
+                    </p>
+                    <div class="item-actions">
+                        <Button
+                            v-if="isDynamicQuery(search)"
+                            :label="$gettext('Run query')"
+                            icon="pi pi-play"
+                            icon-pos="left"
+                            size="small"
+                            text
+                            class="action-btn"
+                            @click="emit('run-query', search.query_definition)"
+                        />
+                        <Button
+                            v-else
+                            :label="$gettext('Show results')"
+                            icon="pi pi-play"
+                            icon-pos="left"
+                            size="small"
+                            text
+                            disabled
+                            class="action-btn"
+                        />
+                        <Button
+                            v-if="activeTab === 'mine'"
+                            :label="$gettext('Delete')"
+                            icon="pi pi-times"
+                            icon-pos="left"
+                            size="small"
+                            text
+                            class="action-btn action-delete"
+                            @click="onDelete(search)"
+                        />
+                    </div>
                 </div>
             </div>
-        </div>
+        </template>
     </div>
 </template>
 
@@ -245,6 +371,45 @@ defineExpose({ loadSearches });
     height: 100%;
     font-size: var(--p-arches-search-font-size);
     background: var(--arches-search-card-bg);
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    padding-inline: 1.6rem;
+    min-height: 5.5rem;
+    font-weight: 600;
+    color: var(--p-text-color);
+    background: var(--arches-search-page-bg);
+    border-block-end: 0.1rem solid var(--p-content-border-color);
+}
+
+.panel-header-title .pi {
+    margin-inline-end: 0.6rem;
+    color: var(--p-primary-color);
+}
+
+.panel-close-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.8rem;
+    font-family: inherit;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--p-text-muted-color);
+    background: none;
+    border: none;
+    border-radius: 0.4rem;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.panel-close-btn:hover {
+    background: var(--p-content-hover-background);
+    color: var(--p-text-color);
 }
 
 .panel-tabs {
@@ -281,6 +446,52 @@ defineExpose({ loadSearches });
 
 .panel-tab:hover:not(.active) {
     background-color: var(--p-content-hover-background);
+    color: var(--p-text-color);
+}
+
+.save-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.save-form-hint {
+    margin: 0;
+    font-size: 1.3rem;
+    color: var(--p-text-muted-color);
+    line-height: 1.5;
+}
+
+.save-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.save-form-label {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--p-text-muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+:deep(.save-form-input .p-inputtext),
+:deep(.save-form-input .p-textarea),
+:deep(.save-form-input) {
+    font-size: var(--p-arches-search-font-size);
+}
+
+.save-form-actions {
+    display: flex;
+    gap: 0.8rem;
+}
+
+.export-trigger-btn.p-button {
+    background: var(--p-content-background);
+    border-color: var(--p-content-border-color);
     color: var(--p-text-color);
 }
 

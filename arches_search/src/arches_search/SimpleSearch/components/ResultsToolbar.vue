@@ -6,11 +6,21 @@ import { useGettext } from "vue3-gettext";
 import Button from "primevue/button";
 import Select from "primevue/select";
 
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+
 import type { SortOption } from "@/arches_search/SimpleSearch/types.ts";
 
 const { $gettext } = useGettext();
+const { searchResults } = useSearchFilters();
 
-const props = defineProps<{
+const totalResults = computed<number>(
+    () => searchResults.value.pagination?.total_results ?? 0,
+);
+const resultsLabelText = computed(() =>
+    $gettext("%{count} results", { count: String(totalResults.value) }),
+);
+
+defineProps<{
     sortValue: string | null;
     showFilters: boolean;
     showMap: boolean;
@@ -18,7 +28,6 @@ const props = defineProps<{
     showTime: boolean;
     hasTimeFilter: boolean;
     showSavedSearches: boolean;
-    showExportPanel: boolean;
     hideFiltersButton?: boolean;
     hideTimeButton?: boolean;
 }>();
@@ -28,25 +37,19 @@ const sortOptions = computed<SortOption[]>(() => [
     { label: $gettext("Z to A"), value: "zToA" },
 ]);
 
-const exportButtonLabel = computed(() =>
-    props.showExportPanel ? $gettext("Hide Export") : $gettext("Export"),
-);
-
 defineEmits<{
     (event: "update:sortValue", value: string | null): void;
-    (event: "save-search"): void;
     (event: "toggle-filters"): void;
     (event: "toggle-map"): void;
     (event: "toggle-time"): void;
     (event: "toggle-saved-searches"): void;
-    (event: "export"): void;
 }>();
 </script>
 
 <template>
     <div class="results-toolbar">
         <div class="toolbar-left">
-            <span class="results-label">{{ $gettext("Results") }}</span>
+            <span class="results-label">{{ resultsLabelText }}</span>
             <Select
                 :model-value="sortValue"
                 :options="sortOptions"
@@ -57,24 +60,12 @@ defineEmits<{
                 class="sort-select"
                 @update:model-value="$emit('update:sortValue', $event)"
             />
-            <Button
-                :label="$gettext('Save this search')"
-                icon="pi pi-save"
-                icon-pos="left"
-                size="small"
-                class="toolbar-btn save-search-btn"
-                @click="$emit('save-search')"
-            />
         </div>
 
         <div class="toolbar-right">
             <Button
                 v-if="!hideFiltersButton"
-                :label="
-                    showFilters
-                        ? $gettext('Hide Filters')
-                        : $gettext('Show Filters')
-                "
+                :label="$gettext('Facets')"
                 icon="pi pi-filter"
                 icon-pos="left"
                 size="small"
@@ -83,9 +74,7 @@ defineEmits<{
             />
             <Button
                 v-if="!hideTimeButton"
-                :label="
-                    showTime ? $gettext('Hide Time') : $gettext('Show Time')
-                "
+                :label="$gettext('Time')"
                 icon="pi pi-clock"
                 icon-pos="left"
                 size="small"
@@ -93,7 +82,7 @@ defineEmits<{
                 @click="$emit('toggle-time')"
             />
             <Button
-                :label="showMap ? $gettext('Hide Map') : $gettext('Show Map')"
+                :label="$gettext('Map')"
                 icon="pi pi-map"
                 icon-pos="left"
                 size="small"
@@ -101,20 +90,14 @@ defineEmits<{
                 @click="$emit('toggle-map')"
             />
             <Button
-                :label="$gettext('Saved Searches')"
-                icon="pi pi-bookmark"
+                :label="$gettext('Save/Export Search')"
+                :icon="
+                    showSavedSearches ? 'pi pi-bookmark-fill' : 'pi pi-bookmark'
+                "
                 icon-pos="left"
                 size="small"
                 :class="['toolbar-btn', { active: showSavedSearches }]"
                 @click="$emit('toggle-saved-searches')"
-            />
-            <Button
-                :label="exportButtonLabel"
-                icon="pi pi-upload"
-                icon-pos="left"
-                size="small"
-                :class="['toolbar-btn', { active: showExportPanel }]"
-                @click="$emit('export')"
             />
         </div>
     </div>
@@ -125,10 +108,12 @@ defineEmits<{
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap-reverse;
+    flex-shrink: 0;
     gap: 1.2rem;
-    padding: 1rem 2.4rem;
-    border-top: 0.1rem solid var(--p-content-border-color);
-    border-bottom: 0.1rem solid var(--p-content-border-color);
+    padding: 1rem;
+    padding-inline-start: 1.4rem;
+    border-bottom: 0.15rem solid var(--p-content-border-color);
     background: var(--arches-search-page-bg);
     min-height: 5.5rem;
 }
@@ -136,23 +121,27 @@ defineEmits<{
 .toolbar-left {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 1rem;
 }
 
 .results-label {
     display: inline-flex;
     align-items: center;
-    padding: 0.4rem 1rem;
-    background: var(--p-surface-100);
+    padding-inline: 1rem;
+    background: var(--arches-search-page-bg);
     color: var(--p-text-muted-color);
-    border-radius: 999rem;
     font-size: 1.2rem;
     font-weight: 600;
     white-space: nowrap;
 }
 
+/* Fixed 1.2rem (not --p-arches-search-font-size), matching the results-label
+   and toolbar-btn text right next to it — that shared token now drives the
+   search button specifically and no longer matches this toolbar's own
+   scale. */
 :deep(.p-select-label) {
-    font-size: var(--p-arches-search-font-size);
+    font-size: 1.2rem;
 }
 
 :deep(.sort-select .p-select) {
@@ -174,25 +163,56 @@ defineEmits<{
     font-size: 1.2rem;
 }
 
+/* font-size (and the icon rule below) must live on this 2-class selector,
+   not the bare .toolbar-btn above — PrimeVue's own .p-button-sm has the same
+   single-class specificity for font-size, and its stylesheet is injected at
+   runtime, after this component's own styles, so on a specificity tie it
+   wins by source order, silently shrinking the label back down to Aura's
+   "sm" scale. Same reasoning as the border/color !important rules below. */
 .toolbar-right .toolbar-btn {
     padding: 0.7rem 1rem;
+    font-size: 1.2rem;
     font-weight: 500;
     border: none;
     border-inline-end: 0.1rem solid var(--p-content-border-color);
     border-radius: 0;
     background: transparent;
-    color: var(--p-text-muted-color);
+    color: var(--arches-search-sec-btn-text);
     transition:
         background 0.12s,
         color 0.12s;
+}
+
+/* Matches the label's own font-size for the same reason — PrimeVue's
+   .p-button-sm .p-button-icon otherwise renders the icon at Aura's smaller
+   "sm" scale, noticeably out of step with the label text next to it. */
+.toolbar-right .toolbar-btn :deep(.p-button-icon) {
+    font-size: 1.2rem;
 }
 
 .toolbar-right .toolbar-btn:last-child {
     border-inline-end: none;
 }
 
+/* !important + explicit border shorthands (not just border-color) because
+   PrimeVue's own default-button :hover styling otherwise wins on properties
+   this rule doesn't pin — including border-style/width on the three sides
+   that should stay borderless, which was rendering an unwanted border AND
+   making the buttons visibly grow on hover. border-inline-end is reasserted
+   at its resting width/color so the segmented-group divider between buttons
+   neither disappears nor shifts. Same reasoning as .type-btn:hover in
+   ResourceTypeFilter.vue. */
 .toolbar-right .toolbar-btn:hover {
-    background: var(--p-content-hover-background);
+    background: var(--arches-search-sec-btn-hover-bg) !important;
+    border-block-start: none !important;
+    border-block-end: none !important;
+    border-inline-start: none !important;
+    border-inline-end: 0.1rem solid var(--p-content-border-color) !important;
+    color: var(--arches-search-sec-btn-text) !important;
+}
+
+.toolbar-right .toolbar-btn:last-child:hover {
+    border-inline-end: none !important;
 }
 
 .toolbar-btn.active {
@@ -201,10 +221,19 @@ defineEmits<{
     color: var(--arches-search-highlight-text);
 }
 
-.save-search-btn {
-    background-color: var(--p-primary-color);
-    border-color: var(--p-primary-color);
-    color: var(--p-primary-contrast-color);
-    border-radius: 0.6rem;
+/* Higher specificity than .toolbar-right .toolbar-btn:hover above, so
+   hovering an already-active button keeps its highlight instead of
+   falling back to the plain grey hover background. */
+.toolbar-right .toolbar-btn.active:hover {
+    background-color: var(--arches-search-highlight-bg) !important;
+    border-block-start: none !important;
+    border-block-end: none !important;
+    border-inline-start: none !important;
+    border-inline-end: 0.1rem solid var(--arches-search-highlight-bg) !important;
+    color: var(--arches-search-highlight-text) !important;
+}
+
+.toolbar-right .toolbar-btn.active:last-child:hover {
+    border-inline-end: none !important;
 }
 </style>

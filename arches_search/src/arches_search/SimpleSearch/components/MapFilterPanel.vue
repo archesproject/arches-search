@@ -23,6 +23,7 @@ const { resultsTileUrl } = useSearchFilters();
 const emit = defineEmits<{
     (event: "update:modelValue", value: FeatureCollection): void;
     (event: "remove"): void;
+    (event: "close"): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -86,9 +87,17 @@ function onEditorUpdate(
 <template>
     <div class="search-map-filter-panel">
         <div class="map-filter-header">
-            <h3 class="map-filter-title">
+            <span class="map-filter-title">
+                <i class="pi pi-map" />
                 {{ $gettext("Map Filter") }}
-            </h3>
+            </span>
+            <button
+                class="map-filter-close-btn"
+                @click="emit('close')"
+            >
+                <i class="pi pi-times" />
+                {{ $gettext("Close") }}
+            </button>
         </div>
         <MapWidget
             ref="mapWidget"
@@ -116,14 +125,42 @@ function onEditorUpdate(
 }
 
 .map-filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding-bottom: 0.75rem;
     border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .map-filter-title {
-    margin: 0;
     font-weight: 700;
     font-size: 1.5rem;
+    color: var(--p-text-color);
+}
+
+.map-filter-title .pi {
+    margin-inline-end: 0.6rem;
+    color: var(--p-primary-color);
+}
+
+.map-filter-close-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.8rem;
+    font-family: inherit;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--p-text-muted-color);
+    background: none;
+    border: none;
+    border-radius: 0.4rem;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.map-filter-close-btn:hover {
+    background: var(--p-content-hover-background);
     color: var(--p-text-color);
 }
 </style>

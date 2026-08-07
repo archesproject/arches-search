@@ -60,9 +60,6 @@ watch(
                     termKey(selectedTerm.text),
                     selectedTerm.text,
                     () => removeTerm(selectedTerm.text),
-                    {
-                        style: "background-color: var(--arches-search-chip-search-bg);",
-                    },
                 );
             }
         }
@@ -168,7 +165,6 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 <template>
     <div class="search-bar">
         <span class="search-bar-inner">
-            <i class="pi pi-search search-icon" />
             <AutoComplete
                 v-model="inputText"
                 class="search-input"
@@ -177,7 +173,7 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
                 :auto-option-focus="true"
                 :empty-search-message="emptySearchMessage"
                 :fluid="true"
-                :placeholder="$gettext('Find an item, sample, supplier\u2026')"
+                :placeholder="$gettext('Find an item, sample, supplier…')"
                 :suggestions="suggestions"
                 @complete="onComplete"
                 @option-select="onSelect"
@@ -218,6 +214,9 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
         </span>
         <Button
             :label="$gettext('Search')"
+            icon="pi pi-search"
+            icon-pos="left"
+            severity="success"
             class="search-button"
             type="button"
             @click="submitSearch"
@@ -232,13 +231,13 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     gap: 0.8rem;
     padding: 1.2rem 1.6rem;
     background-color: var(--p-content-background);
-    border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .search-bar .search-bar-inner {
     display: flex;
     align-items: center;
     flex: 1;
+    max-width: 40%;
     gap: 1rem;
     background-color: var(--arches-search-page-bg);
     border: 0.15rem solid var(--p-content-border-color);
@@ -249,15 +248,21 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
         box-shadow 0.15s;
 }
 
+/* 40% of a normal desktop-width viewport is comfortably wide, but the same
+   40% of a much narrower effective viewport (e.g. browser zoomed to 200%)
+   reads as cramped, so let it claim more of the row once space is tight.
+   px (not rem) deliberately here: media query units are always resolved
+   against the browser's default root font-size, never against this page's
+   own html{font-size} override, so rem would be misleading here. */
+@media (max-width: 900px) {
+    .search-bar .search-bar-inner {
+        max-width: 100%;
+    }
+}
+
 .search-bar .search-bar-inner:focus-within {
     border-color: var(--p-primary-color);
     box-shadow: 0 0 0 0.3rem var(--p-primary-100);
-}
-
-.search-bar .search-icon {
-    font-size: 1.5rem;
-    color: var(--p-text-muted-color);
-    flex-shrink: 0;
 }
 
 .search-bar .search-input {
@@ -273,16 +278,31 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     background-color: transparent;
 }
 
-.search-bar :deep(.search-input .p-autocomplete-input:focus) {
-    outline: none;
+/* !important: arches core's _elements.scss has a global, currently-commented-out
+   `input:focus-visible:not(.select2-search__field) { outline: 2px solid ... !important; }`
+   rule. If that's ever re-enabled it would otherwise win regardless of
+   specificity (its !important beats non-important no matter what), colliding
+   with our own custom focus ring on .search-bar-inner above. This input relies
+   entirely on that ring for focus visibility, so the native outline is
+   suppressed here rather than left to double up with it. */
+.search-bar :deep(.search-input .p-autocomplete-input:focus),
+.search-bar :deep(.search-input .p-autocomplete-input:focus-visible) {
+    outline: none !important;
     box-shadow: none;
 }
 
 .search-bar .search-button {
     font-size: var(--p-arches-search-font-size);
+    font-weight: 700;
     padding: 1rem 2rem;
     border-radius: 0.8rem;
     white-space: nowrap;
+}
+
+.search-bar .search-button :deep(.p-button-icon) {
+    display: inline-flex;
+    align-items: center;
+    font-size: 1.4rem;
 }
 
 .search-bar .suggestion-option {

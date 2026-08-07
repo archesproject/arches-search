@@ -206,9 +206,6 @@ onMounted(function () {
     font-weight: 600;
     color: var(--p-primary-color);
     text-decoration: none;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .descriptor-section-title:hover {
@@ -237,9 +234,6 @@ onMounted(function () {
     font-size: 1.2rem;
     color: var(--p-text-muted-color);
     line-height: 1.4;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .descriptor-section-description-label {
