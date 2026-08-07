@@ -64,8 +64,13 @@ watch(isExpanded, async (expanded) => {
 
 <style scoped>
 .expanded-result-section {
-    border-top: 0.125rem solid var(--p-content-border-color);
-    background-color: var(--p-content-hover-background);
-    padding: 1rem 2rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: 0.6rem 1.6rem;
+    border-top: 0.1rem dashed var(--p-content-border-color);
+    padding: 1rem 1.6rem;
+    background-color: var(--arches-search-page-bg);
+    font-size: 1.2rem;
+    color: var(--p-text-muted-color);
 }
 </style>

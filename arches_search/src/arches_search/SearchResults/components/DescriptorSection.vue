@@ -153,11 +153,8 @@ onMounted(function () {
 
 <style scoped>
 .descriptor-section {
-    --link-color: var(--p-blue-600, #2563eb);
-
     display: flex;
     flex-direction: column;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .descriptor-section-header {
@@ -172,7 +169,8 @@ onMounted(function () {
     height: 10rem;
     flex-shrink: 0;
     background-color: var(--p-surface-100);
-    border: 0.125rem solid var(--p-surface-300);
+    color: var(--p-text-color);
+    border-inline-end: 0.1rem solid var(--p-content-border-color);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -180,8 +178,12 @@ onMounted(function () {
 }
 
 .descriptor-section-thumbnail-placeholder {
-    font-size: 1rem;
-    color: var(--p-text-muted-color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: inherit;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: center;
 }
 
 .descriptor-section-thumbnail-image {
@@ -200,9 +202,9 @@ onMounted(function () {
 }
 
 .descriptor-section-title {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 600;
-    color: var(--link-color);
+    color: var(--p-primary-color);
     text-decoration: none;
     white-space: nowrap;
     overflow: hidden;
@@ -216,27 +218,36 @@ onMounted(function () {
 .descriptor-section-actions {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.2rem;
+    margin-top: 0.2rem;
 }
 
 .descriptor-section-actions :deep(.p-button) {
-    font-size: 1.5rem;
-    padding-inline: 0;
+    font-size: 1.1rem;
+    padding: 0.3rem 0.8rem;
+    color: var(--p-text-muted-color);
+    text-decoration: none;
 }
 
 .descriptor-section-actions :deep(.p-button-icon) {
-    font-size: 1.25rem;
+    font-size: 1rem;
 }
 
 .descriptor-section-description {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     color: var(--p-text-muted-color);
     line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .descriptor-section-description-label {
     font-weight: 600;
-    color: var(--p-text-color);
-    margin-inline-end: 0.25rem;
+    color: var(--p-text-muted-color);
+    margin-inline-end: 0.4rem;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 </style>
