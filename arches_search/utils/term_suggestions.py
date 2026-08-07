@@ -2,6 +2,7 @@ import json
 
 from django.db.models import Q
 
+from arches.app.utils import permission_backend
 from arches_search.models.models import TermSearch
 from arches_search.utils.term_matching import build_term_match_filter
 from arches_controlled_lists.models import List
@@ -52,7 +53,7 @@ def _get_item_path(list_data, value_id, language_code="en"):
     return [list_data["name"]] + path
 
 
-def _find_distinct_matches(term_filter):
+def _find_distinct_matches(term_filter, user):
     """Up to MAX_RESULTS distinct (value, datatype) rows matching term_filter.
     Widens the raw-row cap and retries if a fixed cap under-represents
     distinct values (e.g. one term applied to thousands of resources) —
@@ -67,8 +68,9 @@ def _find_distinct_matches(term_filter):
             .values_list("pk", flat=True)[:raw_match_limit]
         )
         results = list(
-            TermSearch.objects.filter(pk__in=bounded_ids)
-            .values(
+            permission_backend.filter_resource_queryset(
+                user, TermSearch.objects.filter(pk__in=bounded_ids)
+            ).values(
                 "id",
                 "datatype",
                 "value",
@@ -95,8 +97,8 @@ def _find_distinct_matches(term_filter):
 def build_term_suggestions(query, request):
     term_filter = build_term_match_filter(query)
     results = _find_distinct_matches(
-        term_filter & Q(datatype="reference")
-    ) + _find_distinct_matches(term_filter & ~Q(datatype="reference"))
+        term_filter & Q(datatype="reference"), request.user
+    ) + _find_distinct_matches(term_filter & ~Q(datatype="reference"), request.user)
 
     graph_slugs = {result["graph_slug"] for result in results if result["graph_slug"]}
     graph_info_by_slug = {

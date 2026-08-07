@@ -9,6 +9,7 @@ from arches.app.models.models import (
     GraphModel,
     ResourceInstance,
 )
+from arches.app.utils import permission_backend
 
 from arches_search.models.models import GeometrySearch, TermSearch
 from arches_search.utils.advanced_search.advanced_search import (
@@ -34,19 +35,20 @@ class SimpleSearchQuerysetBuilder:
     invalidate an already-cached property below.
     """
 
-    def __init__(self, body):
+    def __init__(self, body, user):
         self.body = dict(body)
+        self.user = user
 
     @cached_property
     def scoped_queryset(self):
-        return build_search_queryset(self.body)
+        return build_search_queryset(self.body, self.user)
 
     @cached_property
     def type_agnostic_queryset(self):
         if not self.body.get("graphIds"):
             return self.scoped_queryset
 
-        return build_search_queryset({**self.body, "graphIds": []})
+        return build_search_queryset({**self.body, "graphIds": []}, self.user)
 
 
 def _union_all(querysets):
@@ -58,7 +60,7 @@ def _union_all(querysets):
     return querysets[0].union(*querysets[1:], all=True)
 
 
-def build_search_queryset(body):
+def build_search_queryset(body, user):
     terms = body.get("terms")
     query = body.get("query")
     graph_ids = body.get("graphIds", [])
@@ -123,7 +125,8 @@ def build_search_queryset(body):
                 resourceinstanceid__in=spatial_ids
             )
 
-    return results_queryset.exclude(graph__slug="arches_system_settings")
+    queryset = results_queryset.exclude(graph__slug="arches_system_settings")
+    return permission_backend.filter_resource_queryset(user, queryset)
 
 
 def build_resource_type_counts(terms, type_agnostic_queryset):
@@ -132,7 +135,7 @@ def build_resource_type_counts(terms, type_agnostic_queryset):
 
     type_agnostic_queryset should be a
     SimpleSearchQuerysetBuilder.type_agnostic_queryset (or an equivalent
-    build_search_queryset(body) result with graphIds cleared) — this function
+    build_search_queryset(body, user) result with graphIds cleared) — this function
     only consumes it, it never decides how to build one.
     """
     graphs = list(

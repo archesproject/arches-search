@@ -15,7 +15,7 @@ from arches_search.utils.search_sort import SortResolver
 class SimpleSearchAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
-        querysets = SimpleSearchQuerysetBuilder(body)
+        querysets = SimpleSearchQuerysetBuilder(body, request.user)
 
         results_queryset = SortResolver(body.get("sort")).apply(
             querysets.scoped_queryset
