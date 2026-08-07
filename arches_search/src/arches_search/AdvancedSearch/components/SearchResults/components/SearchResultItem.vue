@@ -7,7 +7,7 @@ import Card from "primevue/card";
 
 import arches from "arches";
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application";
 
 import type { ResourceData } from "@/arches_search/AdvancedSearch/types.ts";
 

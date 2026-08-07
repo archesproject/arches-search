@@ -122,7 +122,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     padding: 0.5rem 1.2rem;
     color: var(--p-primary-color);
     border: 0.1rem solid var(--p-primary-200);
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     background: var(--p-primary-50);
     font-family: inherit;
     font-size: 1.2rem;

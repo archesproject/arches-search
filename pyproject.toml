@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arches-search"
-version = "0.1.0a11"
+version = "0.1.0a12"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = "AGPL-3.0-or-later"
 authors = []
 classifiers = [
@@ -19,15 +19,15 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "arches<8.3.0,>=8.1.0",
-    "arches-vue-components<2.0.0,>=1.0.1",
-    "arches-controlled-lists>=1.1.0a0",
-    "arches-modular-reports>=1.0.0b7",
+    "arches-controlled-lists>=1.2.0",
+    "arches-modular-reports>=2.0.0",
+    "arches-vue-components>=2.0.0",
 ]
 dynamic = []
 

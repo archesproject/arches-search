@@ -120,7 +120,7 @@ function clearAllFilters(): void {
 .filter-chip {
     display: inline-flex;
     align-items: center;
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     font-size: 1.2rem;
     font-weight: 500;
     border: 0.15rem solid transparent;

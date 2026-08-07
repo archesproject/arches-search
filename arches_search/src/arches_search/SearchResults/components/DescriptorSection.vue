@@ -6,7 +6,7 @@ import Button from "primevue/button";
 
 import arches from "arches";
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application";
 
 import type { Ref } from "vue";
 import type { SectionContent } from "@/arches_modular_reports/ModularReport/types.ts";
@@ -234,6 +234,9 @@ onMounted(function () {
     font-size: 1.2rem;
     color: var(--p-text-muted-color);
     line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .descriptor-section-description-label {

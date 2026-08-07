@@ -118,7 +118,7 @@ function selectGraph(graph: ResourceType | null): void {
     gap: 0.5rem;
     padding: 0.5rem 1.2rem;
     border: 0.15rem solid var(--arches-search-chip-border);
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     background: var(--p-content-background);
     /* !important: PrimeVue's own .p-button-outlined.p-button-secondary sets
        color at the same 2-class specificity as this selector, so on a tie

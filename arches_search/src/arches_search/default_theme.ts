@@ -5,14 +5,10 @@ import { compileGlobalCss } from "@/arches_modular_reports/utils.ts";
 
 const archesSearchTeal = "#0d9488";
 
-// Design tokens with no PrimeVue/Aura equivalent, for concepts this app's
-// real (not mocked-up) components actually render today. Neutrals aside
-// from the page/card two-tier surface, and the primary color, are handled
-// via Aura's own semantic tokens below, so components should prefer those
-// (--p-surface-*, --p-text-*, --p-content-*, --p-primary-*) and only reach
-// for the custom properties here for one of these specific categories.
 const cssOverrides = {
     ":root": {
+        "--arches-search-radius-pill": "10rem",
+
         "--arches-search-page-bg": "#f6f7f9",
         "--arches-search-card-bg": "#ffffff",
 
@@ -26,8 +22,6 @@ const cssOverrides = {
         "--arches-search-live-bg": "#dcfce7",
         "--arches-search-live-text": "#15803d",
 
-        // Active-filter chip colors, one per ActiveFilterKind (excluding
-        // "term", which reuses the chip-search-* tokens above).
         "--arches-search-filter-resource-type-bg": "#ccfbf1",
         "--arches-search-filter-resource-type-border": "#5eead4",
         "--arches-search-filter-resource-type-text": "#0f766e",
@@ -44,25 +38,11 @@ const cssOverrides = {
         "--arches-search-filter-attribute-border": "#c4b5fd",
         "--arches-search-filter-attribute-text": "#5b21b6",
 
-        // Deliberately stronger than --p-content-hover-background (which is
-        // tuned for subtle hoverable rows/lists) — ghost/secondary buttons
-        // need a more perceptible hover cue.
         "--arches-search-sec-btn-hover-bg": "#e2e8f0",
-
-        // Deliberately stronger than --p-text-muted-color — ghost/secondary
-        // button labels need to read as legible text, not a disabled hint.
         "--arches-search-sec-btn-text": "#475569",
-
-        // Deliberately stronger than --p-content-border-color (which is
-        // tuned for subtle content-area separators) — filter/toggle chips
-        // need a more defined outline than that.
         "--arches-search-chip-border": "#cbd5e1",
     },
     ".p-theme-dark": {
-        // True neutral (R=G=B) greyscale, not Tailwind's slate/gray families
-        // used elsewhere in this file for accents — slate/gray both carry a
-        // cool blue tint that reads as "navy" once it covers this much
-        // surface area, which is wrong for a plain dark background.
         "--arches-search-page-bg": "#0a0a0a",
         "--arches-search-card-bg": "#171717",
 

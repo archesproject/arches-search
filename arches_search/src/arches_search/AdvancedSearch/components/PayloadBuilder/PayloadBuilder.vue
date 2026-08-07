@@ -12,6 +12,9 @@ import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 const { $gettext } = useGettext();
 
 const { modelValue, isSearching, totalResults } = defineProps<{
+    // No default: absence means "no query built yet", which disables the
+    // Search/Describe buttons below (`:disabled="!modelValue"`).
+    // eslint-disable-next-line vue/require-default-prop
     modelValue?: GroupPayload;
     isSearching: boolean;
     totalResults: number | null;

@@ -40,7 +40,11 @@ const ITEM_TYPE_CLAUSE = "clause" as const;
 const ITEM_TYPE_GROUP = "group" as const;
 type ItemType = typeof ITEM_TYPE_CLAUSE | typeof ITEM_TYPE_GROUP;
 
-const { modelValue, isRoot, relationshipToParent } = defineProps<{
+const {
+    modelValue = makeEmptyGroupPayload(),
+    isRoot,
+    relationshipToParent = null,
+} = defineProps<{
     modelValue?: GroupPayload;
     isRoot?: boolean;
     relationshipToParent?: GroupPayload["relationship"];
@@ -59,7 +63,7 @@ const showMapDrawer = ref(false);
 
 const items = ref<{ id: string; type: ItemType }[]>([]);
 
-const group = computed(() => modelValue ?? makeEmptyGroupPayload());
+const group = computed(() => modelValue);
 
 const hasRelationship = computed(() => group.value.relationship !== null);
 
@@ -306,7 +310,7 @@ function onUpdateInnerGraphSlug(slug: string): void {
                 v-if="isRoot || relationshipToParent != null"
                 :group-payload="isRoot ? group : contentGroup"
                 :is-root="isRoot"
-                :relationship-to-parent="relationshipToParent ?? null"
+                :relationship-to-parent="relationshipToParent"
                 @change-graph="onChangeGraph"
                 @remove-group="emit('remove')"
             />
