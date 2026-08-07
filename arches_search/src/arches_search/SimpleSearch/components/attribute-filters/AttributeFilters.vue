@@ -85,11 +85,14 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 .attribute-filters {
     height: 100%;
     overflow-y: auto;
-    padding: 1.2rem 1.6rem;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
 }
 
 .attribute-filters-title {
-    margin: 0 0 1.2rem 0;
+    margin: 0;
     padding-bottom: 0.75rem;
     border-bottom: 0.125rem solid var(--p-content-border-color);
     font-weight: 700;
@@ -108,8 +111,9 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 }
 
 .unsupported {
-    font-size: var(--p-arches-search-font-size);
-    color: var(--p-surface-400);
+    font-size: 1.3rem;
+    color: var(--p-text-muted-color);
     padding: 0.4rem 0 0.8rem 0;
+    line-height: 1.5;
 }
 </style>

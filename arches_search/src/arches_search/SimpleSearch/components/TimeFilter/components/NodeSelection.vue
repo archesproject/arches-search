@@ -290,16 +290,17 @@ function removeNode(alias: string): void {
 
 .node-selection__attribute-row {
     display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 0.875rem;
+    flex-direction: column;
+    gap: 0.125rem;
 }
 
 .node-selection__attribute-label {
-    font-size: 1.25rem;
+    font-size: 0.75rem;
     font-weight: 600;
     line-height: 1.35;
-    color: var(--p-text-color);
+    color: var(--p-text-muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     white-space: nowrap;
 }
 
