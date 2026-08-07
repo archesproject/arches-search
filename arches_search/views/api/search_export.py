@@ -18,7 +18,7 @@ class SearchExportAPI(APIBase):
             filename = f"{filename}.xlsx"
 
         language = None if all_descriptors else get_language()
-        queryset = build_search_queryset(body)
+        queryset = build_search_queryset(body, request.user)
 
         exporter = SearchResultsExportModule()
         excel_bytes = exporter.export(queryset, language=language)

@@ -4,6 +4,7 @@ from django.core.paginator import Paginator
 from arches.app.models.models import (
     ResourceInstance,
 )
+from arches.app.utils import permission_backend
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
@@ -18,7 +19,7 @@ from arches_search.utils.search_sort import SortResolver
 from arches_search.utils.through_resource_search import get_related_resources_by_text
 
 
-def build_search_queryset(body):
+def build_search_queryset(body, user):
     terms = body.get("terms")
     query = body.get("query")
     graph_id = body.get("graphId")
@@ -72,13 +73,14 @@ def build_search_queryset(body):
                 resourceinstanceid__in=spatial_ids
             )
 
-    return results_queryset.exclude(graph__slug="arches_system_settings")
+    queryset = results_queryset.exclude(graph__slug="arches_system_settings")
+    return permission_backend.filter_resource_queryset(user, queryset)
 
 
 class SimpleSearchAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
-        results_queryset = build_search_queryset(body)
+        results_queryset = build_search_queryset(body, request.user)
 
         results_queryset = SortResolver(body.get("sort")).apply(results_queryset)
 

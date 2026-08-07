@@ -8,6 +8,7 @@ from arches_controlled_lists.models import List
 from arches_controlled_lists.views import ListView
 
 from arches.app.models.models import TileModel, Node, ResourceInstance
+from arches.app.utils import permission_backend
 
 
 def get_item_path(list_data, value_id, language_code="en"):
@@ -48,7 +49,10 @@ class TermSuggestionView(View):
 
         search_query = SearchQuery(query, config="english")
         results = (
-            TermSearch.objects.values(
+            permission_backend.filter_resource_queryset(
+                request.user, TermSearch.objects.all()
+            )
+            .values(
                 "id", "datatype", "value", "node_alias", "tileid", "resourceinstanceid"
             )
             .distinct("value", "datatype")

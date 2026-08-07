@@ -1,5 +1,6 @@
 from django.core.paginator import Paginator
 
+from arches.app.utils import permission_backend
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
@@ -16,6 +17,9 @@ class AdvancedSearchAPI(APIBase):
         body = JSONDeserializer().deserialize(request.body)
 
         results_queryset = AdvancedSearchQueryCompiler(body).compile()
+        results_queryset = permission_backend.filter_resource_queryset(
+            request.user, results_queryset
+        )
         results_queryset = SortResolver(body.get("sort")).apply(results_queryset)
 
         page_number = body.get("page", 1)
