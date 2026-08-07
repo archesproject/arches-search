@@ -17,7 +17,7 @@ import type { FeatureCollection } from "geojson";
 export async function createSearchMVTContext(params: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
-    graphId?: string | null;
+    graphIds?: string[];
     mapFilter?: FeatureCollection | null;
 }): Promise<{ context_id: string }> {
     const url = generateArchesURL("arches_search:search_mvt_context");
@@ -38,20 +38,20 @@ export async function createSearchMVTContext(params: {
 export async function fetchSearchResults({
     terms = [],
     query = {} as GroupPayload,
-    graphId = null,
+    graphIds = [],
     mapFilter = null,
     page = 1,
     sort,
 }: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
-    graphId?: string | null;
+    graphIds?: string[];
     mapFilter?: FeatureCollection | null;
     page?: number;
     sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
     const requestPayload: Record<string, unknown> = {
-        graphId: graphId,
+        graphIds: graphIds,
         terms: terms,
         query: query,
         mapFilter: mapFilter,
@@ -204,13 +204,13 @@ export async function deleteSavedSearch(savedsearchid: string): Promise<void> {
 export async function exportSearchResults({
     terms = [],
     query,
-    graphId = null,
+    graphIds = [],
     filename = "search_export",
     allDescriptors = false,
 }: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
-    graphId?: string | null;
+    graphIds?: string[];
     filename?: string;
     allDescriptors?: boolean;
 }): Promise<void> {
@@ -225,7 +225,7 @@ export async function exportSearchResults({
             body: JSON.stringify({
                 terms,
                 query,
-                graphId,
+                graphIds,
                 filename,
                 allDescriptors,
             }),
