@@ -170,7 +170,7 @@ onMounted(() => loadSearches());
                 :label="$gettext('Close')"
                 icon="pi pi-times"
                 icon-pos="left"
-                text
+                :text="true"
                 class="panel-close-btn"
                 @click="emit('close')"
             />
@@ -179,19 +179,19 @@ onMounted(() => loadSearches());
         <div class="panel-tabs">
             <Button
                 :label="$gettext('Save/Export this search')"
-                text
+                :text="true"
                 :class="['panel-tab', { active: activeTab === 'save' }]"
                 @click="activeTab = 'save'"
             />
             <Button
                 :label="$gettext('My Saved Searches')"
-                text
+                :text="true"
                 :class="['panel-tab', { active: activeTab === 'mine' }]"
                 @click="activeTab = 'mine'"
             />
             <Button
                 :label="$gettext('Shared Searches')"
-                text
+                :text="true"
                 :class="['panel-tab', { active: activeTab === 'shared' }]"
                 @click="activeTab = 'shared'"
             />
@@ -219,7 +219,7 @@ onMounted(() => loadSearches());
                     id="save-search-name"
                     v-model="saveSearchName"
                     class="save-form-input"
-                    fluid
+                    :fluid="true"
                     @keydown.enter="onSaveSearch"
                 />
             </div>
@@ -234,7 +234,7 @@ onMounted(() => loadSearches());
                     id="save-search-description"
                     v-model="saveSearchDescription"
                     class="save-form-input"
-                    fluid
+                    :fluid="true"
                     rows="3"
                 />
             </div>
@@ -262,7 +262,7 @@ onMounted(() => loadSearches());
                     v-model="filterText"
                     :placeholder="$gettext('Find...')"
                     class="filter-input"
-                    fluid
+                    :fluid="true"
                 />
                 <div class="sort-row">
                     <Select
@@ -334,7 +334,7 @@ onMounted(() => loadSearches());
                             icon="pi pi-play"
                             icon-pos="left"
                             size="small"
-                            text
+                            :text="true"
                             class="action-btn"
                             @click="emit('run-query', search.query_definition)"
                         />
@@ -344,8 +344,8 @@ onMounted(() => loadSearches());
                             icon="pi pi-play"
                             icon-pos="left"
                             size="small"
-                            text
-                            disabled
+                            :text="true"
+                            :disabled="true"
                             class="action-btn"
                         />
                         <Button
@@ -354,7 +354,7 @@ onMounted(() => loadSearches());
                             icon="pi pi-times"
                             icon-pos="left"
                             size="small"
-                            text
+                            :text="true"
                             class="action-btn action-delete"
                             @click="onDelete(search)"
                         />

@@ -56,7 +56,7 @@ defineEmits<{
                 option-label="label"
                 option-value="value"
                 :placeholder="$gettext('Sort by...')"
-                show-clear
+                :show-clear="true"
                 class="sort-select"
                 @update:model-value="$emit('update:sortValue', $event)"
             />

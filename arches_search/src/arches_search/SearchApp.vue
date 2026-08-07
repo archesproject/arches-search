@@ -29,7 +29,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
                         :label="$gettext('Advanced Search')"
                         icon="pi pi-sliders-h"
                         icon-pos="left"
-                        text
+                        :text="true"
                         class="header-link"
                         @click="
                             router.push({ name: routeNames.advancedSearch })
@@ -44,7 +44,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
                         :label="$gettext('Simple Search')"
                         icon="pi pi-sliders-h"
                         icon-pos="left"
-                        text
+                        :text="true"
                         class="header-link"
                         @click="router.push({ name: routeNames.simpleSearch })"
                     />

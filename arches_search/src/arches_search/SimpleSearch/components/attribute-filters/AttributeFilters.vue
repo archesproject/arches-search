@@ -40,7 +40,7 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
                 :label="$gettext('Close')"
                 icon="pi pi-times"
                 icon-pos="left"
-                text
+                :text="true"
                 class="attribute-filters-close-btn"
                 @click="emit('close')"
             />
@@ -59,7 +59,7 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 
         <Accordion
             v-else
-            multiple
+            :multiple="true"
             :value="[]"
         >
             <AccordionPanel

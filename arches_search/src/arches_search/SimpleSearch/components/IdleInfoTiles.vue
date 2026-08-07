@@ -26,7 +26,7 @@ defineEmits<{
         <div class="idle-info-tile-grid">
             <Button
                 v-if="!hideFilters"
-                text
+                :text="true"
                 class="idle-info-tile"
                 @click="$emit('open-filters')"
             >
@@ -43,7 +43,7 @@ defineEmits<{
                 </span>
             </Button>
             <Button
-                text
+                :text="true"
                 class="idle-info-tile"
                 @click="$emit('open-map')"
             >
@@ -61,7 +61,7 @@ defineEmits<{
             </Button>
             <Button
                 v-if="!hideTime"
-                text
+                :text="true"
                 class="idle-info-tile"
                 @click="$emit('open-time')"
             >
@@ -78,7 +78,7 @@ defineEmits<{
                 </span>
             </Button>
             <Button
-                text
+                :text="true"
                 class="idle-info-tile"
                 @click="$emit('open-saved-searches')"
             >

@@ -57,7 +57,7 @@ async function onExport() {
     <Dialog
         :visible="visible"
         :header="$gettext('Export Results')"
-        modal
+        :modal="true"
         :closable="true"
         class="export-panel"
         @update:visible="$emit('update:visible', $event)"
@@ -120,7 +120,7 @@ async function onExport() {
                     id="export-filename"
                     v-model="filename"
                     class="filter-input"
-                    fluid
+                    :fluid="true"
                 />
             </div>
 

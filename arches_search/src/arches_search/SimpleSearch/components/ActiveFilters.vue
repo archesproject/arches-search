@@ -63,7 +63,7 @@ function clearAllFilters(): void {
         <Button
             v-for="activeFilter in activeFilters"
             :key="activeFilter.id"
-            text
+            :text="true"
             class="filter-chip"
             :class="[
                 'filter-chip--' + activeFilter.kind,

@@ -278,7 +278,7 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                 :label="$gettext('Close')"
                 icon="pi pi-times"
                 icon-pos="left"
-                text
+                :text="true"
                 class="time-filter-close-btn"
                 @click="emit('close')"
             />

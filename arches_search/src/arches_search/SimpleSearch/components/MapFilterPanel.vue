@@ -97,7 +97,7 @@ function onEditorUpdate(
                 :label="$gettext('Close')"
                 icon="pi pi-times"
                 icon-pos="left"
-                text
+                :text="true"
                 class="map-filter-close-btn"
                 @click="emit('close')"
             />
