@@ -166,34 +166,35 @@ onMounted(() => loadSearches());
                 <i class="pi pi-bookmark-fill" />
                 {{ $gettext("Save/Export Search") }}
             </span>
-            <button
+            <Button
+                :label="$gettext('Close')"
+                icon="pi pi-times"
+                icon-pos="left"
+                text
                 class="panel-close-btn"
                 @click="emit('close')"
-            >
-                <i class="pi pi-times" />
-                {{ $gettext("Close") }}
-            </button>
+            />
         </div>
 
         <div class="panel-tabs">
-            <button
+            <Button
+                :label="$gettext('Save/Export this search')"
+                text
                 :class="['panel-tab', { active: activeTab === 'save' }]"
                 @click="activeTab = 'save'"
-            >
-                {{ $gettext("Save/Export this search") }}
-            </button>
-            <button
+            />
+            <Button
+                :label="$gettext('My Saved Searches')"
+                text
                 :class="['panel-tab', { active: activeTab === 'mine' }]"
                 @click="activeTab = 'mine'"
-            >
-                {{ $gettext("My Saved Searches") }}
-            </button>
-            <button
+            />
+            <Button
+                :label="$gettext('Shared Searches')"
+                text
                 :class="['panel-tab', { active: activeTab === 'shared' }]"
                 @click="activeTab = 'shared'"
-            >
-                {{ $gettext("Shared Searches") }}
-            </button>
+            />
         </div>
 
         <div
@@ -392,19 +393,11 @@ onMounted(() => loadSearches());
 }
 
 .panel-close-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
     padding: 0.3rem 0.8rem;
-    font-family: inherit;
     font-size: 1.2rem;
     font-weight: 500;
     color: var(--p-text-muted-color);
-    background: none;
-    border: none;
     border-radius: 0.4rem;
-    cursor: pointer;
-    transition: background 0.12s;
 }
 
 .panel-close-btn:hover {
@@ -422,14 +415,10 @@ onMounted(() => loadSearches());
 .panel-tab {
     flex: 1;
     padding: 0.5rem 0.625rem;
-    background: none;
-    border: none;
     border-bottom: 0.125rem solid transparent;
-    cursor: pointer;
+    border-radius: 0;
     font-size: var(--p-arches-search-font-size);
-    font-family: inherit;
     font-weight: 500;
-    text-align: center;
     white-space: nowrap;
     color: var(--p-text-muted-color);
     transition:

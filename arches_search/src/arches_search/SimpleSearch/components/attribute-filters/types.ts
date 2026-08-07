@@ -27,17 +27,16 @@ export interface NumericFilterValue {
 
 // A datatype's filter: the widget rendered inside its accordion panel and the
 // pure function that turns the widget's emitted value into a search query.
-// `value` is the datatype-specific value emitted by `component`; each builder
-// narrows it to its own value type. Returning `null` clears the node's query.
-export interface AttributeFilterEntry {
+// Returning `null` clears the node's query.
+export interface AttributeFilterEntry<TValue> {
     component: Component;
     buildQuery(
         node: NodeFilterConfigNode,
-        value: unknown,
+        value: TValue,
         graphSlug: string,
     ): GroupPayload | null;
     // Renders the widget's current value as chip-friendly display text (for
     // the active-filters row) — kept per-datatype here alongside buildQuery
     // since both are just different views of the same datatype-specific value.
-    formatValue(value: unknown): string;
+    formatValue(value: TValue): string;
 }

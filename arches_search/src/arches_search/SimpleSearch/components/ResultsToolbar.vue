@@ -148,7 +148,6 @@ defineEmits<{
     padding: 0.4rem 0.8rem;
 }
 
-/* segmented view-toggle button bar */
 .toolbar-right {
     display: inline-flex;
     align-items: center;
@@ -183,9 +182,7 @@ defineEmits<{
         color 0.12s;
 }
 
-/* Matches the label's own font-size for the same reason — PrimeVue's
-   .p-button-sm .p-button-icon otherwise renders the icon at Aura's smaller
-   "sm" scale, noticeably out of step with the label text next to it. */
+/* Same specificity tie as above, for the icon. */
 .toolbar-right .toolbar-btn :deep(.p-button-icon) {
     font-size: 1.2rem;
 }

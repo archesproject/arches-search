@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
+
 const { $gettext } = useGettext();
 
 defineProps<{
@@ -22,8 +24,9 @@ defineEmits<{
             {{ $gettext("Explore your results") }}
         </div>
         <div class="idle-info-tile-grid">
-            <button
+            <Button
                 v-if="!hideFilters"
+                text
                 class="idle-info-tile"
                 @click="$emit('open-filters')"
             >
@@ -38,8 +41,9 @@ defineEmits<{
                         )
                     }}
                 </span>
-            </button>
-            <button
+            </Button>
+            <Button
+                text
                 class="idle-info-tile"
                 @click="$emit('open-map')"
             >
@@ -54,9 +58,10 @@ defineEmits<{
                         )
                     }}
                 </span>
-            </button>
-            <button
+            </Button>
+            <Button
                 v-if="!hideTime"
+                text
                 class="idle-info-tile"
                 @click="$emit('open-time')"
             >
@@ -71,8 +76,9 @@ defineEmits<{
                         )
                     }}
                 </span>
-            </button>
-            <button
+            </Button>
+            <Button
+                text
                 class="idle-info-tile"
                 @click="$emit('open-saved-searches')"
             >
@@ -87,7 +93,7 @@ defineEmits<{
                         )
                     }}
                 </span>
-            </button>
+            </Button>
         </div>
     </div>
 </template>
@@ -128,13 +134,11 @@ defineEmits<{
     flex-direction: column;
     gap: 0.6rem;
     padding: 1.4rem 1.2rem;
-    font-family: inherit;
     text-align: start;
     color: inherit;
     background: var(--arches-search-card-bg);
     border: 0.15rem solid var(--p-content-border-color);
     border-radius: 0.8rem;
-    cursor: pointer;
     transition:
         border-color 0.12s,
         box-shadow 0.12s,

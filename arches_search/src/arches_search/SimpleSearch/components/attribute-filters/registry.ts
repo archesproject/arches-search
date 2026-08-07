@@ -35,10 +35,10 @@ function nodeSubject(
 // selected labels. Matches the original hardcoded behavior in SimpleSearch.
 function buildReferenceQuery(
     node: NodeFilterConfigNode,
-    value: unknown,
+    value: ReferenceFilterValue | null,
     graphSlug: string,
 ): GroupPayload | null {
-    const selected = (value as ReferenceFilterValue | null) ?? [];
+    const selected = value ?? [];
     if (selected.length === 0) {
         return null;
     }
@@ -71,10 +71,10 @@ function buildReferenceQuery(
 // (arity 2); a discrete value becomes EQUALS.
 function buildNumericQuery(
     node: NodeFilterConfigNode,
-    value: unknown,
+    value: NumericFilterValue | null,
     graphSlug: string,
 ): GroupPayload | null {
-    const tokens = (value as NumericFilterValue | null)?.tokens ?? [];
+    const tokens = value?.tokens ?? [];
     if (tokens.length === 0) {
         return null;
     }
@@ -113,18 +113,22 @@ function buildNumericQuery(
     };
 }
 
-function formatReferenceValue(value: unknown): string {
-    const selected = (value as ReferenceFilterValue | null) ?? [];
+function formatReferenceValue(value: ReferenceFilterValue | null): string {
+    const selected = value ?? [];
     return selected.map((option) => option.label).join(", ");
 }
 
-function formatNumericValue(value: unknown): string {
-    return (value as NumericFilterValue | null)?.text ?? "";
+function formatNumericValue(value: NumericFilterValue | null): string {
+    return value?.text ?? "";
 }
 
 // Maps an Arches node datatype to its filter widget + query builder. Add a new
 // datatype by registering one entry here and dropping in its widget component.
-const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry> = {
+// The value type is only known per-entry (it's whatever that entry's own
+// component emits), so callers reach it through `unknown` at the two exported
+// functions below rather than every builder/formatter re-asserting it.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous registry: each entry's real value type differs and is only known by construction
+const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry<any>> = {
     reference: {
         component: ReferenceFilter,
         buildQuery: buildReferenceQuery,
@@ -139,7 +143,7 @@ const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry> = {
 
 export function getAttributeFilterEntry(
     datatype: string,
-): AttributeFilterEntry | undefined {
+): AttributeFilterEntry<unknown> | undefined {
     return ATTRIBUTE_FILTER_REGISTRY[datatype];
 }
 

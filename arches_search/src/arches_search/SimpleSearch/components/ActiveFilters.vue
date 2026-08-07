@@ -60,10 +60,10 @@ function clearAllFilters(): void {
     >
         <span class="filter-tag-label">{{ $gettext("Filters:") }}</span>
 
-        <button
+        <Button
             v-for="activeFilter in activeFilters"
             :key="activeFilter.id"
-            type="button"
+            text
             class="filter-chip"
             :class="[
                 'filter-chip--' + activeFilter.kind,
@@ -85,7 +85,7 @@ function clearAllFilters(): void {
             >
                 <i class="pi pi-times" />
             </span>
-        </button>
+        </Button>
 
         <Button
             class="clear-all-button"
@@ -129,7 +129,6 @@ function clearAllFilters(): void {
     background: transparent;
     padding: 0;
     overflow: hidden;
-    font-family: inherit;
     transition: box-shadow 0.12s;
 }
 
