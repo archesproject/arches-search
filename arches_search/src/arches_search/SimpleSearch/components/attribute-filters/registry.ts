@@ -31,14 +31,22 @@ function nodeSubject(
     };
 }
 
+function toReferenceValue(value: unknown): ReferenceFilterValue {
+    return (value as ReferenceFilterValue | null) ?? [];
+}
+
+function toNumericValue(value: unknown): NumericFilterValue | null {
+    return value as NumericFilterValue | null;
+}
+
 // Reference: a single REFERENCES_ANY clause whose operand is the list of
 // selected labels. Matches the original hardcoded behavior in SimpleSearch.
 function buildReferenceQuery(
     node: NodeFilterConfigNode,
-    value: ReferenceFilterValue | null,
+    value: unknown,
     graphSlug: string,
 ): GroupPayload | null {
-    const selected = value ?? [];
+    const selected = toReferenceValue(value);
     if (selected.length === 0) {
         return null;
     }
@@ -71,10 +79,10 @@ function buildReferenceQuery(
 // (arity 2); a discrete value becomes EQUALS.
 function buildNumericQuery(
     node: NodeFilterConfigNode,
-    value: NumericFilterValue | null,
+    value: unknown,
     graphSlug: string,
 ): GroupPayload | null {
-    const tokens = value?.tokens ?? [];
+    const tokens = toNumericValue(value)?.tokens ?? [];
     if (tokens.length === 0) {
         return null;
     }
@@ -113,22 +121,19 @@ function buildNumericQuery(
     };
 }
 
-function formatReferenceValue(value: ReferenceFilterValue | null): string {
-    const selected = value ?? [];
-    return selected.map((option) => option.label).join(", ");
+function formatReferenceValue(value: unknown): string {
+    return toReferenceValue(value)
+        .map((option) => option.label)
+        .join(", ");
 }
 
-function formatNumericValue(value: NumericFilterValue | null): string {
-    return value?.text ?? "";
+function formatNumericValue(value: unknown): string {
+    return toNumericValue(value)?.text ?? "";
 }
 
 // Maps an Arches node datatype to its filter widget + query builder. Add a new
 // datatype by registering one entry here and dropping in its widget component.
-// The value type is only known per-entry (it's whatever that entry's own
-// component emits), so callers reach it through `unknown` at the two exported
-// functions below rather than every builder/formatter re-asserting it.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous registry: each entry's real value type differs and is only known by construction
-const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry<any>> = {
+const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry> = {
     reference: {
         component: ReferenceFilter,
         buildQuery: buildReferenceQuery,
@@ -143,7 +148,7 @@ const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry<any>> = {
 
 export function getAttributeFilterEntry(
     datatype: string,
-): AttributeFilterEntry<unknown> | undefined {
+): AttributeFilterEntry | undefined {
     return ATTRIBUTE_FILTER_REGISTRY[datatype];
 }
 

@@ -136,10 +136,6 @@ defineEmits<{
     white-space: nowrap;
 }
 
-/* Fixed 1.2rem (not --p-arches-search-font-size), matching the results-label
-   and toolbar-btn text right next to it — that shared token now drives the
-   search button specifically and no longer matches this toolbar's own
-   scale. */
 :deep(.p-select-label) {
     font-size: 1.2rem;
 }
@@ -162,12 +158,6 @@ defineEmits<{
     font-size: 1.2rem;
 }
 
-/* font-size (and the icon rule below) must live on this 2-class selector,
-   not the bare .toolbar-btn above — PrimeVue's own .p-button-sm has the same
-   single-class specificity for font-size, and its stylesheet is injected at
-   runtime, after this component's own styles, so on a specificity tie it
-   wins by source order, silently shrinking the label back down to Aura's
-   "sm" scale. Same reasoning as the border/color !important rules below. */
 .toolbar-right .toolbar-btn {
     padding: 0.7rem 1rem;
     font-size: 1.2rem;
@@ -182,7 +172,6 @@ defineEmits<{
         color 0.12s;
 }
 
-/* Same specificity tie as above, for the icon. */
 .toolbar-right .toolbar-btn :deep(.p-button-icon) {
     font-size: 1.2rem;
 }
@@ -191,14 +180,6 @@ defineEmits<{
     border-inline-end: none;
 }
 
-/* !important + explicit border shorthands (not just border-color) because
-   PrimeVue's own default-button :hover styling otherwise wins on properties
-   this rule doesn't pin — including border-style/width on the three sides
-   that should stay borderless, which was rendering an unwanted border AND
-   making the buttons visibly grow on hover. border-inline-end is reasserted
-   at its resting width/color so the segmented-group divider between buttons
-   neither disappears nor shifts. Same reasoning as .type-btn:hover in
-   ResourceTypeFilter.vue. */
 .toolbar-right .toolbar-btn:hover {
     background: var(--arches-search-sec-btn-hover-bg) !important;
     border-block-start: none !important;
@@ -218,9 +199,6 @@ defineEmits<{
     color: var(--arches-search-highlight-text);
 }
 
-/* Higher specificity than .toolbar-right .toolbar-btn:hover above, so
-   hovering an already-active button keeps its highlight instead of
-   falling back to the plain grey hover background. */
 .toolbar-right .toolbar-btn.active:hover {
     background-color: var(--arches-search-highlight-bg) !important;
     border-block-start: none !important;

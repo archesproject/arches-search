@@ -116,7 +116,7 @@ defineEmits<{
     font-size: 1.2rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06rem;
     color: var(--p-text-muted-color);
     background: var(--arches-search-page-bg);
     border-block-end: 0.15rem solid var(--p-content-border-color);

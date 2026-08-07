@@ -109,23 +109,12 @@ function selectGraph(graph: ResourceType | null): void {
 .resource-type-filter .type-btn {
     display: inline-flex;
     align-items: center;
-    /* PrimeVue's own .p-button has overflow:hidden by default, which makes
-       this button's automatic min-width resolve to 0 as a flex item (per
-       the flexbox spec) — without flex-shrink:0 it would shrink below its
-       label's natural width and clip the text instead of forcing the row
-       to overflow into its intended horizontal scroll. */
     flex-shrink: 0;
     gap: 0.5rem;
     padding: 0.5rem 1.2rem;
     border: 0.15rem solid var(--arches-search-chip-border);
     border-radius: var(--arches-search-radius-pill);
     background: var(--p-content-background);
-    /* !important: PrimeVue's own .p-button-outlined.p-button-secondary sets
-       color at the same 2-class specificity as this selector, so on a tie
-       its own token wins by source order (its stylesheet is injected at
-       runtime, after this component's own styles) — same root cause as the
-       hover rule below and as .toolbar-right .toolbar-btn in
-       ResultsToolbar.vue. */
     color: var(--arches-search-sec-btn-text) !important;
     font-size: 1.2rem;
     font-weight: 500;
@@ -138,11 +127,6 @@ function selectGraph(graph: ResourceType | null): void {
         color 0.12s;
 }
 
-/* !important + explicit border shorthand (not just border-color) because
-   PrimeVue's own outlined/secondary :hover styling otherwise wins on
-   properties this rule doesn't pin, including border width — which was
-   making the chips visibly grow/shift on hover. Same reasoning as
-   .toolbar-right .toolbar-btn:hover in ResultsToolbar.vue. */
 .resource-type-filter .type-btn:hover {
     background: var(--p-content-hover-background) !important;
     border: 0.15rem solid var(--p-text-muted-color) !important;

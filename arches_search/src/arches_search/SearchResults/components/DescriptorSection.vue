@@ -182,7 +182,7 @@ onMounted(function () {
     font-weight: 600;
     color: inherit;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.036rem;
     text-align: center;
 }
 
@@ -245,6 +245,6 @@ onMounted(function () {
     margin-inline-end: 0.4rem;
     font-size: 1.1rem;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.044rem;
 }
 </style>

@@ -20,6 +20,10 @@ import type {
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
+const SAVE_TAB = "save" as const;
+const MINE_TAB = "mine" as const;
+const SHARED_TAB = "shared" as const;
+
 const { $gettext } = useGettext();
 const toast = useToast();
 const { getSearchDefinition } = useSearchFilters();
@@ -30,7 +34,9 @@ const emit = defineEmits<{
     (event: "close"): void;
 }>();
 
-const activeTab = ref<"save" | "mine" | "shared">("save");
+const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
+    SAVE_TAB,
+);
 const filterText = ref("");
 const sortValue = ref("aToZ");
 const searches = ref<SavedSearch[]>([]);
@@ -58,7 +64,7 @@ async function onSaveSearch(): Promise<void> {
             life: 3000,
             summary: $gettext("Search saved"),
         });
-        if (activeTab.value === "mine") {
+        if (activeTab.value === MINE_TAB) {
             await loadSearches();
         }
     } catch (error) {
@@ -81,7 +87,7 @@ const sortOptions: SortOption[] = [
 ];
 
 async function loadSearches() {
-    if (activeTab.value === "save") return;
+    if (activeTab.value === SAVE_TAB) return;
 
     isLoading.value = true;
     try {
@@ -130,7 +136,7 @@ async function onDelete(search: SavedSearch) {
             (s) => s.savedsearchid !== search.savedsearchid,
         );
     } catch {
-        // handled silently for now
+        /* empty */
     }
 }
 
@@ -180,25 +186,25 @@ onMounted(() => loadSearches());
             <Button
                 :label="$gettext('Save/Export this search')"
                 :text="true"
-                :class="['panel-tab', { active: activeTab === 'save' }]"
-                @click="activeTab = 'save'"
+                :class="['panel-tab', { active: activeTab === SAVE_TAB }]"
+                @click="activeTab = SAVE_TAB"
             />
             <Button
                 :label="$gettext('My Saved Searches')"
                 :text="true"
-                :class="['panel-tab', { active: activeTab === 'mine' }]"
-                @click="activeTab = 'mine'"
+                :class="['panel-tab', { active: activeTab === MINE_TAB }]"
+                @click="activeTab = MINE_TAB"
             />
             <Button
                 :label="$gettext('Shared Searches')"
                 :text="true"
-                :class="['panel-tab', { active: activeTab === 'shared' }]"
-                @click="activeTab = 'shared'"
+                :class="['panel-tab', { active: activeTab === SHARED_TAB }]"
+                @click="activeTab = SHARED_TAB"
             />
         </div>
 
         <div
-            v-if="activeTab === 'save'"
+            v-if="activeTab === SAVE_TAB"
             class="save-form"
         >
             <p class="save-form-hint">
@@ -349,7 +355,7 @@ onMounted(() => loadSearches());
                             class="action-btn"
                         />
                         <Button
-                            v-if="activeTab === 'mine'"
+                            v-if="activeTab === MINE_TAB"
                             :label="$gettext('Delete')"
                             icon="pi pi-times"
                             icon-pos="left"
@@ -464,7 +470,7 @@ onMounted(() => loadSearches());
     font-weight: 600;
     color: var(--p-text-muted-color);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.048rem;
 }
 
 :deep(.save-form-input .p-inputtext),
@@ -598,7 +604,7 @@ onMounted(() => loadSearches());
 .item-meta {
     display: flex;
     gap: 0.6rem;
-    font-size: 0.85em;
+    font-size: 1.36rem;
     color: var(--p-text-muted-color);
     margin-bottom: 0.2rem;
 }
@@ -620,7 +626,7 @@ onMounted(() => loadSearches());
 }
 
 .action-btn {
-    font-size: 0.85em;
+    font-size: 1.36rem;
     padding: 0.3rem 0.9rem;
     background: var(--p-content-background);
     border: 0.1rem solid var(--p-content-border-color);

@@ -90,7 +90,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     color: var(--p-text-color);
     font-size: 2.2rem;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.044rem;
 }
 
 .search-title .pi {

@@ -112,7 +112,7 @@ function clearAllFilters(): void {
     font-size: 1.1rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.055rem;
     color: var(--p-text-muted-color);
     white-space: nowrap;
 }
@@ -164,7 +164,7 @@ function clearAllFilters(): void {
     font-size: 1rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.04rem;
     opacity: 0.7;
 }
 
