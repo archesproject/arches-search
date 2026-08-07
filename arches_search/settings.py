@@ -27,6 +27,7 @@ DATATYPE_LOCATIONS.append("arches_search.datatypes")
 FUNCTION_LOCATIONS.append("arches_search.functions")
 ETL_MODULE_LOCATIONS.append("arches_search.etl_modules")
 SEARCH_COMPONENT_LOCATIONS.append("arches_search.search_components")
+PERMISSION_FRAMEWORK = "arches_default_deny.ArchesDefaultDenyPermissionFramework"
 
 LOCALE_PATHS.insert(0, os.path.join(APP_ROOT, "locale"))
 
