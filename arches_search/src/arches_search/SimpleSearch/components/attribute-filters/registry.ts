@@ -31,14 +31,6 @@ function nodeSubject(
     };
 }
 
-function toReferenceValue(value: unknown): ReferenceFilterValue {
-    return (value as ReferenceFilterValue | null) ?? [];
-}
-
-function toNumericValue(value: unknown): NumericFilterValue | null {
-    return value as NumericFilterValue | null;
-}
-
 // Reference: a single REFERENCES_ANY clause whose operand is the list of
 // selected labels. Matches the original hardcoded behavior in SimpleSearch.
 function buildReferenceQuery(
@@ -46,7 +38,7 @@ function buildReferenceQuery(
     value: unknown,
     graphSlug: string,
 ): GroupPayload | null {
-    const selected = toReferenceValue(value);
+    const selected = (value as ReferenceFilterValue | null) ?? [];
     if (selected.length === 0) {
         return null;
     }
@@ -82,7 +74,7 @@ function buildNumericQuery(
     value: unknown,
     graphSlug: string,
 ): GroupPayload | null {
-    const tokens = toNumericValue(value)?.tokens ?? [];
+    const tokens = (value as NumericFilterValue | null)?.tokens ?? [];
     if (tokens.length === 0) {
         return null;
     }
@@ -122,13 +114,12 @@ function buildNumericQuery(
 }
 
 function formatReferenceValue(value: unknown): string {
-    return toReferenceValue(value)
-        .map((option) => option.label)
-        .join(", ");
+    const selected = (value as ReferenceFilterValue | null) ?? [];
+    return selected.map((option) => option.label).join(", ");
 }
 
 function formatNumericValue(value: unknown): string {
-    return toNumericValue(value)?.text ?? "";
+    return (value as NumericFilterValue | null)?.text ?? "";
 }
 
 // Maps an Arches node datatype to its filter widget + query builder. Add a new

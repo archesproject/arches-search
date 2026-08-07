@@ -67,7 +67,7 @@ function clearAllFilters(): void {
             class="filter-chip"
             :class="[
                 'filter-chip--' + activeFilter.kind,
-                { 'filter-chip--editable': !!activeFilter.onEdit },
+                { 'filter-chip--editable': activeFilter.onEdit != null },
             ]"
             :title="editTitle(activeFilter)"
             @click="onChipClick(activeFilter)"
