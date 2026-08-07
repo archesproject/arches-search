@@ -112,7 +112,7 @@ function selectGraph(graph: ResourceType | null): void {
     gap: 0.5rem;
     padding: 0.5rem 1.2rem;
     border: 0.15rem solid var(--p-content-border-color);
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     background: var(--p-content-background);
     color: var(--p-text-color);
     font-size: 1.2rem;

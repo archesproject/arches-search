@@ -102,7 +102,7 @@ function clearAllFilters(): void {
 .active-filters .filter-chip {
     display: inline-flex;
     align-items: center;
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     font-size: 1.2rem;
     font-weight: 500;
     border: 0.15rem solid transparent;
@@ -114,8 +114,6 @@ function clearAllFilters(): void {
     box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.08);
 }
 
-/* PrimeVue Chip only exposes a single label + remove-icon, so these
-   approximate the mockup's fc-body/fc-value and fc-dismiss treatments. */
 .active-filters .filter-chip :deep(.p-chip-label) {
     padding-block: 0.4rem;
     padding-inline: 1rem 0.8rem;
@@ -133,10 +131,6 @@ function clearAllFilters(): void {
     opacity: 1;
 }
 
-/* Only the free-text search-term chip (TermFilter.vue) exists as a real
-   active filter today, so it's the only kind wired to a variant class.
-   background is !important because TermFilter.vue sets an inline
-   background-color via activeFilter.options.style, which otherwise wins. */
 .active-filters .filter-chip--search {
     background: var(--arches-search-chip-search-bg) !important;
     border-color: var(--arches-search-chip-search-border);

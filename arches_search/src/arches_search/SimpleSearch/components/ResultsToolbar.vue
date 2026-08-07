@@ -145,7 +145,7 @@ defineEmits<{
     padding: 0.4rem 1rem;
     background: var(--p-surface-100);
     color: var(--p-text-muted-color);
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     font-size: 1.2rem;
     font-weight: 600;
     white-space: nowrap;
@@ -159,7 +159,6 @@ defineEmits<{
     padding: 0.4rem 0.8rem;
 }
 
-/* segmented view-toggle button bar */
 .toolbar-right {
     display: inline-flex;
     align-items: center;

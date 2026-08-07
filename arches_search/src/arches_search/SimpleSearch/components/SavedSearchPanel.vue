@@ -97,6 +97,13 @@ function isDynamicQuery(search: SavedSearch): boolean {
     return qd != null && ("groups" in qd || "terms" in qd);
 }
 
+function queryTypeIconClasses(search: SavedSearch): string[] {
+    if (isDynamicQuery(search)) {
+        return ["pi", "pi-bolt", "chip-live"];
+    }
+    return ["pi", "pi-database", "chip-snapshot"];
+}
+
 watch([activeTab, filterText], () => loadSearches());
 watch(sortValue, () => {
     searches.value = sortSearches(searches.value);
@@ -164,14 +171,7 @@ defineExpose({ loadSearches });
             >
                 <div class="item-header">
                     <i
-                        :class="[
-                            isDynamicQuery(search)
-                                ? 'pi pi-bolt'
-                                : 'pi pi-database',
-                            isDynamicQuery(search)
-                                ? 'chip-live'
-                                : 'chip-snapshot',
-                        ]"
+                        :class="queryTypeIconClasses(search)"
                         class="item-icon query-type-chip"
                     />
                     <span class="item-name">{{ search.name }}</span>
@@ -314,7 +314,6 @@ defineExpose({ loadSearches });
 }
 
 :deep(.sort-select) {
-    width: 13rem;
     flex-shrink: 0;
     border: none;
     box-shadow: none;
@@ -369,7 +368,7 @@ defineExpose({ loadSearches });
 .item-icon.query-type-chip {
     font-size: 1rem;
     padding: 0.25rem;
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     display: inline-flex;
     align-items: center;
     justify-content: center;
