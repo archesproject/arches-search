@@ -300,7 +300,7 @@ function removeNode(alias: string): void {
     line-height: 1.35;
     color: var(--p-text-muted-color);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03rem;
     white-space: nowrap;
 }
 

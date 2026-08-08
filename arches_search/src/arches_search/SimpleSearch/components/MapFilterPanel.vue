@@ -3,6 +3,8 @@ import { nextTick, useTemplateRef, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
+
 import MapWidget from "@/arches_vue_components/widgets/MapWidget/MapWidget.vue";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -23,6 +25,7 @@ const { resultsTileUrl } = useSearchFilters();
 const emit = defineEmits<{
     (event: "update:modelValue", value: FeatureCollection): void;
     (event: "remove"): void;
+    (event: "close"): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -86,9 +89,18 @@ function onEditorUpdate(
 <template>
     <div class="search-map-filter-panel">
         <div class="map-filter-header">
-            <h3 class="map-filter-title">
+            <span class="map-filter-title">
+                <i class="pi pi-map" />
                 {{ $gettext("Map Filter") }}
-            </h3>
+            </span>
+            <Button
+                :label="$gettext('Close')"
+                icon="pi pi-times"
+                icon-pos="left"
+                :text="true"
+                class="map-filter-close-btn"
+                @click="emit('close')"
+            />
         </div>
         <MapWidget
             ref="mapWidget"
@@ -116,14 +128,34 @@ function onEditorUpdate(
 }
 
 .map-filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding-bottom: 0.75rem;
     border-bottom: 0.125rem solid var(--p-content-border-color);
 }
 
 .map-filter-title {
-    margin: 0;
     font-weight: 700;
     font-size: 1.5rem;
+    color: var(--p-text-color);
+}
+
+.map-filter-title .pi {
+    margin-inline-end: 0.6rem;
+    color: var(--p-primary-color);
+}
+
+.map-filter-close-btn {
+    padding: 0.3rem 0.8rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--p-text-muted-color);
+    border-radius: 0.4rem;
+}
+
+.map-filter-close-btn:hover {
+    background: var(--p-content-hover-background);
     color: var(--p-text-color);
 }
 </style>

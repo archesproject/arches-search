@@ -5,6 +5,7 @@ import Accordion from "primevue/accordion";
 import AccordionPanel from "primevue/accordionpanel";
 import AccordionHeader from "primevue/accordionheader";
 import AccordionContent from "primevue/accordioncontent";
+import Button from "primevue/button";
 
 import { getAttributeFilterEntry } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 
@@ -20,6 +21,7 @@ defineProps<{
 
 const emit = defineEmits<{
     (event: "update:value", nodeAlias: string, value: unknown): void;
+    (event: "close"): void;
 }>();
 
 function componentFor(node: NodeFilterConfigNode): Component | null {
@@ -29,9 +31,20 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 
 <template>
     <div class="attribute-filters">
-        <h3 class="attribute-filters-title">
-            {{ $gettext("Attribute Filters") }}
-        </h3>
+        <div class="attribute-filters-header">
+            <h3 class="attribute-filters-title">
+                <i class="pi pi-filter" />
+                {{ $gettext("Attribute Filters") }}
+            </h3>
+            <Button
+                :label="$gettext('Close')"
+                icon="pi pi-times"
+                icon-pos="left"
+                :text="true"
+                class="attribute-filters-close-btn"
+                @click="emit('close')"
+            />
+        </div>
 
         <span
             v-if="nodes.length === 0"
@@ -46,7 +59,7 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 
         <Accordion
             v-else
-            multiple
+            :multiple="true"
             :value="[]"
         >
             <AccordionPanel
@@ -91,12 +104,36 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
     gap: 1.6rem;
 }
 
-.attribute-filters-title {
-    margin: 0;
+.attribute-filters-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding-bottom: 0.75rem;
     border-bottom: 0.125rem solid var(--p-content-border-color);
+}
+
+.attribute-filters-title {
+    margin: 0;
     font-weight: 700;
     font-size: 1.5rem;
+    color: var(--p-text-color);
+}
+
+.attribute-filters-title .pi {
+    margin-inline-end: 0.6rem;
+    color: var(--p-primary-color);
+}
+
+.attribute-filters-close-btn {
+    padding: 0.3rem 0.8rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--p-text-muted-color);
+    border-radius: 0.4rem;
+}
+
+.attribute-filters-close-btn:hover {
+    background: var(--p-content-hover-background);
     color: var(--p-text-color);
 }
 

@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
 import DatePicker from "primevue/datepicker";
 import InputNumber from "primevue/inputnumber";
 import Message from "primevue/message";
@@ -45,6 +46,7 @@ const { graphSlug, graphId, graphLabel, modelValue } = defineProps<{
 const emit = defineEmits<{
     (event: "update:modelValue", clauses: LiteralClause[]): void;
     (event: "remove"): void;
+    (event: "close"): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -267,9 +269,20 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
 
 <template>
     <div class="time-filter">
-        <h3 class="time-filter-title">
-            {{ $gettext("Time Filter") }}
-        </h3>
+        <div class="time-filter-header">
+            <h3 class="time-filter-title">
+                <i class="pi pi-clock" />
+                {{ $gettext("Time Filter") }}
+            </h3>
+            <Button
+                :label="$gettext('Close')"
+                icon="pi pi-times"
+                icon-pos="left"
+                :text="true"
+                class="time-filter-close-btn"
+                @click="emit('close')"
+            />
+        </div>
 
         <Transition name="loading-skeleton">
             <Skeleton
@@ -377,12 +390,36 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
     height: 100%;
 }
 
-.time-filter-title {
-    margin: 0;
+.time-filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding-bottom: 0.75rem;
     border-bottom: 0.125rem solid var(--p-content-border-color);
+}
+
+.time-filter-title {
+    margin: 0;
     font-weight: 700;
     font-size: 1.5rem;
+    color: var(--p-text-color);
+}
+
+.time-filter-title .pi {
+    margin-inline-end: 0.6rem;
+    color: var(--p-primary-color);
+}
+
+.time-filter-close-btn {
+    padding: 0.3rem 0.8rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--p-text-muted-color);
+    border-radius: 0.4rem;
+}
+
+.time-filter-close-btn:hover {
+    background: var(--p-content-hover-background);
     color: var(--p-text-color);
 }
 

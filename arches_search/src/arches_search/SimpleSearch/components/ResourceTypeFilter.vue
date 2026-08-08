@@ -97,7 +97,7 @@ function selectGraph(graph: ResourceType | null): void {
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    padding: 0 0 1.4rem;
+    padding: 0 1.6rem 1.4rem;
     overflow-x: auto;
     scrollbar-width: none;
 }
@@ -109,12 +109,13 @@ function selectGraph(graph: ResourceType | null): void {
 .resource-type-filter .type-btn {
     display: inline-flex;
     align-items: center;
+    flex-shrink: 0;
     gap: 0.5rem;
     padding: 0.5rem 1.2rem;
-    border: 0.15rem solid var(--p-content-border-color);
+    border: 0.15rem solid var(--arches-search-chip-border);
     border-radius: var(--arches-search-radius-pill);
     background: var(--p-content-background);
-    color: var(--p-text-color);
+    color: var(--arches-search-sec-btn-text) !important;
     font-size: 1.2rem;
     font-weight: 500;
     white-space: nowrap;
@@ -127,15 +128,24 @@ function selectGraph(graph: ResourceType | null): void {
 }
 
 .resource-type-filter .type-btn:hover {
-    background: var(--p-content-hover-background);
-    border-color: var(--p-text-muted-color);
+    background: var(--p-content-hover-background) !important;
+    border: 0.15rem solid var(--p-text-muted-color) !important;
+    color: var(--arches-search-sec-btn-text) !important;
 }
 
-.resource-type-filter .type-btn.active,
-.resource-type-filter .type-btn.active:hover {
+/* color needs !important here too, purely to beat the resting rule above
+   now that it's !important — this selector already outranks PrimeVue's own
+   2-class outlined/secondary rule on plain specificity (3 classes vs 2). */
+.resource-type-filter .type-btn.active {
     background: var(--p-primary-color);
     border-color: var(--p-primary-color);
-    color: var(--p-primary-contrast-color);
+    color: var(--p-primary-contrast-color) !important;
+}
+
+.resource-type-filter .type-btn.active:hover {
+    background: var(--p-primary-color) !important;
+    border: 0.15rem solid var(--p-primary-color) !important;
+    color: var(--p-primary-contrast-color) !important;
 }
 
 .resource-type-filter .type-btn :deep(.p-button-icon) {
