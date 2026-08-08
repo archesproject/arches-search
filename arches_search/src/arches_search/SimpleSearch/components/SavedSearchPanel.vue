@@ -420,12 +420,15 @@ onMounted(() => loadSearches());
 
 .panel-tab {
     flex: 1;
+    min-inline-size: 0;
     padding: 0.5rem 0.625rem;
+    overflow: hidden;
     border-bottom: 0.125rem solid transparent;
     border-radius: 0;
-    font-size: var(--p-arches-search-font-size);
+    font-size: 1.2rem;
     font-weight: 500;
     white-space: nowrap;
+    text-overflow: ellipsis;
     color: var(--p-text-muted-color);
     transition:
         background-color 0.12s,
