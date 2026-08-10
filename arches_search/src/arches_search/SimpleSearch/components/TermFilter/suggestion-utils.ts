@@ -7,10 +7,10 @@ import type {
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-export const SUGGESTION_DATATYPE_REFERENCE = "reference";
+const SUGGESTION_DATATYPE_REFERENCE = "reference";
 export const SUGGESTION_DATATYPE_STRING = "string";
 
-export interface HighlightSegment {
+interface HighlightSegment {
     text: string;
     matched: boolean;
 }

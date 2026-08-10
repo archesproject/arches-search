@@ -9,19 +9,9 @@ from arches_controlled_lists.views import ListView
 
 from arches.app.models.models import TileModel, Node, GraphModel
 
-# Substring matching means a short/common query can match huge numbers
-# of rows, so _find_distinct_matches caps and adaptively widens the raw
-# rows it examines (see its docstring) rather than scanning everything
-# up front. .order_by("pk") keeps that scan deterministic — without it,
-# Postgres's parallel workers can return a different row subset on every
-# run of the identical query.
-#
-# Matches are bucketed by datatype (reference vs everything else) rather
-# than pooled under one shared cap: incidental substring matches from
-# the much larger term/string pool (e.g. "red" inside "prepared" or
-# "credit") can otherwise fill MAX_RESULTS before the scan ever reaches
-# the one reference-datatype row for the controlled term itself,
-# silently dropping it from the Controlled Terms tab.
+# Matches are bucketed by datatype (reference vs everything else) so a
+# flood of incidental term matches can't crowd the one matching
+# reference-datatype row out of MAX_RESULTS before the scan reaches it.
 MAX_RESULTS = 100
 INITIAL_RAW_MATCH_LIMIT = 1000
 MAX_RAW_MATCH_LIMIT = 200000
@@ -29,7 +19,7 @@ RAW_MATCH_LIMIT_GROWTH_FACTOR = 10
 
 
 def _get_item_path(list_data, value_id, language_code="en"):
-    """Return a path of prefLabel values from the list name down to the item containing value_id."""
+    """Return the prefLabel path from the list name to value_id's item."""
     items = list_data.get("items", [])
     items_by_id = {item["id"]: item for item in items}
     value_to_item = {v["id"]: item for item in items for v in item.get("values", [])}
@@ -59,25 +49,17 @@ def _get_item_path(list_data, value_id, language_code="en"):
 
 
 def _find_distinct_matches(term_filter):
-    """
-    Up to MAX_RESULTS distinct (value, datatype) TermSearch rows matching
-    term_filter. Widens the raw-row cap and retries when the first pass
-    doesn't reach MAX_RESULTS distinct values — a fixed cap taken in
-    arbitrary (pk) order can under-represent distinct values when many
-    rows share the same handful of values (e.g. a controlled term
-    applied to thousands of resources), since the first N raw rows can
-    all be duplicates of one value. Stops once enough distinct values
-    are found, every match has been examined, or MAX_RAW_MATCH_LIMIT is
-    hit — that ceiling is a real trade-off, not just a safety net:
-    clustering worse than it can still under-count. Raise it if that
-    turns out to matter in practice.
+    """Up to MAX_RESULTS distinct (value, datatype) rows matching term_filter.
+    Widens the raw-row cap and retries if a fixed cap under-represents
+    distinct values (e.g. one term applied to thousands of resources) —
+    capped at MAX_RAW_MATCH_LIMIT, a real trade-off, not just a safety net.
     """
     raw_match_limit = INITIAL_RAW_MATCH_LIMIT
 
     while True:
         bounded_ids = list(
             TermSearch.objects.filter(term_filter)
-            .order_by("pk")
+            .order_by("pk")  # deterministic scan order across parallel workers
             .values_list("pk", flat=True)[:raw_match_limit]
         )
         results = list(
