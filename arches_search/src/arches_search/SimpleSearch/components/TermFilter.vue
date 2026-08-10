@@ -49,11 +49,6 @@ const typeaheadPanel = ref<TypeaheadPanel>("records");
 const recordsTabButton = ref<HTMLButtonElement | null>(null);
 const vocabTabButton = ref<HTMLButtonElement | null>(null);
 
-// Not reactive on purpose — only used to detect a stale onComplete response,
-// never rendered. Two requests can be in flight at once (a debounced search
-// doesn't cancel an already-sent request, only a still-pending timer), and
-// without this, a slower response for an earlier keystroke can land after a
-// faster response for the current one and overwrite it with stale results.
 let latestSuggestionRequestId = 0;
 
 const emptySearchMessage = computed(() =>
@@ -99,15 +94,14 @@ watch(
         for (const selectedTerm of selectedTermValues) {
             if (!previousTermTexts.has(selectedTerm.text)) {
                 const termKind = getTermKind(selectedTerm);
+                const isRecordTerm = termKind === TERM_KIND_RECORD;
                 setTermFilter(
                     termKey(selectedTerm.text),
                     selectedTerm.text,
                     () => removeTerm(selectedTerm.text),
                     undefined,
                     termKind,
-                    termKind === TERM_KIND_RECORD
-                        ? selectedTerm.graph_icon
-                        : undefined,
+                    isRecordTerm ? selectedTerm.graph_icon : undefined,
                 );
             }
         }
@@ -464,12 +458,6 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
         box-shadow 0.15s;
 }
 
-/* 40% of a normal desktop-width viewport is comfortably wide, but the same
-   40% of a much narrower effective viewport (e.g. browser zoomed to 200%)
-   reads as cramped, so let it claim more of the row once space is tight.
-   px (not rem) deliberately here: media query units are always resolved
-   against the browser's default root font-size, never against this page's
-   own html{font-size} override, so rem would be misleading here. */
 @media (max-width: 900px) {
     .search-bar .search-bar-inner {
         max-width: 100%;
@@ -498,13 +486,6 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     color: var(--p-text-muted-color, var(--p-surface-500));
 }
 
-/* !important: arches core's _elements.scss has a global, currently-commented-out
-   `input:focus-visible:not(.select2-search__field) { outline: 2px solid ... !important; }`
-   rule. If that's ever re-enabled it would otherwise win regardless of
-   specificity (its !important beats non-important no matter what), colliding
-   with our own custom focus ring on .search-bar-inner above. This input relies
-   entirely on that ring for focus visibility, so the native outline is
-   suppressed here rather than left to double up with it. */
 .search-bar :deep(.search-input .p-autocomplete-input:focus),
 .search-bar :deep(.search-input .p-autocomplete-input:focus-visible) {
     outline: none !important;
@@ -525,31 +506,6 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     font-size: 1.4rem;
 }
 
-/* PrimeVue's own overlay/list already provide the rounded, bordered,
-   shadowed panel via design tokens, but Aura's defaults (1px border, 6px
-   radius, a flat/tight shadow) all read noticeably smaller/flatter than
-   the mockup's, so they're overridden explicitly below.
-
-   max-width: PrimeVue's own .p-autocomplete-overlay only sets
-   min-width: 100% (matching the trigger), with no upper bound. Every
-   .suggestion-label already truncates with an ellipsis once its container
-   is constrained (see width: 100% comment below), but with nothing capping
-   the overlay itself, a single long record/term name has no container to
-   be constrained by — the panel just grows to fit it, off the edge of the
-   screen if need be. The viewport term keeps that from happening even when
-   the search bar sits near the edge of a narrow window.
-
-   margin-inline-start: append-to="self" positions the overlay flush with
-   the raw <input> (PrimeVue always measures $refs.focusInput, not
-   configurable), but the visible search-bar box starts well to the left of
-   that — .search-bar-inner's own border + padding, then the search icon,
-   then the flex gap, all sit before the input. Left as-is, the overlay
-   renders that whole distance to the right of the visible box instead of
-   flush with it. This shift is the negative sum of those same values (keep
-   in sync with .search-bar-inner and .search-icon above if either changes):
-   border-width 0.1512rem + padding-inline-start 1.4rem + icon width
-   1.5121rem (icon glyphs render at 1em, matching .search-icon's font-size)
-   + gap 1rem. */
 .search-bar :deep(.term-filter-overlay) {
     overflow: hidden;
     border-width: 0.1512rem;
@@ -576,12 +532,6 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     border-block-end: none;
 }
 
-/* !important: Aura's compiled CSS has a same-specificity rule for the
-   keyboard-focused row (.p-focus, added by PrimeVue itself), so cascade
-   order between its injected theme CSS and this component's scoped styles
-   isn't guaranteed to favor this rule otherwise — same reasoning as the
-   focus-outline override above. Unified with :hover so keyboard nav and
-   mouse hover read as the same state, matching the mockup. */
 .search-bar :deep(.term-filter-overlay .p-autocomplete-option:hover),
 .search-bar :deep(.term-filter-overlay .p-autocomplete-option.p-focus) {
     background: var(--p-highlight-background) !important;
@@ -594,11 +544,6 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     text-align: center;
 }
 
-/* width:100% is required, not cosmetic: .p-autocomplete-option (the parent)
-   is itself display:flex, so this element is a flex ITEM of that row with
-   no width of its own by default — it shrink-wraps to its content instead
-   of spanning the row, leaving .suggestion-type's margin-inline-start:auto
-   below with no actual space to push against. */
 .search-bar .suggestion-option {
     display: flex;
     align-items: center;
@@ -653,9 +598,6 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     min-width: 0;
 }
 
-/* :deep() not needed here — <mark> is genuine template markup (rendered
-   via getHighlightSegments, not v-html), so it receives the scoped
-   attribute automatically like any other element in this template. */
 .search-bar .suggestion-label mark {
     background: none;
     color: var(--p-primary-color);
