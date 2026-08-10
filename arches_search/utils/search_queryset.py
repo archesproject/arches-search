@@ -50,11 +50,7 @@ class SimpleSearchQuerysetBuilder:
 
 
 def _union_all(querysets):
-    """
-    Combines per-graph id querysets with UNION ALL rather than UNION: a
-    resource belongs to exactly one graph, so the sets are always disjoint
-    and de-duping would be wasted work.
-    """
+    # Ids are disjoint across graphs, so ALL is safe and skips a needless dedup.
     if not querysets:
         return []
     if len(querysets) == 1:
@@ -62,18 +58,14 @@ def _union_all(querysets):
     return querysets[0].union(*querysets[1:], all=True)
 
 
-def _validate_graph_ids(graph_ids):
-    if not isinstance(graph_ids, list) or not all(
-        isinstance(graph_id, str) for graph_id in graph_ids
-    ):
-        raise ValidationError(_("graphIds must be a list of strings."))
-
-
 def build_search_queryset(body):
     terms = body.get("terms")
     query = body.get("query")
     graph_ids = body.get("graphIds", [])
-    _validate_graph_ids(graph_ids)
+    if not isinstance(graph_ids, list) or not all(
+        isinstance(graph_id, str) for graph_id in graph_ids
+    ):
+        raise ValidationError(_("graphIds must be a list of strings."))
 
     results_queryset = None
     if terms:
