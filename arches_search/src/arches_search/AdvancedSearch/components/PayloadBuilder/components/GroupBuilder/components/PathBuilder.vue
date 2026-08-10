@@ -44,13 +44,16 @@ const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs")!;
 
 const {
     graphSlugs,
-    selectedNode,
+    selectedNode = null,
     relationshipBetweenGraphs,
     shouldPrependGraphName,
     restrictToResourceInstanceDatatypes,
 } = defineProps<{
     graphSlugs: string[];
     selectedNode?: PathSelection | null;
+    // No default: absence means "fall back to graphSlugs" (see graphSelectionKey
+    // and loadNodes below), which isn't expressible as a static default value.
+    // eslint-disable-next-line vue/require-default-prop
     relationshipBetweenGraphs?: string[];
     shouldPrependGraphName?: boolean;
     restrictToResourceInstanceDatatypes?: boolean;
@@ -271,10 +274,6 @@ function buildTree(
 
     for (const node of Object.values(nodeKeyToPathNode)) {
         node.children.sort(compareNodes);
-    }
-
-    if (!graphPair) {
-        return roots;
     }
 
     function pruneUnselectable(nodes: PathNode[]): PathNode[] {

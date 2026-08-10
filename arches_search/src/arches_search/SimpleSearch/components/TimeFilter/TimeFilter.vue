@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
 import DatePicker from "primevue/datepicker";
 import InputNumber from "primevue/inputnumber";
 import Message from "primevue/message";
@@ -273,13 +274,14 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                 <i class="pi pi-clock" />
                 {{ $gettext("Time Filter") }}
             </h3>
-            <button
+            <Button
+                :label="$gettext('Close')"
+                icon="pi pi-times"
+                icon-pos="left"
+                :text="true"
                 class="time-filter-close-btn"
                 @click="emit('close')"
-            >
-                <i class="pi pi-times" />
-                {{ $gettext("Close") }}
-            </button>
+            />
         </div>
 
         <Transition name="loading-skeleton">
@@ -409,19 +411,11 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
 }
 
 .time-filter-close-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
     padding: 0.3rem 0.8rem;
-    font-family: inherit;
     font-size: 1.2rem;
     font-weight: 500;
     color: var(--p-text-muted-color);
-    background: none;
-    border: none;
     border-radius: 0.4rem;
-    cursor: pointer;
-    transition: background 0.12s;
 }
 
 .time-filter-close-btn:hover {

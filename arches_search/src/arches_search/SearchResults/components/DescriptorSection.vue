@@ -6,7 +6,7 @@ import Button from "primevue/button";
 
 import arches from "arches";
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application";
 
 import type { Ref } from "vue";
 import type { SectionContent } from "@/arches_modular_reports/ModularReport/types.ts";
@@ -182,7 +182,7 @@ onMounted(function () {
     font-weight: 600;
     color: inherit;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.036rem;
     text-align: center;
 }
 
@@ -234,6 +234,9 @@ onMounted(function () {
     font-size: 1.2rem;
     color: var(--p-text-muted-color);
     line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .descriptor-section-description-label {
@@ -242,6 +245,6 @@ onMounted(function () {
     margin-inline-end: 0.4rem;
     font-size: 1.1rem;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.044rem;
 }
 </style>

@@ -1,6 +1,6 @@
 import Cookies from "js-cookie";
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application";
 
 import type {
     GroupPayload,

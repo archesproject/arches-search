@@ -142,6 +142,9 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
         if node_is_nodegroup_root and node.nodegroup_id in identity_nodegroup_ids:
             continue
 
+        if not node_is_nodegroup_root and primary_card_node_widget is None:
+            continue
+
         if node_is_nodegroup_root and primary_widget_label:
             card_group_id = f"card-group:{node.nodeid}"
             card_group_label = card_title_by_nodegroup_id.get(node.nodegroup_id) or str(
@@ -150,14 +153,11 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
             parent_nodegroup_id = parent_nodegroup_id_by_nodegroup_id.get(
                 node.nodegroup_id
             )
-            serialized_nodes.append(
+            card_group_node = node.serialize()
+            card_group_node["id"] = card_group_node.pop("nodeid")
+            card_group_node.update(
                 {
                     "id": card_group_id,
-                    "alias": node.alias,
-                    "name": str(node.name),
-                    "description": str(node.description or ""),
-                    "datatype": node.datatype,
-                    "graph_id": str(node.graph_id),
                     "sortorder": card_sortorder_by_nodegroup_id.get(
                         node.nodegroup_id, node.sortorder
                     ),
@@ -170,21 +170,18 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
                     "selectable": False,
                 }
             )
-            serialized_nodes.append(
+            serialized_nodes.append(card_group_node)
+
+            widget_node = node.serialize()
+            widget_node["id"] = widget_node.pop("nodeid")
+            widget_node.update(
                 {
-                    "id": str(node.nodeid),
-                    "alias": node.alias,
-                    "name": str(node.name),
-                    "description": str(node.description or ""),
-                    "datatype": node.datatype,
-                    "graph_id": str(node.graph_id),
-                    "sortorder": node.sortorder,
-                    "config": node.config,
                     "card_x_node_x_widget_label": primary_widget_label,
                     "semantic_parent_id": card_group_id,
                     "nodegroup_has_cardinality_n": nodegroup_has_cardinality_n,
                 }
             )
+            serialized_nodes.append(widget_node)
             continue
 
         if node_is_nodegroup_root:
@@ -211,21 +208,20 @@ def get_nodes_with_widget_labels_for_graph(graph_id):
                 else node.sortorder
             )
 
-        serialized_nodes.append(
+        serialized_node = node.serialize()
+        serialized_node["id"] = serialized_node.pop("nodeid")
+        serialized_node.update(
             {
-                "id": str(node.nodeid),
-                "alias": node.alias,
-                "name": str(node.name),
-                "description": str(node.description or ""),
-                "datatype": node.datatype,
-                "graph_id": str(node.graph_id),
                 "sortorder": node_sortorder,
-                "config": node.config,
                 "card_x_node_x_widget_label": node_display_label,
                 "semantic_parent_id": semantic_parent_id,
                 "nodegroup_has_cardinality_n": nodegroup_has_cardinality_n,
             }
         )
+        if primary_card_node_widget is None:
+            serialized_node["selectable"] = False
+
+        serialized_nodes.append(serialized_node)
 
     return serialized_nodes
 

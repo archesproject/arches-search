@@ -3,6 +3,8 @@ import { nextTick, useTemplateRef, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
+
 import MapWidget from "@/arches_vue_components/widgets/MapWidget/MapWidget.vue";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -91,13 +93,14 @@ function onEditorUpdate(
                 <i class="pi pi-map" />
                 {{ $gettext("Map Filter") }}
             </span>
-            <button
+            <Button
+                :label="$gettext('Close')"
+                icon="pi pi-times"
+                icon-pos="left"
+                :text="true"
                 class="map-filter-close-btn"
                 @click="emit('close')"
-            >
-                <i class="pi pi-times" />
-                {{ $gettext("Close") }}
-            </button>
+            />
         </div>
         <MapWidget
             ref="mapWidget"
@@ -144,19 +147,11 @@ function onEditorUpdate(
 }
 
 .map-filter-close-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
     padding: 0.3rem 0.8rem;
-    font-family: inherit;
     font-size: 1.2rem;
     font-weight: 500;
     color: var(--p-text-muted-color);
-    background: none;
-    border: none;
     border-radius: 0.4rem;
-    cursor: pointer;
-    transition: background 0.12s;
 }
 
 .map-filter-close-btn:hover {

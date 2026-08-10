@@ -1,6 +1,6 @@
 import Cookies from "js-cookie";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application";
 
 export async function getSearchResults(
     searchQuery: GroupPayload,
