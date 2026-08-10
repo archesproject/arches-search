@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import AutoComplete from "primevue/autocomplete";
@@ -45,7 +45,10 @@ interface TypeaheadPanelDefinition {
     label: string;
 }
 
+const autoCompleteRef = ref<InstanceType<typeof AutoComplete> | null>(null);
+
 const suggestions = ref<Array<TermSuggestion>>([]);
+const suggestionsQuery = ref<string | null>(null);
 const selectedTerms = ref<Array<TermSuggestion>>([]);
 const inputText = ref("");
 const isOverlayShown = ref(false);
@@ -125,6 +128,14 @@ watch(
     { deep: true },
 );
 
+onMounted(() => {
+    const autoCompleteElement = autoCompleteRef.value as unknown as {
+        $el?: HTMLElement;
+    } | null;
+
+    autoCompleteElement?.$el?.querySelector<HTMLInputElement>("input")?.focus();
+});
+
 function termKey(termValue: string): string {
     return `${filterKey}:${termValue}`;
 }
@@ -135,12 +146,26 @@ function removeTerm(termValue: string): void {
     );
 }
 
+function stopStrayLoadingIndicator(): void {
+    if (autoCompleteRef.value) {
+        (autoCompleteRef.value as unknown as { searching: boolean }).searching =
+            false;
+    }
+}
+
 async function onComplete(event: AutoCompleteCompleteEvent): Promise<void> {
     const trimmedQuery = event.query.trim();
+
+    if (trimmedQuery !== inputText.value.trim()) {
+        stopStrayLoadingIndicator();
+        return;
+    }
+
     const requestId = ++latestSuggestionRequestId;
 
     if (!trimmedQuery) {
         suggestions.value = [];
+        suggestionsQuery.value = null;
         hasSuggestionLoadError.value = false;
         return;
     }
@@ -152,12 +177,14 @@ async function onComplete(event: AutoCompleteCompleteEvent): Promise<void> {
             return;
         }
         suggestions.value = results;
+        suggestionsQuery.value = trimmedQuery;
     } catch (error) {
         if (requestId !== latestSuggestionRequestId) {
             return;
         }
         console.error(error);
         suggestions.value = [];
+        suggestionsQuery.value = null;
         hasSuggestionLoadError.value = true;
     }
 }
@@ -165,6 +192,9 @@ async function onComplete(event: AutoCompleteCompleteEvent): Promise<void> {
 function onSelect(event: TermSuggestionSelectEvent): void {
     selectedTerms.value = [...selectedTerms.value, event.value];
     inputText.value = "";
+    suggestionsQuery.value = null;
+    latestSuggestionRequestId += 1;
+    stopStrayLoadingIndicator();
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -177,8 +207,9 @@ function onKeydown(event: KeyboardEvent): void {
 
 function submitSearch(): void {
     const trimmedInputText = inputText.value.trim();
+    const suggestionsMatchInput = suggestionsQuery.value === trimmedInputText;
 
-    if (suggestions.value.length > 1) {
+    if (suggestionsMatchInput && suggestions.value.length > 1) {
         onSelect({ value: suggestions.value[0] });
         return;
     }
@@ -222,6 +253,7 @@ function getNoResultsMessage(): string {
                 class="pi pi-search search-icon"
             ></i>
             <AutoComplete
+                ref="autoCompleteRef"
                 v-model="inputText"
                 class="search-input"
                 overlay-class="term-filter-overlay"
