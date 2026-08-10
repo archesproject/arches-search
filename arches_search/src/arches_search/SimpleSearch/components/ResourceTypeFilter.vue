@@ -13,7 +13,7 @@ import type { ResourceType } from "@/arches_search/SimpleSearch/types.ts";
 const RESOURCE_TYPE_FALLBACK_KEY = "__all__";
 
 const { $gettext, current } = useGettext();
-const { setGraph, activeGraph, searchResults } = useSearchFilters();
+const { toggleGraph, activeGraphs, searchResults } = useSearchFilters();
 
 const compactCountFormatter = computed(
     () => new Intl.NumberFormat(current, { notation: "compact" }),
@@ -79,20 +79,14 @@ function getResourceTypeButtonKey(resourceType: ResourceType): string {
 
 function isResourceTypeSelected(resourceType: ResourceType): boolean {
     if (resourceType.id === null) {
-        return activeGraph.value === null;
+        return activeGraphs.value.length === 0;
     }
 
-    return activeGraph.value?.id === resourceType.id;
+    return activeGraphs.value.some((graph) => graph.id === resourceType.id);
 }
 
 function selectGraph(resourceType: ResourceType): void {
-    if (resourceType.id === null || activeGraph.value?.id === resourceType.id) {
-        setGraph(null);
-
-        return;
-    }
-
-    setGraph(resourceType);
+    toggleGraph(resourceType);
 }
 
 function getResourceTypeCount(resourceType: ResourceType): number {

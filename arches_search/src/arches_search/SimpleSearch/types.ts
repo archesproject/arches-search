@@ -8,13 +8,11 @@ export interface ResourceType {
 
 // Serializable snapshot of every piece of state that defines a search.
 // Anything that should round-trip through "save / load search" must live
-// here — and therefore on `useSearchFilters`. Bump `version` when the
-// shape changes so old saved rows can be migrated.
+// here — and therefore on `useSearchFilters`.
 export interface SearchDefinition {
-    version: 1;
     terms: SerializedTerm[];
     queries: Record<string, GroupPayload>;
-    graphId: string | null;
+    graphIds: string[];
 }
 
 export const TERM_KIND_CONTROLLED_TERM = "controlled-term";
@@ -44,15 +42,19 @@ export interface TermSuggestion {
 }
 
 export const ACTIVE_FILTER_KIND_TERM = "term";
+export const ACTIVE_FILTER_KIND_RESOURCE_TYPE = "resource-type";
+export const ACTIVE_FILTER_KIND_TIME = "time";
+export const ACTIVE_FILTER_KIND_MAP = "map";
+export const ACTIVE_FILTER_KIND_ATTRIBUTE = "attribute";
 
 export type ActiveFilterKind =
     | typeof ACTIVE_FILTER_KIND_TERM
     | typeof TERM_KIND_CONTROLLED_TERM
     | typeof TERM_KIND_RECORD
-    | "resource-type"
-    | "time"
-    | "map"
-    | "attribute";
+    | typeof ACTIVE_FILTER_KIND_RESOURCE_TYPE
+    | typeof ACTIVE_FILTER_KIND_TIME
+    | typeof ACTIVE_FILTER_KIND_MAP
+    | typeof ACTIVE_FILTER_KIND_ATTRIBUTE;
 
 export interface ActiveFilter {
     id: string;
