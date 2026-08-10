@@ -17,10 +17,19 @@ export interface SearchDefinition {
     graphId: string | null;
 }
 
+export const TERM_KIND_CONTROLLED_TERM = "controlled-term";
+export const TERM_KIND_RECORD = "record";
+
+export type TermKind =
+    | typeof TERM_KIND_CONTROLLED_TERM
+    | typeof TERM_KIND_RECORD;
+
 export interface SerializedTerm {
     id: string;
     text: string;
     inverted: boolean;
+    termKind?: TermKind;
+    icon?: string;
     options?: Record<string, unknown>;
 }
 
@@ -29,10 +38,17 @@ export interface TermSuggestion {
     datatype: string;
     text: string;
     addtional_info?: Record<string, unknown>;
+    resourceinstanceid?: string;
+    graph_icon?: string;
+    graph_name?: string;
 }
 
+export const ACTIVE_FILTER_KIND_TERM = "term";
+
 export type ActiveFilterKind =
-    | "term"
+    | typeof ACTIVE_FILTER_KIND_TERM
+    | typeof TERM_KIND_CONTROLLED_TERM
+    | typeof TERM_KIND_RECORD
     | "resource-type"
     | "time"
     | "map"
@@ -49,6 +65,19 @@ export interface ActiveFilter {
     onEdit?: () => void;
     options?: Record<string, unknown>;
 }
+
+export const RESULTS_SORT_RELEVANCE = "relevance";
+export const RESULTS_SORT_A_TO_Z = "aToZ";
+export const RESULTS_SORT_Z_TO_A = "zToA";
+export const RESULTS_SORT_NEWEST = "newest";
+export const RESULTS_SORT_OLDEST = "oldest";
+
+export type ResultsSortValue =
+    | typeof RESULTS_SORT_RELEVANCE
+    | typeof RESULTS_SORT_A_TO_Z
+    | typeof RESULTS_SORT_Z_TO_A
+    | typeof RESULTS_SORT_NEWEST
+    | typeof RESULTS_SORT_OLDEST;
 
 export interface SortOption {
     label: string;
@@ -74,7 +103,9 @@ export interface NodeFilterConfigNode {
 
 export type SortDirection = "asc" | "desc";
 
-export type SortSpec = { type: "primary_name"; direction: SortDirection };
+export type SortSpec =
+    | { type: "primary_name"; direction: SortDirection }
+    | { type: "created_time"; direction: SortDirection };
 
 export interface SavedSearch {
     savedsearchid: string;

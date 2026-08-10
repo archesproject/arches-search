@@ -38,6 +38,14 @@ const cssOverrides = {
         "--arches-search-filter-attribute-border": "#c4b5fd",
         "--arches-search-filter-attribute-text": "#5b21b6",
 
+        "--arches-search-filter-controlled-term-bg": "#f5f3ff",
+        "--arches-search-filter-controlled-term-border": "#c4b5fd",
+        "--arches-search-filter-controlled-term-text": "#5b21b6",
+
+        "--arches-search-filter-record-bg": "#f0fdf4",
+        "--arches-search-filter-record-border": "#86efac",
+        "--arches-search-filter-record-text": "#15803d",
+
         "--arches-search-sec-btn-hover-bg": "#e2e8f0",
         "--arches-search-sec-btn-text": "#475569",
         "--arches-search-chip-border": "#cbd5e1",
@@ -71,6 +79,14 @@ const cssOverrides = {
         "--arches-search-filter-attribute-bg": "#2d1049",
         "--arches-search-filter-attribute-border": "#7c3aed",
         "--arches-search-filter-attribute-text": "#c4b5fd",
+
+        "--arches-search-filter-controlled-term-bg": "#2d1049",
+        "--arches-search-filter-controlled-term-border": "#7c3aed",
+        "--arches-search-filter-controlled-term-text": "#c4b5fd",
+
+        "--arches-search-filter-record-bg": "#052e16",
+        "--arches-search-filter-record-border": "#16a34a",
+        "--arches-search-filter-record-text": "#4ade80",
 
         "--arches-search-sec-btn-hover-bg": "#404040",
 

@@ -13,11 +13,17 @@ import type {
     GroupPayload,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    ACTIVE_FILTER_KIND_TERM,
+    TERM_KIND_CONTROLLED_TERM,
+    TERM_KIND_RECORD,
+} from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ActiveFilter,
     ResourceType,
     SearchDefinition,
     SortSpec,
+    TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
 
@@ -60,6 +66,8 @@ interface SearchFilters {
         text: string,
         clear: () => void,
         options?: Record<string, unknown>,
+        termKind?: TermKind,
+        icon?: string,
     ): void;
 }
 
@@ -104,11 +112,33 @@ function createSearchFilters(): SearchFilters {
         () => queries.value,
     );
 
+    function getTermFilterCategory(termKind?: TermKind): string {
+        if (termKind === TERM_KIND_CONTROLLED_TERM) {
+            return $gettext("Term");
+        }
+        if (termKind === TERM_KIND_RECORD) {
+            return $gettext("Record");
+        }
+        return $gettext("Search");
+    }
+
+    function getTermFilterIcon(termKind?: TermKind): string {
+        if (termKind === TERM_KIND_CONTROLLED_TERM) {
+            return "pi pi-tag";
+        }
+        if (termKind === TERM_KIND_RECORD) {
+            return "pi pi-database";
+        }
+        return "pi pi-search";
+    }
+
     function setTermFilter(
         key: string,
         text: string,
         clear: () => void,
         options?: Record<string, unknown>,
+        termKind?: TermKind,
+        icon?: string,
     ): void {
         const next = new Map(terms.value);
         next.set(key, {
@@ -116,9 +146,9 @@ function createSearchFilters(): SearchFilters {
             text,
             clear,
             inverted: false,
-            kind: "term",
-            category: $gettext("Search"),
-            icon: "pi pi-search",
+            kind: termKind ?? ACTIVE_FILTER_KIND_TERM,
+            category: getTermFilterCategory(termKind),
+            icon: icon || getTermFilterIcon(termKind),
             options,
         });
         terms.value = next;
@@ -249,10 +279,15 @@ function createSearchFilters(): SearchFilters {
         // Strip the `clear` closure off each ActiveFilter — closures aren't
         // serializable, and the restore path rebuilds them from `id`.
         const serializedTerms = [...terms.value.values()].map(
-            ({ id, text, inverted, options }) => ({
+            ({ id, text, inverted, kind, icon, options }) => ({
                 id,
                 text,
                 inverted,
+                ...(kind === TERM_KIND_CONTROLLED_TERM ||
+                kind === TERM_KIND_RECORD
+                    ? { termKind: kind }
+                    : {}),
+                ...(kind === TERM_KIND_RECORD ? { icon } : {}),
                 ...(options !== undefined ? { options } : {}),
             }),
         );
@@ -286,6 +321,8 @@ function createSearchFilters(): SearchFilters {
                 term.text,
                 () => clearTermFilter(term.id),
                 term.options,
+                term.termKind,
+                term.icon,
             );
         }
         for (const [filterKey, payload] of Object.entries(definition.queries)) {
@@ -339,6 +376,8 @@ function createEmptySearchResults(): SearchResults {
             has_next: false,
             has_previous: false,
         },
+        resource_type_counts: [],
+        all_resource_count: 0,
     };
 }
 

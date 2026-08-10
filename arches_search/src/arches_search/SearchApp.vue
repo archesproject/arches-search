@@ -78,7 +78,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     align-items: center;
     justify-content: space-between;
     gap: 1.6rem;
-    padding: 2rem 2rem 0;
+    padding: 2rem 2rem 0.4rem;
     background-color: var(--arches-search-card-bg);
 }
 

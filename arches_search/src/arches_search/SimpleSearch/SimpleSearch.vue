@@ -15,7 +15,7 @@ import IdleInfoTiles from "@/arches_search/SimpleSearch/components/IdleInfoTiles
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
-import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
+import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter/TermFilter.vue";
 import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
 
@@ -30,6 +30,13 @@ import {
     formatAttributeFilterValue,
 } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+import {
+    RESULTS_SORT_A_TO_Z,
+    RESULTS_SORT_NEWEST,
+    RESULTS_SORT_OLDEST,
+    RESULTS_SORT_RELEVANCE,
+    RESULTS_SORT_Z_TO_A,
+} from "@/arches_search/SimpleSearch/types.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 
@@ -41,6 +48,7 @@ import type {
 import type {
     ActiveFilter,
     NodeFilterConfigNode,
+    ResultsSortValue,
     SearchDefinition,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -97,7 +105,7 @@ const {
     onSplitterResizeEnd,
 } = useSidePanel();
 
-const sortValue = ref<string | null>(null);
+const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
 const graphModels = ref<GraphModel[]>([]);
 const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
@@ -212,17 +220,21 @@ function onRequestPage(page: number): void {
     search(page);
 }
 
-function onSortValueUpdate(nextSortValue: string | null): void {
+function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
     sortValue.value = nextSortValue;
     setSort(sortSpecForValue(nextSortValue));
 }
 
-function sortSpecForValue(value: string | null): SortSpec[] {
+function sortSpecForValue(value: ResultsSortValue | null): SortSpec[] {
     switch (value) {
-        case "aToZ":
+        case RESULTS_SORT_A_TO_Z:
             return [{ type: "primary_name", direction: "asc" }];
-        case "zToA":
+        case RESULTS_SORT_Z_TO_A:
             return [{ type: "primary_name", direction: "desc" }];
+        case RESULTS_SORT_NEWEST:
+            return [{ type: "created_time", direction: "desc" }];
+        case RESULTS_SORT_OLDEST:
+            return [{ type: "created_time", direction: "asc" }];
         default:
             return [];
     }

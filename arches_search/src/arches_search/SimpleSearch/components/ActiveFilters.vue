@@ -225,6 +225,18 @@ function clearAllFilters(): void {
     color: var(--arches-search-filter-attribute-text);
 }
 
+.filter-chip--controlled-term {
+    background: var(--arches-search-filter-controlled-term-bg);
+    border-color: var(--arches-search-filter-controlled-term-border);
+    color: var(--arches-search-filter-controlled-term-text);
+}
+
+.filter-chip--record {
+    background: var(--arches-search-filter-record-bg);
+    border-color: var(--arches-search-filter-record-border);
+    color: var(--arches-search-filter-record-text);
+}
+
 .clear-all-button {
     padding: 0;
     margin-inline-start: 0.6rem;

@@ -8,7 +8,17 @@ import Select from "primevue/select";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
-import type { SortOption } from "@/arches_search/SimpleSearch/types.ts";
+import {
+    RESULTS_SORT_A_TO_Z,
+    RESULTS_SORT_NEWEST,
+    RESULTS_SORT_OLDEST,
+    RESULTS_SORT_RELEVANCE,
+    RESULTS_SORT_Z_TO_A,
+} from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    ResultsSortValue,
+    SortOption,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 const { $gettext } = useGettext();
 const { searchResults } = useSearchFilters();
@@ -21,7 +31,7 @@ const resultsLabelText = computed(() =>
 );
 
 defineProps<{
-    sortValue: string | null;
+    sortValue: ResultsSortValue | null;
     showFilters: boolean;
     showMap: boolean;
     hasMapFilter: boolean;
@@ -33,12 +43,15 @@ defineProps<{
 }>();
 
 const sortOptions = computed<SortOption[]>(() => [
-    { label: $gettext("A to Z"), value: "aToZ" },
-    { label: $gettext("Z to A"), value: "zToA" },
+    { label: $gettext("Relevance"), value: RESULTS_SORT_RELEVANCE },
+    { label: $gettext("Name A to Z"), value: RESULTS_SORT_A_TO_Z },
+    { label: $gettext("Name Z to A"), value: RESULTS_SORT_Z_TO_A },
+    { label: $gettext("Newest first"), value: RESULTS_SORT_NEWEST },
+    { label: $gettext("Oldest first"), value: RESULTS_SORT_OLDEST },
 ]);
 
 defineEmits<{
-    (event: "update:sortValue", value: string | null): void;
+    (event: "update:sortValue", value: ResultsSortValue | null): void;
     (event: "toggle-filters"): void;
     (event: "toggle-map"): void;
     (event: "toggle-time"): void;
@@ -58,6 +71,7 @@ defineEmits<{
                 :placeholder="$gettext('Sort by...')"
                 :show-clear="true"
                 class="sort-select"
+                overlay-class="sort-select-overlay"
                 @update:model-value="$emit('update:sortValue', $event)"
             />
         </div>
@@ -161,7 +175,7 @@ defineEmits<{
 .toolbar-right .toolbar-btn {
     padding: 0.7rem 1rem;
     font-size: 1.2rem;
-    font-weight: 500;
+    font-weight: 600;
     border: none;
     border-inline-end: 0.1rem solid var(--p-content-border-color);
     border-radius: 0;
@@ -174,6 +188,10 @@ defineEmits<{
 
 .toolbar-right .toolbar-btn :deep(.p-button-icon) {
     font-size: 1.2rem;
+}
+
+.toolbar-right .toolbar-btn :deep(.p-button-label) {
+    font-weight: 600;
 }
 
 .toolbar-right .toolbar-btn:last-child {
