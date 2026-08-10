@@ -22,16 +22,20 @@ def _get_item_path(list_data, value_id, language_code="en"):
     """Return the prefLabel path from the list name to value_id's item."""
     items = list_data.get("items", [])
     items_by_id = {item["id"]: item for item in items}
-    value_to_item = {v["id"]: item for item in items for v in item.get("values", [])}
+    value_to_item = {
+        item_value["id"]: item
+        for item in items
+        for item_value in item.get("values", [])
+    }
 
     def pref_label(item):
-        ret = item["id"]
-        for v in item.get("values", []):
-            if v["valuetype_id"] == "prefLabel":
-                ret = v["value"]
-                if v["language_id"] == language_code:
-                    return v["value"]
-        return ret
+        fallback_label = item["id"]
+        for item_value in item.get("values", []):
+            if item_value["valuetype_id"] == "prefLabel":
+                fallback_label = item_value["value"]
+                if item_value["language_id"] == language_code:
+                    return item_value["value"]
+        return fallback_label
 
     item = value_to_item.get(value_id)
 

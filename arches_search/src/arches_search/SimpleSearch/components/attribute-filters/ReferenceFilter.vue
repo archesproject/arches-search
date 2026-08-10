@@ -14,7 +14,7 @@ import type {
 
 const { $gettext } = useGettext();
 
-const props = defineProps<{
+const { node, modelValue } = defineProps<{
     node: NodeFilterConfigNode;
     modelValue: ReferenceFilterValue | null;
 }>();
@@ -27,11 +27,11 @@ const options = ref<ReferenceFilterOption[]>([]);
 const isLoading = ref(false);
 
 const selectedIds = computed(
-    () => new Set((props.modelValue ?? []).map((option) => option.id)),
+    () => new Set((modelValue ?? []).map((option) => option.id)),
 );
 
 const controlledListId = computed<string | null>(() => {
-    const listId = props.node.config?.controlledList;
+    const listId = node.config?.controlledList;
     return typeof listId === "string" ? listId : null;
 });
 
@@ -67,7 +67,7 @@ function isChecked(optionId: string): boolean {
 }
 
 function toggleOption(option: ReferenceFilterOption): void {
-    const current = props.modelValue ?? [];
+    const current = modelValue ?? [];
     const next = isChecked(option.id)
         ? current.filter((selected) => selected.id !== option.id)
         : [...current, option];
