@@ -85,8 +85,7 @@ class SearchPermissionFilteringTest(TestCase):
 
     def _search_ids(self, response):
         return {
-            resource["resourceinstanceid"]
-            for resource in response.json()["resources"]
+            resource["resourceinstanceid"] for resource in response.json()["resources"]
         }
 
     # --- SimpleSearchAPI ---
