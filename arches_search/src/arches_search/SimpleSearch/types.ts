@@ -43,8 +43,10 @@ export interface TermSuggestion {
     graph_name?: string;
 }
 
+export const ACTIVE_FILTER_KIND_TERM = "term";
+
 export type ActiveFilterKind =
-    | "term"
+    | typeof ACTIVE_FILTER_KIND_TERM
     | typeof TERM_KIND_CONTROLLED_TERM
     | typeof TERM_KIND_RECORD
     | "resource-type"

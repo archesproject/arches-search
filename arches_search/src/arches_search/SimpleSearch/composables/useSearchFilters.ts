@@ -14,6 +14,7 @@ import type {
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import {
+    ACTIVE_FILTER_KIND_TERM,
     TERM_KIND_CONTROLLED_TERM,
     TERM_KIND_RECORD,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -145,7 +146,7 @@ function createSearchFilters(): SearchFilters {
             text,
             clear,
             inverted: false,
-            kind: termKind ?? "term",
+            kind: termKind ?? ACTIVE_FILTER_KIND_TERM,
             category: getTermFilterCategory(termKind),
             icon: icon || getTermFilterIcon(termKind),
             options,
