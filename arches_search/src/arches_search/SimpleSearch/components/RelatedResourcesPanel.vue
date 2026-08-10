@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useGettext } from "vue3-gettext";
 
+import Button from "primevue/button";
+
 defineProps<{
     resourceTitle: string;
 }>();
@@ -23,13 +25,13 @@ const { $gettext } = useGettext();
                     })
                 }}
             </h3>
-            <button
+            <Button
                 class="related-resources-back-btn"
+                icon="pi pi-arrow-left"
+                variant="link"
+                :label="$gettext('Back')"
                 @click="emit('close')"
-            >
-                <i class="pi pi-arrow-left" />
-                {{ $gettext("Back") }}
-            </button>
+            />
         </div>
 
         <div class="related-resources-placeholder">
@@ -75,23 +77,17 @@ const { $gettext } = useGettext();
     flex-shrink: 0;
 }
 
-.related-resources-back-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
+.related-resources-back-btn.p-button {
     flex-shrink: 0;
     padding: 0.3rem 0.8rem;
-    font-family: inherit;
     font-size: 1.2rem;
     font-weight: 500;
     color: var(--p-text-muted-color);
-    background: none;
-    border: none;
     border-radius: 0.4rem;
-    cursor: pointer;
+    text-decoration: none;
 }
 
-.related-resources-back-btn:hover {
+.related-resources-back-btn.p-button:hover {
     background: var(--p-content-hover-background);
     color: var(--p-text-color);
 }

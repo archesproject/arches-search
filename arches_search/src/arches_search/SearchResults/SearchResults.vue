@@ -56,8 +56,6 @@ const isPageRequestInFlight = ref(false);
 
 const requestedDescriptorIds = new Set<string>();
 
-// Bounded by graph count, not resource count, so fetched once here
-// rather than resolved per result.
 onMounted(async () => {
     try {
         const lifecycleStates = await fetchResourceInstanceLifecycleStates();

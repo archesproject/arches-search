@@ -160,8 +160,6 @@ export function useSidePanel() {
         switchToPanel(IDLE_PANEL);
     }
 
-    // Unlike toggleSidePanel, always switches to the clicked resource's
-    // related view rather than closing an already-open one.
     function viewRelatedResource(resource: RelatedResource): void {
         relatedResource.value = resource;
         switchToPanel(RELATED_RESOURCES_PANEL);

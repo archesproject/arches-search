@@ -70,8 +70,6 @@ const resourceReportLink = computed<string>(function () {
     });
 });
 
-// Lifecycle states are admin-configurable, not a fixed enum, so severity is
-// derived from the two permission flags every state always has, not name/id.
 const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
     const state = lifecycleState?.value;
     if (!state) return "secondary";
@@ -97,7 +95,7 @@ const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
                     class="descriptor-section-lifecycle-tag"
                     :severity="lifecycleSeverity"
                     :value="lifecycleState.name"
-                    rounded
+                    :rounded="true"
                 />
             </div>
 
@@ -108,7 +106,7 @@ const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
                 <span class="descriptor-section-description-label">
                     {{ $gettext("Description:") }}
                 </span>
-                {{ resourceDescriptionText }}
+                <span>{{ resourceDescriptionText }}</span>
             </div>
 
             <div class="descriptor-section-actions">
@@ -207,9 +205,6 @@ const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
     text-decoration: none;
 }
 
-/* Aura's button.label.font.weight token sets an explicit weight on this
-   span, which wins over the ancestor .p-button rule regardless of
-   specificity — same as the toolbar-btn rules in ResultsToolbar.vue. */
 .descriptor-section-actions :deep(.p-button-label) {
     font-weight: 600;
 }

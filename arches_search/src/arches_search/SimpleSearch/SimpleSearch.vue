@@ -114,8 +114,6 @@ const {
     onSplitterResizeEnd,
 } = useSidePanel();
 
-// Avoids threading a prop/emit chain down through SearchResults.vue and
-// SearchResultCard.vue to reach DescriptorSection, several layers down.
 provide("viewRelatedResource", viewRelatedResource);
 
 const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
@@ -522,7 +520,7 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                         />
                         <RelatedResourcesPanel
                             v-if="isRelatedResourcesOpen"
-                            :resource-title="relatedResource?.title ?? ''"
+                            :resource-title="relatedResource!.title"
                             @close="closeSidePanel()"
                         />
                         <TimeFilter

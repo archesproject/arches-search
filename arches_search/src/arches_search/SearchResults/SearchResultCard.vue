@@ -35,8 +35,6 @@ const props = defineProps<{
     result: ResourceData;
     descriptorData: ResourceDescriptorData | null;
     reportConfig: SearchReportConfig | null;
-    // reportConfig is null both before it loads and once it's confirmed
-    // empty, so this flag disambiguates "not loaded yet" from "no config".
     reportConfigLoaded: boolean;
     graphModel: GraphModel | null;
     lifecycleState: ResourceInstanceLifecycleState | null;
@@ -98,8 +96,6 @@ watchEffect(() => {
     }
 });
 
-// The thumbnail frames the whole card, including the expanded section
-// below, so it lives here rather than inside DescriptorSection.
 const thumbIconClass = computed<string>(
     () => props.graphModel?.iconclass || FALLBACK_THUMB_ICON,
 );
@@ -110,9 +106,6 @@ const thumbAccentColor = computed<string>(
     () => props.graphModel?.color || FALLBACK_THUMB_ACCENT_COLOR,
 );
 
-// Opt-in via config: no existing SearchReportConfig row sets this key, so
-// thumbnails stay off until a graph's config explicitly enables them.
-// Exactly one component is configured per report slot, hence components[0].
 const shouldShowThumbnailImage = computed<boolean>(
     () =>
         configAsNamedSection.value.components[0]?.config
@@ -129,15 +122,12 @@ const hasLoadedThumbnailImage = ref(false);
 const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
 let hasAttemptedThumbnailLoad = false;
 
-// Watches only reportConfigLoaded so this fires once, after the config
-// that governs shouldShowThumbnailImage is actually known.
 watch(
     () => props.reportConfigLoaded,
     function loadThumbnailImage(isReportConfigLoaded) {
         if (
             !isReportConfigLoaded ||
             hasAttemptedThumbnailLoad ||
-            typeof window === "undefined" ||
             !shouldShowThumbnailImage.value
         ) {
             return;
