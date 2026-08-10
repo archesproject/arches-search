@@ -11,8 +11,8 @@ import Tabs from "primevue/tabs";
 import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import SuggestionOption from "@/arches_search/SimpleSearch/components/TermFilter/components/SuggestionOption.vue";
+import { SUGGESTION_DATATYPE_STRING } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
 import {
-    SUGGESTION_DATATYPE_STRING,
     getTermKind,
     isConceptSuggestion,
 } from "@/arches_search/SimpleSearch/components/TermFilter/suggestion-utils.ts";

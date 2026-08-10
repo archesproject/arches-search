@@ -1,3 +1,4 @@
+import { SUGGESTION_DATATYPE_REFERENCE } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
 import {
     TERM_KIND_CONTROLLED_TERM,
     TERM_KIND_RECORD,
@@ -6,9 +7,6 @@ import type {
     TermKind,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
-
-const SUGGESTION_DATATYPE_REFERENCE = "reference";
-export const SUGGESTION_DATATYPE_STRING = "string";
 
 interface HighlightSegment {
     text: string;
@@ -62,7 +60,6 @@ export function getSuggestionPath(suggestion: TermSuggestion): string | null {
 
     if (
         !Array.isArray(suggestionPath) ||
-        suggestionPath.length === 0 ||
         !suggestionPath.every((pathItem) => typeof pathItem === "string")
     ) {
         return null;
