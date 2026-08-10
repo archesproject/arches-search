@@ -25,7 +25,7 @@ interface TermSuggestionSelectEvent {
     value: TermSuggestion;
 }
 
-const props = defineProps<{
+const { filterKey } = defineProps<{
     filterKey: string;
 }>();
 
@@ -126,7 +126,7 @@ watch(
 );
 
 function termKey(termValue: string): string {
-    return `${props.filterKey}:${termValue}`;
+    return `${filterKey}:${termValue}`;
 }
 
 function removeTerm(termValue: string): void {

@@ -9,18 +9,18 @@ import {
 
 import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
 
-const props = defineProps<{
+const { suggestion, query } = defineProps<{
     suggestion: TermSuggestion;
     query: string;
 }>();
 
-const isConcept = computed(() => isConceptSuggestion(props.suggestion));
+const isConcept = computed(() => isConceptSuggestion(suggestion));
 
 const highlightSegments = computed(() =>
-    getHighlightSegments(props.suggestion.text, props.query),
+    getHighlightSegments(suggestion.text, query),
 );
 
-const suggestionPath = computed(() => getSuggestionPath(props.suggestion));
+const suggestionPath = computed(() => getSuggestionPath(suggestion));
 </script>
 
 <template>
