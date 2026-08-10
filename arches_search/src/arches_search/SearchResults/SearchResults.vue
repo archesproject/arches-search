@@ -56,8 +56,7 @@ const isPageRequestInFlight = ref(false);
 
 const requestedDescriptorIds = new Set<string>();
 
-// The full set of lifecycle-state definitions is small and admin-configured
-// (bounded by graph count, not resource count), so it's fetched once here
+// Bounded by graph count, not resource count, so fetched once here
 // rather than resolved per result.
 onMounted(async () => {
     try {

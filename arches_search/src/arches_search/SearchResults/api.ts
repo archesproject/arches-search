@@ -31,10 +31,6 @@ export async function fetchResourceDescriptors(
     return parsed;
 }
 
-// The full set of lifecycle-state definitions is bounded by admin
-// configuration, not by how many resources exist, so this is fetched once
-// and joined against resources client-side rather than resolved per-result
-// server-side.
 export async function fetchResourceInstanceLifecycleStates(): Promise<
     ResourceInstanceLifecycleState[]
 > {

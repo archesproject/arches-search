@@ -70,11 +70,8 @@ const resourceReportLink = computed<string>(function () {
     });
 });
 
-// Lifecycle states are fully admin-configurable — an arbitrary number of
-// named states per graph, not a fixed enum — so the badge tone is derived
-// only from the two permission flags every state always has, never from a
-// state's name or id. Mapped to PrimeVue's built-in Tag severities (rather
-// than custom colors) so the badge automatically tracks this app's theme.
+// Lifecycle states are admin-configurable, not a fixed enum, so severity is
+// derived from the two permission flags every state always has, not name/id.
 const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
     const state = lifecycleState?.value;
     if (!state) return "secondary";
@@ -210,11 +207,9 @@ const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
     text-decoration: none;
 }
 
-/* Aura's own button.label.font.weight token sets font-weight directly on
-   this span, which — being an explicit (not inherited) value — always wins
-   over anything set on the ancestor .p-button above, regardless of
-   specificity. Same reasoning as the toolbar-btn rules in
-   ResultsToolbar.vue. */
+/* Aura's button.label.font.weight token sets an explicit weight on this
+   span, which wins over the ancestor .p-button rule regardless of
+   specificity — same as the toolbar-btn rules in ResultsToolbar.vue. */
 .descriptor-section-actions :deep(.p-button-label) {
     font-weight: 600;
 }
@@ -223,8 +218,6 @@ const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
     font-size: 1.1rem;
 }
 
-/* Mirrors the mockup's .view-btn-card treatment: View Report is the
-   preferred action in this row, set apart from the other muted links. */
 .descriptor-section-actions
     :deep(.descriptor-section-view-report-action.p-button) {
     color: var(--p-primary-color);

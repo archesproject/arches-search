@@ -120,20 +120,19 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
 
 .header-link {
     padding: 0.5rem 1.2rem;
-    color: var(--p-primary-color);
-    border: 0.1rem solid var(--p-primary-200);
+    color: var(--p-highlight-color);
     border-radius: var(--arches-search-radius-pill);
-    background: var(--p-primary-50);
+    background: var(--p-highlight-background);
     font-size: 1.2rem;
     font-weight: 600;
     white-space: nowrap;
     transition:
         background 0.15s,
-        border-color 0.15s;
+        color 0.15s;
 }
 
 .header-link:hover {
-    border-color: var(--p-primary-300);
-    background: var(--p-primary-100);
+    background: var(--p-highlight-focus-background);
+    color: var(--p-highlight-focus-color);
 }
 </style>

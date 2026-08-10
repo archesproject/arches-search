@@ -33,7 +33,6 @@ const { $gettext } = useGettext();
 const { query } = defineProps<{
     // No default: absence means "no initial query", which keeps searchPayload
     // undefined below (gates performSearch() and hides the PayloadAnalyzer).
-
     query?: GroupPayload;
 }>();
 

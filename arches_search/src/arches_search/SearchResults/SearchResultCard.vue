@@ -35,10 +35,8 @@ const props = defineProps<{
     result: ResourceData;
     descriptorData: ResourceDescriptorData | null;
     reportConfig: SearchReportConfig | null;
-    // reportConfig is null both before it's fetched and after a confirmed
-    // "no config for this graph" result — this disambiguates the two, so
-    // the thumbnail-load effect below can wait for the real value instead
-    // of evaluating shouldShowThumbnailImage against a not-yet-loaded null.
+    // reportConfig is null both before it loads and once it's confirmed
+    // empty, so this flag disambiguates "not loaded yet" from "no config".
     reportConfigLoaded: boolean;
     graphModel: GraphModel | null;
     lifecycleState: ResourceInstanceLifecycleState | null;
@@ -100,10 +98,8 @@ watchEffect(() => {
     }
 });
 
-// The thumbnail is a framing element of the card itself — spanning its full
-// height, including the expanded section below — not specific to whichever
-// report component happens to be configured for the body, so it lives here
-// rather than inside DescriptorSection.
+// The thumbnail frames the whole card, including the expanded section
+// below, so it lives here rather than inside DescriptorSection.
 const thumbIconClass = computed<string>(
     () => props.graphModel?.iconclass || FALLBACK_THUMB_ICON,
 );
@@ -114,12 +110,9 @@ const thumbAccentColor = computed<string>(
     () => props.graphModel?.color || FALLBACK_THUMB_ACCENT_COLOR,
 );
 
-// Config-driven, opt-in: no existing SearchReportConfig row sets this key,
-// so a graph only gets a thumbnail fetch once someone explicitly turns it
-// on for that graph's config. This is a deliberate default flip — every
-// existing resource stops fetching thumbnails until its config opts in. In
-// practice exactly one component is configured for this report slot, so its
-// config is the one that governs the card-level thumbnail.
+// Opt-in via config: no existing SearchReportConfig row sets this key, so
+// thumbnails stay off until a graph's config explicitly enables them.
+// Exactly one component is configured per report slot, hence components[0].
 const shouldShowThumbnailImage = computed<boolean>(
     () =>
         configAsNamedSection.value.components[0]?.config
@@ -136,9 +129,7 @@ const hasLoadedThumbnailImage = ref(false);
 const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
 let hasAttemptedThumbnailLoad = false;
 
-// Watches only reportConfigLoaded (not shouldShowThumbnailImage or
-// resourceDisplayName, which change independently afterward as their own
-// async data resolves) so this fires exactly once, only once the config
+// Watches only reportConfigLoaded so this fires once, after the config
 // that governs shouldShowThumbnailImage is actually known.
 watch(
     () => props.reportConfigLoaded,
@@ -295,7 +286,7 @@ watch(
     font-size: 0.9rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.036rem;
     color: var(--thumb-accent-color);
     line-height: 1.3;
 }

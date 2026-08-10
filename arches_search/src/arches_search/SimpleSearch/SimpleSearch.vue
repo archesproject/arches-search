@@ -114,10 +114,8 @@ const {
     onSplitterResizeEnd,
 } = useSidePanel();
 
-// Reachable from anywhere in the results-card subtree (SearchResultCard,
-// DescriptorSection, etc.) without threading a prop/emit chain through
-// SearchResults.vue and SearchResultCard.vue — the side panel this opens
-// lives here, several layers up from where "Related" is clicked.
+// Avoids threading a prop/emit chain down through SearchResults.vue and
+// SearchResultCard.vue to reach DescriptorSection, several layers down.
 provide("viewRelatedResource", viewRelatedResource);
 
 const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
