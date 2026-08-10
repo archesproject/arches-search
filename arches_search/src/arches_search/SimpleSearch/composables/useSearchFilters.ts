@@ -36,18 +36,18 @@ interface SearchRequestTerm {
 interface ExportPayload {
     terms: SearchRequestTerm[];
     query: GroupPayload | undefined;
-    graphId: string | null;
+    graphIds: string[];
 }
 
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
-    activeGraph: Ref<ResourceType | null>;
+    activeGraphs: Ref<ResourceType[]>;
     currentPage: Ref<number>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
-    resultsGraph: Ref<ResourceType | null>;
+    resultsGraphs: Ref<ResourceType[]>;
     searchResults: Ref<SearchResults>;
     sort: Ref<SortSpec[]>;
     applySearchDefinition(definition: SearchDefinition): void;
@@ -57,7 +57,6 @@ interface SearchFilters {
     getExportPayload(): ExportPayload;
     getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
-    setGraph(graph: ResourceType | null): void;
     setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
     setSort(next: SortSpec[]): void;
@@ -69,6 +68,7 @@ interface SearchFilters {
         termKind?: TermKind,
         icon?: string,
     ): void;
+    toggleGraph(resourceType: ResourceType): void;
 }
 
 const FIRST_SEARCH_PAGE = 1;
@@ -84,8 +84,8 @@ function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const mapFilter = ref<FeatureCollection | null>(null);
-    const activeGraph = ref<ResourceType | null>(null);
-    const resultsGraph = ref<ResourceType | null>(null);
+    const activeGraphs = ref<ResourceType[]>([]);
+    const resultsGraphs = ref<ResourceType[]>([]);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
     const isSearching = ref(false);
     const currentPage = ref(FIRST_SEARCH_PAGE);
@@ -190,10 +190,28 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
-    function setGraph(graph: ResourceType | null): void {
-        activeGraph.value = graph;
+    function setGraphs(graphs: ResourceType[]): void {
+        activeGraphs.value = graphs;
         currentPage.value = FIRST_SEARCH_PAGE;
         search();
+    }
+
+    function toggleGraph(resourceType: ResourceType): void {
+        if (resourceType.id === null) {
+            setGraphs([]);
+            return;
+        }
+
+        const isActive = activeGraphs.value.some(
+            (graph) => graph.id === resourceType.id,
+        );
+        setGraphs(
+            isActive
+                ? activeGraphs.value.filter(
+                      (graph) => graph.id !== resourceType.id,
+                  )
+                : [...activeGraphs.value, resourceType],
+        );
     }
 
     function setSort(next: SortSpec[]): void {
@@ -212,12 +230,12 @@ function createSearchFilters(): SearchFilters {
             isSearching.value = true;
 
             try {
-                const requestGraph = activeGraph.value;
+                const requestGraphs = activeGraphs.value;
                 const searchParams = {
                     terms: getRequestTerms(),
                     query: getRequestQuery(),
                     page,
-                    graphId: requestGraph ? requestGraph.id : null,
+                    graphIds: requestGraphs.map((graph) => graph.id as string),
                     mapFilter: mapFilter.value,
                     sort: sort.value,
                 };
@@ -244,7 +262,7 @@ function createSearchFilters(): SearchFilters {
                     searchResults.value = results;
                 }
 
-                resultsGraph.value = requestGraph;
+                resultsGraphs.value = requestGraphs;
                 mvtContextId.value = context?.context_id ?? null;
             } finally {
                 isSearching.value = false;
@@ -292,10 +310,9 @@ function createSearchFilters(): SearchFilters {
             }),
         );
         return {
-            version: 1,
             terms: serializedTerms,
             queries: Object.fromEntries(queries.value),
-            graphId: activeGraph.value?.id ?? null,
+            graphIds: activeGraphs.value.map((graph) => graph.id as string),
         };
     }
 
@@ -309,11 +326,9 @@ function createSearchFilters(): SearchFilters {
             clearQuery(filterKey);
         }
 
-        if (definition.graphId) {
-            setGraph({ id: definition.graphId, label: "", icon: "" });
-        } else {
-            setGraph(null);
-        }
+        setGraphs(
+            definition.graphIds.map((id) => ({ id, label: "", icon: "" })),
+        );
 
         for (const term of definition.terms) {
             setTermFilter(
@@ -334,13 +349,13 @@ function createSearchFilters(): SearchFilters {
         return {
             terms: getRequestTerms(),
             query: getRequestQuery(),
-            graphId: activeGraph.value ? activeGraph.value.id : null,
+            graphIds: activeGraphs.value.map((graph) => graph.id as string),
         };
     }
 
     return {
         activeFilters,
-        activeGraph,
+        activeGraphs,
         applySearchDefinition,
         clearMapFilter,
         clearQuery,
@@ -352,15 +367,15 @@ function createSearchFilters(): SearchFilters {
         mapFilter,
         queries: queriesView,
         resultsTileUrl,
-        resultsGraph,
+        resultsGraphs,
         search,
         searchResults,
-        setGraph,
         setMapFilter,
         setQuery,
         setSort,
         setTermFilter,
         sort,
+        toggleGraph,
     };
 }
 

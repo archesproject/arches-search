@@ -31,6 +31,10 @@ import {
 } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import {
+    ACTIVE_FILTER_KIND_ATTRIBUTE,
+    ACTIVE_FILTER_KIND_MAP,
+    ACTIVE_FILTER_KIND_RESOURCE_TYPE,
+    ACTIVE_FILTER_KIND_TIME,
     RESULTS_SORT_A_TO_Z,
     RESULTS_SORT_NEWEST,
     RESULTS_SORT_OLDEST,
@@ -48,6 +52,7 @@ import type {
 import type {
     ActiveFilter,
     NodeFilterConfigNode,
+    ResourceType,
     ResultsSortValue,
     SearchDefinition,
     SortSpec,
@@ -62,7 +67,7 @@ const { $gettext } = useGettext();
 
 const {
     activeFilters,
-    activeGraph,
+    activeGraphs,
     applySearchDefinition,
     clearMapFilter,
     clearQuery,
@@ -71,10 +76,10 @@ const {
     queries,
     search,
     searchResults,
-    setGraph,
     setMapFilter,
     setQuery,
     setSort,
+    toggleGraph,
 } = provideSearchFilters();
 
 const {
@@ -110,27 +115,42 @@ const graphModels = ref<GraphModel[]>([]);
 const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
 
+const isSingleGraphSelected = computed<boolean>(
+    () => activeGraphs.value.length === 1,
+);
+
+const singleActiveGraph = computed<ResourceType | null>(() =>
+    isSingleGraphSelected.value ? activeGraphs.value[0] : null,
+);
+
 const activeGraphId = computed<string | null>(
-    () => activeGraph.value?.id ?? null,
+    () => singleActiveGraph.value?.id ?? null,
 );
 
 const activeGraphLabel = computed<string | null>(
-    () => activeGraph.value?.label ?? null,
+    () => singleActiveGraph.value?.label ?? null,
 );
 
 const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
 
 watch(
-    () => activeGraph.value,
-    (graph) => {
+    () => activeGraphs.value,
+    (graphs) => {
         // Drop any attribute-filter queries from the previously active graph.
         for (const node of nodeFilterConfigNodes.value) {
             clearQuery(node.node_alias);
         }
         filterValues.value = {};
 
-        if (!graph || !graph.id) {
+        if (graphs.length !== 1) {
             nodeFilterConfigNodes.value = [];
+            // Attribute/time filters are single-graph features and are
+            // unreachable outside the exactly-one-selected state; clear the
+            // time-filter query explicitly rather than relying on
+            // TimeFilter.vue's own prop watcher, since closeSidePanel()
+            // below unmounts it synchronously (and it may already be
+            // unmounted), so that watcher isn't guaranteed to run.
+            clearQuery(TIME_FILTER_QUERY_KEY);
 
             if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
                 closeSidePanel();
@@ -139,7 +159,7 @@ watch(
             return;
         }
 
-        void loadNodeFilterConfig(graph.id);
+        void loadNodeFilterConfig(graphs[0].id as string);
     },
 );
 
@@ -299,21 +319,23 @@ function clearAttributeFilter(nodeAlias: string): void {
 // live behind the collapsible side panel, so their chips get an onEdit that
 // reopens it (openXFilter, not onToggleXFilter — a toggle would close an
 // already-open panel instead of keeping it open for editing).
-const resourceTypeActiveFilter = computed<ActiveFilter | null>(() => {
-    if (!activeGraph.value) {
-        return null;
-    }
+const resourceTypeActiveFilters = computed<ActiveFilter[]>(() =>
+    activeGraphs.value.map((graph) => {
+        const graphModel = graphModels.value.find(
+            (candidate) => candidate.graphid === graph.id,
+        );
 
-    return {
-        id: "resourceType",
-        text: activeGraph.value.label,
-        clear: () => setGraph(null),
-        inverted: false,
-        kind: "resource-type",
-        category: $gettext("Type"),
-        icon: activeGraph.value.icon,
-    };
-});
+        return {
+            id: `resourceType:${graph.id}`,
+            text: graphModel?.name ?? graph.label,
+            clear: () => toggleGraph(graph),
+            inverted: false,
+            kind: ACTIVE_FILTER_KIND_RESOURCE_TYPE,
+            category: $gettext("Type"),
+            icon: graphModel?.iconclass ?? graph.icon,
+        };
+    }),
+);
 
 const timeActiveFilter = computed<ActiveFilter | null>(() => {
     const clause = selectedTimeFilterClause.value;
@@ -326,7 +348,7 @@ const timeActiveFilter = computed<ActiveFilter | null>(() => {
         text: formatTimeFilterLabel(clause),
         clear: onRemoveTimeFilter,
         inverted: false,
-        kind: "time",
+        kind: ACTIVE_FILTER_KIND_TIME,
         category: $gettext("Date"),
         icon: "pi pi-clock",
         onEdit: openTimeFilter,
@@ -346,7 +368,7 @@ const mapActiveFilter = computed<ActiveFilter | null>(() => {
         }),
         clear: onRemoveMapFilter,
         inverted: false,
-        kind: "map",
+        kind: ACTIVE_FILTER_KIND_MAP,
         category: $gettext("Area"),
         icon: "pi pi-map",
         onEdit: openMapFilter,
@@ -373,7 +395,7 @@ const attributeActiveFilters = computed<ActiveFilter[]>(() => {
                 text,
                 clear: () => clearAttributeFilter(node.node_alias),
                 inverted: false,
-                kind: "attribute",
+                kind: ACTIVE_FILTER_KIND_ATTRIBUTE,
                 category: node.label,
                 icon: "pi pi-filter",
                 onEdit: openAttributeFilters,
@@ -384,7 +406,7 @@ const attributeActiveFilters = computed<ActiveFilter[]>(() => {
 
 const allActiveFilters = computed<ActiveFilter[]>(() => [
     ...activeFilters.value,
-    ...(resourceTypeActiveFilter.value ? [resourceTypeActiveFilter.value] : []),
+    ...resourceTypeActiveFilters.value,
     ...(timeActiveFilter.value ? [timeActiveFilter.value] : []),
     ...(mapActiveFilter.value ? [mapActiveFilter.value] : []),
     ...attributeActiveFilters.value,
@@ -395,20 +417,12 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
     filterValues.value = {};
 }
 
-// Tolerant parser so older saved rows (which only stored `terms` + `graphId`)
-// load cleanly. New code always writes the full SearchDefinition shape.
 function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
     const rawTerms = Array.isArray(raw.terms) ? raw.terms : [];
     const terms = rawTerms.flatMap((t) => {
         if (!t || typeof t !== "object") return [];
         const term = t as Record<string, unknown>;
-        // Legacy rows used `value` for the id; new rows use `id`.
-        const id =
-            typeof term.id === "string"
-                ? term.id
-                : typeof term.value === "string"
-                  ? term.value
-                  : null;
+        const id = typeof term.id === "string" ? term.id : null;
         const text = typeof term.text === "string" ? term.text : null;
         if (!id || text === null) return [];
         return [
@@ -428,12 +442,11 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             ? (raw.queries as SearchDefinition["queries"])
             : {};
 
-    return {
-        version: 1,
-        terms,
-        queries: queriesIn,
-        graphId: typeof raw.graphId === "string" ? raw.graphId : null,
-    };
+    const graphIds = Array.isArray(raw.graphIds)
+        ? raw.graphIds.filter((id): id is string => typeof id === "string")
+        : [];
+
+    return { terms, queries: queriesIn, graphIds };
 }
 </script>
 
@@ -465,8 +478,8 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                         :show-time="isTimeFilterOpen"
                         :has-time-filter="hasTimeFilter"
                         :show-saved-searches="isSavedSearchesOpen"
-                        :hide-filters-button="!activeGraph"
-                        :hide-time-button="!activeGraph"
+                        :hide-filters-button="!isSingleGraphSelected"
+                        :hide-time-button="!isSingleGraphSelected"
                         @update:sort-value="onSortValueUpdate"
                         @toggle-filters="onToggleAttributeFilters"
                         @toggle-map="onToggleMapFilter"
@@ -523,8 +536,8 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                         />
                         <IdleInfoTiles
                             v-else-if="isIdle"
-                            :hide-filters="!activeGraph"
-                            :hide-time="!activeGraph"
+                            :hide-filters="!isSingleGraphSelected"
+                            :hide-time="!isSingleGraphSelected"
                             @open-filters="onToggleAttributeFilters"
                             @open-map="onToggleMapFilter"
                             @open-time="onToggleTimeFilter"
