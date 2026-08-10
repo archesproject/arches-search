@@ -4,6 +4,9 @@ import { useGettext } from "vue3-gettext";
 
 import AutoComplete from "primevue/autocomplete";
 import Button from "primevue/button";
+import Tab from "primevue/tab";
+import TabList from "primevue/tablist";
+import Tabs from "primevue/tabs";
 
 import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -59,7 +62,6 @@ const inputText = ref("");
 const isOverlayShown = ref(false);
 const hasSuggestionLoadError = ref(false);
 const typeaheadPanel = ref<TypeaheadPanel>(TYPEAHEAD_PANEL_RECORDS);
-const tabButtons = ref<Array<HTMLButtonElement | null>>([]);
 
 let latestSuggestionRequestId = 0;
 
@@ -244,31 +246,6 @@ function getHighlightSegments(text: string, query: string): HighlightSegment[] {
         .filter((segment) => segment.text !== "");
 }
 
-function switchTypeaheadPanel(panel: TypeaheadPanel): void {
-    typeaheadPanel.value = panel;
-}
-
-function handleTabChipKeydown(
-    event: KeyboardEvent,
-    currentPanelId: TypeaheadPanel,
-): void {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-        return;
-    }
-
-    event.preventDefault();
-    const panels = typeaheadPanels.value;
-    const currentIndex = panels.findIndex(
-        (panel) => panel.id === currentPanelId,
-    );
-    const direction = event.key === "ArrowRight" ? 1 : -1;
-    const nextIndex =
-        (currentIndex + direction + panels.length) % panels.length;
-
-    switchTypeaheadPanel(panels[nextIndex].id);
-    tabButtons.value[nextIndex]?.focus();
-}
-
 function getNoResultsMessage(): string {
     return typeaheadPanel.value === TYPEAHEAD_PANEL_RECORDS
         ? $gettext("No matching records for “%{query}”", {
@@ -309,7 +286,7 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
                 class="search-input"
                 overlay-class="term-filter-overlay"
                 option-label="text"
-                scroll-height="32.2581rem"
+                scroll-height="32rem"
                 append-to="self"
                 :auto-option-focus="true"
                 :empty-search-message="emptySearchMessage"
@@ -324,20 +301,19 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
             >
                 <template #header>
                     <div class="suggestion-tab-bar">
-                        <button
-                            v-for="panel in typeaheadPanels"
-                            :key="panel.id"
-                            ref="tabButtons"
-                            type="button"
-                            class="suggestion-tab-chip"
-                            :class="{ active: typeaheadPanel === panel.id }"
-                            @mousedown.prevent
-                            @click="switchTypeaheadPanel(panel.id)"
-                            @keydown="handleTabChipKeydown($event, panel.id)"
-                        >
-                            <i :class="panel.icon"></i>
-                            {{ panel.label }}
-                        </button>
+                        <Tabs v-model:value="typeaheadPanel">
+                            <TabList>
+                                <Tab
+                                    v-for="panel in typeaheadPanels"
+                                    :key="panel.id"
+                                    :value="panel.id"
+                                    @mousedown.prevent
+                                >
+                                    <i :class="panel.icon"></i>
+                                    {{ panel.label }}
+                                </Tab>
+                            </TabList>
+                        </Tabs>
                     </div>
                 </template>
 
@@ -442,13 +418,13 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 .search-bar {
     display: flex;
     align-items: center;
-    gap: 1.0081rem;
+    gap: 1rem;
     padding: 1.2rem 1.6rem;
     background-color: var(--p-content-background);
 }
 
 .search-bar .search-icon {
-    font-size: 1.5121rem;
+    font-size: 1.5rem;
     color: var(--p-text-muted-color, var(--p-surface-500));
     flex-shrink: 0;
 }
@@ -486,8 +462,8 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 .search-bar :deep(.search-input .p-autocomplete-input) {
     border: none;
     box-shadow: none;
-    padding: 1.2097rem 0;
-    font-size: 1.4113rem;
+    padding: 1.2rem 0;
+    font-size: 1.4rem;
     width: 100%;
     background-color: transparent;
 }
@@ -518,13 +494,13 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 
 .search-bar :deep(.term-filter-overlay) {
     overflow: hidden;
-    border-width: 0.1512rem;
-    border-radius: 0.8065rem;
+    border-width: 0.15rem;
+    border-radius: 0.8rem;
     box-shadow:
-        0 0.8065rem 2.4194rem rgba(0, 0, 0, 0.12),
-        0 0.2016rem 0.6048rem rgba(0, 0, 0, 0.07);
+        0 0.8rem 2.4rem rgba(0, 0, 0, 0.12),
+        0 0.2rem 0.6rem rgba(0, 0, 0, 0.07);
     max-width: 80vw;
-    margin-inline-start: calc(-1 * (0.1512rem + 1.4rem + 1.5121rem + 1rem));
+    margin-inline-start: -4.05rem;
 }
 
 .search-bar :deep(.term-filter-overlay .p-autocomplete-list) {
@@ -535,7 +511,7 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 .search-bar :deep(.term-filter-overlay .p-autocomplete-option) {
     border-radius: 0;
     border-block-end: 0.1rem solid var(--p-content-border-color);
-    padding: 0.8065rem 1.4113rem;
+    padding: 0.8rem 1.4rem;
 }
 
 .search-bar :deep(.term-filter-overlay .p-autocomplete-option:last-child) {
@@ -548,8 +524,8 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 }
 
 .search-bar :deep(.term-filter-overlay .p-autocomplete-empty-message) {
-    padding: 1.2097rem 1.4113rem;
-    font-size: 1.3105rem;
+    padding: 1.2rem 1.4rem;
+    font-size: 1.3rem;
     color: var(--p-text-muted-color, var(--p-surface-500));
     text-align: center;
 }
@@ -596,7 +572,7 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 
 .search-bar .suggestion-label {
     font-weight: 500;
-    font-size: 1.3105rem;
+    font-size: 1.3rem;
     color: var(--p-text-color);
     white-space: nowrap;
     overflow: hidden;
@@ -615,10 +591,10 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 }
 
 .search-bar .suggestion-type {
-    font-size: 1.0081rem;
+    font-size: 1rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.04rem;
     color: var(--p-text-muted-color, var(--p-surface-500));
     flex-shrink: 0;
     white-space: nowrap;
@@ -628,38 +604,47 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
 .search-bar .suggestion-tab-bar {
     display: flex;
     align-items: center;
-    gap: 0.6048rem;
-    padding: 0.8065rem 1.0081rem;
+    padding: 0.8rem 1rem;
     border-block-end: 0.1rem solid var(--p-content-border-color);
     background: var(--arches-search-page-bg);
 }
 
-.search-bar .suggestion-tab-chip {
+.search-bar .suggestion-tab-bar :deep(.p-tablist-tab-list) {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.search-bar .suggestion-tab-bar :deep(.p-tablist-active-bar) {
+    display: none;
+}
+
+.search-bar .suggestion-tab-bar :deep(.p-tab) {
     display: inline-flex;
     align-items: center;
-    gap: 0.504rem;
-    padding: 0.4032rem 1.0081rem;
-    border-radius: 999rem;
-    font-size: 1.2097rem;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    border-radius: var(--arches-search-radius-pill);
+    font-size: 1.2rem;
     font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
-    border: 0.1512rem solid var(--arches-search-chip-border);
+    border: 0.15rem solid var(--arches-search-chip-border);
     background: var(--p-content-background);
     color: var(--arches-search-sec-btn-text);
     font-family: inherit;
 }
 
-.search-bar .suggestion-tab-chip:hover {
+.search-bar .suggestion-tab-bar :deep(.p-tab:hover) {
     background: var(--arches-search-sec-btn-hover-bg);
 }
 
-.search-bar .suggestion-tab-chip:focus-visible {
-    outline: 0.2016rem solid var(--p-primary-color);
-    outline-offset: 0.2016rem;
+.search-bar .suggestion-tab-bar :deep(.p-tab:focus-visible) {
+    outline: 0.2rem solid var(--p-primary-color);
+    outline-offset: 0.2rem;
 }
 
-.search-bar .suggestion-tab-chip.active {
+.search-bar .suggestion-tab-bar :deep(.p-tab-active) {
     background: var(--p-primary-color);
     border-color: var(--p-primary-color);
     color: var(--p-primary-contrast-color, var(--p-surface-0));
