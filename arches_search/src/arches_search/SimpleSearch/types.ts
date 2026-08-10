@@ -8,10 +8,8 @@ export interface ResourceType {
 
 // Serializable snapshot of every piece of state that defines a search.
 // Anything that should round-trip through "save / load search" must live
-// here — and therefore on `useSearchFilters`. Bump `version` when the
-// shape changes so old saved rows can be migrated.
+// here — and therefore on `useSearchFilters`.
 export interface SearchDefinition {
-    version: 2;
     terms: SerializedTerm[];
     queries: Record<string, GroupPayload>;
     graphIds: string[];

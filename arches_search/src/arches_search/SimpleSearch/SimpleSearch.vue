@@ -413,20 +413,12 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
     filterValues.value = {};
 }
 
-// Tolerant parser so older saved rows (which only stored `terms` + `graphId`)
-// load cleanly. New code always writes the full SearchDefinition shape.
 function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
     const rawTerms = Array.isArray(raw.terms) ? raw.terms : [];
     const terms = rawTerms.flatMap((t) => {
         if (!t || typeof t !== "object") return [];
         const term = t as Record<string, unknown>;
-        // Legacy rows used `value` for the id; new rows use `id`.
-        const id =
-            typeof term.id === "string"
-                ? term.id
-                : typeof term.value === "string"
-                  ? term.value
-                  : null;
+        const id = typeof term.id === "string" ? term.id : null;
         const text = typeof term.text === "string" ? term.text : null;
         if (!id || text === null) return [];
         return [
@@ -446,25 +438,11 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             ? (raw.queries as SearchDefinition["queries"])
             : {};
 
-    return {
-        version: 2,
-        terms,
-        queries: queriesIn,
-        graphIds: parseGraphIds(raw),
-    };
-}
+    const graphIds = Array.isArray(raw.graphIds)
+        ? raw.graphIds.filter((id): id is string => typeof id === "string")
+        : [];
 
-// Legacy rows stored a single `graphId`; new rows store `graphIds`.
-function parseGraphIds(raw: Record<string, unknown>): string[] {
-    if (Array.isArray(raw.graphIds)) {
-        return raw.graphIds.filter(
-            (id): id is string => typeof id === "string",
-        );
-    }
-    if (typeof raw.graphId === "string") {
-        return [raw.graphId];
-    }
-    return [];
+    return { terms, queries: queriesIn, graphIds };
 }
 </script>
 

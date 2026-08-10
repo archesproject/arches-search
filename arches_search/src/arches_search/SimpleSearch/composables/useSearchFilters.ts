@@ -310,7 +310,6 @@ function createSearchFilters(): SearchFilters {
             }),
         );
         return {
-            version: 2,
             terms: serializedTerms,
             queries: Object.fromEntries(queries.value),
             graphIds: activeGraphs.value.map((graph) => graph.id as string),
