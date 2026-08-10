@@ -18,7 +18,7 @@ type CheckboxState = Record<
 const DATE_DATATYPES = ["date", "edtf"] as const;
 const NODE_SELECT_ID = "simple-search-time-filter-node-selection";
 
-const props = defineProps<{
+const { graphLabel, loading, modelValue, nodes } = defineProps<{
     graphLabel: string | null;
     loading: boolean;
     modelValue: string[];
@@ -31,9 +31,7 @@ const emit = defineEmits<{
 
 const { $gettext, interpolate } = useGettext();
 
-const nodeOptions = computed<TimeFilterTreeNode[]>(() =>
-    buildTree(props.nodes),
-);
+const nodeOptions = computed<TimeFilterTreeNode[]>(() => buildTree(nodes));
 
 const hasSelectableNodes = computed<boolean>(
     () => nodeOptions.value.length > 0,
@@ -63,7 +61,7 @@ const nodeByKey = computed<Map<string, TimeFilterTreeNode>>(() => {
 });
 
 const nodePathByAlias = computed<Record<string, string>>(() => {
-    const nodeById = new Map(props.nodes.map((node) => [node.id, node]));
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
     function buildPath(node: TimeFilterNodeSummary): string {
         const labels: string[] = [];
@@ -77,14 +75,14 @@ const nodePathByAlias = computed<Record<string, string>>(() => {
     }
 
     return Object.fromEntries(
-        props.nodes
+        nodes
             .filter((node) => node.alias)
             .map((node) => [node.alias, buildPath(node)]),
     );
 });
 
 const selectedKeys = computed<CheckboxState>(() => {
-    const selectedAliasSet = new Set(props.modelValue);
+    const selectedAliasSet = new Set(modelValue);
 
     function processNode(node: TimeFilterTreeNode): {
         state: CheckboxState;
@@ -219,7 +217,7 @@ function buildTree(
 function removeNode(alias: string): void {
     emit(
         "update:modelValue",
-        props.modelValue.filter((selectedAlias) => selectedAlias !== alias),
+        modelValue.filter((selectedAlias) => selectedAlias !== alias),
     );
 }
 </script>
@@ -233,7 +231,7 @@ function removeNode(alias: string): void {
             >
                 {{
                     interpolate($gettext("%{graphLabel} Time attribute:"), {
-                        graphLabel: props.graphLabel ?? $gettext("Resource"),
+                        graphLabel: graphLabel ?? $gettext("Resource"),
                     })
                 }}
             </label>
@@ -246,7 +244,7 @@ function removeNode(alias: string): void {
                 :disabled="!hasSelectableNodes"
                 filter
                 :filter-placeholder="$gettext('Search nodes...')"
-                :loading="props.loading"
+                :loading="loading"
                 :placeholder="$gettext('Select node...')"
                 :expanded-keys="expandedKeys"
                 :options="nodeOptions"
@@ -264,12 +262,12 @@ function removeNode(alias: string): void {
 
         <div class="node-selection__chips">
             <Chip
-                v-if="props.modelValue.length === 0"
+                v-if="modelValue.length === 0"
                 :label="$gettext('All date nodes')"
                 class="node-selection__chip"
             />
             <Chip
-                v-for="alias in props.modelValue"
+                v-for="alias in modelValue"
                 :key="alias"
                 :label="nodePathByAlias[alias] ?? alias"
                 removable
@@ -300,7 +298,7 @@ function removeNode(alias: string): void {
     line-height: 1.35;
     color: var(--p-text-muted-color);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03rem;
     white-space: nowrap;
 }
 

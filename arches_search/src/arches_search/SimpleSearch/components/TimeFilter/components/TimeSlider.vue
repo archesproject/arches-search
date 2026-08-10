@@ -8,7 +8,7 @@ import { HISTORICAL_CUTOFF_YEAR } from "@/arches_search/SimpleSearch/components/
 
 const LABEL_OVERLAP_THRESHOLD = 25;
 
-const props = defineProps<{
+const { modelValue, bounds } = defineProps<{
     modelValue: [number, number];
     bounds: [Date, Date];
     disabled?: boolean;
@@ -19,31 +19,27 @@ const emit = defineEmits<{
 }>();
 
 const totalDays = computed<number>(() => {
-    const days = dayjs(props.bounds[1]).diff(props.bounds[0], "day");
+    const days = dayjs(bounds[1]).diff(bounds[0], "day");
     return Math.max(days, 0);
 });
 
 const handleStartDate = computed<Date>(() =>
-    dayjs(props.bounds[0]).add(props.modelValue[0], "day").toDate(),
+    dayjs(bounds[0]).add(modelValue[0], "day").toDate(),
 );
 
 const handleEndDate = computed<Date>(() =>
-    dayjs(props.bounds[0]).add(props.modelValue[1], "day").toDate(),
+    dayjs(bounds[0]).add(modelValue[1], "day").toDate(),
 );
 
-const boundsStartLabel = computed<string>(() => formatYear(props.bounds[0]));
-const boundsEndLabel = computed<string>(() => formatYear(props.bounds[1]));
+const boundsStartLabel = computed<string>(() => formatYear(bounds[0]));
+const boundsEndLabel = computed<string>(() => formatYear(bounds[1]));
 const handleStartLabel = computed<string>(() =>
     formatYear(handleStartDate.value),
 );
 const handleEndLabel = computed<string>(() => formatYear(handleEndDate.value));
 
-const handleStartPercent = computed<number>(() =>
-    percentFor(props.modelValue[0], 0),
-);
-const handleEndPercent = computed<number>(() =>
-    percentFor(props.modelValue[1], 100),
-);
+const handleStartPercent = computed<number>(() => percentFor(modelValue[0], 0));
+const handleEndPercent = computed<number>(() => percentFor(modelValue[1], 100));
 
 const labelsOverlap = computed<boolean>(() => {
     const labelDistance = Math.abs(

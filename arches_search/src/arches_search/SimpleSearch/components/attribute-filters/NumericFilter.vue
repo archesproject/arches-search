@@ -13,7 +13,7 @@ import type { NumericParseError } from "@/arches_search/SimpleSearch/components/
 
 const { $gettext } = useGettext();
 
-const props = defineProps<{
+const { modelValue } = defineProps<{
     node: NodeFilterConfigNode;
     modelValue: NumericFilterValue | null;
 }>();
@@ -22,12 +22,12 @@ const emit = defineEmits<{
     (event: "update:modelValue", value: NumericFilterValue): void;
 }>();
 
-const text = ref(props.modelValue?.text ?? "");
+const text = ref(modelValue?.text ?? "");
 const errorMessage = ref<string | null>(null);
 
 // Re-sync when the value is reset externally (e.g. switching graphs clears it).
 watch(
-    () => props.modelValue?.text ?? "",
+    () => modelValue?.text ?? "",
     (incoming) => {
         if (incoming !== text.value) {
             text.value = incoming;

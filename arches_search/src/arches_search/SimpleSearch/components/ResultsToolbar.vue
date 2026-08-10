@@ -8,7 +8,17 @@ import Select from "primevue/select";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
-import type { SortOption } from "@/arches_search/SimpleSearch/types.ts";
+import {
+    RESULTS_SORT_A_TO_Z,
+    RESULTS_SORT_NEWEST,
+    RESULTS_SORT_OLDEST,
+    RESULTS_SORT_RELEVANCE,
+    RESULTS_SORT_Z_TO_A,
+} from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    ResultsSortValue,
+    SortOption,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 const { $gettext } = useGettext();
 const { searchResults } = useSearchFilters();
@@ -21,7 +31,7 @@ const resultsLabelText = computed(() =>
 );
 
 defineProps<{
-    sortValue: string | null;
+    sortValue: ResultsSortValue | null;
     showFilters: boolean;
     showMap: boolean;
     hasMapFilter: boolean;
@@ -33,15 +43,15 @@ defineProps<{
 }>();
 
 const sortOptions = computed<SortOption[]>(() => [
-    { label: $gettext("Relevance"), value: "relevance" },
-    { label: $gettext("Name A to Z"), value: "aToZ" },
-    { label: $gettext("Name Z to A"), value: "zToA" },
-    { label: $gettext("Newest first"), value: "newest" },
-    { label: $gettext("Oldest first"), value: "oldest" },
+    { label: $gettext("Relevance"), value: RESULTS_SORT_RELEVANCE },
+    { label: $gettext("Name A to Z"), value: RESULTS_SORT_A_TO_Z },
+    { label: $gettext("Name Z to A"), value: RESULTS_SORT_Z_TO_A },
+    { label: $gettext("Newest first"), value: RESULTS_SORT_NEWEST },
+    { label: $gettext("Oldest first"), value: RESULTS_SORT_OLDEST },
 ]);
 
 defineEmits<{
-    (event: "update:sortValue", value: string | null): void;
+    (event: "update:sortValue", value: ResultsSortValue | null): void;
     (event: "toggle-filters"): void;
     (event: "toggle-map"): void;
     (event: "toggle-time"): void;
@@ -59,6 +69,7 @@ defineEmits<{
                 option-label="label"
                 option-value="value"
                 :placeholder="$gettext('Sort by...')"
+                :show-clear="true"
                 class="sort-select"
                 overlay-class="sort-select-overlay"
                 @update:model-value="$emit('update:sortValue', $event)"
@@ -139,10 +150,6 @@ defineEmits<{
     white-space: nowrap;
 }
 
-/* Fixed 1.2rem (not --p-arches-search-font-size), matching the results-label
-   and toolbar-btn text right next to it — that shared token now drives the
-   search button specifically and no longer matches this toolbar's own
-   scale. */
 :deep(.p-select-label) {
     font-size: 1.2rem;
 }
@@ -151,7 +158,6 @@ defineEmits<{
     padding: 0.4rem 0.8rem;
 }
 
-/* segmented view-toggle button bar */
 .toolbar-right {
     display: inline-flex;
     align-items: center;
@@ -166,12 +172,6 @@ defineEmits<{
     font-size: 1.2rem;
 }
 
-/* font-size (and the icon rule below) must live on this 2-class selector,
-   not the bare .toolbar-btn above — PrimeVue's own .p-button-sm has the same
-   single-class specificity for font-size, and its stylesheet is injected at
-   runtime, after this component's own styles, so on a specificity tie it
-   wins by source order, silently shrinking the label back down to Aura's
-   "sm" scale. Same reasoning as the border/color !important rules below. */
 .toolbar-right .toolbar-btn {
     padding: 0.7rem 1rem;
     font-size: 1.2rem;
@@ -186,17 +186,10 @@ defineEmits<{
         color 0.12s;
 }
 
-/* Matches the label's own font-size for the same reason — PrimeVue's
-   .p-button-sm .p-button-icon otherwise renders the icon at Aura's smaller
-   "sm" scale, noticeably out of step with the label text next to it. */
 .toolbar-right .toolbar-btn :deep(.p-button-icon) {
     font-size: 1.2rem;
 }
 
-/* PrimeVue's Aura button preset sets font-weight directly on .p-button-label
-   (500), which wins over the inherited value from .toolbar-btn above since
-   inheritance loses to any explicit same-specificity rule — same root cause
-   as the icon rule above and the color/border !important rules below. */
 .toolbar-right .toolbar-btn :deep(.p-button-label) {
     font-weight: 600;
 }
@@ -205,14 +198,6 @@ defineEmits<{
     border-inline-end: none;
 }
 
-/* !important + explicit border shorthands (not just border-color) because
-   PrimeVue's own default-button :hover styling otherwise wins on properties
-   this rule doesn't pin — including border-style/width on the three sides
-   that should stay borderless, which was rendering an unwanted border AND
-   making the buttons visibly grow on hover. border-inline-end is reasserted
-   at its resting width/color so the segmented-group divider between buttons
-   neither disappears nor shifts. Same reasoning as .type-btn:hover in
-   ResourceTypeFilter.vue. */
 .toolbar-right .toolbar-btn:hover {
     background: var(--arches-search-sec-btn-hover-bg) !important;
     border-block-start: none !important;
@@ -232,9 +217,6 @@ defineEmits<{
     color: var(--arches-search-highlight-text);
 }
 
-/* Higher specificity than .toolbar-right .toolbar-btn:hover above, so
-   hovering an already-active button keeps its highlight instead of
-   falling back to the plain grey hover background. */
 .toolbar-right .toolbar-btn.active:hover {
     background-color: var(--arches-search-highlight-bg) !important;
     border-block-start: none !important;

@@ -5,6 +5,7 @@ import Accordion from "primevue/accordion";
 import AccordionPanel from "primevue/accordionpanel";
 import AccordionHeader from "primevue/accordionheader";
 import AccordionContent from "primevue/accordioncontent";
+import Button from "primevue/button";
 
 import { getAttributeFilterEntry } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 
@@ -35,13 +36,14 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
                 <i class="pi pi-filter" />
                 {{ $gettext("Attribute Filters") }}
             </h3>
-            <button
+            <Button
+                :label="$gettext('Close')"
+                icon="pi pi-times"
+                icon-pos="left"
+                :text="true"
                 class="attribute-filters-close-btn"
                 @click="emit('close')"
-            >
-                <i class="pi pi-times" />
-                {{ $gettext("Close") }}
-            </button>
+            />
         </div>
 
         <span
@@ -57,7 +59,7 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 
         <Accordion
             v-else
-            multiple
+            :multiple="true"
             :value="[]"
         >
             <AccordionPanel
@@ -123,19 +125,11 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 }
 
 .attribute-filters-close-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
     padding: 0.3rem 0.8rem;
-    font-family: inherit;
     font-size: 1.2rem;
     font-weight: 500;
     color: var(--p-text-muted-color);
-    background: none;
-    border: none;
     border-radius: 0.4rem;
-    cursor: pointer;
-    transition: background 0.12s;
 }
 
 .attribute-filters-close-btn:hover {

@@ -11,10 +11,14 @@ import type { GraphModel } from "@/arches_search/AdvancedSearch/types.ts";
 import type { ResourceType } from "@/arches_search/SimpleSearch/types.ts";
 
 const RESOURCE_TYPE_FALLBACK_KEY = "__all__";
-const COUNT_ABBREVIATION_THRESHOLD = 1000;
 
-const { $gettext } = useGettext();
+const { $gettext, current } = useGettext();
 const { toggleGraph, activeGraphs, searchResults } = useSearchFilters();
+
+const compactCountFormatter = computed(
+    () => new Intl.NumberFormat(current, { notation: "compact" }),
+);
+const fullCountFormatter = computed(() => new Intl.NumberFormat(current));
 
 const resourceTypes = ref<ResourceType[]>([]);
 const hasResourceTypeLoadError = ref(false);
@@ -94,21 +98,23 @@ function getResourceTypeCount(resourceType: ResourceType): number {
 }
 
 function getResourceTypeCountLabel(resourceType: ResourceType): string {
-    const count = getResourceTypeCount(resourceType);
+    return compactCountFormatter.value.format(
+        getResourceTypeCount(resourceType),
+    );
+}
 
-    if (count < COUNT_ABBREVIATION_THRESHOLD) {
-        return String(count);
-    }
-
-    return $gettext("%{count}k", {
-        count: (count / 1000).toFixed(1),
+function getResourceTypeCountDisplay(resourceType: ResourceType): string {
+    return $gettext("(%{count})", {
+        count: getResourceTypeCountLabel(resourceType),
     });
 }
 
 function getResourceTypeTooltip(resourceType: ResourceType): string {
     return $gettext("%{label} — %{count} records", {
         label: resourceType.label,
-        count: getResourceTypeCount(resourceType).toLocaleString(),
+        count: fullCountFormatter.value.format(
+            getResourceTypeCount(resourceType),
+        ),
     });
 }
 </script>
@@ -133,9 +139,9 @@ function getResourceTypeTooltip(resourceType: ResourceType): string {
                 :class="resourceType.icon"
             />
             <span class="type-label">{{ resourceType.label }}</span>
-            <span class="type-count"
-                >({{ getResourceTypeCountLabel(resourceType) }})</span
-            >
+            <span class="type-count">{{
+                getResourceTypeCountDisplay(resourceType)
+            }}</span>
         </Button>
 
         <span
@@ -166,29 +172,13 @@ function getResourceTypeTooltip(resourceType: ResourceType): string {
 .resource-type-filter .type-btn {
     display: inline-flex;
     align-items: center;
-    /* !important: PrimeVue's own .p-button sets justify-content at the same
-       specificity (and/or via its runtime-injected stylesheet, which loads
-       after this component's own styles), so on a tie it wins by source
-       order and left-aligns the icon/label/count group instead of
-       centering it — same root cause as the color/border rules below. */
     justify-content: center !important;
-    /* PrimeVue's own .p-button has overflow:hidden by default, which makes
-       this button's automatic min-width resolve to 0 as a flex item (per
-       the flexbox spec) — without flex-shrink:0 it would shrink below its
-       label's natural width and clip the text instead of forcing the row
-       to overflow into its intended horizontal scroll. */
     flex-shrink: 0;
     gap: 0.5rem;
     padding: 0.7rem 1.2rem;
     border: 0.15rem solid var(--arches-search-chip-border);
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     background: var(--p-content-background);
-    /* !important: PrimeVue's own .p-button-outlined.p-button-secondary sets
-       color at the same 2-class specificity as this selector, so on a tie
-       its own token wins by source order (its stylesheet is injected at
-       runtime, after this component's own styles) — same root cause as the
-       hover rule below and as .toolbar-right .toolbar-btn in
-       ResultsToolbar.vue. */
     color: var(--arches-search-sec-btn-text) !important;
     font-size: 1.2rem;
     font-weight: 600;
@@ -201,11 +191,6 @@ function getResourceTypeTooltip(resourceType: ResourceType): string {
         color 0.12s;
 }
 
-/* !important + explicit border shorthand (not just border-color) because
-   PrimeVue's own outlined/secondary :hover styling otherwise wins on
-   properties this rule doesn't pin, including border width — which was
-   making the chips visibly grow/shift on hover. Same reasoning as
-   .toolbar-right .toolbar-btn:hover in ResultsToolbar.vue. */
 .resource-type-filter .type-btn:hover {
     background: var(--p-content-hover-background) !important;
     border: 0.15rem solid var(--p-text-muted-color) !important;

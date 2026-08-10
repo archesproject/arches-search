@@ -1,7 +1,7 @@
 import { computed, inject, provide, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application";
 import {
     createSearchMVTContext,
     fetchSearchResults,
@@ -13,6 +13,11 @@ import type {
     GroupPayload,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    ACTIVE_FILTER_KIND_TERM,
+    TERM_KIND_CONTROLLED_TERM,
+    TERM_KIND_RECORD,
+} from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ActiveFilter,
     ResourceType,
@@ -108,20 +113,20 @@ function createSearchFilters(): SearchFilters {
     );
 
     function getTermFilterCategory(termKind?: TermKind): string {
-        if (termKind === "controlled-term") {
+        if (termKind === TERM_KIND_CONTROLLED_TERM) {
             return $gettext("Term");
         }
-        if (termKind === "record") {
+        if (termKind === TERM_KIND_RECORD) {
             return $gettext("Record");
         }
         return $gettext("Search");
     }
 
     function getTermFilterIcon(termKind?: TermKind): string {
-        if (termKind === "controlled-term") {
+        if (termKind === TERM_KIND_CONTROLLED_TERM) {
             return "pi pi-tag";
         }
-        if (termKind === "record") {
+        if (termKind === TERM_KIND_RECORD) {
             return "pi pi-database";
         }
         return "pi pi-search";
@@ -141,7 +146,7 @@ function createSearchFilters(): SearchFilters {
             text,
             clear,
             inverted: false,
-            kind: termKind ?? "term",
+            kind: termKind ?? ACTIVE_FILTER_KIND_TERM,
             category: getTermFilterCategory(termKind),
             icon: icon || getTermFilterIcon(termKind),
             options,
@@ -296,10 +301,11 @@ function createSearchFilters(): SearchFilters {
                 id,
                 text,
                 inverted,
-                ...(kind === "controlled-term" || kind === "record"
+                ...(kind === TERM_KIND_CONTROLLED_TERM ||
+                kind === TERM_KIND_RECORD
                     ? { termKind: kind }
                     : {}),
-                ...(kind === "record" ? { icon } : {}),
+                ...(kind === TERM_KIND_RECORD ? { icon } : {}),
                 ...(options !== undefined ? { options } : {}),
             }),
         );
