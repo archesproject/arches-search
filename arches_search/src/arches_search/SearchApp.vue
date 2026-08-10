@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
+import Button from "primevue/button";
 import Card from "primevue/card";
 
 import { routeNames } from "@/arches_search/routes.ts";
@@ -24,27 +25,29 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
                     v-if="isSimpleSearch"
                     class="header-nav"
                 >
-                    <button
+                    <Button
+                        :label="$gettext('Advanced Search')"
+                        icon="pi pi-sliders-h"
+                        icon-pos="left"
+                        :text="true"
                         class="header-link"
                         @click="
                             router.push({ name: routeNames.advancedSearch })
                         "
-                    >
-                        <i class="pi pi-sliders-h" />
-                        {{ $gettext("Advanced Search") }}
-                    </button>
+                    />
                 </nav>
                 <nav
                     v-else
                     class="header-nav"
                 >
-                    <button
+                    <Button
+                        :label="$gettext('Simple Search')"
+                        icon="pi pi-sliders-h"
+                        icon-pos="left"
+                        :text="true"
                         class="header-link"
                         @click="router.push({ name: routeNames.simpleSearch })"
-                    >
-                        <i class="pi pi-sliders-h" />
-                        {{ $gettext("Simple Search") }}
-                    </button>
+                    />
                 </nav>
             </header>
         </template>
@@ -87,7 +90,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     color: var(--p-text-color);
     font-size: 2.2rem;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.044rem;
 }
 
 .search-title .pi {
@@ -116,28 +119,21 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
 }
 
 .header-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
     padding: 0.5rem 1.2rem;
     color: var(--p-primary-color);
-    border: 0.1rem solid
-        color-mix(in srgb, var(--p-primary-color), transparent 60%);
-    border-radius: 999rem;
-    background: var(--p-highlight-background);
-    font-family: inherit;
+    border: 0.1rem solid var(--p-primary-200);
+    border-radius: var(--arches-search-radius-pill);
+    background: var(--p-primary-50);
     font-size: 1.2rem;
     font-weight: 600;
-    text-decoration: none;
     white-space: nowrap;
-    cursor: pointer;
     transition:
         background 0.15s,
         border-color 0.15s;
 }
 
 .header-link:hover {
-    border-color: color-mix(in srgb, var(--p-primary-color), transparent 30%);
-    background: var(--p-highlight-focus-background);
+    border-color: var(--p-primary-300);
+    background: var(--p-primary-100);
 }
 </style>

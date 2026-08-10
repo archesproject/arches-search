@@ -20,6 +20,21 @@ import type {
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
+const SAVE_TAB = "save" as const;
+const MINE_TAB = "mine" as const;
+const SHARED_TAB = "shared" as const;
+
+const SORT_A_TO_Z = "aToZ" as const;
+const SORT_Z_TO_A = "zToA" as const;
+const SORT_NEWEST = "newest" as const;
+const SORT_OLDEST = "oldest" as const;
+
+type SavedSearchSortValue =
+    | typeof SORT_A_TO_Z
+    | typeof SORT_Z_TO_A
+    | typeof SORT_NEWEST
+    | typeof SORT_OLDEST;
+
 const { $gettext } = useGettext();
 const toast = useToast();
 const { getSearchDefinition } = useSearchFilters();
@@ -30,9 +45,11 @@ const emit = defineEmits<{
     (event: "close"): void;
 }>();
 
-const activeTab = ref<"save" | "mine" | "shared">("save");
+const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
+    SAVE_TAB,
+);
 const filterText = ref("");
-const sortValue = ref("aToZ");
+const sortValue = ref<SavedSearchSortValue>(SORT_A_TO_Z);
 const searches = ref<SavedSearch[]>([]);
 const isLoading = ref(false);
 
@@ -58,7 +75,7 @@ async function onSaveSearch(): Promise<void> {
             life: 3000,
             summary: $gettext("Search saved"),
         });
-        if (activeTab.value === "mine") {
+        if (activeTab.value === MINE_TAB) {
             await loadSearches();
         }
     } catch (error) {
@@ -74,14 +91,14 @@ async function onSaveSearch(): Promise<void> {
 }
 
 const sortOptions: SortOption[] = [
-    { label: $gettext("Sort A to Z"), value: "aToZ" },
-    { label: $gettext("Sort Z to A"), value: "zToA" },
-    { label: $gettext("Newest first"), value: "newest" },
-    { label: $gettext("Oldest first"), value: "oldest" },
+    { label: $gettext("Sort A to Z"), value: SORT_A_TO_Z },
+    { label: $gettext("Sort Z to A"), value: SORT_Z_TO_A },
+    { label: $gettext("Newest first"), value: SORT_NEWEST },
+    { label: $gettext("Oldest first"), value: SORT_OLDEST },
 ];
 
 async function loadSearches() {
-    if (activeTab.value === "save") return;
+    if (activeTab.value === SAVE_TAB) return;
 
     isLoading.value = true;
     try {
@@ -100,17 +117,17 @@ async function loadSearches() {
 function sortSearches(items: SavedSearch[]): SavedSearch[] {
     const sorted = [...items];
     switch (sortValue.value) {
-        case "zToA":
+        case SORT_Z_TO_A:
             sorted.sort((a, b) => b.name.localeCompare(a.name));
             break;
-        case "newest":
+        case SORT_NEWEST:
             sorted.sort(
                 (a, b) =>
                     new Date(b.created_at).getTime() -
                     new Date(a.created_at).getTime(),
             );
             break;
-        case "oldest":
+        case SORT_OLDEST:
             sorted.sort(
                 (a, b) =>
                     new Date(a.created_at).getTime() -
@@ -130,7 +147,7 @@ async function onDelete(search: SavedSearch) {
             (s) => s.savedsearchid !== search.savedsearchid,
         );
     } catch {
-        // handled silently for now
+        /* empty */
     }
 }
 
@@ -142,6 +159,13 @@ function formatDate(iso: string): string {
 function isDynamicQuery(search: SavedSearch): boolean {
     const qd = search.query_definition;
     return qd != null && ("groups" in qd || "terms" in qd);
+}
+
+function queryTypeIconClasses(search: SavedSearch): string[] {
+    if (isDynamicQuery(search)) {
+        return ["pi", "pi-bolt", "chip-live"];
+    }
+    return ["pi", "pi-database", "chip-snapshot"];
 }
 
 watch([activeTab, filterText], () => loadSearches());
@@ -159,38 +183,39 @@ onMounted(() => loadSearches());
                 <i class="pi pi-bookmark-fill" />
                 {{ $gettext("Save/Export Search") }}
             </span>
-            <button
+            <Button
+                :label="$gettext('Close')"
+                icon="pi pi-times"
+                icon-pos="left"
+                :text="true"
                 class="panel-close-btn"
                 @click="emit('close')"
-            >
-                <i class="pi pi-times" />
-                {{ $gettext("Close") }}
-            </button>
+            />
         </div>
 
         <div class="panel-tabs">
-            <button
-                :class="['panel-tab', { active: activeTab === 'save' }]"
-                @click="activeTab = 'save'"
-            >
-                {{ $gettext("Save/Export this search") }}
-            </button>
-            <button
-                :class="['panel-tab', { active: activeTab === 'mine' }]"
-                @click="activeTab = 'mine'"
-            >
-                {{ $gettext("My Saved Searches") }}
-            </button>
-            <button
-                :class="['panel-tab', { active: activeTab === 'shared' }]"
-                @click="activeTab = 'shared'"
-            >
-                {{ $gettext("Shared Searches") }}
-            </button>
+            <Button
+                :label="$gettext('Save/Export this search')"
+                :text="true"
+                :class="['panel-tab', { active: activeTab === SAVE_TAB }]"
+                @click="activeTab = SAVE_TAB"
+            />
+            <Button
+                :label="$gettext('My Saved Searches')"
+                :text="true"
+                :class="['panel-tab', { active: activeTab === MINE_TAB }]"
+                @click="activeTab = MINE_TAB"
+            />
+            <Button
+                :label="$gettext('Shared Searches')"
+                :text="true"
+                :class="['panel-tab', { active: activeTab === SHARED_TAB }]"
+                @click="activeTab = SHARED_TAB"
+            />
         </div>
 
         <div
-            v-if="activeTab === 'save'"
+            v-if="activeTab === SAVE_TAB"
             class="save-form"
         >
             <p class="save-form-hint">
@@ -211,7 +236,7 @@ onMounted(() => loadSearches());
                     id="save-search-name"
                     v-model="saveSearchName"
                     class="save-form-input"
-                    fluid
+                    :fluid="true"
                     @keydown.enter="onSaveSearch"
                 />
             </div>
@@ -226,7 +251,7 @@ onMounted(() => loadSearches());
                     id="save-search-description"
                     v-model="saveSearchDescription"
                     class="save-form-input"
-                    fluid
+                    :fluid="true"
                     rows="3"
                 />
             </div>
@@ -254,7 +279,7 @@ onMounted(() => loadSearches());
                     v-model="filterText"
                     :placeholder="$gettext('Find...')"
                     class="filter-input"
-                    fluid
+                    :fluid="true"
                 />
                 <div class="sort-row">
                     <Select
@@ -289,14 +314,7 @@ onMounted(() => loadSearches());
                 >
                     <div class="item-header">
                         <i
-                            :class="[
-                                isDynamicQuery(search)
-                                    ? 'pi pi-bolt'
-                                    : 'pi pi-database',
-                                isDynamicQuery(search)
-                                    ? 'chip-live'
-                                    : 'chip-snapshot',
-                            ]"
+                            :class="queryTypeIconClasses(search)"
                             class="item-icon query-type-chip"
                         />
                         <span class="item-name">{{ search.name }}</span>
@@ -333,7 +351,7 @@ onMounted(() => loadSearches());
                             icon="pi pi-play"
                             icon-pos="left"
                             size="small"
-                            text
+                            :text="true"
                             class="action-btn"
                             @click="emit('run-query', search.query_definition)"
                         />
@@ -343,17 +361,17 @@ onMounted(() => loadSearches());
                             icon="pi pi-play"
                             icon-pos="left"
                             size="small"
-                            text
-                            disabled
+                            :text="true"
+                            :disabled="true"
                             class="action-btn"
                         />
                         <Button
-                            v-if="activeTab === 'mine'"
+                            v-if="activeTab === MINE_TAB"
                             :label="$gettext('Delete')"
                             icon="pi pi-times"
                             icon-pos="left"
                             size="small"
-                            text
+                            :text="true"
                             class="action-btn action-delete"
                             @click="onDelete(search)"
                         />
@@ -392,19 +410,11 @@ onMounted(() => loadSearches());
 }
 
 .panel-close-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
     padding: 0.3rem 0.8rem;
-    font-family: inherit;
     font-size: 1.2rem;
     font-weight: 500;
     color: var(--p-text-muted-color);
-    background: none;
-    border: none;
     border-radius: 0.4rem;
-    cursor: pointer;
-    transition: background 0.12s;
 }
 
 .panel-close-btn:hover {
@@ -421,16 +431,15 @@ onMounted(() => loadSearches());
 
 .panel-tab {
     flex: 1;
+    min-inline-size: 0;
     padding: 0.5rem 0.625rem;
-    background: none;
-    border: none;
+    overflow: hidden;
     border-bottom: 0.125rem solid transparent;
-    cursor: pointer;
-    font-size: var(--p-arches-search-font-size);
-    font-family: inherit;
+    border-radius: 0;
+    font-size: 1.2rem;
     font-weight: 500;
-    text-align: center;
     white-space: nowrap;
+    text-overflow: ellipsis;
     color: var(--p-text-muted-color);
     transition:
         background-color 0.12s,
@@ -475,7 +484,7 @@ onMounted(() => loadSearches());
     font-weight: 600;
     color: var(--p-text-muted-color);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.048rem;
 }
 
 :deep(.save-form-input .p-inputtext),
@@ -525,7 +534,6 @@ onMounted(() => loadSearches());
 }
 
 :deep(.sort-select) {
-    width: 13rem;
     flex-shrink: 0;
     border: none;
     box-shadow: none;
@@ -580,7 +588,7 @@ onMounted(() => loadSearches());
 .item-icon.query-type-chip {
     font-size: 1rem;
     padding: 0.25rem;
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -610,7 +618,7 @@ onMounted(() => loadSearches());
 .item-meta {
     display: flex;
     gap: 0.6rem;
-    font-size: 0.85em;
+    font-size: 1.36rem;
     color: var(--p-text-muted-color);
     margin-bottom: 0.2rem;
 }
@@ -632,7 +640,7 @@ onMounted(() => loadSearches());
 }
 
 .action-btn {
-    font-size: 0.85em;
+    font-size: 1.36rem;
     padding: 0.3rem 0.9rem;
     background: var(--p-content-background);
     border: 0.1rem solid var(--p-content-border-color);

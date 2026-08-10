@@ -57,7 +57,7 @@ async function onExport() {
     <Dialog
         :visible="visible"
         :header="$gettext('Export Results')"
-        modal
+        :modal="true"
         :closable="true"
         class="export-panel"
         @update:visible="$emit('update:visible', $event)"
@@ -120,7 +120,7 @@ async function onExport() {
                     id="export-filename"
                     v-model="filename"
                     class="filter-input"
-                    fluid
+                    :fluid="true"
                 />
             </div>
 
@@ -218,7 +218,7 @@ async function onExport() {
 .item-description {
     margin-inline-start: 1.5rem;
     color: var(--p-text-muted-color);
-    font-size: 0.85em;
+    font-size: 0.85rem;
 }
 
 .descriptors-toggle {
@@ -227,7 +227,7 @@ async function onExport() {
     gap: 0.5rem;
     margin-block-start: 0.5rem;
     margin-inline-start: 1.5rem;
-    font-size: 0.85em;
+    font-size: 0.85rem;
 }
 
 .filename-row {

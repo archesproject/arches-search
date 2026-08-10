@@ -60,14 +60,14 @@ function clearAllFilters(): void {
     >
         <span class="filter-tag-label">{{ $gettext("Filters:") }}</span>
 
-        <button
+        <Button
             v-for="activeFilter in activeFilters"
             :key="activeFilter.id"
-            type="button"
+            :text="true"
             class="filter-chip"
             :class="[
                 'filter-chip--' + activeFilter.kind,
-                { 'filter-chip--editable': !!activeFilter.onEdit },
+                { 'filter-chip--editable': activeFilter.onEdit != null },
             ]"
             :title="editTitle(activeFilter)"
             @click="onChipClick(activeFilter)"
@@ -85,7 +85,7 @@ function clearAllFilters(): void {
             >
                 <i class="pi pi-times" />
             </span>
-        </button>
+        </Button>
 
         <Button
             class="clear-all-button"
@@ -112,7 +112,7 @@ function clearAllFilters(): void {
     font-size: 1.1rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.055rem;
     color: var(--p-text-muted-color);
     white-space: nowrap;
 }
@@ -120,7 +120,7 @@ function clearAllFilters(): void {
 .filter-chip {
     display: inline-flex;
     align-items: center;
-    border-radius: 999rem;
+    border-radius: var(--arches-search-radius-pill);
     font-size: 1.2rem;
     font-weight: 500;
     border: 0.15rem solid transparent;
@@ -129,7 +129,6 @@ function clearAllFilters(): void {
     background: transparent;
     padding: 0;
     overflow: hidden;
-    font-family: inherit;
     transition: box-shadow 0.12s;
 }
 
@@ -165,7 +164,7 @@ function clearAllFilters(): void {
     font-size: 1rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.04rem;
     opacity: 0.7;
 }
 

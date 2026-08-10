@@ -48,7 +48,6 @@ const componentLookup: ComponentLookup = {};
 
 const isExpanded = ref(false);
 
-// Provide context for injected child components (DescriptorSection, ExpandedResultSection, etc.)
 provide("resourceInstanceId", props.result.resourceinstanceid);
 provide("descriptorData", toRef(props, "descriptorData"));
 provide("lifecycleState", toRef(props, "lifecycleState"));

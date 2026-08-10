@@ -7,7 +7,7 @@ import Tag from "primevue/tag";
 
 import arches from "arches";
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application";
 
 import type { Ref } from "vue";
 import type { SectionContent } from "@/arches_modular_reports/ModularReport/types.ts";
@@ -250,6 +250,6 @@ const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
     margin-inline-end: 0.4rem;
     font-size: 1.1rem;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.044rem;
 }
 </style>
