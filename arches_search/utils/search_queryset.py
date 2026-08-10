@@ -49,6 +49,19 @@ class SimpleSearchQuerysetBuilder:
         return build_search_queryset({**self.body, "graphIds": []})
 
 
+def _union_all(querysets):
+    """
+    Combines per-graph id querysets with UNION ALL rather than UNION: a
+    resource belongs to exactly one graph, so the sets are always disjoint
+    and de-duping would be wasted work.
+    """
+    if not querysets:
+        return []
+    if len(querysets) == 1:
+        return querysets[0]
+    return querysets[0].union(*querysets[1:], all=True)
+
+
 def _validate_graph_ids(graph_ids):
     if not isinstance(graph_ids, list) or not all(
         isinstance(graph_id, str) for graph_id in graph_ids
@@ -72,11 +85,7 @@ def build_search_queryset(body):
                 )
                 for graph_id in graph_ids
             ]
-            combined_ids = (
-                per_graph_match_ids[0]
-                if len(per_graph_match_ids) == 1
-                else per_graph_match_ids[0].union(*per_graph_match_ids[1:], all=True)
-            )
+            combined_ids = _union_all(per_graph_match_ids)
             results_queryset = ResourceInstance.objects.filter(
                 resourceinstanceid__in=combined_ids
             )
@@ -149,16 +158,7 @@ def build_resource_type_counts(terms, type_agnostic_queryset):
             for graph in graphs
         ]
 
-        if not per_graph_matches:
-            combined_matches = []
-
-        elif len(per_graph_matches) == 1:
-            combined_matches = per_graph_matches[0]
-
-        else:
-            combined_matches = per_graph_matches[0].union(
-                *per_graph_matches[1:], all=True
-            )
+        combined_matches = _union_all(per_graph_matches)
 
         counts_by_graph_id = Counter(combined_matches)
         all_resource_count = type_agnostic_queryset.count()
