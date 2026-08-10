@@ -9,6 +9,10 @@ import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts"
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import type { AutoCompleteCompleteEvent } from "primevue/autocomplete";
+import {
+    TERM_KIND_CONTROLLED_TERM,
+    TERM_KIND_RECORD,
+} from "@/arches_search/SimpleSearch/types.ts";
 import type {
     TermKind,
     TermSuggestion,
@@ -101,7 +105,9 @@ watch(
                     () => removeTerm(selectedTerm.text),
                     undefined,
                     termKind,
-                    termKind === "record" ? selectedTerm.graph_icon : undefined,
+                    termKind === TERM_KIND_RECORD
+                        ? selectedTerm.graph_icon
+                        : undefined,
                 );
             }
         }
@@ -193,10 +199,10 @@ function isConceptSuggestion(suggestion: TermSuggestion): boolean {
 
 function getTermKind(suggestion: TermSuggestion): TermKind | undefined {
     if (isConceptSuggestion(suggestion)) {
-        return "controlled-term";
+        return TERM_KIND_CONTROLLED_TERM;
     }
     if (suggestion.resourceinstanceid) {
-        return "record";
+        return TERM_KIND_RECORD;
     }
     return undefined;
 }

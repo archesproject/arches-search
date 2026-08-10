@@ -24,6 +24,17 @@ const SAVE_TAB = "save" as const;
 const MINE_TAB = "mine" as const;
 const SHARED_TAB = "shared" as const;
 
+const SORT_A_TO_Z = "aToZ" as const;
+const SORT_Z_TO_A = "zToA" as const;
+const SORT_NEWEST = "newest" as const;
+const SORT_OLDEST = "oldest" as const;
+
+type SavedSearchSortValue =
+    | typeof SORT_A_TO_Z
+    | typeof SORT_Z_TO_A
+    | typeof SORT_NEWEST
+    | typeof SORT_OLDEST;
+
 const { $gettext } = useGettext();
 const toast = useToast();
 const { getSearchDefinition } = useSearchFilters();
@@ -38,7 +49,7 @@ const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
     SAVE_TAB,
 );
 const filterText = ref("");
-const sortValue = ref("aToZ");
+const sortValue = ref<SavedSearchSortValue>(SORT_A_TO_Z);
 const searches = ref<SavedSearch[]>([]);
 const isLoading = ref(false);
 
@@ -80,10 +91,10 @@ async function onSaveSearch(): Promise<void> {
 }
 
 const sortOptions: SortOption[] = [
-    { label: $gettext("Sort A to Z"), value: "aToZ" },
-    { label: $gettext("Sort Z to A"), value: "zToA" },
-    { label: $gettext("Newest first"), value: "newest" },
-    { label: $gettext("Oldest first"), value: "oldest" },
+    { label: $gettext("Sort A to Z"), value: SORT_A_TO_Z },
+    { label: $gettext("Sort Z to A"), value: SORT_Z_TO_A },
+    { label: $gettext("Newest first"), value: SORT_NEWEST },
+    { label: $gettext("Oldest first"), value: SORT_OLDEST },
 ];
 
 async function loadSearches() {
@@ -106,17 +117,17 @@ async function loadSearches() {
 function sortSearches(items: SavedSearch[]): SavedSearch[] {
     const sorted = [...items];
     switch (sortValue.value) {
-        case "zToA":
+        case SORT_Z_TO_A:
             sorted.sort((a, b) => b.name.localeCompare(a.name));
             break;
-        case "newest":
+        case SORT_NEWEST:
             sorted.sort(
                 (a, b) =>
                     new Date(b.created_at).getTime() -
                     new Date(a.created_at).getTime(),
             );
             break;
-        case "oldest":
+        case SORT_OLDEST:
             sorted.sort(
                 (a, b) =>
                     new Date(a.created_at).getTime() -

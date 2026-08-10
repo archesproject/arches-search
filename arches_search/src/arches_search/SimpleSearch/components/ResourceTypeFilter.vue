@@ -11,10 +11,14 @@ import type { GraphModel } from "@/arches_search/AdvancedSearch/types.ts";
 import type { ResourceType } from "@/arches_search/SimpleSearch/types.ts";
 
 const RESOURCE_TYPE_FALLBACK_KEY = "__all__";
-const COUNT_ABBREVIATION_THRESHOLD = 1000;
 
-const { $gettext } = useGettext();
+const { $gettext, current } = useGettext();
 const { setGraph, activeGraph, searchResults } = useSearchFilters();
+
+const compactCountFormatter = computed(
+    () => new Intl.NumberFormat(current, { notation: "compact" }),
+);
+const fullCountFormatter = computed(() => new Intl.NumberFormat(current));
 
 const resourceTypes = ref<ResourceType[]>([]);
 const hasResourceTypeLoadError = ref(false);
@@ -100,21 +104,23 @@ function getResourceTypeCount(resourceType: ResourceType): number {
 }
 
 function getResourceTypeCountLabel(resourceType: ResourceType): string {
-    const count = getResourceTypeCount(resourceType);
+    return compactCountFormatter.value.format(
+        getResourceTypeCount(resourceType),
+    );
+}
 
-    if (count < COUNT_ABBREVIATION_THRESHOLD) {
-        return String(count);
-    }
-
-    return $gettext("%{count}k", {
-        count: (count / 1000).toFixed(1),
+function getResourceTypeCountDisplay(resourceType: ResourceType): string {
+    return $gettext("(%{count})", {
+        count: getResourceTypeCountLabel(resourceType),
     });
 }
 
 function getResourceTypeTooltip(resourceType: ResourceType): string {
     return $gettext("%{label} — %{count} records", {
         label: resourceType.label,
-        count: getResourceTypeCount(resourceType).toLocaleString(),
+        count: fullCountFormatter.value.format(
+            getResourceTypeCount(resourceType),
+        ),
     });
 }
 </script>
@@ -139,9 +145,9 @@ function getResourceTypeTooltip(resourceType: ResourceType): string {
                 :class="resourceType.icon"
             />
             <span class="type-label">{{ resourceType.label }}</span>
-            <span class="type-count"
-                >({{ getResourceTypeCountLabel(resourceType) }})</span
-            >
+            <span class="type-count">{{
+                getResourceTypeCountDisplay(resourceType)
+            }}</span>
         </Button>
 
         <span

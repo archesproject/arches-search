@@ -8,7 +8,17 @@ import Select from "primevue/select";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
-import type { SortOption } from "@/arches_search/SimpleSearch/types.ts";
+import {
+    RESULTS_SORT_A_TO_Z,
+    RESULTS_SORT_NEWEST,
+    RESULTS_SORT_OLDEST,
+    RESULTS_SORT_RELEVANCE,
+    RESULTS_SORT_Z_TO_A,
+} from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    ResultsSortValue,
+    SortOption,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 const { $gettext } = useGettext();
 const { searchResults } = useSearchFilters();
@@ -21,7 +31,7 @@ const resultsLabelText = computed(() =>
 );
 
 defineProps<{
-    sortValue: string | null;
+    sortValue: ResultsSortValue | null;
     showFilters: boolean;
     showMap: boolean;
     hasMapFilter: boolean;
@@ -33,15 +43,15 @@ defineProps<{
 }>();
 
 const sortOptions = computed<SortOption[]>(() => [
-    { label: $gettext("Relevance"), value: "relevance" },
-    { label: $gettext("Name A to Z"), value: "aToZ" },
-    { label: $gettext("Name Z to A"), value: "zToA" },
-    { label: $gettext("Newest first"), value: "newest" },
-    { label: $gettext("Oldest first"), value: "oldest" },
+    { label: $gettext("Relevance"), value: RESULTS_SORT_RELEVANCE },
+    { label: $gettext("Name A to Z"), value: RESULTS_SORT_A_TO_Z },
+    { label: $gettext("Name Z to A"), value: RESULTS_SORT_Z_TO_A },
+    { label: $gettext("Newest first"), value: RESULTS_SORT_NEWEST },
+    { label: $gettext("Oldest first"), value: RESULTS_SORT_OLDEST },
 ]);
 
 defineEmits<{
-    (event: "update:sortValue", value: string | null): void;
+    (event: "update:sortValue", value: ResultsSortValue | null): void;
     (event: "toggle-filters"): void;
     (event: "toggle-map"): void;
     (event: "toggle-time"): void;
@@ -180,10 +190,6 @@ defineEmits<{
     font-size: 1.2rem;
 }
 
-/* PrimeVue's Aura button preset sets font-weight directly on .p-button-label
-   (500), which wins over the inherited value from .toolbar-btn above since
-   inheritance loses to any explicit same-specificity rule — same root cause
-   as the icon rule above and the color/border !important rules below. */
 .toolbar-right .toolbar-btn :deep(.p-button-label) {
     font-weight: 600;
 }
