@@ -17,6 +17,10 @@ import type {
     ResourceInstanceLifecycleState,
 } from "@/arches_search/SearchResults/types.ts";
 
+const LIFECYCLE_SEVERITY_WARN = "warn" as const;
+const LIFECYCLE_SEVERITY_SUCCESS = "success" as const;
+const LIFECYCLE_SEVERITY_SECONDARY = "secondary" as const;
+
 const { $gettext } = useGettext();
 
 defineProps<{
@@ -70,12 +74,16 @@ const resourceReportLink = computed<string>(function () {
     });
 });
 
-const lifecycleSeverity = computed<"warn" | "success" | "secondary">(() => {
+const lifecycleSeverity = computed<
+    | typeof LIFECYCLE_SEVERITY_WARN
+    | typeof LIFECYCLE_SEVERITY_SUCCESS
+    | typeof LIFECYCLE_SEVERITY_SECONDARY
+>(() => {
     const state = lifecycleState?.value;
-    if (!state) return "secondary";
-    if (state.can_delete_resource_instances) return "warn";
-    if (state.can_edit_resource_instances) return "success";
-    return "secondary";
+    if (!state) return LIFECYCLE_SEVERITY_SECONDARY;
+    if (state.can_delete_resource_instances) return LIFECYCLE_SEVERITY_WARN;
+    if (state.can_edit_resource_instances) return LIFECYCLE_SEVERITY_SUCCESS;
+    return LIFECYCLE_SEVERITY_SECONDARY;
 });
 </script>
 
