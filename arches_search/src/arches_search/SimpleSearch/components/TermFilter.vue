@@ -33,7 +33,20 @@ const props = defineProps<{
 const { $gettext } = useGettext();
 const { setTermFilter, clearTermFilter } = useSearchFilters();
 
-type TypeaheadPanel = "records" | "vocab";
+const TYPEAHEAD_PANEL_RECORDS = "records";
+const TYPEAHEAD_PANEL_VOCAB = "vocab";
+const SUGGESTION_DATATYPE_REFERENCE = "reference";
+const SUGGESTION_DATATYPE_STRING = "string";
+
+type TypeaheadPanel =
+    | typeof TYPEAHEAD_PANEL_RECORDS
+    | typeof TYPEAHEAD_PANEL_VOCAB;
+
+interface TypeaheadPanelDefinition {
+    id: TypeaheadPanel;
+    icon: string;
+    label: string;
+}
 
 interface HighlightSegment {
     text: string;
@@ -45,9 +58,8 @@ const selectedTerms = ref<Array<TermSuggestion>>([]);
 const inputText = ref("");
 const isOverlayShown = ref(false);
 const hasSuggestionLoadError = ref(false);
-const typeaheadPanel = ref<TypeaheadPanel>("records");
-const recordsTabButton = ref<HTMLButtonElement | null>(null);
-const vocabTabButton = ref<HTMLButtonElement | null>(null);
+const typeaheadPanel = ref<TypeaheadPanel>(TYPEAHEAD_PANEL_RECORDS);
+const tabButtons = ref<Array<HTMLButtonElement | null>>([]);
 
 let latestSuggestionRequestId = 0;
 
@@ -58,19 +70,32 @@ const emptySearchMessage = computed(() =>
 );
 
 const recordSuggestions = computed<Array<TermSuggestion>>(() =>
-    suggestions.value.filter(
-        (suggestion) => suggestion.datatype !== "reference",
-    ),
+    suggestions.value.filter((suggestion) => !isConceptSuggestion(suggestion)),
 );
 
 const vocabSuggestions = computed<Array<TermSuggestion>>(() =>
-    suggestions.value.filter(
-        (suggestion) => suggestion.datatype === "reference",
-    ),
+    suggestions.value.filter(isConceptSuggestion),
 );
 
+const typeaheadPanels = computed<TypeaheadPanelDefinition[]>(() => [
+    {
+        id: TYPEAHEAD_PANEL_RECORDS,
+        icon: "pi pi-database",
+        label: $gettext("Records (%{count})", {
+            count: String(recordSuggestions.value.length),
+        }),
+    },
+    {
+        id: TYPEAHEAD_PANEL_VOCAB,
+        icon: "pi pi-tag",
+        label: $gettext("Controlled Terms (%{count})", {
+            count: String(vocabSuggestions.value.length),
+        }),
+    },
+]);
+
 const activeSuggestions = computed<Array<TermSuggestion>>(() =>
-    typeaheadPanel.value === "records"
+    typeaheadPanel.value === TYPEAHEAD_PANEL_RECORDS
         ? recordSuggestions.value
         : vocabSuggestions.value,
 );
@@ -171,7 +196,7 @@ function submitSearch(): void {
         onSelect({
             value: {
                 id: Date.now(),
-                datatype: "string",
+                datatype: SUGGESTION_DATATYPE_STRING,
                 text: trimmedInputText,
             },
         });
@@ -184,11 +209,11 @@ function showOverlay(): void {
 
 function hideOverlay(): void {
     isOverlayShown.value = false;
-    typeaheadPanel.value = "records";
+    typeaheadPanel.value = TYPEAHEAD_PANEL_RECORDS;
 }
 
 function isConceptSuggestion(suggestion: TermSuggestion): boolean {
-    return suggestion.datatype === "reference";
+    return suggestion.datatype === SUGGESTION_DATATYPE_REFERENCE;
 }
 
 function getTermKind(suggestion: TermSuggestion): TermKind | undefined {
@@ -225,24 +250,27 @@ function switchTypeaheadPanel(panel: TypeaheadPanel): void {
 
 function handleTabChipKeydown(
     event: KeyboardEvent,
-    currentPanel: TypeaheadPanel,
+    currentPanelId: TypeaheadPanel,
 ): void {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
         return;
     }
 
     event.preventDefault();
-    const nextPanel: TypeaheadPanel =
-        currentPanel === "records" ? "vocab" : "records";
-    switchTypeaheadPanel(nextPanel);
-    (nextPanel === "records"
-        ? recordsTabButton
-        : vocabTabButton
-    ).value?.focus();
+    const panels = typeaheadPanels.value;
+    const currentIndex = panels.findIndex(
+        (panel) => panel.id === currentPanelId,
+    );
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    const nextIndex =
+        (currentIndex + direction + panels.length) % panels.length;
+
+    switchTypeaheadPanel(panels[nextIndex].id);
+    tabButtons.value[nextIndex]?.focus();
 }
 
 function getNoResultsMessage(): string {
-    return typeaheadPanel.value === "records"
+    return typeaheadPanel.value === TYPEAHEAD_PANEL_RECORDS
         ? $gettext("No matching records for “%{query}”", {
               query: inputText.value,
           })
@@ -297,36 +325,18 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
                 <template #header>
                     <div class="suggestion-tab-bar">
                         <button
-                            ref="recordsTabButton"
+                            v-for="panel in typeaheadPanels"
+                            :key="panel.id"
+                            ref="tabButtons"
                             type="button"
                             class="suggestion-tab-chip"
-                            :class="{ active: typeaheadPanel === 'records' }"
+                            :class="{ active: typeaheadPanel === panel.id }"
                             @mousedown.prevent
-                            @click="switchTypeaheadPanel('records')"
-                            @keydown="handleTabChipKeydown($event, 'records')"
+                            @click="switchTypeaheadPanel(panel.id)"
+                            @keydown="handleTabChipKeydown($event, panel.id)"
                         >
-                            <i class="pi pi-database"></i>
-                            {{
-                                $gettext("Records (%{count})", {
-                                    count: String(recordSuggestions.length),
-                                })
-                            }}
-                        </button>
-                        <button
-                            ref="vocabTabButton"
-                            type="button"
-                            class="suggestion-tab-chip"
-                            :class="{ active: typeaheadPanel === 'vocab' }"
-                            @mousedown.prevent
-                            @click="switchTypeaheadPanel('vocab')"
-                            @keydown="handleTabChipKeydown($event, 'vocab')"
-                        >
-                            <i class="pi pi-tag"></i>
-                            {{
-                                $gettext("Controlled Terms (%{count})", {
-                                    count: String(vocabSuggestions.length),
-                                })
-                            }}
+                            <i :class="panel.icon"></i>
+                            {{ panel.label }}
                         </button>
                     </div>
                 </template>
