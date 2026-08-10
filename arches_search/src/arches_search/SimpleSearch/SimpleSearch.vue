@@ -31,6 +31,10 @@ import {
 } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import {
+    ACTIVE_FILTER_KIND_ATTRIBUTE,
+    ACTIVE_FILTER_KIND_MAP,
+    ACTIVE_FILTER_KIND_RESOURCE_TYPE,
+    ACTIVE_FILTER_KIND_TIME,
     RESULTS_SORT_A_TO_Z,
     RESULTS_SORT_NEWEST,
     RESULTS_SORT_OLDEST,
@@ -326,7 +330,7 @@ const resourceTypeActiveFilters = computed<ActiveFilter[]>(() =>
             text: graphModel?.name ?? graph.label,
             clear: () => toggleGraph(graph),
             inverted: false,
-            kind: "resource-type",
+            kind: ACTIVE_FILTER_KIND_RESOURCE_TYPE,
             category: $gettext("Type"),
             icon: graphModel?.iconclass ?? graph.icon,
         };
@@ -344,7 +348,7 @@ const timeActiveFilter = computed<ActiveFilter | null>(() => {
         text: formatTimeFilterLabel(clause),
         clear: onRemoveTimeFilter,
         inverted: false,
-        kind: "time",
+        kind: ACTIVE_FILTER_KIND_TIME,
         category: $gettext("Date"),
         icon: "pi pi-clock",
         onEdit: openTimeFilter,
@@ -364,7 +368,7 @@ const mapActiveFilter = computed<ActiveFilter | null>(() => {
         }),
         clear: onRemoveMapFilter,
         inverted: false,
-        kind: "map",
+        kind: ACTIVE_FILTER_KIND_MAP,
         category: $gettext("Area"),
         icon: "pi pi-map",
         onEdit: openMapFilter,
@@ -391,7 +395,7 @@ const attributeActiveFilters = computed<ActiveFilter[]>(() => {
                 text,
                 clear: () => clearAttributeFilter(node.node_alias),
                 inverted: false,
-                kind: "attribute",
+                kind: ACTIVE_FILTER_KIND_ATTRIBUTE,
                 category: node.label,
                 icon: "pi pi-filter",
                 onEdit: openAttributeFilters,

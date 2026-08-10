@@ -42,15 +42,19 @@ export interface TermSuggestion {
 }
 
 export const ACTIVE_FILTER_KIND_TERM = "term";
+export const ACTIVE_FILTER_KIND_RESOURCE_TYPE = "resource-type";
+export const ACTIVE_FILTER_KIND_TIME = "time";
+export const ACTIVE_FILTER_KIND_MAP = "map";
+export const ACTIVE_FILTER_KIND_ATTRIBUTE = "attribute";
 
 export type ActiveFilterKind =
     | typeof ACTIVE_FILTER_KIND_TERM
     | typeof TERM_KIND_CONTROLLED_TERM
     | typeof TERM_KIND_RECORD
-    | "resource-type"
-    | "time"
-    | "map"
-    | "attribute";
+    | typeof ACTIVE_FILTER_KIND_RESOURCE_TYPE
+    | typeof ACTIVE_FILTER_KIND_TIME
+    | typeof ACTIVE_FILTER_KIND_MAP
+    | typeof ACTIVE_FILTER_KIND_ATTRIBUTE;
 
 export interface ActiveFilter {
     id: string;
