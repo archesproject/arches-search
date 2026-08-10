@@ -15,7 +15,7 @@ import IdleInfoTiles from "@/arches_search/SimpleSearch/components/IdleInfoTiles
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
-import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter.vue";
+import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter/TermFilter.vue";
 import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
 

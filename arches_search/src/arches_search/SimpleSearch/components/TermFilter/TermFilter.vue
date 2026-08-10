@@ -10,23 +10,19 @@ import Tabs from "primevue/tabs";
 
 import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+import SuggestionOption from "@/arches_search/SimpleSearch/components/TermFilter/components/SuggestionOption.vue";
+import {
+    SUGGESTION_DATATYPE_STRING,
+    getTermKind,
+    isConceptSuggestion,
+} from "@/arches_search/SimpleSearch/components/TermFilter/suggestion-utils.ts";
 
 import type { AutoCompleteCompleteEvent } from "primevue/autocomplete";
-import {
-    TERM_KIND_CONTROLLED_TERM,
-    TERM_KIND_RECORD,
-} from "@/arches_search/SimpleSearch/types.ts";
-import type {
-    TermKind,
-    TermSuggestion,
-} from "@/arches_search/SimpleSearch/types.ts";
+import { TERM_KIND_RECORD } from "@/arches_search/SimpleSearch/types.ts";
+import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
 
 interface TermSuggestionSelectEvent {
     value: TermSuggestion;
-}
-
-interface TermSuggestionAdditionalInfo {
-    path?: unknown;
 }
 
 const props = defineProps<{
@@ -38,8 +34,6 @@ const { setTermFilter, clearTermFilter } = useSearchFilters();
 
 const TYPEAHEAD_PANEL_RECORDS = "records";
 const TYPEAHEAD_PANEL_VOCAB = "vocab";
-const SUGGESTION_DATATYPE_REFERENCE = "reference";
-const SUGGESTION_DATATYPE_STRING = "string";
 
 type TypeaheadPanel =
     | typeof TYPEAHEAD_PANEL_RECORDS
@@ -49,11 +43,6 @@ interface TypeaheadPanelDefinition {
     id: TypeaheadPanel;
     icon: string;
     label: string;
-}
-
-interface HighlightSegment {
-    text: string;
-    matched: boolean;
 }
 
 const suggestions = ref<Array<TermSuggestion>>([]);
@@ -214,38 +203,6 @@ function hideOverlay(): void {
     typeaheadPanel.value = TYPEAHEAD_PANEL_RECORDS;
 }
 
-function isConceptSuggestion(suggestion: TermSuggestion): boolean {
-    return suggestion.datatype === SUGGESTION_DATATYPE_REFERENCE;
-}
-
-function getTermKind(suggestion: TermSuggestion): TermKind | undefined {
-    if (isConceptSuggestion(suggestion)) {
-        return TERM_KIND_CONTROLLED_TERM;
-    }
-    if (suggestion.resourceinstanceid) {
-        return TERM_KIND_RECORD;
-    }
-    return undefined;
-}
-
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function getHighlightSegments(text: string, query: string): HighlightSegment[] {
-    const trimmedQuery = query.trim();
-
-    if (!trimmedQuery) {
-        return [{ text, matched: false }];
-    }
-
-    const matchPattern = new RegExp(`(${escapeRegExp(trimmedQuery)})`, "gi");
-    return text
-        .split(matchPattern)
-        .map((segment, index) => ({ text: segment, matched: index % 2 === 1 }))
-        .filter((segment) => segment.text !== "");
-}
-
 function getNoResultsMessage(): string {
     return typeaheadPanel.value === TYPEAHEAD_PANEL_RECORDS
         ? $gettext("No matching records for “%{query}”", {
@@ -254,23 +211,6 @@ function getNoResultsMessage(): string {
         : $gettext("No matching controlled terms for “%{query}”", {
               query: inputText.value,
           });
-}
-
-function getSuggestionPath(suggestion: TermSuggestion): string | null {
-    const additionalInfo = suggestion.addtional_info as
-        | TermSuggestionAdditionalInfo
-        | undefined;
-    const suggestionPath = additionalInfo?.path;
-
-    if (
-        !Array.isArray(suggestionPath) ||
-        suggestionPath.length === 0 ||
-        !suggestionPath.every((pathItem) => typeof pathItem === "string")
-    ) {
-        return null;
-    }
-
-    return suggestionPath.join(" > ");
 }
 </script>
 
@@ -318,82 +258,10 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
                 </template>
 
                 <template #option="{ option }">
-                    <div
-                        class="suggestion-option"
-                        :class="{
-                            'suggestion-option--vocab':
-                                isConceptSuggestion(option),
-                        }"
-                    >
-                        <span
-                            v-if="isConceptSuggestion(option)"
-                            class="suggestion-icon suggestion-icon--concept"
-                        >
-                            C
-                        </span>
-                        <i
-                            v-else
-                            :class="[
-                                'suggestion-icon',
-                                'suggestion-icon--record',
-                                option.graph_icon || 'pi pi-search',
-                            ]"
-                        />
-
-                        <div
-                            v-if="isConceptSuggestion(option)"
-                            class="suggestion-content"
-                        >
-                            <span class="suggestion-label">
-                                <template
-                                    v-for="(
-                                        segment, segmentIndex
-                                    ) in getHighlightSegments(
-                                        option.text,
-                                        inputText,
-                                    )"
-                                    :key="segmentIndex"
-                                >
-                                    <mark v-if="segment.matched">{{
-                                        segment.text
-                                    }}</mark>
-                                    <span v-else>{{ segment.text }}</span>
-                                </template>
-                            </span>
-                            <span
-                                v-if="getSuggestionPath(option)"
-                                class="suggestion-path"
-                            >
-                                {{ getSuggestionPath(option) }}
-                            </span>
-                        </div>
-                        <template v-else>
-                            <span
-                                class="suggestion-label suggestion-label--record"
-                            >
-                                <template
-                                    v-for="(
-                                        segment, segmentIndex
-                                    ) in getHighlightSegments(
-                                        option.text,
-                                        inputText,
-                                    )"
-                                    :key="segmentIndex"
-                                >
-                                    <mark v-if="segment.matched">{{
-                                        segment.text
-                                    }}</mark>
-                                    <span v-else>{{ segment.text }}</span>
-                                </template>
-                            </span>
-                            <span
-                                v-if="option.graph_name"
-                                class="suggestion-type"
-                            >
-                                {{ option.graph_name }}
-                            </span>
-                        </template>
-                    </div>
+                    <SuggestionOption
+                        :suggestion="option"
+                        :query="inputText"
+                    />
                 </template>
 
                 <template #empty>
@@ -530,77 +398,6 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     text-align: center;
 }
 
-.search-bar .suggestion-option {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    width: 100%;
-}
-
-.search-bar .suggestion-option--vocab {
-    align-items: flex-start;
-}
-
-.search-bar .suggestion-icon {
-    flex-shrink: 0;
-    width: 1.75rem;
-    height: 1.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    font-size: 0.8rem;
-    font-weight: 700;
-    margin-block-start: 0.1rem;
-}
-
-.search-bar .suggestion-icon--concept {
-    background-color: var(--p-primary-color);
-    color: var(--p-primary-contrast-color, var(--p-surface-0));
-}
-
-.search-bar .suggestion-icon--record {
-    background-color: var(--p-surface-200);
-    color: var(--p-surface-700);
-}
-
-.search-bar .suggestion-content {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.search-bar .suggestion-label {
-    font-weight: 500;
-    font-size: 1.3rem;
-    color: var(--p-text-color);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.search-bar .suggestion-label--record {
-    flex: 1;
-    min-width: 0;
-}
-
-.search-bar .suggestion-label mark {
-    background: none;
-    color: var(--p-primary-color);
-    font-weight: 700;
-}
-
-.search-bar .suggestion-type {
-    font-size: 1rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04rem;
-    color: var(--p-text-muted-color, var(--p-surface-500));
-    flex-shrink: 0;
-    white-space: nowrap;
-    margin-inline-start: auto;
-}
-
 .search-bar .suggestion-tab-bar {
     display: flex;
     align-items: center;
@@ -648,13 +445,5 @@ function getSuggestionPath(suggestion: TermSuggestion): string | null {
     background: var(--p-primary-color);
     border-color: var(--p-primary-color);
     color: var(--p-primary-contrast-color, var(--p-surface-0));
-}
-
-.search-bar .suggestion-path {
-    font-size: 1.1rem;
-    color: var(--p-text-muted-color, var(--p-surface-500));
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 </style>
