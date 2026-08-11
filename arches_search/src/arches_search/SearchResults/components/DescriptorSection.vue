@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, nextTick, ref } from "vue";
+import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
+import Tag from "primevue/tag";
 
 import arches from "arches";
 
@@ -10,7 +11,15 @@ import { generateArchesURL } from "@/arches_vue_components/application";
 
 import type { Ref } from "vue";
 import type { SectionContent } from "@/arches_modular_reports/ModularReport/types.ts";
-import type { ResourceDescriptorData } from "@/arches_search/SearchResults/types.ts";
+import type { RelatedResource } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
+import type {
+    ResourceDescriptorData,
+    ResourceInstanceLifecycleState,
+} from "@/arches_search/SearchResults/types.ts";
+
+const LIFECYCLE_SEVERITY_WARN = "warn" as const;
+const LIFECYCLE_SEVERITY_SUCCESS = "success" as const;
+const LIFECYCLE_SEVERITY_SECONDARY = "secondary" as const;
 
 const { $gettext } = useGettext();
 
@@ -22,13 +31,23 @@ const resourceInstanceId = inject("resourceInstanceId") as string;
 const descriptorData = inject("descriptorData") as Ref<
     ResourceDescriptorData | null | undefined
 >;
+const lifecycleState = inject(
+    "lifecycleState",
+) as Ref<ResourceInstanceLifecycleState | null>;
 const isExpanded = inject("searchResultExpanded") as Ref<boolean>;
-
-const shouldShowThumbnailContainer = ref(false);
-const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
+const viewRelatedResource = inject("viewRelatedResource") as (
+    resource: RelatedResource,
+) => void;
 
 function toggleExpanded(): void {
     isExpanded.value = !isExpanded.value;
+}
+
+function onViewRelated(): void {
+    viewRelatedResource({
+        id: resourceInstanceId,
+        title: resourceDisplayName.value,
+    });
 }
 
 const activeDescriptors = computed(function () {
@@ -55,50 +74,23 @@ const resourceReportLink = computed<string>(function () {
     });
 });
 
-onMounted(function () {
-    if (typeof window === "undefined") {
-        return;
-    }
-
-    const thumbnailImageElement = new window.Image();
-
-    thumbnailImageElement.alt = resourceDisplayName.value;
-    thumbnailImageElement.className = "descriptor-section-thumbnail-image";
-
-    thumbnailImageElement.onload = async function () {
-        shouldShowThumbnailContainer.value = true;
-
-        await nextTick();
-
-        if (thumbnailContainerElement.value) {
-            thumbnailContainerElement.value.appendChild(thumbnailImageElement);
-        }
-    };
-
-    thumbnailImageElement.onerror = function () {
-        shouldShowThumbnailContainer.value = false;
-    };
-
-    thumbnailImageElement.src = `/thumbnail/${resourceInstanceId}`;
+const lifecycleSeverity = computed<
+    | typeof LIFECYCLE_SEVERITY_WARN
+    | typeof LIFECYCLE_SEVERITY_SUCCESS
+    | typeof LIFECYCLE_SEVERITY_SECONDARY
+>(() => {
+    const state = lifecycleState?.value;
+    if (!state) return LIFECYCLE_SEVERITY_SECONDARY;
+    if (state.can_delete_resource_instances) return LIFECYCLE_SEVERITY_WARN;
+    if (state.can_edit_resource_instances) return LIFECYCLE_SEVERITY_SUCCESS;
+    return LIFECYCLE_SEVERITY_SECONDARY;
 });
 </script>
 
 <template>
     <div class="descriptor-section">
-        <div class="descriptor-section-header">
-            <div
-                ref="thumbnailContainerElement"
-                class="descriptor-section-thumbnail"
-            >
-                <span
-                    v-if="!shouldShowThumbnailContainer"
-                    class="descriptor-section-thumbnail-placeholder"
-                >
-                    {{ $gettext("Image") }}
-                </span>
-            </div>
-
-            <div class="descriptor-section-content">
+        <div class="descriptor-section-content">
+            <div class="descriptor-section-title-row">
                 <a
                     :href="resourceReportLink"
                     target="_blank"
@@ -106,46 +98,61 @@ onMounted(function () {
                 >
                     {{ resourceDisplayName }}
                 </a>
+                <Tag
+                    v-if="lifecycleState"
+                    class="descriptor-section-lifecycle-tag"
+                    :severity="lifecycleSeverity"
+                    :value="lifecycleState.name"
+                    :rounded="true"
+                />
+            </div>
 
-                <div class="descriptor-section-actions">
-                    <Button
-                        :icon="
-                            isExpanded
-                                ? 'pi pi-chevron-down'
-                                : 'pi pi-chevron-right'
-                        "
-                        variant="link"
-                        :label="
-                            isExpanded
-                                ? $gettext('Show less')
-                                : $gettext('Show more')
-                        "
-                        @click="toggleExpanded"
-                    />
-                    <Button
-                        as="a"
-                        icon="pi pi-wrench"
-                        target="_blank"
-                        variant="link"
-                        :href="resourceEditorLink"
-                        :label="$gettext('Edit')"
-                    />
-                    <Button
-                        icon="pi pi-sitemap"
-                        variant="link"
-                        :label="$gettext('Related Resources')"
-                    />
-                </div>
+            <div
+                v-if="resourceDescriptionText"
+                class="descriptor-section-description"
+            >
+                <span class="descriptor-section-description-label">
+                    {{ $gettext("Description:") }}
+                </span>
+                <span>{{ resourceDescriptionText }}</span>
+            </div>
 
-                <div
-                    v-if="resourceDescriptionText"
-                    class="descriptor-section-description"
-                >
-                    <span class="descriptor-section-description-label">
-                        {{ $gettext("Description:") }}
-                    </span>
-                    {{ resourceDescriptionText }}
-                </div>
+            <div class="descriptor-section-actions">
+                <Button
+                    :icon="
+                        isExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'
+                    "
+                    variant="link"
+                    :label="
+                        isExpanded
+                            ? $gettext('Show less')
+                            : $gettext('Show more')
+                    "
+                    @click="toggleExpanded"
+                />
+                <Button
+                    as="a"
+                    class="descriptor-section-view-report-action"
+                    icon="pi pi-external-link"
+                    target="_blank"
+                    variant="link"
+                    :href="resourceReportLink"
+                    :label="$gettext('View Report')"
+                />
+                <Button
+                    as="a"
+                    icon="pi pi-wrench"
+                    target="_blank"
+                    variant="link"
+                    :href="resourceEditorLink"
+                    :label="$gettext('Edit')"
+                />
+                <Button
+                    icon="pi pi-sitemap"
+                    variant="link"
+                    :label="$gettext('Related')"
+                    @click="onViewRelated"
+                />
             </div>
         </div>
     </div>
@@ -157,48 +164,20 @@ onMounted(function () {
     flex-direction: column;
 }
 
-.descriptor-section-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 1.5rem;
-    padding: 1.5rem 2rem;
-}
-
-.descriptor-section-thumbnail {
-    width: 10rem;
-    height: 10rem;
-    flex-shrink: 0;
-    background-color: var(--p-surface-100);
-    color: var(--p-text-color);
-    border-inline-end: 0.1rem solid var(--p-content-border-color);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.descriptor-section-thumbnail-placeholder {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: inherit;
-    text-transform: uppercase;
-    letter-spacing: 0.036rem;
-    text-align: center;
-}
-
-.descriptor-section-thumbnail-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
 .descriptor-section-content {
     display: flex;
     flex-direction: column;
     gap: 0.625rem;
     flex: 1;
     min-width: 0;
-    padding-top: 0.25rem;
+    padding: 1.5rem 2rem;
+}
+
+.descriptor-section-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .descriptor-section-title {
@@ -206,10 +185,18 @@ onMounted(function () {
     font-weight: 600;
     color: var(--p-primary-color);
     text-decoration: none;
+    line-height: 1.3;
 }
 
 .descriptor-section-title:hover {
     text-decoration: underline;
+}
+
+.descriptor-section-lifecycle-tag.p-tag {
+    font-size: 1rem;
+    padding: 0.2rem 0.8rem;
+    font-weight: 600;
+    flex-shrink: 0;
 }
 
 .descriptor-section-actions {
@@ -220,14 +207,28 @@ onMounted(function () {
 }
 
 .descriptor-section-actions :deep(.p-button) {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     padding: 0.3rem 0.8rem;
     color: var(--p-text-muted-color);
     text-decoration: none;
 }
 
+.descriptor-section-actions :deep(.p-button-label) {
+    font-weight: 600;
+}
+
 .descriptor-section-actions :deep(.p-button-icon) {
-    font-size: 1rem;
+    font-size: 1.1rem;
+}
+
+.descriptor-section-actions
+    :deep(.descriptor-section-view-report-action.p-button) {
+    color: var(--p-primary-color);
+}
+
+.descriptor-section-actions
+    :deep(.descriptor-section-view-report-action.p-button .p-button-label) {
+    font-weight: 700;
 }
 
 .descriptor-section-description {

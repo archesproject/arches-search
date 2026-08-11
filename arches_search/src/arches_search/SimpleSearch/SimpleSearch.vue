@@ -12,6 +12,7 @@ import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters
 import AttributeFilters from "@/arches_search/SimpleSearch/components/attribute-filters/AttributeFilters.vue";
 import ExportPanel from "@/arches_search/SimpleSearch/components/ExportPanel.vue";
 import IdleInfoTiles from "@/arches_search/SimpleSearch/components/IdleInfoTiles.vue";
+import RelatedResourcesPanel from "@/arches_search/SimpleSearch/components/RelatedResourcesPanel.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
@@ -92,6 +93,8 @@ const {
     isSavedSearchesOpen,
     isTimeFilterActive,
     isTimeFilterOpen,
+    isRelatedResourcesOpen,
+    relatedResource,
     resultsPanelSize,
     visibleSidePanelSize,
     sidePanelMinSize,
@@ -490,6 +493,7 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                         :results="searchResults"
                         :is-searching="isSearching"
                         :filter-text="''"
+                        :graph-models="graphModels"
                         @request-page="onRequestPage"
                     />
                 </SplitterPanel>
@@ -511,8 +515,13 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
                             @remove="onRemoveMapFilter"
                             @close="closeSidePanel()"
                         />
+                        <RelatedResourcesPanel
+                            v-if="isRelatedResourcesOpen"
+                            :resource-title="relatedResource!.title"
+                            @close="closeSidePanel()"
+                        />
                         <TimeFilter
-                            v-if="isTimeFilterActive"
+                            v-else-if="isTimeFilterActive"
                             :graph-slug="activeGraphSlug"
                             :graph-id="activeGraphId"
                             :graph-label="activeGraphLabel"
