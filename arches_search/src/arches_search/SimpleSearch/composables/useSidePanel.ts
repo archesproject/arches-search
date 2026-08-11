@@ -1,4 +1,4 @@
-import { computed, onUnmounted, ref } from "vue";
+import { computed, onUnmounted, provide, ref } from "vue";
 import type { CSSProperties } from "vue";
 
 const SIDE_PANEL_SIZE = 40;
@@ -165,6 +165,8 @@ export function useSidePanel() {
         switchToPanel(RELATED_RESOURCES_PANEL);
     }
 
+    provide("viewRelatedResource", viewRelatedResource);
+
     function toggleSidePanel(panelType: SidePanelType): void {
         const next =
             activeSidePanel.value === panelType ? IDLE_PANEL : panelType;
@@ -238,7 +240,6 @@ export function useSidePanel() {
         sidePanelContentClass,
         sidePanelStyle,
         closeSidePanel,
-        viewRelatedResource,
         onToggleAttributeFilters,
         onToggleMapFilter,
         onToggleSavedSearches,

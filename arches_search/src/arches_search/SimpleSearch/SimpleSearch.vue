@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, ref, watch, watchEffect } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
 import Toast from "primevue/toast";
@@ -101,7 +101,6 @@ const {
     sidePanelContentClass,
     sidePanelStyle,
     closeSidePanel,
-    viewRelatedResource,
     onToggleAttributeFilters,
     onToggleMapFilter,
     onToggleSavedSearches,
@@ -113,8 +112,6 @@ const {
     onSplitterResize,
     onSplitterResizeEnd,
 } = useSidePanel();
-
-provide("viewRelatedResource", viewRelatedResource);
 
 const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
 const graphModels = ref<GraphModel[]>([]);
