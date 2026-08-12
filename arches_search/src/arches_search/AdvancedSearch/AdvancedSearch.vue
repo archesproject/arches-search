@@ -220,10 +220,6 @@ function onRequestPage(nextPageNumber: number) {
 
             <PayloadAnalyzer
                 v-if="searchPayload"
-                :datatypes-to-advanced-search-facets="
-                    datatypesToAdvancedSearchFacets
-                "
-                :graphs="graphs"
                 :payload="searchPayload"
                 :visible="shouldShowPayloadAnalyzer"
                 @update:visible="onUpdatePayloadAnalyzerVisible"

@@ -4,6 +4,7 @@ from django.conf.urls.i18n import i18n_patterns
 from django.urls import include, path
 
 from arches_search.views.api.advanced_search import AdvancedSearchAPI
+from arches_search.views.api.query_narrator import NarrateQueryAPI
 from arches_search.views.api.advanced_search_sql import AdvancedSearchSQLAPI
 from arches_search.views.api.advanced_search_facet import (
     DatatypeFacetsAPI,
@@ -37,6 +38,11 @@ from arches_search.views.api.simple_search import SimpleSearchAPI
 
 urlpatterns = [
     path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
+    path(
+        "api/advanced-search/narrate",
+        NarrateQueryAPI.as_view(),
+        name="narrate_query",
+    ),
     path(
         "api/advanced-search/sql",
         AdvancedSearchSQLAPI.as_view(),

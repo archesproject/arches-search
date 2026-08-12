@@ -13,11 +13,7 @@ import PayloadAnalyzerNarrationPanel from "@/arches_search/AdvancedSearch/compon
 import PayloadAnalyzerPayloadPanel from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/PayloadPanel.vue";
 import PayloadAnalyzerSQLPanel from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/SQLPanel.vue";
 
-import type {
-    AdvancedSearchFacet,
-    GraphModel,
-    GroupPayload,
-} from "@/arches_search/AdvancedSearch/types.ts";
+import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
 
@@ -28,8 +24,6 @@ const PAYLOAD = "payload";
 defineProps<{
     visible: boolean;
     payload: GroupPayload;
-    graphs: GraphModel[];
-    datatypesToAdvancedSearchFacets: Record<string, AdvancedSearchFacet[]>;
 }>();
 
 const emit = defineEmits<{
@@ -77,13 +71,7 @@ function onUpdateVisible(nextVisible: boolean) {
                     </TabPanel>
 
                     <TabPanel :value="NARRATION">
-                        <PayloadAnalyzerNarrationPanel
-                            :payload="payload"
-                            :graphs="graphs"
-                            :datatypes-to-advanced-search-facets="
-                                datatypesToAdvancedSearchFacets
-                            "
-                        />
+                        <PayloadAnalyzerNarrationPanel :payload="payload" />
                     </TabPanel>
 
                     <TabPanel :value="PAYLOAD">
