@@ -1,7 +1,6 @@
 import uuid
 from django.db import migrations
 
-
 LAYER_UUID = uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 SOURCE_NAME = "arches-search-results"
 LAYER_NAME = "Search Results"

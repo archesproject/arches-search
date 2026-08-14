@@ -26,7 +26,6 @@ from arches_search.indexing.indexers.file_list import FileListIndexing
 from arches_search.indexing.indexers.string import StringIndexing
 from arches_search.models.models import FileListSearch, TermSearch
 
-
 # ---------------------------------------------------------------------------
 # Shared test fixture
 # ---------------------------------------------------------------------------

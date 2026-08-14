@@ -3,7 +3,6 @@ import django.db.models.deletion
 from django.contrib.postgres.indexes import GistIndex
 from django.db import migrations, models
 
-
 NEW_GEOJSON_FACETS = [
     {
         "label": {"en": "intersects with"},

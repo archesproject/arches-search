@@ -6,7 +6,6 @@ from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Lower
 from django.utils.translation import get_language, gettext as _
 
-
 SORT_TYPE_PRIMARY_NAME = "primary_name"
 SORT_TYPE_CREATED_TIME = "created_time"
 DIRECTION_ASC = "asc"

@@ -70,7 +70,8 @@ def _find_distinct_matches(term_filter, user):
         results = list(
             permission_backend.filter_resource_queryset(
                 user, TermSearch.objects.filter(pk__in=bounded_ids)
-            ).values(
+            )
+            .values(
                 "id",
                 "datatype",
                 "value",
