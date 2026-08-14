@@ -1,4 +1,6 @@
 from django.apps import AppConfig
+from django.conf import settings
+from django.core.checks import Tags, Warning, register
 
 
 class ArchesSearchConfig(AppConfig):
@@ -35,3 +37,23 @@ class ArchesSearchConfig(AppConfig):
             }
 
         register("search_result_expanded", search_result_expanded_factory)
+
+
+@register(Tags.compatibility)
+def warn_default_allow_permission_framework(app_configs, **kwargs):
+    errors = []
+
+    if (
+        getattr(settings, "PERMISSION_FRAMEWORK", None)
+        == "arches_default_allow.ArchesDefaultAllowPermissionFramework"
+    ):
+        errors.append(
+            Warning(
+                msg="arches-search is not compatible with Default Allow permission framework.",
+                hint="Set PERMISSION_FRAMEWORK to arches_default_deny.ArchesDefaultDenyPermissionFramework.",
+                obj=settings.APP_NAME,
+                id="arches_search.W001",
+            )
+        )
+
+    return errors
