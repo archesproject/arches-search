@@ -1,6 +1,5 @@
 from django.db import migrations, models
 
-
 DATE_RANGE_COMPARISON_FACETS = [
     {
         "operator": "EQUALS",

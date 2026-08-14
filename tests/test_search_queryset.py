@@ -37,7 +37,9 @@ class SearchQuerysetTestCaseBase(TestCase):
             username="search-queryset-tester", password="unused"
         )
         cls.superuser = get_user_model().objects.create_superuser(
-            username="search-queryset-admin", email="admin@example.com", password="unused"
+            username="search-queryset-admin",
+            email="admin@example.com",
+            password="unused",
         )
 
         cls.graph_a = GraphModel.objects.create(

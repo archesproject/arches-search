@@ -1,7 +1,6 @@
 import django.db.models.deletion
 from django.db import migrations, models
 
-
 EDTF_DATE_OPERATORS = {
     "EQUALS",
     "NOT_EQUALS",

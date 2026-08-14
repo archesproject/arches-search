@@ -52,7 +52,7 @@ DATABASES = {
 }
 
 
-PERMISSION_FRAMEWORK="arches_default_deny.ArchesDefaultDenyPermissionFramework"
+PERMISSION_FRAMEWORK = "arches_default_deny.ArchesDefaultDenyPermissionFramework"
 
 CACHES = {
     "default": {

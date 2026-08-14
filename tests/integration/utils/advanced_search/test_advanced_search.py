@@ -17,7 +17,6 @@ from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
 )
 
-
 PERSON_A_ID = uuid.UUID("d631f6e1-9da3-4236-93c8-7cda90a61536")
 PERSON_B_ID = uuid.UUID("77eddfe7-289a-464b-ae2d-8a442f298d99")
 PERSON_C_ID = uuid.UUID("60de0174-b81a-4efa-ba3b-83fbb1c5e075")

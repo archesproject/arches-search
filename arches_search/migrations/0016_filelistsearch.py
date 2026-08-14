@@ -4,7 +4,6 @@ import django.contrib.postgres.indexes
 import django.db.models.deletion
 from django.db import migrations, models
 
-
 FILE_LIST_FACET_SPECS = (
     {
         "operator": "FILE_SIZE_GREATER_THAN",

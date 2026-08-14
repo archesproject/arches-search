@@ -13,7 +13,6 @@ from arches.app.views.api import APIBase
 
 from arches_search.utils.search_queryset import build_search_queryset
 
-
 MVT_LAYER_NAME = "search-results"
 CONTEXT_CACHE_TIMEOUT = 3600
 
