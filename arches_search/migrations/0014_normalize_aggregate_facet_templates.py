@@ -1,6 +1,5 @@
 from django.db import migrations
 
-
 FORWARD_TEMPLATE_UPDATES = (
     ("reference", "REFERENCES_ALL", "AGG_SUPERSET:{col}:{p0}"),
     ("reference", "REFERENCES_ONLY", "AGG_SET_EQUAL:{col}:{p0}"),

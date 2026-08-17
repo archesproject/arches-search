@@ -1,6 +1,5 @@
 from django.db import migrations
 
-
 # Maps each (model_name, old_template) pair to the replacement template.
 # model_name is the lowercase label of the target ContentType.
 # These take priority over the universal replacements below.
