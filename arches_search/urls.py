@@ -22,6 +22,7 @@ from arches_search.views.api.resource_names_for_payload import (
 )
 from arches_search.views.api.relatable_node_tree_for_graph import (
     RelatableNodesTreeForGraphAPI,
+    RelatableNodesTreeForGraphPairAPI,
 )
 from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 from arches_search.views.api.saved_search import SavedSearchAPI
@@ -76,6 +77,11 @@ urlpatterns = [
         "api/advanced-search/graph/<uuid:graph_id>/relatable-nodes-tree",
         RelatableNodesTreeForGraphAPI.as_view(),
         name="api-relatable-nodes-tree-for-graph",
+    ),
+    path(
+        "api/advanced-search/graph/<uuid:graph_id>/relatable-nodes-tree/<uuid:other_graph_id>",
+        RelatableNodesTreeForGraphPairAPI.as_view(),
+        name="api-relatable-nodes-tree-for-graph-pair",
     ),
     path(
         "api/advanced-search/graph/<uuid:graph_id>/date-bounds",

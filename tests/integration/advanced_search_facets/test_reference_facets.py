@@ -99,6 +99,28 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
             ],
         }
 
+        bilingual_list_item_id = str(uuid.uuid4())
+        cls.reference_a_bilingual = {
+            "uri": f"urn:test:reference:{uuid.uuid4()}",
+            "list_id": cls.reference_list_id,
+            "labels": [
+                {
+                    "id": str(uuid.uuid4()),
+                    "value": "ref-bilingual-en",
+                    "language_id": "en",
+                    "valuetype_id": "prefLabel",
+                    "list_item_id": bilingual_list_item_id,
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "value": "ref-bilingual-fr",
+                    "language_id": "fr",
+                    "valuetype_id": "prefLabel",
+                    "list_item_id": bilingual_list_item_id,
+                },
+            ],
+        }
+
         any_suffix = uuid.uuid4().hex[:8]
         cls.any_graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
@@ -261,6 +283,20 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
             provisionaledits=None,
         )
         cls.only_other_tile.save()
+
+        cls.only_bilingual_match_resource = ResourceInstance(
+            resourceinstanceid=uuid.uuid4(),
+            graph=cls.only_graph,
+        )
+        cls.only_bilingual_match_resource.save()
+        cls.only_bilingual_match_tile = TileModel(
+            tileid=uuid.uuid4(),
+            nodegroup=cls.only_nodegroup,
+            resourceinstance=cls.only_bilingual_match_resource,
+            data={str(cls.only_reference_node.nodeid): [cls.reference_a_bilingual]},
+            provisionaledits=None,
+        )
+        cls.only_bilingual_match_tile.save()
 
         none_suffix = uuid.uuid4().hex[:8]
         cls.none_graph = GraphModel.objects.create(
@@ -493,6 +529,44 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.any_match_resource.resourceinstanceid})
 
+    def test_references_any_matches_with_real_widget_shaped_operand(self):
+        """This checks REFERENCES_ANY against the real widget-shaped operand (a list of {uri, list_id, labels}, as GenericWidget actually emits it) instead of flat label strings."""
+        payload = {
+            "graph_slug": self.any_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.any_graph.slug,
+                        "node_alias": self.any_reference_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_ANY",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.reference_a, self.reference_b],
+                        }
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.any_match_resource.resourceinstanceid})
+
     def test_references_all_matches_when_all_requested_references_are_present(self):
         """This checks that the references all facet returns only the resource that contains every requested reference label."""
         payload = {
@@ -511,6 +585,44 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                     },
                     "operator": "REFERENCES_ALL",
                     "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.all_match_resource.resourceinstanceid})
+
+    def test_references_all_matches_with_real_widget_shaped_operand(self):
+        """This checks REFERENCES_ALL against the real widget-shaped operand instead of flat label strings."""
+        payload = {
+            "graph_slug": self.all_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.all_graph.slug,
+                        "node_alias": self.all_reference_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_ALL",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.reference_a, self.reference_b],
+                        }
+                    ],
                 }
             ],
             "groups": [],
@@ -559,6 +671,86 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.only_match_resource.resourceinstanceid})
 
+    def test_references_only_matches_with_real_widget_shaped_operand(self):
+        """This checks REFERENCES_ONLY against the real widget-shaped operand instead of flat label strings."""
+        payload = {
+            "graph_slug": self.only_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.only_graph.slug,
+                        "node_alias": self.only_reference_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_ONLY",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.reference_a, self.reference_b],
+                        }
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.only_match_resource.resourceinstanceid})
+
+    def test_references_only_matches_when_multi_label_reference_widget_value_is_selected(
+        self,
+    ):
+        """This checks REFERENCES_ONLY against a real widget-shaped operand for a reference item that carries multiple labels (translations of the same list item). Every label gets indexed as its own row, so a normalize_operands implementation that picks only one label per item would under-count the requested set against the indexed total and incorrectly return no results here."""
+        payload = {
+            "graph_slug": self.only_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.only_graph.slug,
+                        "node_alias": self.only_reference_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_ONLY",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.reference_a_bilingual],
+                        }
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(
+            result, {self.only_bilingual_match_resource.resourceinstanceid}
+        )
+
     def test_references_none_of_matches_when_requested_references_are_absent(self):
         """This checks that the references none of facet returns only the resource that omits every forbidden reference label."""
         payload = {
@@ -577,6 +769,44 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                     },
                     "operator": "REFERENCES_NONE_OF",
                     "operands": [{"type": "LITERAL", "value": ["ref-a", "ref-b"]}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.none_match_resource.resourceinstanceid})
+
+    def test_references_none_of_matches_with_real_widget_shaped_operand(self):
+        """This checks REFERENCES_NONE_OF against the real widget-shaped operand instead of flat label strings."""
+        payload = {
+            "graph_slug": self.none_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.none_graph.slug,
+                        "node_alias": self.none_reference_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_NONE_OF",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [self.reference_a, self.reference_b],
+                        }
+                    ],
                 }
             ],
             "groups": [],
@@ -625,6 +855,39 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.descendant_match_resource.resourceinstanceid})
 
+    def test_descendant_of_matches_with_real_widget_shaped_operand(self):
+        """This checks DESCENDANT_OF against the real widget-shaped operand instead of a flat label string."""
+        payload = {
+            "graph_slug": self.descendant_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.descendant_graph.slug,
+                        "node_alias": self.descendant_reference_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "DESCENDANT_OF",
+                    "operands": [{"type": "LITERAL", "value": [self.reference_child]}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.descendant_match_resource.resourceinstanceid})
+
     def test_ancestor_of_matches_the_requested_ancestor_token(self):
         """This checks that the ancestor of facet returns only the resource whose indexed reference label matches the requested ancestor token."""
         payload = {
@@ -643,6 +906,39 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                     },
                     "operator": "ANCESTOR_OF",
                     "operands": [{"type": "LITERAL", "value": ["ref-parent"]}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.ancestor_match_resource.resourceinstanceid})
+
+    def test_ancestor_of_matches_with_real_widget_shaped_operand(self):
+        """This checks ANCESTOR_OF against the real widget-shaped operand instead of a flat label string."""
+        payload = {
+            "graph_slug": self.ancestor_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.ancestor_graph.slug,
+                        "node_alias": self.ancestor_reference_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "ANCESTOR_OF",
+                    "operands": [{"type": "LITERAL", "value": [self.reference_parent]}],
                 }
             ],
             "groups": [],

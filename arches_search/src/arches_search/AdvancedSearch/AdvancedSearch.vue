@@ -17,6 +17,7 @@ import {
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
     getRelatableNodesTreeForGraphId as fetchRelatableNodesTreeForGraphId,
+    getRelatableNodesTreeForGraphPair as fetchRelatableNodesTreeForGraphPair,
     getSearchResults,
 } from "@/arches_search/AdvancedSearch/api.ts";
 
@@ -50,6 +51,7 @@ const datatypesToAdvancedSearchFacets = ref<
 const graphs = ref([]);
 const graphIdToNodeCache = ref({});
 const graphIdToRelatableNodesTreeCache = ref({});
+const graphIdPairToRelatableNodesTreeCache = ref({});
 
 const searchResults = ref<SearchResultsPayload | null>(null);
 const searchResultsInstanceKey = ref(0);
@@ -60,6 +62,7 @@ provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
 provide("getNodesForGraphId", getNodesForGraphId);
 provide("getRelatableNodesTreeForGraphId", getRelatableNodesTreeForGraphId);
+provide("getRelatableNodesTreeForGraphPair", getRelatableNodesTreeForGraphPair);
 
 watchEffect(async () => {
     try {
@@ -82,6 +85,17 @@ async function getNodesForGraphId(graphId: string) {
 async function getRelatableNodesTreeForGraphId(graphId: string) {
     return await getFromCache(graphIdToRelatableNodesTreeCache, graphId, () =>
         fetchRelatableNodesTreeForGraphId(graphId),
+    );
+}
+
+async function getRelatableNodesTreeForGraphPair(
+    graphId: string,
+    otherGraphId: string,
+) {
+    return await getFromCache(
+        graphIdPairToRelatableNodesTreeCache,
+        `${graphId}::${otherGraphId}`,
+        () => fetchRelatableNodesTreeForGraphPair(graphId, otherGraphId),
     );
 }
 

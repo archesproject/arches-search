@@ -289,6 +289,38 @@ class SavedSearchAPITest(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_post_non_list_users_returns_400(self):
+        self.client.force_login(self.alice)
+        response = self.client.post(
+            reverse("saved_searches"),
+            json.dumps(
+                {
+                    "name": "Bad Users Shape",
+                    "query_definition": SAMPLE_QUERY,
+                    "users": "not-a-list",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(SavedSearch.objects.filter(name="Bad Users Shape").exists())
+
+    def test_post_nonexistent_user_id_returns_400_without_leaving_orphan(self):
+        self.client.force_login(self.alice)
+        response = self._post_search("Bad User Reference", users=[999999], groups=[])
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(SavedSearch.objects.filter(name="Bad User Reference").exists())
+
+    def test_post_nonexistent_group_id_returns_400_without_leaving_orphan(self):
+        self.client.force_login(self.alice)
+        response = self._post_search("Bad Group Reference", users=[], groups=[999999])
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            SavedSearch.objects.filter(name="Bad Group Reference").exists()
+        )
+
     # --- DELETE ---
 
     def test_delete_by_creator_succeeds(self):

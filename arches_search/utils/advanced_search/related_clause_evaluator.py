@@ -129,11 +129,17 @@ class RelatedClauseEvaluator:
             resourceinstanceid=OuterRef(traversal_context["child_id_field"])
         ).annotate(_anchor_resource_id=OuterRef(traversal_context["anchor_id_field"]))
 
+        normalized_operand_items, _filter_value = (
+            model_class.normalize_operands(operand_items)
+            if hasattr(model_class, "normalize_operands")
+            else (list(operand_items), None)
+        )
+
         predicate_expression, is_template_negated = (
             self.predicate_builder.build_predicate(
                 datatype_name=datatype_name,
                 operator_token=operator_token,
-                operands=operand_items,
+                operands=normalized_operand_items,
                 anchor_resource_id_annotation="_anchor_resource_id",
                 facet=facet,
             )

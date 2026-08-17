@@ -11,6 +11,6 @@ class ResourceNamesForPayloadAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
 
-        resource_names = build_resource_names_for_payload(body)
+        resource_names = build_resource_names_for_payload(body, request.user)
 
         return JSONResponse(resource_names)

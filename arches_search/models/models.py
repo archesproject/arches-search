@@ -122,39 +122,119 @@ class TermSearch(models.Model):
         output_field=SearchVectorField(),
     )
 
+    @staticmethod
+    def _extract_language_entry_text(language_entry):
+        if isinstance(language_entry, dict) and "value" in language_entry:
+            return language_entry["value"]
+        return language_entry
+
+    @staticmethod
+    def _is_reference_value(raw_value):
+        return (
+            isinstance(raw_value, list)
+            and raw_value
+            and all(
+                isinstance(reference_item, dict) and "labels" in reference_item
+                for reference_item in raw_value
+            )
+        )
+
+    @staticmethod
+    def _normalize_reference_value(raw_value):
+        return list(
+            dict.fromkeys(
+                label.get("value")
+                for reference_item in raw_value
+                for label in reference_item.get("labels") or []
+                if label.get("value") is not None
+            )
+        )
+
+    @staticmethod
+    def _is_url_value(raw_value):
+        return set(raw_value.keys()) <= {"url", "url_label"}
+
+    @staticmethod
+    def _normalize_url_value(raw_value):
+        return raw_value.get("url_label") or raw_value.get("url")
+
+    @classmethod
+    def _resolve_localized_string_language(
+        cls, operand_item, raw_value, active_language_code, short_language_code
+    ):
+        # The widget includes every configured language as a key even when
+        # blank, so prefer non-empty entries over a bare key-presence check.
+        non_empty_language_codes = [
+            language_code
+            for language_code, language_entry in raw_value.items()
+            if cls._extract_language_entry_text(language_entry)
+        ]
+
+        display_value = operand_item.get("display_value")
+        if display_value:
+            displayed_language_codes = [
+                language_code
+                for language_code in non_empty_language_codes
+                if cls._extract_language_entry_text(raw_value[language_code])
+                == display_value
+            ]
+            if displayed_language_codes:
+                non_empty_language_codes = displayed_language_codes
+
+        candidate_language_codes = non_empty_language_codes or list(raw_value.keys())
+
+        if active_language_code and active_language_code in candidate_language_codes:
+            return active_language_code
+        if short_language_code and short_language_code in candidate_language_codes:
+            return short_language_code
+        return candidate_language_codes[0]
+
     @classmethod
     def normalize_operands(cls, operand_items):
         active_language_code = get_language()
         short_language_code = (
             active_language_code.split("-")[0] if active_language_code else None
         )
+
         normalized_items = []
         resolved_language = None
         for operand_item in operand_items:
             raw_value = operand_item.get("value")
-            if isinstance(raw_value, dict) and raw_value:
-                if active_language_code and active_language_code in raw_value:
-                    chosen_language = active_language_code
-                elif short_language_code and short_language_code in raw_value:
-                    chosen_language = short_language_code
-                else:
-                    chosen_language = next(iter(raw_value))
 
-                if resolved_language is None:
-                    resolved_language = chosen_language
-                elif chosen_language != resolved_language:
-                    raise ValueError(
-                        "Localized string operands resolved to different languages"
-                    )
+            if cls._is_reference_value(raw_value):
+                normalized_items.append(
+                    {
+                        **operand_item,
+                        "value": cls._normalize_reference_value(raw_value),
+                    }
+                )
+                continue
 
-                language_value = raw_value[chosen_language]
-
-                if isinstance(language_value, dict) and "value" in language_value:
-                    language_value = language_value["value"]
-                normalized_items.append({**operand_item, "value": language_value})
-
-            else:
+            if not isinstance(raw_value, dict) or not raw_value:
                 normalized_items.append(operand_item)
+                continue
+
+            if cls._is_url_value(raw_value):
+                normalized_items.append(
+                    {**operand_item, "value": cls._normalize_url_value(raw_value)}
+                )
+                continue
+
+            chosen_language = cls._resolve_localized_string_language(
+                operand_item, raw_value, active_language_code, short_language_code
+            )
+            if resolved_language is None:
+                resolved_language = chosen_language
+            elif chosen_language != resolved_language:
+                raise ValueError(
+                    "Localized string operands resolved to different languages"
+                )
+
+            language_value = cls._extract_language_entry_text(
+                raw_value[chosen_language]
+            )
+            normalized_items.append({**operand_item, "value": language_value})
+
         return normalized_items, resolved_language
 
     class Meta:
@@ -267,6 +347,29 @@ class UUIDSearch(models.Model):
             ),
             models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
         ]
+
+    @classmethod
+    def normalize_operands(cls, operand_items):
+        def extract_resource_id(resource_reference):
+            if isinstance(resource_reference, dict):
+                return resource_reference.get("resourceId")
+            return resource_reference
+
+        normalized_items = []
+        for operand_item in operand_items:
+            raw_value = operand_item.get("value")
+            if isinstance(raw_value, list):
+                normalized_value = [
+                    extract_resource_id(resource_reference)
+                    for resource_reference in raw_value
+                ]
+            elif isinstance(raw_value, dict):
+                normalized_value = extract_resource_id(raw_value)
+            else:
+                normalized_items.append(operand_item)
+                continue
+            normalized_items.append({**operand_item, "value": normalized_value})
+        return normalized_items, None
 
 
 class DateSearch(models.Model):
