@@ -19,7 +19,8 @@ import type {
     NodeMetadataMap,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-const { $gettext } = useGettext();
+const gettext = useGettext();
+const { $gettext } = gettext;
 
 const { payload, graphs, datatypesToAdvancedSearchFacets } = defineProps<{
     payload: GroupPayload;
@@ -38,6 +39,7 @@ const narration = computed(() =>
         graphs,
         datatypesToAdvancedSearchFacets,
         gettext: $gettext,
+        currentLanguage: gettext.current,
         nodeMetadata: nodeMetadata.value,
         resourceNames: resourceNames.value,
     }),

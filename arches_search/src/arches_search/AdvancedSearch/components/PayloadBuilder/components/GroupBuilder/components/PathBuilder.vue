@@ -8,6 +8,8 @@ import TreeSelect from "primevue/treeselect";
 import type {
     GraphModel,
     PathSelection,
+    RelatableGraphOption,
+    RelatableNodeOption,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 type NodeSummary = {
@@ -19,7 +21,8 @@ type NodeSummary = {
     card_x_node_x_widget_label: string;
     semantic_parent_id: string | null;
     graph_slug?: string;
-    config?: unknown;
+    graph_label?: string;
+    is_inverse?: boolean;
     selectable?: boolean;
     [key: string]: unknown;
 };
@@ -33,33 +36,29 @@ type PathNode = {
 };
 
 const DATATYPE_SEMANTIC = "semantic";
-const DATATYPE_RESOURCE_INSTANCE = "resource-instance";
-const DATATYPE_RESOURCE_INSTANCE_LIST = "resource-instance-list";
 
-const { $gettext } = useGettext();
+const {
+    graphSlugs,
+    selectedNode = null,
+    shouldPrependGraphName,
+    graphOptionsTree,
+} = defineProps<{
+    // No default: absence means "use graphOptionsTree instead" (see
+    // graphSelectionKey and the watcher below) — the two are mutually exclusive
+    // alternate data sources, so neither can be expressed as a static default.
+    graphSlugs?: string[];
+    selectedNode?: PathSelection | null;
+    shouldPrependGraphName?: boolean;
+    graphOptionsTree?: RelatableGraphOption[];
+}>();
+
+const emit = defineEmits<{ "update:selectedNode": [PathSelection | null] }>();
 
 const getNodesForGraphId =
     inject<(graphId: string) => Promise<NodeSummary[]>>("getNodesForGraphId")!;
 const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs")!;
 
-const {
-    graphSlugs,
-    selectedNode = null,
-    relationshipBetweenGraphs,
-    shouldPrependGraphName,
-    restrictToResourceInstanceDatatypes,
-} = defineProps<{
-    graphSlugs: string[];
-    selectedNode?: PathSelection | null;
-    // No default: absence means "fall back to graphSlugs" (see graphSelectionKey
-    // and loadNodes below), which isn't expressible as a static default value.
-    // eslint-disable-next-line vue/require-default-prop
-    relationshipBetweenGraphs?: string[];
-    shouldPrependGraphName?: boolean;
-    restrictToResourceInstanceDatatypes?: boolean;
-}>();
-
-const emit = defineEmits<{ "update:selectedNode": [PathSelection | null] }>();
+const { $gettext } = useGettext();
 
 let currentLoad = 0;
 
@@ -68,7 +67,10 @@ const configurationError = ref<Error | null>(null);
 const nodeOptions = ref<PathNode[]>([]);
 
 const graphSelectionKey = computed(() => {
-    return `${graphSlugs.join("|")}::${relationshipBetweenGraphs?.join("|") ?? ""}::${restrictToResourceInstanceDatatypes}`;
+    if (graphOptionsTree) {
+        return `options::${graphOptionsTree.map((graphOption) => graphOption.key).join("|")}`;
+    }
+    return (graphSlugs ?? []).join("|");
 });
 
 const hasSelectableNodes = computed(() => {
@@ -96,6 +98,8 @@ const selectedKeys = computed({
             return (
                 node.data.graph_slug === selectedNode.graph_slug &&
                 node.data.alias === selectedNode.node_alias &&
+                (selectedNode.is_inverse === undefined ||
+                    node.data.is_inverse === selectedNode.is_inverse) &&
                 node.selectable !== false
             );
         });
@@ -131,6 +135,7 @@ const selectedKeys = computed({
         emit("update:selectedNode", {
             graph_slug: matchingNode.data.graph_slug!,
             node_alias: matchingNode.data.alias,
+            is_inverse: matchingNode.data.is_inverse,
         });
     },
 });
@@ -138,12 +143,20 @@ const selectedKeys = computed({
 watch(
     graphSelectionKey,
     async () => {
-        if (graphSlugs.length === 0) {
+        if (graphOptionsTree) {
+            nodeOptions.value = buildTree(
+                flattenGraphOptionsTree(graphOptionsTree),
+            );
+            return;
+        }
+
+        const activeGraphSlugs = graphSlugs ?? [];
+        if (activeGraphSlugs.length === 0) {
             clearState();
             return;
         }
 
-        await loadNodes();
+        await loadNodes(activeGraphSlugs);
     },
     { immediate: true },
 );
@@ -175,58 +188,11 @@ function findNode(
     return null;
 }
 
-function linksGraphPair(
-    node: NodeSummary,
-    graphPair: [string, string],
-): boolean {
-    const [firstGraphSlug, secondGraphSlug] = graphPair;
-
-    if (
-        node.graph_slug !== firstGraphSlug &&
-        node.graph_slug !== secondGraphSlug
-    ) {
-        return false;
-    }
-    const configuredGraphs =
-        (node.config as { graphs?: { graphid: string }[] })?.graphs ?? [];
-    const targetSlug =
-        node.graph_slug === firstGraphSlug ? secondGraphSlug : firstGraphSlug;
-
-    return configuredGraphs.some((configured) => {
-        return (
-            graphs.value.find((graph) => {
-                return graph.graphid === configured.graphid;
-            })?.slug === targetSlug
-        );
-    });
+function isNodeSelectable(node: NodeSummary): boolean {
+    return node.datatype !== DATATYPE_SEMANTIC && node.selectable !== false;
 }
 
-function isNodeSelectable(
-    node: NodeSummary,
-    graphPair: [string, string] | undefined,
-): boolean {
-    if (node.datatype === DATATYPE_SEMANTIC || node.selectable === false) {
-        return false;
-    }
-
-    const isRestrictedDatatype =
-        node.datatype !== DATATYPE_RESOURCE_INSTANCE &&
-        node.datatype !== DATATYPE_RESOURCE_INSTANCE_LIST;
-
-    if (restrictToResourceInstanceDatatypes && isRestrictedDatatype) {
-        return false;
-    }
-    if (!graphPair) {
-        return true;
-    }
-
-    return linksGraphPair(node, graphPair);
-}
-
-function buildTree(
-    nodeSummaries: NodeSummary[],
-    graphPair: [string, string] | undefined,
-): PathNode[] {
+function buildTree(nodeSummaries: NodeSummary[]): PathNode[] {
     const nodeKeyToPathNode: Record<string, PathNode> = {};
     const roots: PathNode[] = [];
 
@@ -240,7 +206,7 @@ function buildTree(
                 nodeSummary.alias,
             data: nodeSummary,
             children: [],
-            selectable: isNodeSelectable(nodeSummary, graphPair),
+            selectable: isNodeSelectable(nodeSummary),
         };
     }
 
@@ -289,7 +255,62 @@ function buildTree(
     return pruneUnselectable(roots);
 }
 
-async function loadNodes(): Promise<void> {
+function flattenGraphOptionsTree(
+    graphOptions: RelatableGraphOption[],
+): NodeSummary[] {
+    const flatNodeSummaries: NodeSummary[] = [];
+
+    function visit(
+        relatableNode: RelatableNodeOption,
+        graphSlug: string,
+        graphLabel: string,
+        parentKey: string,
+    ): void {
+        flatNodeSummaries.push({
+            id: relatableNode.key,
+            alias: relatableNode.data.alias,
+            name: relatableNode.data.name,
+            datatype: relatableNode.data.datatype,
+            sortorder: flatNodeSummaries.length,
+            card_x_node_x_widget_label: relatableNode.label,
+            semantic_parent_id: parentKey,
+            graph_slug: graphSlug,
+            graph_label: graphLabel,
+            is_inverse: relatableNode.data.is_inverse,
+        });
+
+        for (const childNode of relatableNode.children) {
+            visit(childNode, graphSlug, graphLabel, relatableNode.key);
+        }
+    }
+
+    for (const graphOption of graphOptions) {
+        // Kept visible so a self-relationship's two identically-named branches stay distinguishable.
+        flatNodeSummaries.push({
+            id: graphOption.key,
+            alias: "",
+            name: graphOption.label,
+            datatype: DATATYPE_SEMANTIC,
+            sortorder: flatNodeSummaries.length,
+            card_x_node_x_widget_label: graphOption.label,
+            semantic_parent_id: null,
+            graph_slug: graphOption.data.slug,
+        });
+
+        for (const rootNode of graphOption.children) {
+            visit(
+                rootNode,
+                graphOption.data.slug,
+                graphOption.label,
+                graphOption.key,
+            );
+        }
+    }
+
+    return flatNodeSummaries;
+}
+
+async function loadNodes(activeGraphSlugs: string[]): Promise<void> {
     currentLoad++;
     const thisLoad = currentLoad;
     isLoading.value = true;
@@ -297,15 +318,8 @@ async function loadNodes(): Promise<void> {
     clearState();
 
     try {
-        const pairSlugs = relationshipBetweenGraphs ?? graphSlugs;
-        let graphPair: [string, string] | undefined = undefined;
-
-        if (pairSlugs.length >= 2) {
-            graphPair = [pairSlugs[0], pairSlugs[1]];
-        }
-
         const perGraphTrees = await Promise.all(
-            graphSlugs.map(async (slug) => {
+            activeGraphSlugs.map(async (slug) => {
                 const matchingGraph = graphs.value.find((graph) => {
                     return graph.slug === slug;
                 });
@@ -323,7 +337,7 @@ async function loadNodes(): Promise<void> {
                     };
                 });
 
-                return buildTree(nodesWithSlug, graphPair);
+                return buildTree(nodesWithSlug);
             }),
         );
 
@@ -350,15 +364,17 @@ function getGraphLabelPrefix(treeSelectValue: unknown): string {
         treeSelectValue as Array<{ data?: NodeSummary }>
     )?.[0]?.data;
 
-    const graphName = graphs.value.find((graph) => {
-        return graph.slug === firstSelectedNode?.graph_slug;
-    })?.name;
+    const graphLabel =
+        firstSelectedNode?.graph_label ??
+        graphs.value.find((graph) => {
+            return graph.slug === firstSelectedNode?.graph_slug;
+        })?.name;
 
-    if (!graphName) {
+    if (!graphLabel) {
         return "";
     }
 
-    return `${graphName}: `;
+    return `${graphLabel}: `;
 }
 </script>
 
