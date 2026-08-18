@@ -20,6 +20,7 @@ from arches.app.models.models import (
     ResourceInstance,
     TileModel,
 )
+from arches.app.utils.permission_backend import assign_perm
 
 # python manage.py test tests.test_simple_search_api --settings="tests.test_settings"
 
@@ -70,6 +71,9 @@ class SimpleSearchAPITest(TestCase):
         cls.amber_site = cls._create_resource(
             cls.graph_b, cls.nodegroup_b, cls.node_b, "amber excavation site"
         )
+
+        assign_perm("view_resourceinstance", cls.user, cls.amber_mineral)
+        assign_perm("view_resourceinstance", cls.user, cls.amber_site)
 
         call_command("arches_search", "reindex_database", stdout=io.StringIO())
 
