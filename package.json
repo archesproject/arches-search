@@ -19,15 +19,13 @@
         "vitest": "vitest --run --coverage"
     },
     "dependencies": {
-        "arches": "archesproject/arches#stable/8.1.4",
-        "arches-vue-components": "archesproject/arches-vue-components#stable/2.0.2",
-        "arches-controlled-lists": "archesproject/arches-controlled-lists#stable/1.2.0",
-        "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.1.4",
-        "arches-modular-reports": "archesproject/arches-modular-reports#stable/2.0.0",
+        "arches": "archesproject/arches#alpha/8.2.0a8",
+        "arches-vue-components": "archesproject/arches-vue-components#dev/2.1.x",
+        "arches-controlled-lists": "archesproject/arches-controlled-lists#semver:^v1.3.0-alpha.2",
+        "arches-modular-reports": "archesproject/arches-modular-reports#dev/2.1.x",
         "vue-router": "4.4.3"
     },
     "devDependencies": {
-        "arches-dev-dependencies": "archesproject/arches-dev-dependencies#dev/8.1.x",
         "geojson": "npm:@types/geojson@^7946.0.16"
     },
     "nodeModulesPaths": {},
