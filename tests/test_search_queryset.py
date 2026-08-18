@@ -6,6 +6,7 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.test import TestCase
+from django.contrib.auth import get_user_model
 
 from arches.app.models.models import (
     GraphModel,
@@ -32,6 +33,15 @@ class SearchQuerysetTestCaseBase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(
+            username="search-queryset-tester", password="unused"
+        )
+        cls.superuser = get_user_model().objects.create_superuser(
+            username="search-queryset-admin",
+            email="admin@example.com",
+            password="unused",
+        )
+
         cls.graph_a = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             name="Mineral",
@@ -102,7 +112,8 @@ class BuildSearchQuerysetGraphIdsTests(SearchQuerysetTestCaseBase):
             {
                 "terms": [{"text": "amber"}],
                 "graphIds": [str(self.graph_a.graphid), str(self.graph_b.graphid)],
-            }
+            },
+            self.superuser,
         )
 
         ids = set(result.values_list("resourceinstanceid", flat=True))
@@ -119,7 +130,8 @@ class BuildSearchQuerysetGraphIdsTests(SearchQuerysetTestCaseBase):
             {
                 "terms": [{"text": "amber"}],
                 "graphIds": [str(self.graph_a.graphid)],
-            }
+            },
+            self.superuser,
         )
 
         ids = set(result.values_list("resourceinstanceid", flat=True))
@@ -130,7 +142,8 @@ class BuildSearchQuerysetGraphIdsTests(SearchQuerysetTestCaseBase):
             {
                 "terms": [{"text": "amber"}],
                 "graphIds": [str(self.graph_a.graphid), str(self.graph_b.graphid)],
-            }
+            },
+            self.superuser,
         )
 
         ids = set(result.values_list("resourceinstanceid", flat=True))
@@ -138,7 +151,8 @@ class BuildSearchQuerysetGraphIdsTests(SearchQuerysetTestCaseBase):
 
     def test_term_search_without_graph_ids_uses_and_semantics_across_terms(self):
         result = build_search_queryset(
-            {"terms": [{"text": "amber"}, {"text": "specimen"}], "graphIds": []}
+            {"terms": [{"text": "amber"}, {"text": "specimen"}], "graphIds": []},
+            self.superuser,
         )
 
         ids = set(result.values_list("resourceinstanceid", flat=True))
@@ -148,7 +162,8 @@ class BuildSearchQuerysetGraphIdsTests(SearchQuerysetTestCaseBase):
         result = build_search_queryset(
             {
                 "graphIds": [str(self.graph_a.graphid), str(self.graph_b.graphid)],
-            }
+            },
+            self.superuser,
         )
 
         ids = set(result.values_list("resourceinstanceid", flat=True))
@@ -163,7 +178,8 @@ class BuildSearchQuerysetGraphIdsTests(SearchQuerysetTestCaseBase):
 
     def test_no_terms_or_query_scopes_to_multiple_graph_ids(self):
         result = build_search_queryset(
-            {"graphIds": [str(self.graph_a.graphid), str(self.graph_b.graphid)]}
+            {"graphIds": [str(self.graph_a.graphid), str(self.graph_b.graphid)]},
+            self.superuser,
         )
 
         ids = set(result.values_list("resourceinstanceid", flat=True))
@@ -177,7 +193,7 @@ class BuildSearchQuerysetGraphIdsTests(SearchQuerysetTestCaseBase):
         )
 
     def test_missing_graph_ids_defaults_to_no_scoping(self):
-        result = build_search_queryset({})
+        result = build_search_queryset({}, self.superuser)
 
         ids = set(result.values_list("resourceinstanceid", flat=True))
         self.assertIn(self.amber_mineral.resourceinstanceid, ids)
@@ -186,18 +202,22 @@ class BuildSearchQuerysetGraphIdsTests(SearchQuerysetTestCaseBase):
     def test_non_list_graph_ids_raises_validation_error(self):
         with self.assertRaises(ValidationError):
             build_search_queryset(
-                {"terms": [{"text": "amber"}], "graphIds": str(self.graph_a.graphid)}
+                {"terms": [{"text": "amber"}], "graphIds": str(self.graph_a.graphid)},
+                self.superuser,
             )
 
     def test_non_string_graph_id_entry_raises_validation_error(self):
         with self.assertRaises(ValidationError):
-            build_search_queryset({"terms": [{"text": "amber"}], "graphIds": [123]})
+            build_search_queryset(
+                {"terms": [{"text": "amber"}], "graphIds": [123]}, self.superuser
+            )
 
 
 class BuildResourceTypeCountsGraphIdsTests(SearchQuerysetTestCaseBase):
     def test_counts_terms_across_multiple_graphs(self):
         type_agnostic_queryset = build_search_queryset(
-            {"terms": [{"text": "amber"}], "graphIds": []}
+            {"terms": [{"text": "amber"}], "graphIds": []},
+            self.superuser,
         )
 
         results, all_resource_count = build_resource_type_counts(
@@ -212,7 +232,9 @@ class BuildResourceTypeCountsGraphIdsTests(SearchQuerysetTestCaseBase):
 
 class SimpleSearchQuerysetBuilderGraphIdsTests(SearchQuerysetTestCaseBase):
     def test_type_agnostic_queryset_reuses_scoped_queryset_when_no_graph_ids(self):
-        builder = SimpleSearchQuerysetBuilder({"terms": [{"text": "amber"}]})
+        builder = SimpleSearchQuerysetBuilder(
+            {"terms": [{"text": "amber"}]}, self.superuser
+        )
 
         self.assertIs(builder.type_agnostic_queryset, builder.scoped_queryset)
 
@@ -221,7 +243,8 @@ class SimpleSearchQuerysetBuilderGraphIdsTests(SearchQuerysetTestCaseBase):
             {
                 "terms": [{"text": "amber"}],
                 "graphIds": [str(self.graph_a.graphid)],
-            }
+            },
+            self.superuser,
         )
 
         scoped_ids = set(

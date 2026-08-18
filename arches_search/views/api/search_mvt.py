@@ -39,8 +39,8 @@ def _context_cache_key(context_id):
     return f"search:mvt:{context_id}"
 
 
-def _tile_cache_key(context_id, zoom, x, y):
-    return f"search:mvt:tile:{context_id}:{zoom}:{x}:{y}"
+def _tile_cache_key(context_id, user_id, zoom, x, y):
+    return f"search:mvt:tile:{context_id}:{user_id}:{zoom}:{x}:{y}"
 
 
 class EmptySearchTileAPI(APIBase):
@@ -65,12 +65,12 @@ class SearchMVTAPI(APIBase):
         if body is None:
             raise Http404()
 
-        tile_key = _tile_cache_key(context_id, zoom, x, y)
+        tile_key = _tile_cache_key(context_id, request.user.id, zoom, x, y)
         cached_tile = mvt_cache.get(tile_key)
         if cached_tile is not None:
             return HttpResponse(cached_tile, content_type="application/x-protobuf")
 
-        search_results_queryset = build_search_queryset(body).values(
+        search_results_queryset = build_search_queryset(body, request.user).values(
             "resourceinstanceid"
         )
         mvt_tile = self._generate_tile(search_results_queryset, zoom, x, y)
