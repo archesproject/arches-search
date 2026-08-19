@@ -1,19 +1,17 @@
-from typing import Callable, TypeVar
+from typing import Callable
 
 from django.apps import apps
 from django.utils.module_loading import import_string
 
-T = TypeVar("T")
-
 
 def discover_extension_instances(
     app_config_attribute: str,
-    base_class: type[T],
-    key_func: Callable[[T], str],
-) -> dict[str, T]:
+    base_class: type,
+    key_func: Callable[[object], str],
+) -> dict[str, object]:
     """Instantiate every class listed under app_config.<app_config_attribute>
     across all installed apps, keyed by key_func."""
-    registry: dict[str, T] = {}
+    registry: dict[str, object] = {}
 
     for app_config in apps.get_app_configs():
         for class_path in getattr(app_config, app_config_attribute, []):
