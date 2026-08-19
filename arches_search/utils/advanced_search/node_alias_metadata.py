@@ -4,7 +4,7 @@ from django.conf import settings
 from django.utils.translation import get_language
 from arches.app.models import models as arches_models
 
-from arches_search.utils.advanced_search.node_alias_datatype_registry import (
+from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
 

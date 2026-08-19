@@ -16,7 +16,7 @@ from arches.app.models.models import (
     TileModel,
 )
 
-from arches_search.utils.search_queryset import (
+from arches_search.utils.simple_search.search_queryset import (
     SimpleSearchQuerysetBuilder,
     build_resource_type_counts,
     build_search_queryset,

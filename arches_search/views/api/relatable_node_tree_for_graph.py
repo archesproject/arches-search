@@ -5,7 +5,7 @@ from django.utils.translation import gettext as _
 from arches.app.utils.response import JSONResponse, JSONErrorResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.relatable_node_tree_for_graph import (
+from arches_search.utils.advanced_search.relatable_node_tree_for_graph import (
     build_relatable_nodes_tree_response,
     build_relatable_nodes_tree_for_graph_pair,
 )
