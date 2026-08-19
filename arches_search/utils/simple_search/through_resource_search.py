@@ -6,7 +6,7 @@ from arches.app.models.models import (
 )
 
 from arches_search.models.models import TermSearch
-from arches_search.utils.term_matching import build_term_match_filter
+from arches_search.utils.simple_search.term_matching import build_term_match_filter
 
 
 def get_related_resources_by_text(search_terms, target_graphid):

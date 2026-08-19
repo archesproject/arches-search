@@ -255,3 +255,99 @@ class Migration(migrations.Migration):
 ```
 
 In this example `height` is a `number` node, so it renders as a numeric range/value input, and `material` is a `reference` node, so it renders as a controlled-list picker.
+
+---
+
+## Extending Advanced Search for a Custom Datatype
+
+A custom datatype needs four things to work with Advanced Search:
+
+1.  Registration with arches core, see [Registering your datatype](https://arches.readthedocs.io/en/stable/developing/extending/extensions/datatypes/#registering-your-datatype).
+2.  `AdvancedSearchFacet` rows, added via a migration, pointing at whichever table fits: `TermSearch`, `UUIDSearch`, `DateSearch`, `NumericSearch`, `BooleanSearch`, `GeometrySearch`, `FileListSearch`.
+3.  An indexer, so tile values get written into that table.
+4.  Optionally, an operand normalizer, so values submitted from the UI are shaped correctly before comparison.
+
+### Indexers
+
+Subclass `arches_search.indexing.base.BaseIndexing`, point `self.datatype` at your datatype, and return the rows to write from `index(self, tile, node)`:
+
+```python
+from arches.app.datatypes.datatypes import DataTypeFactory
+from arches_search.indexing.base import BaseIndexing
+from arches_search.models.models import TermSearch
+
+
+class MeasurementIndexing(BaseIndexing):
+    def __init__(self):
+        super().__init__()
+        self.datatype = DataTypeFactory().get_instance("measurement")
+
+    def index(self, tile, node):
+        raw_value = tile.data.get(str(node.nodeid))
+        if not raw_value:
+            return []
+        return [
+            TermSearch(
+                node_alias=node.alias,
+                tileid_id=tile.tileid,
+                resourceinstanceid_id=tile.resourceinstance_id,
+                datatype="measurement",
+                graph_slug=node.graph.slug,
+                value=raw_value["value"],
+                language="",
+            )
+        ]
+```
+
+Declare `search_indexers` on your app's `AppConfig`:
+
+```python
+from django.apps import AppConfig
+
+
+class MyAppConfig(AppConfig):
+    search_indexers = [
+        "my_app.indexing.MeasurementIndexing",
+    ]
+```
+
+### Operand normalizers
+
+Subclass `arches_search.utils.advanced_search.operand_normalization.base.BaseOperandNormalizer` and implement `normalize_value`. `operand_item["value"]` arrives in the same shape your datatype stores in a tile (a reference's list of `{"labels": [...]}` entries, a resource-instance's `{"resourceId": ...}`, etc.) — `normalize_value` turns that into whatever your facet's `orm_template` should actually compare against:
+
+```python
+from arches.app.datatypes.datatypes import DataTypeFactory
+from arches_search.utils.advanced_search.operand_normalization.base import (
+    BaseOperandNormalizer,
+)
+
+
+class MeasurementOperandNormalizer(BaseOperandNormalizer):
+    def __init__(self):
+        super().__init__()
+        self.datatype = DataTypeFactory().get_instance("measurement")
+
+    def normalize_value(self, operand_item):
+        raw_value = operand_item.get("value")
+        return raw_value.get("value") if isinstance(raw_value, dict) else raw_value
+
+    def resolve_filter_value(self, operand_item):
+        raw_value = operand_item.get("value")
+        return raw_value.get("unit") if isinstance(raw_value, dict) else None
+```
+
+`resolve_filter_value` is only needed if your facet sets `filter_field` too (like `TermSearch`'s `language` column, or `unit` here). Whatever it returns gets compared against that column, and every operand in the same clause has to agree on the same value.
+
+Declare `advanced_search_operand_normalizers` the same way, on the same `AppConfig`:
+
+```python
+class MyAppConfig(AppConfig):
+    search_indexers = [
+        "my_app.indexing.MeasurementIndexing",
+    ]
+    advanced_search_operand_normalizers = [
+        "my_app.operand_normalization.MeasurementOperandNormalizer",
+    ]
+```
+
+This is opt-in; a datatype with no normalizer just passes its value through untouched. Most flat-scalar datatypes (numbers, booleans) don't need one at all.

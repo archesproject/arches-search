@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from django.db.models import OuterRef, QuerySet
 
-from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
+from arches_search.utils.advanced_search.predicate_building.aggregate_predicate_runtime import (
     build_grouped_rows_matching_aggregate_predicate,
 )
 from arches_search.utils.advanced_search.constants import (
@@ -104,7 +104,9 @@ class ChildRowsComputer:
                     subject_node_alias=subject_node_alias,
                 )
                 normalized_operand_items, filter_value = (
-                    model_class.normalize_operands(operand_items)
+                    model_class.normalize_operands(
+                        operand_items, datatype_name=datatype_name
+                    )
                     if hasattr(model_class, "normalize_operands")
                     else (list(operand_items), None)
                 )
