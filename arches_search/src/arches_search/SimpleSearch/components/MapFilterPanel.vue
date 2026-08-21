@@ -117,7 +117,7 @@ function clearDrawnFeatures() {
         <MapComponent
             ref="mapComponent"
             :value="modelValue"
-            :overlay-layers="resolveOverlayLayersWithSearchResults"
+            :resolve-overlay-layers="resolveOverlayLayersWithSearchResults"
             @update:overlays="onOverlaysUpdate"
             @update:value="onValueUpdate"
         />
@@ -133,7 +133,7 @@ function clearDrawnFeatures() {
             <MapComponent
                 ref="mapComponent"
                 :value="modelValue"
-                :overlay-layers="resolveOverlayLayersWithSearchResults"
+                :resolve-overlay-layers="resolveOverlayLayersWithSearchResults"
                 :max-features="MAX_DRAWN_FEATURES"
                 :interaction-tools="[]"
                 @update:overlays="onOverlaysUpdate"
