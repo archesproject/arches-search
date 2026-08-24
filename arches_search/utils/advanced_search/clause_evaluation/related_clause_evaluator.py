@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional
 
 from django.db.models import Exists, OuterRef
 
-from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
+from arches_search.utils.advanced_search.predicate_building.aggregate_predicate_runtime import (
     build_grouped_rows_matching_aggregate_predicate,
 )
 from arches_search.utils.advanced_search.constants import (
@@ -130,7 +130,7 @@ class RelatedClauseEvaluator:
         ).annotate(_anchor_resource_id=OuterRef(traversal_context["anchor_id_field"]))
 
         normalized_operand_items, _filter_value = (
-            model_class.normalize_operands(operand_items)
+            model_class.normalize_operands(operand_items, datatype_name=datatype_name)
             if hasattr(model_class, "normalize_operands")
             else (list(operand_items), None)
         )

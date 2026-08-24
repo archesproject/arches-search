@@ -3,24 +3,32 @@ from django.db.models import QuerySet
 from django.utils.translation import gettext as _
 from arches.app.models import models as arches_models
 
-from arches_search.utils.advanced_search.node_alias_datatype_registry import (
+from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
-from arches_search.utils.advanced_search.search_model_registry import (
+from arches_search.utils.advanced_search.registries.search_model_registry import (
     SearchModelRegistry,
 )
-from arches_search.utils.advanced_search.facet_registry import FacetRegistry
+from arches_search.utils.advanced_search.registries.facet_registry import FacetRegistry
 from arches_search.utils.advanced_search.path_navigator import PathNavigator
-from arches_search.utils.advanced_search.predicate_builder import PredicateBuilder
-from arches_search.utils.advanced_search.literal_clause_evaluator import (
+from arches_search.utils.advanced_search.predicate_building.predicate_builder import (
+    PredicateBuilder,
+)
+from arches_search.utils.advanced_search.clause_evaluation.literal_clause_evaluator import (
     LiteralClauseEvaluator,
 )
-from arches_search.utils.advanced_search.related_clause_evaluator import (
+from arches_search.utils.advanced_search.clause_evaluation.related_clause_evaluator import (
     RelatedClauseEvaluator,
 )
-from arches_search.utils.advanced_search.tile_scope_evaluator import TileScopeEvaluator
-from arches_search.utils.advanced_search.clause_reducer import ClauseReducer
-from arches_search.utils.advanced_search.group_compiler import GroupCompiler
+from arches_search.utils.advanced_search.clause_evaluation.tile_scope_evaluator import (
+    TileScopeEvaluator,
+)
+from arches_search.utils.advanced_search.clause_evaluation.clause_reducer import (
+    ClauseReducer,
+)
+from arches_search.utils.advanced_search.clause_evaluation.group_compiler import (
+    GroupCompiler,
+)
 from arches_search.utils.advanced_search.payload_validator import PayloadValidator
 
 

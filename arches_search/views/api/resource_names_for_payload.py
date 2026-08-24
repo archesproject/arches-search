@@ -2,7 +2,7 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.resource_names_for_payload import (
+from arches_search.utils.advanced_search.resource_names_for_payload import (
     build_resource_names_for_payload,
 )
 

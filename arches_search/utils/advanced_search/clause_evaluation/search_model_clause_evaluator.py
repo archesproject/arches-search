@@ -205,7 +205,7 @@ class SearchModelClauseEvaluator:
             resourceinstanceid=OuterRef(correlate_field_name),
         )
         normalized_operand_items, filter_value = (
-            model_class.normalize_operands(operand_items)
+            model_class.normalize_operands(operand_items, datatype_name=datatype_name)
             if hasattr(model_class, "normalize_operands")
             else (list(operand_items), None)
         )
