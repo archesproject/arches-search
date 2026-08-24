@@ -19,6 +19,7 @@ export type DescribeQueryOptions = {
         Record<string, AdvancedSearchFacet[]>
     >;
     gettext: (msgid: string, params?: Record<string, unknown>) => string;
+    currentLanguage?: string;
     nodeMetadata?: NodeMetadataMap;
     resourceNames?: Readonly<Record<string, string>>;
 };
@@ -34,6 +35,7 @@ export function describeAdvancedSearchQuery(
         graphs,
         datatypesToAdvancedSearchFacets,
         gettext,
+        currentLanguage,
         nodeMetadata,
         resourceNames,
     } = options;
@@ -309,6 +311,52 @@ export function describeAdvancedSearchQuery(
         return "";
     }
 
+    function resolveReferenceLabelText(
+        labels: Array<{
+            value?: string;
+            language_id?: string;
+            valuetype_id?: string;
+        }>,
+    ): string {
+        const shortLanguage = currentLanguage?.split("-")[0];
+        const prefLabels = labels.filter(
+            (label) => label.valuetype_id === "prefLabel",
+        );
+        const matchingLabel =
+            prefLabels.find((label) => label.language_id === currentLanguage) ??
+            prefLabels.find((label) => label.language_id === shortLanguage) ??
+            prefLabels[0] ??
+            labels[0];
+        return matchingLabel?.value ?? "";
+    }
+
+    function resolveArrayItemDisplayText(item: unknown): string | null {
+        if (typeof item === "string") {
+            return resourceNames?.[item] || item;
+        }
+
+        if (item && typeof item === "object") {
+            const resourceId = (item as { resourceId?: unknown }).resourceId;
+            if (typeof resourceId === "string") {
+                return resourceNames?.[resourceId] || resourceId;
+            }
+
+            const labels = (item as { labels?: unknown }).labels;
+            if (Array.isArray(labels)) {
+                const labelText = resolveReferenceLabelText(
+                    labels as Array<{
+                        value?: string;
+                        language_id?: string;
+                        valuetype_id?: string;
+                    }>,
+                );
+                return labelText || null;
+            }
+        }
+
+        return null;
+    }
+
     function describeOperand(
         operand: LiteralOperand | { type: "PATH"; value: unknown },
         subjectDatatype: string,
@@ -325,8 +373,10 @@ export function describeAdvancedSearchQuery(
 
         if (Array.isArray(rawValue)) {
             const resolvedNames = (rawValue as unknown[])
-                .filter((item): item is string => typeof item === "string")
-                .map((resourceId) => resourceNames?.[resourceId] || resourceId);
+                .map((item) => resolveArrayItemDisplayText(item))
+                .filter((resolvedText): resolvedText is string =>
+                    Boolean(resolvedText),
+                );
             return formatValueList(resolvedNames);
         }
 

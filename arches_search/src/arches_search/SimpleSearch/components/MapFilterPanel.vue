@@ -10,7 +10,6 @@ import MapWidget from "@/arches_vue_components/widgets/MapWidget/MapWidget.vue";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import type { FeatureCollection } from "geojson";
-import type { GeoJSONFeatureCollectionAliasedNodeData } from "@/arches_vue_components/datatypes/geojson-feature-collection/types";
 
 const SEARCH_RESULTS_SOURCE = "arches-search-results";
 const SEARCH_RENDER_CONTEXT = "search";
@@ -61,27 +60,11 @@ function setSearchTiles(tileUrl: string | null) {
     ]);
 }
 
-function aliasedNodeData(): GeoJSONFeatureCollectionAliasedNodeData | null {
-    if (!modelValue) return null;
-    return { display_value: "", node_value: modelValue, details: [] };
-}
-
-function onEditorUpdate(
-    updatedValue: GeoJSONFeatureCollectionAliasedNodeData | FeatureCollection,
-) {
-    let featureCollection: FeatureCollection | null;
-    if ("node_value" in updatedValue) {
-        featureCollection = (
-            updatedValue as GeoJSONFeatureCollectionAliasedNodeData
-        ).node_value;
-    } else {
-        featureCollection = updatedValue as FeatureCollection;
-    }
-
-    if (!featureCollection || featureCollection.features.length === 0) {
+function onEditorUpdate(updatedValue: FeatureCollection): void {
+    if (updatedValue.features.length === 0) {
         emit("remove");
     } else {
-        emit("update:modelValue", featureCollection);
+        emit("update:modelValue", updatedValue);
     }
 }
 </script>
@@ -106,7 +89,7 @@ function onEditorUpdate(
             ref="mapWidget"
             mode="edit"
             :render-context="SEARCH_RENDER_CONTEXT"
-            :aliased-node-data="aliasedNodeData()"
+            :value="modelValue"
             @update:overlays="onOverlaysUpdate"
             @update:value="onEditorUpdate"
         />

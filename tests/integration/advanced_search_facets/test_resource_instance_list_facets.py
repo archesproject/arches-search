@@ -16,6 +16,20 @@ from arches_search.utils.advanced_search.advanced_search import (
 
 
 class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
+    @staticmethod
+    def _resource_reference(resource, include_extra_fields=False):
+        """Real widget-shaped operand entry; include_extra_fields proves normalize_operands ignores ontologyProperty/resourceXresourceId rather than choking on them."""
+        reference = {"resourceId": str(resource.resourceinstanceid)}
+        if include_extra_fields:
+            reference.update(
+                {
+                    "ontologyProperty": "",
+                    "inverseOntologyProperty": "",
+                    "resourceXresourceId": str(uuid.uuid4()),
+                }
+            )
+        return reference
+
     @classmethod
     def setUpTestData(cls):
         target_suffix = uuid.uuid4().hex[:8]
@@ -400,8 +414,11 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                         {
                             "type": "LITERAL",
                             "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
+                                self._resource_reference(
+                                    self.reference_a_resource,
+                                    include_extra_fields=True,
+                                ),
+                                self._resource_reference(self.reference_b_resource),
                             ],
                         }
                     ],
@@ -441,8 +458,8 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                         {
                             "type": "LITERAL",
                             "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
+                                self._resource_reference(self.reference_a_resource),
+                                self._resource_reference(self.reference_b_resource),
                             ],
                         }
                     ],
@@ -482,8 +499,8 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                         {
                             "type": "LITERAL",
                             "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
+                                self._resource_reference(self.reference_a_resource),
+                                self._resource_reference(self.reference_b_resource),
                             ],
                         }
                     ],
@@ -523,8 +540,8 @@ class ResourceInstanceListAdvancedSearchFacetIntegrationTestCase(TestCase):
                         {
                             "type": "LITERAL",
                             "value": [
-                                str(self.reference_a_resource.resourceinstanceid),
-                                str(self.reference_b_resource.resourceinstanceid),
+                                self._resource_reference(self.reference_a_resource),
+                                self._resource_reference(self.reference_b_resource),
                             ],
                         }
                     ],

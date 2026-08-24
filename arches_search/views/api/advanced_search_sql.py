@@ -1,5 +1,6 @@
 import sqlparse
 
+from arches.app.utils import permission_backend
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
@@ -14,6 +15,7 @@ class AdvancedSearchSQLAPI(APIBase):
         body = JSONDeserializer().deserialize(request.body)
 
         queryset = AdvancedSearchQueryCompiler(body).compile()
+        queryset = permission_backend.filter_resource_queryset(request.user, queryset)
         raw_sql = str(queryset.query)
 
         formatted_sql = sqlparse.format(

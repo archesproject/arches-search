@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.views import View
 
-from arches_search.utils.term_suggestions import build_term_suggestions
+from arches_search.utils.simple_search.term_suggestions import build_term_suggestions
 
 
 class TermSuggestionView(View):
