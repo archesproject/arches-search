@@ -350,4 +350,4 @@ class MyAppConfig(AppConfig):
     ]
 ```
 
-This is opt-in; a datatype with no normalizer just passes its value through untouched. Most flat-scalar datatypes (numbers, booleans) don't need one at all.
+This is opt-in; a datatype with no normalizer just passes its value through untouched. Most scalar datatypes (numbers, booleans) don't need one at all.
