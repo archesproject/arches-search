@@ -149,12 +149,6 @@ def attach_extra_columns(resources, extra_columns_spec, user):
 def _resolve_column(entry, node, resourceinstanceids, user, graph_query_by_graph_slug):
     try:
         graph_slug = entry["graph_slug"]
-        # get_tiles() needs the graph's full node/nodegroup structure to
-        # resolve tile.nodegroup correctly (~13 queries -- see
-        # GraphWithPrefetchingQuerySet.prefetch) regardless of how narrowly
-        # `nodes=` scopes the actual decode. That cost is real but paid at
-        # most once per graph per request: every column sharing a graph_slug
-        # reuses the same (already-evaluated) queryset instead of repeating it.
         if graph_slug not in graph_query_by_graph_slug:
             graph_query_by_graph_slug[graph_slug] = (
                 GraphWithPrefetching.objects.prefetch(graph_slug)
