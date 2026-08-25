@@ -2,16 +2,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
 
-from arches_search.utils.advanced_search.literal_clause_evaluator import (
+from arches_search.utils.advanced_search.clause_evaluation.literal_clause_evaluator import (
     LiteralClauseEvaluator,
 )
-from arches_search.utils.advanced_search.related_clause_evaluator import (
+from arches_search.utils.advanced_search.clause_evaluation.related_clause_evaluator import (
     RelatedClauseEvaluator,
 )
-from arches_search.utils.advanced_search.tile_scope_evaluator import (
+from arches_search.utils.advanced_search.clause_evaluation.tile_scope_evaluator import (
     TileScopeEvaluator,
 )
-from arches_search.utils.advanced_search.node_alias_datatype_registry import (
+from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
 from arches_search.utils.advanced_search.relationship_utils import (

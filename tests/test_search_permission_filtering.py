@@ -41,12 +41,16 @@ class SearchPermissionFilteringTest(TestCase):
         )
 
         cls.granted_resource = ResourceInstance(
-            resourceinstanceid=uuid.uuid4(), graph=cls.graph
+            resourceinstanceid=uuid.uuid4(),
+            graph=cls.graph,
+            descriptors={"en": {"name": "Granted Resource"}},
         )
         cls.granted_resource.save()
 
         cls.restricted_resource = ResourceInstance(
-            resourceinstanceid=uuid.uuid4(), graph=cls.graph
+            resourceinstanceid=uuid.uuid4(),
+            graph=cls.graph,
+            descriptors={"en": {"name": "Restricted Resource"}},
         )
         cls.restricted_resource.save()
 
@@ -208,3 +212,93 @@ class SearchPermissionFilteringTest(TestCase):
             self.assertIn("alderaan expedition", values)
         with self.subTest("restricted term visible"):
             self.assertIn("alderaan archives", values)
+
+    # --- ResourceNamesForPayloadAPI ---
+
+    def _resource_names_payload(self):
+        return {
+            "clauses": [
+                {
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": [
+                                {
+                                    "resourceId": str(
+                                        self.granted_resource.resourceinstanceid
+                                    )
+                                },
+                                {
+                                    "resourceId": str(
+                                        self.restricted_resource.resourceinstanceid
+                                    )
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "groups": [],
+        }
+
+    def test_resource_names_for_payload_excludes_ungranted_resource_for_member(self):
+        self.client.force_login(self.member)
+        response = self.client.post(
+            reverse("resource_names_for_payload"),
+            json.dumps(self._resource_names_payload()),
+            content_type="application/json",
+        )
+
+        with self.subTest("status code"):
+            self.assertEqual(response.status_code, 200)
+        names_by_id = response.json()
+        with self.subTest("granted resource name visible"):
+            self.assertIn(str(self.granted_resource.resourceinstanceid), names_by_id)
+        with self.subTest("restricted resource name hidden"):
+            self.assertNotIn(
+                str(self.restricted_resource.resourceinstanceid), names_by_id
+            )
+
+    # --- AdvancedSearchSQLAPI ---
+
+    def test_advanced_search_sql_applies_permission_filter_for_member(self):
+        """Member and superuser SQL for the same query must differ: the superuser's compiled queryset is unfiltered, the member's gains a permission-scoping subquery. Before this fix the two were identical regardless of who asked."""
+        body = self._advanced_search_body()
+
+        self.client.force_login(self.member)
+        member_response = self.client.post(
+            reverse("advanced_search_sql"),
+            json.dumps(body),
+            content_type="application/json",
+        )
+
+        self.client.force_login(self.admin)
+        admin_response = self.client.post(
+            reverse("advanced_search_sql"),
+            json.dumps(body),
+            content_type="application/json",
+        )
+
+        with self.subTest("status codes"):
+            self.assertEqual(member_response.status_code, 200)
+            self.assertEqual(admin_response.status_code, 200)
+        with self.subTest("member SQL is permission-scoped"):
+            self.assertNotEqual(
+                member_response.json()["sql"], admin_response.json()["sql"]
+            )
+
+    def test_resource_names_for_payload_superuser_sees_all_names(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse("resource_names_for_payload"),
+            json.dumps(self._resource_names_payload()),
+            content_type="application/json",
+        )
+
+        with self.subTest("status code"):
+            self.assertEqual(response.status_code, 200)
+        names_by_id = response.json()
+        with self.subTest("granted resource name visible"):
+            self.assertIn(str(self.granted_resource.resourceinstanceid), names_by_id)
+        with self.subTest("restricted resource name visible"):
+            self.assertIn(str(self.restricted_resource.resourceinstanceid), names_by_id)

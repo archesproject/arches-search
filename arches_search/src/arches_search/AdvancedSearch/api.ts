@@ -133,6 +133,32 @@ export async function getRelatableNodesTreeForGraphId(graphId: string) {
     return parsed;
 }
 
+export async function getRelatableNodesTreeForGraphPair(
+    graphId: string,
+    otherGraphId: string,
+) {
+    const response = await fetch(
+        generateArchesURL(
+            "arches_search:api-relatable-nodes-tree-for-graph-pair",
+            {
+                graph_id: graphId,
+                other_graph_id: otherGraphId,
+            },
+        ),
+        {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
 export async function getAdvancedSearchFacets() {
     const response = await fetch(
         generateArchesURL("arches_search:all_datatype_facets"),

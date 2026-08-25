@@ -35,16 +35,16 @@ const lifecycleState = inject(
     "lifecycleState",
 ) as Ref<ResourceInstanceLifecycleState | null>;
 const isExpanded = inject("searchResultExpanded") as Ref<boolean>;
-const viewRelatedResource = inject("viewRelatedResource") as (
-    resource: RelatedResource,
-) => void;
+const viewRelatedResource = inject<
+    ((resource: RelatedResource) => void) | null
+>("viewRelatedResource", null);
 
 function toggleExpanded(): void {
     isExpanded.value = !isExpanded.value;
 }
 
 function onViewRelated(): void {
-    viewRelatedResource({
+    viewRelatedResource?.({
         id: resourceInstanceId,
         title: resourceDisplayName.value,
     });
@@ -148,6 +148,7 @@ const lifecycleSeverity = computed<
                     :label="$gettext('Edit')"
                 />
                 <Button
+                    v-if="viewRelatedResource"
                     icon="pi pi-sitemap"
                     variant="link"
                     :label="$gettext('Related')"

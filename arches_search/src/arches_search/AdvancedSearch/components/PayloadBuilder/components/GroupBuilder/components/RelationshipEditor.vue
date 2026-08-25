@@ -11,6 +11,8 @@ import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilde
 import type {
     GraphModel,
     PathSelection,
+    RelatableNodesTreeForGraphPairResponse,
+    RelatableNodesTreeResponse,
     RelationshipBlock,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
@@ -33,19 +35,36 @@ const { relationship, anchorGraphSlug, innerGraphSlug } = defineProps<{
 
 const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs")!;
 const getRelatableNodesTreeForGraphId = inject<
-    (graphId: string) => Promise<{ relatable_graphs: GraphModel[] }>
+    (graphId: string) => Promise<RelatableNodesTreeResponse>
 >("getRelatableNodesTreeForGraphId")!;
+const getRelatableNodesTreeForGraphPair = inject<
+    (
+        graphId: string,
+        otherGraphId: string,
+    ) => Promise<RelatableNodesTreeForGraphPairResponse>
+>("getRelatableNodesTreeForGraphPair")!;
 
 const isLoadingRelatableTree = ref(false);
 const relatableTreeError = ref<Error | null>(null);
 
-const relatableNodesTree = ref<{
-    relatable_graphs: GraphModel[];
-} | null>(null);
+const relatableNodesTree = ref<RelatableNodesTreeResponse | null>(null);
+
+const isLoadingPairwiseTree = ref(false);
+const pairwiseTreeError = ref<Error | null>(null);
+
+const pairwiseNodesTree = ref<RelatableNodesTreeForGraphPairResponse | null>(
+    null,
+);
 
 const anchorGraph = computed(() => {
     return graphs.value.find(
         (graphModel) => graphModel.slug === anchorGraphSlug,
+    );
+});
+
+const innerGraph = computed(() => {
+    return graphs.value.find(
+        (graphModel) => graphModel.slug === innerGraphSlug,
     );
 });
 
@@ -91,6 +110,7 @@ const selectedRelationshipNode = computed<PathSelection | null>(() => {
     return {
         graph_slug: relationship.path.graph_slug,
         node_alias: relationship.path.node_alias,
+        is_inverse: relationship.is_inverse,
     };
 });
 
@@ -118,6 +138,14 @@ watch(
         }
         emitPathReset();
     },
+);
+
+watch(
+    () => [anchorGraphSlug, innerGraphSlug] as const,
+    async () => {
+        await loadPairwiseNodesTree();
+    },
+    { immediate: true },
 );
 
 async function loadRelatableTree() {
@@ -157,6 +185,32 @@ async function loadRelatableTree() {
     }
 }
 
+async function loadPairwiseNodesTree(): Promise<void> {
+    isLoadingPairwiseTree.value = true;
+    pairwiseTreeError.value = null;
+
+    const graphId = anchorGraph.value?.graphid;
+    const otherGraphId = innerGraph.value?.graphid;
+
+    if (!graphId || !otherGraphId) {
+        pairwiseNodesTree.value = null;
+        isLoadingPairwiseTree.value = false;
+        return;
+    }
+
+    try {
+        pairwiseNodesTree.value = await getRelatableNodesTreeForGraphPair(
+            graphId,
+            otherGraphId,
+        );
+    } catch (error) {
+        pairwiseTreeError.value = error as Error;
+        pairwiseNodesTree.value = null;
+    } finally {
+        isLoadingPairwiseTree.value = false;
+    }
+}
+
 function emitPathReset(): void {
     emit("update:relationship", {
         ...relationship,
@@ -180,7 +234,7 @@ function onUpdateSelectedNode(nextSelectedNode: PathSelection | null): void {
             graph_slug: nextSelectedNode.graph_slug,
             node_alias: nextSelectedNode.node_alias,
         },
-        is_inverse: nextSelectedNode.graph_slug !== anchorGraphSlug,
+        is_inverse: nextSelectedNode.is_inverse ?? false,
     });
 }
 
@@ -238,18 +292,21 @@ function onChangeTraversalQuantifier(nextQuantifier: string): void {
                     }}
                 </span>
 
+                <Message
+                    v-if="innerGraphSlug && pairwiseTreeError"
+                    severity="error"
+                    class="relationship-message"
+                >
+                    {{ pairwiseTreeError.message }}
+                </Message>
+
                 <div
-                    v-if="innerGraphSlug"
+                    v-else-if="innerGraphSlug"
                     class="relationship-path-builder"
                 >
                     <PathBuilder
-                        :graph-slugs="[anchorGraphSlug, innerGraphSlug]"
+                        :graph-options-tree="pairwiseNodesTree?.options ?? []"
                         :selected-node="selectedRelationshipNode"
-                        :restrict-to-resource-instance-datatypes="true"
-                        :relationship-between-graphs="[
-                            anchorGraphSlug,
-                            innerGraphSlug,
-                        ]"
                         :should-prepend-graph-name="true"
                         @update:selected-node="onUpdateSelectedNode"
                     />

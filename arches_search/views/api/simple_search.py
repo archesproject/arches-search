@@ -10,7 +10,7 @@ from arches_search.utils.extra_columns import (
     validate_extra_columns,
 )
 from arches_search.utils.search_aggregation import build_aggregations
-from arches_search.utils.search_queryset import (
+from arches_search.utils.simple_search.search_queryset import (
     SimpleSearchQuerysetBuilder,
     build_resource_type_counts,
 )

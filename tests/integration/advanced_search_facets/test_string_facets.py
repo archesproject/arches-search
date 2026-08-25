@@ -352,6 +352,60 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
         cls.tile_without_value.save()
 
+        language_switch_suffix = uuid.uuid4().hex[:8]
+        cls.language_switch_graph = GraphModel.objects.create(
+            graphid=uuid.uuid4(),
+            slug=f"facet_string_language_switch_{language_switch_suffix}",
+            isresource=True,
+        )
+        cls.language_switch_nodegroup = NodeGroup.objects.create(
+            nodegroupid=uuid.uuid4(),
+            cardinality="1",
+        )
+        cls.language_switch_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name=f"value_{language_switch_suffix}",
+            alias=f"value_{language_switch_suffix}",
+            datatype="string",
+            graph=cls.language_switch_graph,
+            nodegroup=cls.language_switch_nodegroup,
+            istopnode=True,
+        )
+
+        cls.stale_language_resource = ResourceInstance(
+            resourceinstanceid=uuid.uuid4(),
+            graph=cls.language_switch_graph,
+        )
+        cls.stale_language_resource.save()
+        TileModel(
+            tileid=uuid.uuid4(),
+            nodegroup=cls.language_switch_nodegroup,
+            resourceinstance=cls.stale_language_resource,
+            data={
+                str(cls.language_switch_node.nodeid): cls._localized_string_value(
+                    "OLDVALUE"
+                )
+            },
+            provisionaledits=None,
+        ).save()
+
+        cls.displayed_language_resource = ResourceInstance(
+            resourceinstanceid=uuid.uuid4(),
+            graph=cls.language_switch_graph,
+        )
+        cls.displayed_language_resource.save()
+        TileModel(
+            tileid=uuid.uuid4(),
+            nodegroup=cls.language_switch_nodegroup,
+            resourceinstance=cls.displayed_language_resource,
+            data={
+                str(cls.language_switch_node.nodeid): cls._localized_string_value(
+                    "", fr="NEWVALUE"
+                )
+            },
+            provisionaledits=None,
+        ).save()
+
         call_command("arches_search", "reindex_database")
 
     def test_like_matches_a_substring(self):
@@ -617,6 +671,89 @@ class StringAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
 
         self.assertEqual(result, {self.alt_translated_resource.resourceinstanceid})
+
+    def test_equals_with_language_dict_prefers_a_non_empty_locale_over_a_blank_active_one(
+        self,
+    ):
+        """This is the real widget shape: every configured language is present as a key, but only the one the user actually typed into is non-empty. The active UI language's key exists but is blank here, so resolution must fall back to whichever locale has content rather than searching for an empty string."""
+        payload = {
+            "graph_slug": self.multilingual_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.multilingual_graph.slug,
+                        "node_alias": self.multilingual_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "EQUALS",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": self._localized_string_value("", fr="MEDOR"),
+                        }
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.translated_resource.resourceinstanceid})
+
+    def test_equals_with_language_dict_prefers_the_displayed_language_over_a_stale_one(
+        self,
+    ):
+        """Reproduces switching languages mid-edit: the widget leaves the previous language's text in place when you switch, so a French field typed after an English one still carries the old English value alongside the new French one. display_value names which language is actually on screen; resolution must follow it rather than falling back to the active UI language, which would otherwise pick the stale English text back up."""
+        payload = {
+            "graph_slug": self.language_switch_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.language_switch_graph.slug,
+                        "node_alias": self.language_switch_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "EQUALS",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": self._localized_string_value(
+                                "OLDVALUE", fr="NEWVALUE"
+                            ),
+                            "display_value": "NEWVALUE",
+                        }
+                    ],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.displayed_language_resource.resourceinstanceid})
 
     def test_not_equals_with_language_dict_ignores_different_translated_values(self):
         """A localized NOT_EQUALS should only consider values in the selected locale."""

@@ -87,6 +87,8 @@ export type SubjectPath = SubjectPair[];
 export type PathSelection = {
     graph_slug: string;
     node_alias: string;
+    // Disambiguates a self-relationship's two identically-slugged/aliased branches.
+    is_inverse?: boolean;
 };
 export type ClauseSubject = {
     type: ClauseSubjectTypeToken;
@@ -136,6 +138,42 @@ export type NodeMetadataEntry = {
 };
 
 export type NodeMetadataMap = Readonly<Record<string, NodeMetadataEntry>>;
+
+export type RelatableNodeOption = {
+    key: string;
+    label: string;
+    children: RelatableNodeOption[];
+    data: {
+        id: string;
+        graph_id: string;
+        alias: string;
+        name: string;
+        description: string;
+        datatype: string;
+        is_inverse: boolean;
+    };
+};
+
+export type RelatableGraphOption = {
+    key: string;
+    label: string;
+    children: RelatableNodeOption[];
+    data: {
+        graph_id: string;
+        slug: string;
+        name: string;
+    };
+};
+
+export type RelatableNodesTreeResponse = {
+    target_graph_id: string;
+    relatable_graphs: { graph_id: string; slug: string; name: string }[];
+    options: RelatableGraphOption[];
+};
+
+export type RelatableNodesTreeForGraphPairResponse = {
+    options: RelatableGraphOption[];
+};
 
 export interface ResourceTypeCount {
     graph_id: string;
