@@ -4,6 +4,7 @@ import { generateArchesURL } from "@/arches_vue_components/application";
 
 import type {
     GroupPayload,
+    PathSelection,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
@@ -42,6 +43,7 @@ export async function fetchSearchResults({
     mapFilter = null,
     page = 1,
     sort,
+    extraColumns,
 }: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
@@ -49,6 +51,7 @@ export async function fetchSearchResults({
     mapFilter?: FeatureCollection | null;
     page?: number;
     sort?: SortSpec[];
+    extraColumns?: PathSelection[];
 } = {}): Promise<SearchResults> {
     const requestPayload: Record<string, unknown> = {
         graphIds: graphIds,
@@ -60,6 +63,9 @@ export async function fetchSearchResults({
 
     if (sort !== undefined) {
         requestPayload.sort = sort;
+    }
+    if (extraColumns !== undefined) {
+        requestPayload.extra_columns = extraColumns;
     }
 
     const response = await fetch(

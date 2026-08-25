@@ -1,3 +1,5 @@
+import type { AliasedNodeData } from "@/arches_vue_components/types.ts";
+
 export interface AdvancedSearchFacet {
     id: number;
     arity: number;
@@ -173,4 +175,5 @@ export interface ResourceData {
     graph_publication_id?: string;
     principaluser_id?: number;
     resource_instance_lifecycle_state_id?: string | null;
+    extra_columns: { [nodeAlias: string]: AliasedNodeData[] };
 }
