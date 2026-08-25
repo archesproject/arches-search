@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import arches from "arches";
+
 import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
@@ -6,6 +8,7 @@ import Checkbox from "primevue/checkbox";
 
 import { fetchControlledListItems } from "@/arches_search/SimpleSearch/api.ts";
 
+import type { Language } from "@/arches_component_lab/types.ts";
 import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ReferenceFilterOption,
@@ -13,6 +16,9 @@ import type {
 } from "@/arches_search/SimpleSearch/components/attribute-filters/types.ts";
 
 const { $gettext } = useGettext();
+
+const language = arches.activeLanguage;
+const systemLanguage = arches.languages.find((lang: Language) => lang.isdefault)?.code ?? "en";
 
 const { node, modelValue } = defineProps<{
     node: NodeFilterConfigNode;
@@ -44,7 +50,7 @@ watch(
         }
         isLoading.value = true;
         try {
-            const items = await fetchControlledListItems(listId);
+            const items = await fetchControlledListItems(listId, language, systemLanguage);
             options.value = items.map((item) => ({
                 id: item.uri,
                 label: item.label,
