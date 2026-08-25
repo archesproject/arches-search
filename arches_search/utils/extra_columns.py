@@ -6,7 +6,7 @@ from django.utils.translation import gettext as _
 from arches.app.models.models import Node, ResourceInstance
 from arches.app.utils import permission_backend
 
-from arches_querysets.models import TileTree
+from arches_querysets.models import GraphWithPrefetching, TileTree
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +122,7 @@ def attach_extra_columns(resources, extra_columns_spec, user):
         return result
 
     resolved_nodes = resolve_node_refs(extra_columns_spec, user)
+    graph_query_by_graph_slug = {}
 
     for entry in extra_columns_spec:
         node = resolved_nodes.get((entry["graph_slug"], entry["node_alias"]))
@@ -135,7 +136,7 @@ def attach_extra_columns(resources, extra_columns_spec, user):
             continue
 
         values_by_resource = _resolve_column(
-            entry, node, matching_resourceinstanceids, user
+            entry, node, matching_resourceinstanceids, user, graph_query_by_graph_slug
         )
         for resourceinstanceid in matching_resourceinstanceids:
             result[resourceinstanceid][entry["node_alias"]] = values_by_resource.get(
@@ -145,15 +146,28 @@ def attach_extra_columns(resources, extra_columns_spec, user):
     return result
 
 
-def _resolve_column(entry, node, resourceinstanceids, user):
+def _resolve_column(entry, node, resourceinstanceids, user, graph_query_by_graph_slug):
     try:
+        graph_slug = entry["graph_slug"]
+        # get_tiles() needs the graph's full node/nodegroup structure to
+        # resolve tile.nodegroup correctly (~13 queries -- see
+        # GraphWithPrefetchingQuerySet.prefetch) regardless of how narrowly
+        # `nodes=` scopes the actual decode. That cost is real but paid at
+        # most once per graph per request: every column sharing a graph_slug
+        # reuses the same (already-evaluated) queryset instead of repeating it.
+        if graph_slug not in graph_query_by_graph_slug:
+            graph_query_by_graph_slug[graph_slug] = (
+                GraphWithPrefetching.objects.prefetch(graph_slug)
+            )
+
         tiles = TileTree.objects.get_tiles(
-            graph_slug=entry["graph_slug"],
+            graph_slug=graph_slug,
             nodegroup_alias=node.alias,
             resource_ids=resourceinstanceids,
             nodes=[node],
             depth=0,
             as_representation=True,
+            graph_query=graph_query_by_graph_slug[graph_slug],
         )
 
         tiles_by_resource = {}
