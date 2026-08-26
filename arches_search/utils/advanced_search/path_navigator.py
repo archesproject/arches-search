@@ -6,10 +6,10 @@ from django.utils.translation import gettext as _
 from arches_search.utils.advanced_search.constants import (
     TERMINAL_RESOURCE_DATATYPES,
 )
-from arches_search.utils.advanced_search.search_model_registry import (
+from arches_search.utils.advanced_search.registries.search_model_registry import (
     SearchModelRegistry,
 )
-from arches_search.utils.advanced_search.node_alias_datatype_registry import (
+from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
 from arches_search.utils.advanced_search.relationship_utils import (

@@ -1,3 +1,5 @@
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db.models import Q
 
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
@@ -9,6 +11,12 @@ from arches_search.models.models import (
     SharedSearchXUser,
     SharedSearchXGroup,
 )
+
+
+def _is_list_of_ids(value):
+    return isinstance(value, list) and all(
+        isinstance(item, int) and not isinstance(item, bool) for item in value
+    )
 
 
 def _serialize_saved_search(saved_search, include_created_at=True):
@@ -64,6 +72,39 @@ class SavedSearchAPI(APIBase):
         if query_definition is None:
             return JSONResponse({"error": "query_definition is required"}, status=400)
 
+        shared_user_ids = body.get("users", [])
+        shared_group_ids = body.get("groups", [])
+        if not _is_list_of_ids(shared_user_ids) or not _is_list_of_ids(
+            shared_group_ids
+        ):
+            return JSONResponse(
+                {"error": "users and groups must be lists of integer ids"},
+                status=400,
+            )
+
+        # FK constraints are deferred, so an invalid id wouldn't raise until
+        # commit; check existence up front instead.
+        requested_user_ids = set(shared_user_ids)
+        requested_group_ids = set(shared_group_ids)
+        existing_user_ids = set(
+            get_user_model()
+            .objects.filter(pk__in=requested_user_ids)
+            .values_list("pk", flat=True)
+        )
+        existing_group_ids = set(
+            Group.objects.filter(pk__in=requested_group_ids).values_list(
+                "pk", flat=True
+            )
+        )
+        if (
+            existing_user_ids != requested_user_ids
+            or existing_group_ids != requested_group_ids
+        ):
+            return JSONResponse(
+                {"error": "users and groups must reference existing ids"},
+                status=400,
+            )
+
         saved_search = SavedSearch.objects.create(
             name=name,
             description=body.get("description", ""),
@@ -74,14 +115,13 @@ class SavedSearchAPI(APIBase):
         SharedSearchXUser.objects.bulk_create(
             [
                 SharedSearchXUser(saved_search=saved_search, user_id=uid)
-                for uid in body.get("users", [])
+                for uid in shared_user_ids
             ]
         )
-
         SharedSearchXGroup.objects.bulk_create(
             [
                 SharedSearchXGroup(saved_search=saved_search, group_id=gid)
-                for gid in body.get("groups", [])
+                for gid in shared_group_ids
             ]
         )
 

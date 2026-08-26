@@ -88,10 +88,26 @@ class AdvancedSearchFacet(models.Model):
             return None
         return self.target_search_model.model_class()
 
-    def filter_rows(self, rows, resolved_language):
-        if not self.filter_field or resolved_language is None:
+    def filter_rows(self, rows, resolved_filter_value):
+        if not self.filter_field or resolved_filter_value is None:
             return rows
-        return rows.filter(**{self.filter_field: resolved_language})
+        return rows.filter(**{self.filter_field: resolved_filter_value})
+
+
+def _get_operand_normalizer(datatype_name):
+    from arches_search.utils.advanced_search.operand_normalization.operand_normalizer_factory import (
+        OperandNormalizerFactory,
+    )
+
+    return OperandNormalizerFactory().get_normalizer(datatype_name)
+
+
+def _normalize_operands_via_factory(operand_items, datatype_name):
+    normalizer = _get_operand_normalizer(datatype_name)
+    return [
+        {**operand_item, "value": normalizer.normalize_value(operand_item)}
+        for operand_item in operand_items
+    ]
 
 
 class TermSearch(models.Model):
@@ -123,39 +139,23 @@ class TermSearch(models.Model):
     )
 
     @classmethod
-    def normalize_operands(cls, operand_items):
-        active_language_code = get_language()
-        short_language_code = (
-            active_language_code.split("-")[0] if active_language_code else None
-        )
+    def normalize_operands(cls, operand_items, *, datatype_name):
+        normalizer = _get_operand_normalizer(datatype_name)
+
         normalized_items = []
-        resolved_language = None
+        resolved_filter_value = None
         for operand_item in operand_items:
-            raw_value = operand_item.get("value")
-            if isinstance(raw_value, dict) and raw_value:
-                if active_language_code and active_language_code in raw_value:
-                    chosen_language = active_language_code
-                elif short_language_code and short_language_code in raw_value:
-                    chosen_language = short_language_code
-                else:
-                    chosen_language = next(iter(raw_value))
+            item_filter_value = normalizer.resolve_filter_value(operand_item)
+            if item_filter_value is not None:
+                if resolved_filter_value is None:
+                    resolved_filter_value = item_filter_value
+                elif item_filter_value != resolved_filter_value:
+                    raise ValueError("Operands resolved to different filter values")
+            normalized_items.append(
+                {**operand_item, "value": normalizer.normalize_value(operand_item)}
+            )
 
-                if resolved_language is None:
-                    resolved_language = chosen_language
-                elif chosen_language != resolved_language:
-                    raise ValueError(
-                        "Localized string operands resolved to different languages"
-                    )
-
-                language_value = raw_value[chosen_language]
-
-                if isinstance(language_value, dict) and "value" in language_value:
-                    language_value = language_value["value"]
-                normalized_items.append({**operand_item, "value": language_value})
-
-            else:
-                normalized_items.append(operand_item)
-        return normalized_items, resolved_language
+        return normalized_items, resolved_filter_value
 
     class Meta:
         managed = True
@@ -218,6 +218,10 @@ class NumericSearch(models.Model):
     datatype = models.TextField()
     value = models.DecimalField(decimal_places=10, max_digits=64)
 
+    @classmethod
+    def normalize_operands(cls, operand_items, *, datatype_name):
+        return _normalize_operands_via_factory(operand_items, datatype_name), None
+
     class Meta:
         managed = True
         db_table = "arches_search_numeric"
@@ -268,6 +272,10 @@ class UUIDSearch(models.Model):
             models.Index(fields=["graph_slug", "node_alias", "tileid", "value"]),
         ]
 
+    @classmethod
+    def normalize_operands(cls, operand_items, *, datatype_name):
+        return _normalize_operands_via_factory(operand_items, datatype_name), None
+
 
 class DateSearch(models.Model):
     id = models.AutoField(primary_key=True)
@@ -302,22 +310,8 @@ class DateSearch(models.Model):
         ]
 
     @classmethod
-    def normalize_operands(cls, operand_items):
-        from arches.app.utils.date_utils import ExtendedDateFormat
-
-        edtf = ExtendedDateFormat()
-        normalized_items = []
-        for operand_item in operand_items:
-            raw_value = operand_item.get("value")
-            if isinstance(raw_value, str) and raw_value.count("-") == 2:
-                year_str, month_str, day_str = raw_value.split("-")
-                sortable_value = edtf.to_sortable_date(
-                    int(year_str), int(month_str), int(day_str)
-                )
-                normalized_items.append({**operand_item, "value": sortable_value})
-            else:
-                normalized_items.append(operand_item)
-        return normalized_items, None
+    def normalize_operands(cls, operand_items, *, datatype_name):
+        return _normalize_operands_via_factory(operand_items, datatype_name), None
 
 
 class DateRangeSearch(models.Model):
@@ -381,6 +375,10 @@ class BooleanSearch(models.Model):
     datatype = models.TextField()
     value = models.BooleanField()
 
+    @classmethod
+    def normalize_operands(cls, operand_items, *, datatype_name):
+        return _normalize_operands_via_factory(operand_items, datatype_name), None
+
     class Meta:
         managed = True
         db_table = "arches_search_boolean"
@@ -413,6 +411,10 @@ class GeometrySearch(models.Model):
     node_alias = models.TextField()
     datatype = models.TextField()
     geom = GeometryField(srid=4326, spatial_index=False)
+
+    @classmethod
+    def normalize_operands(cls, operand_items, *, datatype_name):
+        return _normalize_operands_via_factory(operand_items, datatype_name), None
 
     class Meta:
         managed = True
@@ -449,6 +451,10 @@ class FileListSearch(models.Model):
     extension = models.TextField(null=True, blank=True)
     file_size = models.BigIntegerField(null=True, blank=True)
     modified_at = models.FloatField(null=True, blank=True)
+
+    @classmethod
+    def normalize_operands(cls, operand_items, *, datatype_name):
+        return _normalize_operands_via_factory(operand_items, datatype_name), None
 
     class Meta:
         managed = True

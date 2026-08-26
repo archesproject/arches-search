@@ -3,6 +3,7 @@ from collections import defaultdict
 from django.db import models
 from django.db.models import F
 from django.db.models.functions import Cast
+from django.utils.translation import gettext as _
 
 from arches.app.models import models as arches_models
 
@@ -88,6 +89,7 @@ def build_relatable_nodes_tree_response(target_graph_uuid):
         ordered_node_ids,
         widget_label_by_node_id,
         parent_by_child_id_by_graph_id,
+        anchor_graph_id=str(target_graph_uuid),
     )
 
     relatable_graphs = [
@@ -106,6 +108,142 @@ def build_relatable_nodes_tree_response(target_graph_uuid):
         "relatable_graphs": relatable_graphs,
         "options": options,
     }
+
+
+def build_relatable_nodes_tree_for_graph_pair(graph_a_uuid, graph_b_uuid):
+    graph_rows_by_id = {
+        str(graph_row["graphid"]): graph_row
+        for graph_row in arches_models.GraphModel.objects.filter(
+            graphid__in=(graph_a_uuid, graph_b_uuid),
+            isresource=True,
+            is_active=True,
+        ).values("graphid", "name", "slug")
+    }
+
+    if not graph_rows_by_id:
+        return {"options": []}
+
+    relatable_graph_ids = sorted(graph_rows_by_id.keys())
+
+    relatable_node_rows = [
+        (node_id, graph_id)
+        for node_id, graph_id in _get_pairwise_linking_node_rows(
+            graph_a_uuid, graph_b_uuid
+        )
+        if graph_id in graph_rows_by_id
+    ]
+
+    parent_by_child_id_by_graph_id = _build_semantic_parent_maps(relatable_graph_ids)
+
+    included_node_ids_by_graph_id = _collect_relatable_nodes_plus_ancestors(
+        relatable_node_rows,
+        parent_by_child_id_by_graph_id,
+    )
+
+    included_node_ids = (
+        set().union(*included_node_ids_by_graph_id.values())
+        if included_node_ids_by_graph_id
+        else set()
+    )
+
+    node_rows_by_id, ordered_node_ids = _fetch_nodes_by_id_with_order(included_node_ids)
+    widget_label_by_node_id = _fetch_primary_widget_labels(included_node_ids)
+
+    options = _build_treeselect_options(
+        relatable_graph_ids,
+        graph_rows_by_id,
+        included_node_ids_by_graph_id,
+        node_rows_by_id,
+        ordered_node_ids,
+        widget_label_by_node_id,
+        parent_by_child_id_by_graph_id,
+        anchor_graph_id=str(graph_a_uuid),
+    )
+
+    if str(graph_a_uuid) == str(graph_b_uuid) and options:
+        options = _duplicate_self_relationship_options(options[0])
+
+    return {"options": options}
+
+
+def _duplicate_self_relationship_options(graph_option):
+    return [
+        _clone_option_tree_with_role(
+            graph_option,
+            role_suffix="forward",
+            label_template=_("%(graph_label)s (outer)"),
+            force_is_inverse=None,
+        ),
+        _clone_option_tree_with_role(
+            graph_option,
+            role_suffix="inverse",
+            label_template=_("%(graph_label)s (inner)"),
+            force_is_inverse=True,
+        ),
+    ]
+
+
+def _clone_option_tree_with_role(
+    graph_option, role_suffix, label_template, force_is_inverse
+):
+    return {
+        "key": f"{graph_option['key']}::{role_suffix}",
+        "label": label_template % {"graph_label": graph_option["label"]},
+        "children": [
+            _clone_node_tree_with_role(child, role_suffix, force_is_inverse)
+            for child in graph_option["children"]
+        ],
+        "data": graph_option["data"],
+    }
+
+
+def _clone_node_tree_with_role(node_option, role_suffix, force_is_inverse):
+    data = dict(node_option["data"])
+    if force_is_inverse is not None:
+        data["is_inverse"] = force_is_inverse
+
+    return {
+        "key": f"{node_option['key']}::{role_suffix}",
+        "label": node_option["label"],
+        "children": [
+            _clone_node_tree_with_role(child, role_suffix, force_is_inverse)
+            for child in node_option["children"]
+        ],
+        "data": data,
+    }
+
+
+def _get_pairwise_linking_node_rows(graph_a_uuid, graph_b_uuid):
+    graph_a_id = str(graph_a_uuid)
+    graph_b_id = str(graph_b_uuid)
+
+    node_rows = (
+        arches_models.Node.objects.filter(
+            graph_id__in=(graph_a_uuid, graph_b_uuid),
+            datatype__in=("resource-instance", "resource-instance-list"),
+            graph__is_active=True,
+        )
+        .annotate(config_jsonb=Cast(F("config"), output_field=models.JSONField()))
+        .values("nodeid", "graph_id", "config_jsonb")
+    )
+
+    linking_node_rows = []
+
+    for node_row in node_rows:
+        own_graph_id = str(node_row["graph_id"])
+        other_graph_id = graph_b_id if own_graph_id == graph_a_id else graph_a_id
+
+        config = node_row.get("config_jsonb") or {}
+        referenced_graph_ids = {
+            graph_entry.get("graphid")
+            for graph_entry in config.get("graphs") or []
+            if graph_entry.get("graphid")
+        }
+
+        if other_graph_id in referenced_graph_ids:
+            linking_node_rows.append((node_row["nodeid"], own_graph_id))
+
+    return linking_node_rows
 
 
 def _get_incoming_node_rows(target_graph_uuid):
@@ -246,6 +384,7 @@ def _build_treeselect_options(
     ordered_node_ids,
     widget_label_by_node_id,
     parent_by_child_id_by_graph_id,
+    anchor_graph_id,
 ):
     options = []
 
@@ -291,6 +430,8 @@ def _build_treeselect_options(
                     "name": node_row.get("name") or "",
                     "description": node_row.get("description") or "",
                     "datatype": node_row.get("datatype"),
+                    "is_inverse": str(node_row.get("graph_id") or graph_id)
+                    != anchor_graph_id,
                 },
             }
 

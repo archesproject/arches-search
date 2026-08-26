@@ -5,6 +5,7 @@ from django.conf import settings
 from django.utils.translation import get_language
 
 from arches.app.models import models as arches_models
+from arches.app.utils import permission_backend
 
 OPERAND_TYPE_LITERAL = "LITERAL"
 
@@ -32,6 +33,12 @@ def _collect_uuid_strings_from_group_payload(
             for item in operand_value:
                 if isinstance(item, str) and _is_valid_uuid_string(item):
                     uuid_strings_found.append(item)
+                elif isinstance(item, dict):
+                    resource_id = item.get("resourceId")
+                    if isinstance(resource_id, str) and _is_valid_uuid_string(
+                        resource_id
+                    ):
+                        uuid_strings_found.append(resource_id)
 
     for child_group in group_payload.get("groups", []):
         uuid_strings_found.extend(_collect_uuid_strings_from_group_payload(child_group))
@@ -77,6 +84,7 @@ def _resolve_resource_display_name(
 
 def build_resource_names_for_payload(
     group_payload: Dict[str, Any],
+    user,
 ) -> Dict[str, str]:
     language_code = get_language() or settings.LANGUAGE_CODE
     default_language_code = settings.LANGUAGE_CODE
@@ -85,8 +93,11 @@ def build_resource_names_for_payload(
     if not all_operand_uuid_strings:
         return {}
 
-    resource_instance_rows = arches_models.ResourceInstance.objects.filter(
-        pk__in=set(all_operand_uuid_strings)
+    resource_instance_rows = permission_backend.filter_resource_queryset(
+        user,
+        arches_models.ResourceInstance.objects.filter(
+            pk__in=set(all_operand_uuid_strings)
+        ),
     ).values("resourceinstanceid", "name", "descriptors")
 
     resource_names_by_id: Dict[str, str] = {}

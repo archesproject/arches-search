@@ -4,16 +4,18 @@ from typing import Any, Dict, List, Optional
 
 from django.db.models import Exists, OuterRef, Q, QuerySet
 
-from arches_search.utils.advanced_search.aggregate_predicate_runtime import (
+from arches_search.utils.advanced_search.predicate_building.aggregate_predicate_runtime import (
     build_grouped_rows_matching_aggregate_predicate,
 )
-from arches_search.utils.advanced_search.child_rows_computer import ChildRowsComputer
+from arches_search.utils.advanced_search.clause_evaluation.child_rows_computer import (
+    ChildRowsComputer,
+)
 from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_ALL,
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
 )
-from arches_search.utils.advanced_search.search_model_clause_evaluator import (
+from arches_search.utils.advanced_search.clause_evaluation.search_model_clause_evaluator import (
     SearchModelClauseEvaluator,
 )
 from arches_search.utils.advanced_search.specs import (
@@ -132,7 +134,7 @@ class LiteralClauseEvaluator:
             subject_node_alias=subject_node_alias,
         )
         normalized_operand_items, filter_value = (
-            model_class.normalize_operands(operand_items)
+            model_class.normalize_operands(operand_items, datatype_name=datatype_name)
             if hasattr(model_class, "normalize_operands")
             else (list(operand_items), None)
         )

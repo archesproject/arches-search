@@ -16,8 +16,10 @@ from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
 )
 from arches_search.utils.geo_utils import GeoUtils
-from arches_search.utils.term_matching import build_term_match_filter
-from arches_search.utils.through_resource_search import get_related_resources_by_text
+from arches_search.utils.simple_search.term_matching import build_term_match_filter
+from arches_search.utils.simple_search.through_resource_search import (
+    get_related_resources_by_text,
+)
 
 
 class SimpleSearchQuerysetBuilder:

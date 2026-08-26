@@ -2,7 +2,7 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.node_alias_metadata import (
+from arches_search.utils.advanced_search.node_alias_metadata import (
     build_node_alias_metadata_for_payload_query,
 )
 
