@@ -1,17 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, useTemplateRef, watch } from "vue";
+import { nextTick, useTemplateRef, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
-import Panel from "primevue/panel";
 
 import {
-    BufferControls,
-    DrawControls,
     MapComponent,
     resolveDefaultOverlayLayers,
-    ShapefileDropZone,
 } from "@/arches_vue_components/components";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -20,7 +16,6 @@ import type { FeatureCollection } from "geojson";
 import type { MapLayer } from "@/arches_vue_components/components";
 
 const SEARCH_RESULTS_SOURCE = "arches-search-results";
-const MAX_DRAWN_FEATURES = 1;
 
 function resolveOverlayLayersWithSearchResults(
     candidateOverlayLayers: MapLayer[],
@@ -48,11 +43,6 @@ const { $gettext } = useGettext();
 
 const mapComponentRef =
     useTemplateRef<InstanceType<typeof MapComponent>>("mapComponent");
-
-// Simple Search renders ShapefileDropZone/BufferControls/DrawControls above
-// and over MapComponent rather than nested inside it, so they need its
-// MapContext passed explicitly instead of picking it up via provide/inject.
-const mapContext = computed(() => mapComponentRef.value?.context);
 
 watch(resultsTileUrl, (tileUrl) => setSearchTiles(tileUrl));
 
@@ -89,10 +79,6 @@ function onValueUpdate(updatedValue: FeatureCollection) {
         emit("update:modelValue", updatedValue);
     }
 }
-
-function clearDrawnFeatures() {
-    mapContext.value?.deleteAllDrawnFeatures();
-}
 </script>
 
 <template>
@@ -111,9 +97,6 @@ function clearDrawnFeatures() {
                 @click="emit('close')"
             />
         </div>
-        <!--
-        Superseded by the interaction-tools="[]" + floating-draw-panel setup
-        below -- kept here, commented out, pending follow-up on this pass.
         <MapComponent
             ref="mapComponent"
             :value="modelValue"
@@ -121,39 +104,6 @@ function clearDrawnFeatures() {
             @update:overlays="onOverlaysUpdate"
             @update:value="onValueUpdate"
         />
-        -->
-        <div
-            v-if="mapContext"
-            class="map-tools-bar"
-        >
-            <ShapefileDropZone :context="mapContext" />
-            <BufferControls :context="mapContext" />
-        </div>
-        <div class="map-area">
-            <MapComponent
-                ref="mapComponent"
-                :value="modelValue"
-                :resolve-overlay-layers="resolveOverlayLayersWithSearchResults"
-                :max-features="MAX_DRAWN_FEATURES"
-                :interaction-tools="[]"
-                @update:overlays="onOverlaysUpdate"
-                @update:value="onValueUpdate"
-            />
-            <Panel
-                v-if="mapContext"
-                class="floating-draw-panel"
-                :header="$gettext('Draw')"
-            >
-                <div class="floating-draw-panel-content">
-                    <DrawControls :context="mapContext" />
-                    <Button
-                        :label="$gettext('Remove All')"
-                        severity="secondary"
-                        @click="clearDrawnFeatures"
-                    />
-                </div>
-            </Panel>
-        </div>
     </div>
 </template>
 
@@ -201,36 +151,5 @@ function clearDrawnFeatures() {
 .map-filter-close-btn:hover {
     background: var(--p-content-hover-background);
     color: var(--p-text-color);
-}
-
-.map-tools-bar {
-    display: flex;
-    flex-direction: row;
-    gap: 1.25rem;
-}
-
-.map-tools-bar > * {
-    flex: 1 1 0;
-}
-
-.map-area {
-    position: relative;
-    display: flex;
-    flex: 1;
-    min-height: 0;
-}
-
-.floating-draw-panel {
-    position: absolute;
-    inset-block-start: 1.25rem;
-    inset-inline-end: 1.25rem;
-    z-index: 1;
-    width: 22rem;
-}
-
-.floating-draw-panel-content {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
 }
 </style>
