@@ -14,10 +14,14 @@ import type {
     ReferenceFilterValue,
 } from "@/arches_search/SimpleSearch/components/attribute-filters/types.ts";
 
+const DEFAULT_LANGUAGE_CODE = "en";
+
 const { $gettext } = useGettext();
 
 const language = arches.activeLanguage;
-const systemLanguage = arches.languages.find((lang: Language) => lang.isdefault)?.code ?? "en";
+const systemLanguage =
+    arches.languages.find((lang: Language) => lang.isdefault)?.code ??
+    DEFAULT_LANGUAGE_CODE;
 
 const { node, modelValue } = defineProps<{
     node: NodeFilterConfigNode;
