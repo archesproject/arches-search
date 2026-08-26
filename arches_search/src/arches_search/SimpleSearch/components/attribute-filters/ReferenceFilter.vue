@@ -7,7 +7,7 @@ import Checkbox from "primevue/checkbox";
 
 import { fetchControlledListItems } from "@/arches_search/SimpleSearch/api.ts";
 
-import type { Language } from "@/arches_component_lab/types.ts";
+import type { Language } from "@/arches_controlled_lists/types.ts";
 import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ReferenceFilterOption,
