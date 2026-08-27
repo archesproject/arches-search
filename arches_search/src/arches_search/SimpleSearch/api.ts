@@ -3,6 +3,7 @@ import Cookies from "js-cookie";
 import { generateArchesURL } from "@/arches_vue_components/application";
 import { getItemLabel } from "@/arches_controlled_lists/utils.ts";
 
+import type { ControlledListItem } from "@/arches_controlled_lists/types.ts";
 import type {
     GroupPayload,
     SearchResults,
@@ -110,14 +111,14 @@ export async function fetchControlledListItems(
         throw new Error(response.statusText);
     }
     const data = await response.json();
-    return (data.items as Array<Record<string, unknown>>)
-        .filter((item: Record<string, unknown>) => !item.guide)
-        .map((item: Record<string, unknown>) => {
+    return (data.items as ControlledListItem[])
+        .filter((item) => !item.guide)
+        .map((item) => {
             return {
-                id: item.id as string,
+                id: item.id,
                 label: getItemLabel(item, language, systemLanguage).value,
-                uri: item.uri as string,
-                sortorder: item.sortorder as number,
+                uri: item.uri,
+                sortorder: item.sortorder,
             };
         });
 }
