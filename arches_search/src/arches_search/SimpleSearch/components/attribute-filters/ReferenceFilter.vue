@@ -1,24 +1,27 @@
 <script setup lang="ts">
-import arches from "arches";
-
 import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import arches from "arches";
 import Checkbox from "primevue/checkbox";
 
 import { fetchControlledListItems } from "@/arches_search/SimpleSearch/api.ts";
 
-import type { Language } from "@/arches_component_lab/types.ts";
+import type { Language } from "@/arches_controlled_lists/types.ts";
 import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ReferenceFilterOption,
     ReferenceFilterValue,
 } from "@/arches_search/SimpleSearch/components/attribute-filters/types.ts";
 
+const DEFAULT_LANGUAGE_CODE = "en";
+
 const { $gettext } = useGettext();
 
 const language = arches.activeLanguage;
-const systemLanguage = arches.languages.find((lang: Language) => lang.isdefault)?.code ?? "en";
+const systemLanguage =
+    arches.languages.find((lang: Language) => lang.isdefault)?.code ??
+    DEFAULT_LANGUAGE_CODE;
 
 const { node, modelValue } = defineProps<{
     node: NodeFilterConfigNode;
