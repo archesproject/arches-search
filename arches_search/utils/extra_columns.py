@@ -3,18 +3,12 @@ import logging
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
-from arches.app.models.models import Node, ResourceInstance
+from arches.app.models.models import Node
 from arches.app.utils import permission_backend
 
 from arches_querysets.models import GraphWithPrefetching, TileTree
 
 logger = logging.getLogger(__name__)
-
-# These two datatypes' `details`/`display_value` name a *different*
-# resource than the one being displayed (the related resource being
-# pointed at), which is why they alone need the extra permission pass in
-# _filter_permitted_related_resources
-RESOURCE_INSTANCE_DATATYPES = ("resource-instance", "resource-instance-list")
 
 
 def validate_extra_columns(extra_columns_spec):
@@ -70,45 +64,10 @@ def resolve_node_refs(extra_columns_spec, user):
     return resolved
 
 
-def _filter_permitted_related_resources(tiles_by_resource, user):
-    related_resource_ids = set()
-    for values in tiles_by_resource.values():
-        for value in values:
-            for detail in value.get("details") or []:
-                if detail.get("resource_id"):
-                    related_resource_ids.add(detail["resource_id"])
-
-    if not related_resource_ids:
-        return
-
-    permitted_ids = set(
-        str(pk)
-        for pk in permission_backend.filter_resource_queryset(
-            user, ResourceInstance.objects.filter(pk__in=related_resource_ids)
-        ).values_list("resourceinstanceid", flat=True)
-    )
-
-    for values in tiles_by_resource.values():
-        for value in values:
-            details = value.get("details") or []
-            permitted_details = [
-                detail
-                for detail in details
-                if detail.get("resource_id") in permitted_ids
-            ]
-
-            value["details"] = permitted_details
-            value["display_value"] = ", ".join(
-                detail["display_value"] or "" for detail in permitted_details
-            )
-            value["node_value"] = [
-                inner_val
-                for inner_val in value.get("node_value") or []
-                if inner_val and inner_val.get("resourceId") in permitted_ids
-            ]
-
-
 def attach_extra_columns(resources, extra_columns_spec, user):
+    if not extra_columns_spec:
+        return {str(resource.pk): {} for resource in resources}
+
     result = {}
     resourceinstanceids_by_graph_id = {}
     for resource in resources:
@@ -117,9 +76,6 @@ def attach_extra_columns(resources, extra_columns_spec, user):
         resourceinstanceids_by_graph_id.setdefault(resource.graph_id, []).append(
             resourceinstanceid
         )
-
-    if not extra_columns_spec:
-        return result
 
     resolved_nodes = resolve_node_refs(extra_columns_spec, user)
     graph_query_by_graph_slug = {}
@@ -170,9 +126,6 @@ def _resolve_column(entry, node, resourceinstanceids, user, graph_query_by_graph
             tiles_by_resource.setdefault(str(tile.resourceinstance_id), []).append(
                 value
             )
-
-        if node.datatype in RESOURCE_INSTANCE_DATATYPES:
-            _filter_permitted_related_resources(tiles_by_resource, user)
 
         return tiles_by_resource
     except Exception:
