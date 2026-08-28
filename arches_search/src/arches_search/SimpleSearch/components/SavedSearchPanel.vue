@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 import { useToast } from "primevue/usetoast";
 
@@ -29,24 +29,36 @@ const SORT_Z_TO_A = "zToA" as const;
 const SORT_NEWEST = "newest" as const;
 const SORT_OLDEST = "oldest" as const;
 
+const RUN_QUERY_EVENT = "run-query" as const;
+const OPEN_EXPORT_EVENT = "open-export" as const;
+const CLOSE_EVENT = "close" as const;
+
 type SavedSearchSortValue =
     | typeof SORT_A_TO_Z
     | typeof SORT_Z_TO_A
     | typeof SORT_NEWEST
     | typeof SORT_OLDEST;
 
-const { $gettext } = useGettext();
-const toast = useToast();
-const { getSearchDefinition } = useSearchFilters();
-
-const emit = defineEmits<{
-    (event: "run-query", queryDefinition: Record<string, unknown>): void;
-    (event: "open-export"): void;
-    (event: "close"): void;
+const { shouldShowHeader = true, shouldShowSaveTab = true } = defineProps<{
+    shouldShowHeader?: boolean;
+    shouldShowSaveTab?: boolean;
 }>();
 
+const emit = defineEmits<{
+    (
+        event: typeof RUN_QUERY_EVENT,
+        queryDefinition: Record<string, unknown>,
+    ): void;
+    (event: typeof OPEN_EXPORT_EVENT): void;
+    (event: typeof CLOSE_EVENT): void;
+}>();
+
+const { $gettext } = useGettext();
+const toast = useToast();
+const searchFilters = shouldShowSaveTab ? useSearchFilters() : null;
+
 const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
-    SAVE_TAB,
+    shouldShowSaveTab ? SAVE_TAB : MINE_TAB,
 );
 const filterText = ref("");
 const sortValue = ref<SavedSearchSortValue>(SORT_A_TO_Z);
@@ -57,16 +69,36 @@ const saveSearchName = ref("");
 const saveSearchDescription = ref("");
 const isSaving = ref(false);
 
+const sortOptions: SortOption[] = [
+    { label: $gettext("Sort A to Z"), value: SORT_A_TO_Z },
+    { label: $gettext("Sort Z to A"), value: SORT_Z_TO_A },
+    { label: $gettext("Newest first"), value: SORT_NEWEST },
+    { label: $gettext("Oldest first"), value: SORT_OLDEST },
+];
+
+watchEffect(async () => {
+    await loadSearches();
+});
+
+watch(sortValue, () => {
+    searches.value = sortSearches(searches.value);
+});
+
 async function onSaveSearch(): Promise<void> {
     const name = saveSearchName.value.trim();
-    if (!name) return;
+    if (!name || !searchFilters) {
+        return;
+    }
 
     isSaving.value = true;
     try {
         await createSavedSearch(
             name,
             saveSearchDescription.value.trim(),
-            getSearchDefinition() as unknown as Record<string, unknown>,
+            searchFilters.getSearchDefinition() as unknown as Record<
+                string,
+                unknown
+            >,
         );
         saveSearchName.value = "";
         saveSearchDescription.value = "";
@@ -90,14 +122,7 @@ async function onSaveSearch(): Promise<void> {
     }
 }
 
-const sortOptions: SortOption[] = [
-    { label: $gettext("Sort A to Z"), value: SORT_A_TO_Z },
-    { label: $gettext("Sort Z to A"), value: SORT_Z_TO_A },
-    { label: $gettext("Newest first"), value: SORT_NEWEST },
-    { label: $gettext("Oldest first"), value: SORT_OLDEST },
-];
-
-async function loadSearches() {
+async function loadSearches(): Promise<void> {
     if (activeTab.value === SAVE_TAB) return;
 
     isLoading.value = true;
@@ -118,47 +143,55 @@ function sortSearches(items: SavedSearch[]): SavedSearch[] {
     const sorted = [...items];
     switch (sortValue.value) {
         case SORT_Z_TO_A:
-            sorted.sort((a, b) => b.name.localeCompare(a.name));
+            sorted.sort((left, right) => right.name.localeCompare(left.name));
             break;
         case SORT_NEWEST:
             sorted.sort(
-                (a, b) =>
-                    new Date(b.created_at).getTime() -
-                    new Date(a.created_at).getTime(),
+                (left, right) =>
+                    new Date(right.created_at).getTime() -
+                    new Date(left.created_at).getTime(),
             );
             break;
         case SORT_OLDEST:
             sorted.sort(
-                (a, b) =>
-                    new Date(a.created_at).getTime() -
-                    new Date(b.created_at).getTime(),
+                (left, right) =>
+                    new Date(left.created_at).getTime() -
+                    new Date(right.created_at).getTime(),
             );
             break;
         default:
-            sorted.sort((a, b) => a.name.localeCompare(b.name));
+            sorted.sort((left, right) => left.name.localeCompare(right.name));
     }
     return sorted;
 }
 
-async function onDelete(search: SavedSearch) {
+async function onDelete(search: SavedSearch): Promise<void> {
     try {
         await deleteSavedSearch(search.savedsearchid);
         searches.value = searches.value.filter(
-            (s) => s.savedsearchid !== search.savedsearchid,
+            (savedSearch) => savedSearch.savedsearchid !== search.savedsearchid,
         );
-    } catch {
-        /* empty */
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("Failed to delete search"),
+            detail: error instanceof Error ? error.message : undefined,
+        });
     }
 }
 
-function formatDate(iso: string): string {
-    const d = new Date(iso);
-    return d.toLocaleString();
+function formatDate(isoDateString: string): string {
+    const date = new Date(isoDateString);
+    return date.toLocaleString();
 }
 
 function isDynamicQuery(search: SavedSearch): boolean {
-    const qd = search.query_definition;
-    return qd != null && ("groups" in qd || "terms" in qd);
+    const queryDefinition = search.query_definition;
+    return (
+        queryDefinition != null &&
+        ("groups" in queryDefinition || "terms" in queryDefinition)
+    );
 }
 
 function queryTypeIconClasses(search: SavedSearch): string[] {
@@ -168,33 +201,37 @@ function queryTypeIconClasses(search: SavedSearch): string[] {
     return ["pi", "pi-database", "chip-snapshot"];
 }
 
-watch([activeTab, filterText], () => loadSearches());
-watch(sortValue, () => {
-    searches.value = sortSearches(searches.value);
-});
-
-onMounted(() => loadSearches());
+function queryTypeLabel(search: SavedSearch): string {
+    if (isDynamicQuery(search)) {
+        return $gettext("Dynamic query");
+    }
+    return $gettext("Saved Results");
+}
 </script>
 
 <template>
     <div class="saved-search-panel">
-        <div class="panel-header">
+        <div
+            v-if="shouldShowHeader"
+            class="panel-header"
+        >
             <span class="panel-header-title">
                 <i class="pi pi-bookmark-fill" />
                 {{ $gettext("Save/Export Search") }}
             </span>
             <Button
-                :label="$gettext('Close')"
                 icon="pi pi-times"
                 icon-pos="left"
-                :text="true"
                 class="panel-close-btn"
-                @click="emit('close')"
+                :label="$gettext('Close')"
+                :text="true"
+                @click="emit(CLOSE_EVENT)"
             />
         </div>
 
         <div class="panel-tabs">
             <Button
+                v-if="shouldShowSaveTab"
                 :label="$gettext('Save/Export this search')"
                 :text="true"
                 :class="['panel-tab', { active: activeTab === SAVE_TAB }]"
@@ -251,24 +288,24 @@ onMounted(() => loadSearches());
                     id="save-search-description"
                     v-model="saveSearchDescription"
                     class="save-form-input"
-                    :fluid="true"
                     rows="3"
+                    :fluid="true"
                 />
             </div>
             <div class="save-form-actions">
                 <Button
-                    :label="$gettext('Save')"
                     icon="pi pi-check"
+                    :label="$gettext('Save')"
                     :loading="isSaving"
                     :disabled="isSaving || !saveSearchName.trim()"
                     @click="onSaveSearch"
                 />
                 <Button
-                    :label="$gettext('Export')"
                     icon="pi pi-upload"
                     severity="secondary"
                     class="export-trigger-btn"
-                    @click="emit('open-export')"
+                    :label="$gettext('Export')"
+                    @click="emit(OPEN_EXPORT_EVENT)"
                 />
             </div>
         </div>
@@ -277,18 +314,18 @@ onMounted(() => loadSearches());
             <div class="panel-controls">
                 <InputText
                     v-model="filterText"
-                    :placeholder="$gettext('Find...')"
                     class="filter-input"
+                    :placeholder="$gettext('Find...')"
                     :fluid="true"
                 />
                 <div class="sort-row">
                     <Select
                         v-model="sortValue"
-                        :options="sortOptions"
                         option-label="label"
                         option-value="value"
                         class="sort-select"
                         variant="filled"
+                        :options="sortOptions"
                     />
                 </div>
             </div>
@@ -314,18 +351,14 @@ onMounted(() => loadSearches());
                 >
                     <div class="item-header">
                         <i
-                            :class="queryTypeIconClasses(search)"
                             class="item-icon query-type-chip"
+                            :class="queryTypeIconClasses(search)"
                         />
                         <span class="item-name">{{ search.name }}</span>
                     </div>
                     <div class="item-meta">
                         <span class="item-type">
-                            {{
-                                isDynamicQuery(search)
-                                    ? $gettext("Dynamic query")
-                                    : $gettext("Saved Results")
-                            }}
+                            {{ queryTypeLabel(search) }}
                         </span>
                         <span class="item-date">
                             {{ $gettext("Saved:") }}
@@ -347,32 +380,34 @@ onMounted(() => loadSearches());
                     <div class="item-actions">
                         <Button
                             v-if="isDynamicQuery(search)"
-                            :label="$gettext('Run query')"
                             icon="pi pi-play"
                             icon-pos="left"
                             size="small"
-                            :text="true"
                             class="action-btn"
-                            @click="emit('run-query', search.query_definition)"
+                            :label="$gettext('Run query')"
+                            :text="true"
+                            @click="
+                                emit(RUN_QUERY_EVENT, search.query_definition)
+                            "
                         />
                         <Button
                             v-else
-                            :label="$gettext('Show results')"
                             icon="pi pi-play"
                             icon-pos="left"
                             size="small"
+                            class="action-btn"
+                            :label="$gettext('Show results')"
                             :text="true"
                             :disabled="true"
-                            class="action-btn"
                         />
                         <Button
                             v-if="activeTab === MINE_TAB"
-                            :label="$gettext('Delete')"
                             icon="pi pi-times"
                             icon-pos="left"
                             size="small"
-                            :text="true"
                             class="action-btn action-delete"
+                            :label="$gettext('Delete')"
+                            :text="true"
                             @click="onDelete(search)"
                         />
                     </div>
@@ -426,7 +461,7 @@ onMounted(() => loadSearches());
     display: flex;
     flex-shrink: 0;
     padding: 0.3125rem 0.75rem;
-    border-bottom: 0.0625rem solid var(--p-content-border-color);
+    border-block-end: 0.0625rem solid var(--p-content-border-color);
 }
 
 .panel-tab {
@@ -434,7 +469,7 @@ onMounted(() => loadSearches());
     min-inline-size: 0;
     padding: 0.5rem 0.625rem;
     overflow: hidden;
-    border-bottom: 0.125rem solid transparent;
+    border-block-end: 0.125rem solid transparent;
     border-radius: 0;
     font-size: 1.2rem;
     font-weight: 500;
@@ -448,7 +483,7 @@ onMounted(() => loadSearches());
 }
 
 .panel-tab.active {
-    border-bottom-color: var(--p-primary-color);
+    border-block-end-color: var(--p-primary-color);
     color: var(--p-text-color);
     font-weight: 600;
 }
@@ -510,7 +545,7 @@ onMounted(() => loadSearches());
     gap: 0.5rem;
     padding: 0.625rem 1rem 0.5rem;
     flex-shrink: 0;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    border-block-end: 0.125rem solid var(--p-content-border-color);
 }
 
 .filter-input {
@@ -571,14 +606,14 @@ onMounted(() => loadSearches());
 
 .saved-search-item:hover {
     border-color: var(--p-primary-color);
-    box-shadow: 0 0.1rem 0.3rem rgba(0, 0, 0, 0.08);
+    box-shadow: var(--arches-search-item-hover-shadow);
 }
 
 .item-header {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    margin-bottom: 0.2rem;
+    margin-block-end: 0.2rem;
 }
 
 .item-icon {
@@ -620,7 +655,7 @@ onMounted(() => loadSearches());
     gap: 0.6rem;
     font-size: 1.36rem;
     color: var(--p-text-muted-color);
-    margin-bottom: 0.2rem;
+    margin-block-end: 0.2rem;
 }
 
 .item-description {
@@ -636,7 +671,7 @@ onMounted(() => loadSearches());
 .item-actions {
     display: flex;
     gap: 0.4rem;
-    margin-top: 0.125rem;
+    margin-block-start: 0.125rem;
 }
 
 .action-btn {
