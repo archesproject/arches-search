@@ -5,32 +5,32 @@ import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
 
-import MapWidget from "@/arches_vue_components/widgets/MapWidget/MapWidget.vue";
+import MapComponent from "@/arches_vue_components/components/MapComponent/MapComponent.vue";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import type { FeatureCollection } from "geojson";
 
 const SEARCH_RESULTS_SOURCE = "arches-search-results";
-const SEARCH_RENDER_CONTEXT = "search";
+const REMOVE_EVENT = "remove" as const;
+const CLOSE_EVENT = "close" as const;
 
 const { modelValue, visible } = defineProps<{
     modelValue: FeatureCollection | null;
     visible?: boolean;
 }>();
 
-const { resultsTileUrl } = useSearchFilters();
-
 const emit = defineEmits<{
     (event: "update:modelValue", value: FeatureCollection): void;
-    (event: "remove"): void;
-    (event: "close"): void;
+    (event: typeof REMOVE_EVENT): void;
+    (event: typeof CLOSE_EVENT): void;
 }>();
 
+const { resultsTileUrl } = useSearchFilters();
 const { $gettext } = useGettext();
 
-const mapWidgetRef =
-    useTemplateRef<InstanceType<typeof MapWidget>>("mapWidget");
+const mapComponentRef =
+    useTemplateRef<InstanceType<typeof MapComponent>>("mapComponent");
 
 watch(resultsTileUrl, (tileUrl) => setSearchTiles(tileUrl));
 
@@ -39,30 +39,48 @@ watch(
     (isVisible) => {
         if (isVisible) {
             nextTick(() => {
-                mapWidgetRef.value?.map?.resize();
+                mapComponentRef.value?.map?.resize();
             });
         }
     },
 );
 
-function onOverlaysUpdate() {
+watch(
+    () => modelValue,
+    (updatedModelValue, previousModelValue) => {
+        const previousFeatureCount = previousModelValue?.features.length ?? 0;
+        const updatedFeatureCount = updatedModelValue?.features.length ?? 0;
+
+        if (previousFeatureCount > 0 && updatedFeatureCount === 0) {
+            mapComponentRef.value?.context?.deleteAllDrawnFeatures();
+        }
+    },
+);
+
+function onMapReady(): void {
+    if (modelValue && modelValue.features.length > 0) {
+        mapComponentRef.value?.context?.addFeatures(modelValue.features);
+    }
+}
+
+function onOverlaysUpdate(): void {
     requestAnimationFrame(() => {
         nextTick(() => setSearchTiles(resultsTileUrl.value));
     });
 }
 
-function setSearchTiles(tileUrl: string | null) {
+function setSearchTiles(tileUrl: string | null): void {
     if (!tileUrl) return;
-    const source = mapWidgetRef.value?.map?.getSource(SEARCH_RESULTS_SOURCE);
+    const source = mapComponentRef.value?.map?.getSource(SEARCH_RESULTS_SOURCE);
     if (!source) return;
     (source as unknown as { setTiles: (tiles: string[]) => void }).setTiles([
         tileUrl,
     ]);
 }
 
-function onEditorUpdate(updatedValue: FeatureCollection): void {
+function onMapUpdate(updatedValue: FeatureCollection): void {
     if (updatedValue.features.length === 0) {
-        emit("remove");
+        emit(REMOVE_EVENT);
     } else {
         emit("update:modelValue", updatedValue);
     }
@@ -77,21 +95,20 @@ function onEditorUpdate(updatedValue: FeatureCollection): void {
                 {{ $gettext("Map Filter") }}
             </span>
             <Button
-                :label="$gettext('Close')"
                 icon="pi pi-times"
                 icon-pos="left"
-                :text="true"
                 class="map-filter-close-btn"
-                @click="emit('close')"
+                :label="$gettext('Close')"
+                :text="true"
+                @click="emit(CLOSE_EVENT)"
             />
         </div>
-        <MapWidget
-            ref="mapWidget"
-            mode="edit"
-            :render-context="SEARCH_RENDER_CONTEXT"
+        <MapComponent
+            ref="mapComponent"
             :value="modelValue"
             @update:overlays="onOverlaysUpdate"
-            @update:value="onEditorUpdate"
+            @update:value="onMapUpdate"
+            @ready="onMapReady"
         />
     </div>
 </template>
@@ -114,8 +131,8 @@ function onEditorUpdate(updatedValue: FeatureCollection): void {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 0.75rem;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    padding-block-end: 0.75rem;
+    border-block-end: 0.125rem solid var(--p-content-border-color);
 }
 
 .map-filter-title {
