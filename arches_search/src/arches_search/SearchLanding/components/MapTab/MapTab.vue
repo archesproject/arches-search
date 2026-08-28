@@ -3,7 +3,7 @@ import { computed, ref, useTemplateRef } from "vue";
 import { useRouter } from "vue-router";
 
 import MapComponent from "@/arches_vue_components/components/MapComponent/MapComponent.vue";
-import SpatialFilterTool from "@/arches_search/SearchLanding/tabs/components/SpatialFilterTool/SpatialFilterTool.vue";
+import SpatialFilterTool from "@/arches_search/SearchLanding/components/MapTab/components/SpatialFilterTool/SpatialFilterTool.vue";
 
 import { routeNames } from "@/arches_search/routes.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";

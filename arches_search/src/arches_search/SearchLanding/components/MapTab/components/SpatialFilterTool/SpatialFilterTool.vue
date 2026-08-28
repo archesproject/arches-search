@@ -5,9 +5,9 @@ import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
 
-import AppliedFiltersList from "@/arches_search/SearchLanding/tabs/components/SpatialFilterTool/components/AppliedFiltersList.vue";
-import BufferDistanceControls from "@/arches_search/SearchLanding/tabs/components/SpatialFilterTool/components/BufferDistanceControls.vue";
-import DrawTypeButtons from "@/arches_search/SearchLanding/tabs/components/SpatialFilterTool/components/DrawTypeButtons.vue";
+import AppliedFiltersList from "@/arches_search/SearchLanding/components/MapTab/components/SpatialFilterTool/components/AppliedFiltersList.vue";
+import BufferDistanceControls from "@/arches_search/SearchLanding/components/MapTab/components/SpatialFilterTool/components/BufferDistanceControls.vue";
+import DrawTypeButtons from "@/arches_search/SearchLanding/components/MapTab/components/SpatialFilterTool/components/DrawTypeButtons.vue";
 
 import { useResolvedMapContext } from "@/arches_vue_components/components/MapComponent/composables/useMapContext.ts";
 

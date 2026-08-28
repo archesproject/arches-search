@@ -31,19 +31,22 @@ export function useLandingContent(): {
                 slug: "resource-types",
                 label: $gettext("Resource Types"),
                 icon: "pi pi-sitemap",
-                component: "arches_search/SearchLanding/tabs/ResourceTypesTab",
+                component:
+                    "arches_search/SearchLanding/components/ResourceTypesTab",
             },
             {
                 slug: "map",
                 label: $gettext("Map"),
                 icon: "pi pi-map",
-                component: "arches_search/SearchLanding/tabs/MapTab",
+                component:
+                    "arches_search/SearchLanding/components/MapTab/MapTab",
             },
             {
                 slug: "saved-searches",
                 label: $gettext("Saved Searches"),
                 icon: "pi pi-bookmark-fill",
-                component: "arches_search/SearchLanding/tabs/SavedSearchesTab",
+                component:
+                    "arches_search/SearchLanding/components/SavedSearchesTab",
             },
         ],
     };
