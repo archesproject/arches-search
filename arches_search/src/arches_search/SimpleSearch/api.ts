@@ -12,10 +12,11 @@ import type {
     SortSpec,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
+import type { SearchRequestTerm } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import type { FeatureCollection } from "geojson";
 
 export async function createSearchMVTContext(params: {
-    terms?: { type: string; text: string; inverted: boolean }[];
+    terms?: SearchRequestTerm[];
     query?: GroupPayload;
     graphIds?: string[];
     mapFilter?: FeatureCollection | null;
@@ -43,7 +44,7 @@ export async function fetchSearchResults({
     page = 1,
     sort,
 }: {
-    terms?: { type: string; text: string; inverted: boolean }[];
+    terms?: SearchRequestTerm[];
     query?: GroupPayload;
     graphIds?: string[];
     mapFilter?: FeatureCollection | null;
@@ -116,7 +117,7 @@ export async function fetchControlledListItems(
                 value: string;
             }>;
             const prefLabel = values.find(
-                (v) => v.valuetype_id === "prefLabel",
+                (valueEntry) => valueEntry.valuetype_id === "prefLabel",
             );
             return {
                 id: item.id as string,
