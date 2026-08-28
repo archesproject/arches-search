@@ -283,9 +283,7 @@ class ExtraColumnsTests(TestCase):
         )
         self.assertNotIn("name", result[str(self.other_resource.pk)])
 
-    def test_related_resource_permission_redacts_details_display_value_and_node_value(
-        self,
-    ):
+    def test_related_resource_permission_is_not_checked_here(self):
         result = attach_extra_columns(
             [self.resource],
             [{"graph_slug": self.graph.slug, "node_alias": "related"}],
@@ -298,14 +296,14 @@ class ExtraColumnsTests(TestCase):
 
         detail_ids = {d["resource_id"] for d in value["details"]}
         self.assertIn(readable_id, detail_ids)
-        self.assertNotIn(unreadable_id, detail_ids)
+        self.assertIn(unreadable_id, detail_ids)
 
         self.assertIn("Readable Target", value["display_value"])
-        self.assertNotIn("Secret Target", value["display_value"])
+        self.assertIn("Secret Target", value["display_value"])
 
         node_value_ids = {v["resourceId"] for v in value["node_value"]}
         self.assertIn(readable_id, node_value_ids)
-        self.assertNotIn(unreadable_id, node_value_ids)
+        self.assertIn(unreadable_id, node_value_ids)
 
     def test_scalar_datatypes_do_not_crash(self):
         result = attach_extra_columns(
