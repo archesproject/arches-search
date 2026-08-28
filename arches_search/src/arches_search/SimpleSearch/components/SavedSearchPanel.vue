@@ -45,12 +45,9 @@ const { shouldShowHeader = true, shouldShowSaveTab = true } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (
-        event: typeof RUN_QUERY_EVENT,
-        queryDefinition: Record<string, unknown>,
-    ): void;
-    (event: typeof OPEN_EXPORT_EVENT): void;
-    (event: typeof CLOSE_EVENT): void;
+    (event: "run-query", queryDefinition: Record<string, unknown>): void;
+    (event: "open-export"): void;
+    (event: "close"): void;
 }>();
 
 const { $gettext } = useGettext();

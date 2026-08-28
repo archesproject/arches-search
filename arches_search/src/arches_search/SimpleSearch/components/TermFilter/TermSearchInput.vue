@@ -26,7 +26,7 @@ const SUBMIT_EVENT = "submit" as const;
 
 const emit = defineEmits<{
     (
-        event: typeof SUBMIT_EVENT,
+        event: "submit",
         payload: { text: string; termKind?: TermKind; icon?: string },
     ): void;
 }>();

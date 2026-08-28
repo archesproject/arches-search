@@ -20,7 +20,7 @@ const { context = undefined } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: typeof SEARCH_EVENT): void;
+    (event: "search"): void;
 }>();
 
 const resolvedContext = useResolvedMapContext(context, "SpatialFilterTool");

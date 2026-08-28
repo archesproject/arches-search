@@ -13,7 +13,7 @@ const { activeFilters } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: typeof CLEAR_ALL_EVENT): void;
+    (event: "clear-all"): void;
 }>();
 
 const { $gettext } = useGettext();

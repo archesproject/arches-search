@@ -22,8 +22,8 @@ const { modelValue, visible } = defineProps<{
 
 const emit = defineEmits<{
     (event: "update:modelValue", value: FeatureCollection): void;
-    (event: typeof REMOVE_EVENT): void;
-    (event: typeof CLOSE_EVENT): void;
+    (event: "remove"): void;
+    (event: "close"): void;
 }>();
 
 const { resultsTileUrl } = useSearchFilters();
