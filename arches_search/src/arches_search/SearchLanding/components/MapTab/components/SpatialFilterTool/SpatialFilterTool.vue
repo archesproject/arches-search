@@ -11,7 +11,7 @@ import DrawTypeButtons from "@/arches_search/SearchLanding/components/MapTab/com
 
 import { useResolvedMapContext } from "@/arches_vue_components/components/MapComponent/composables/useMapContext.ts";
 
-import { type MapContext } from "@/arches_vue_components/components/MapComponent/types.ts";
+import type { MapContext } from "@/arches_vue_components/components/MapComponent/types.ts";
 
 const SEARCH_EVENT = "search" as const;
 

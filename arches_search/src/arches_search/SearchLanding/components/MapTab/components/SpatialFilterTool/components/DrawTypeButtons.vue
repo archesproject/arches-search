@@ -16,9 +16,9 @@ import {
 } from "@/arches_vue_components/components/MapComponent/constants.ts";
 import { useResolvedMapContext } from "@/arches_vue_components/components/MapComponent/composables/useMapContext.ts";
 
-import {
-    type DrawMode,
-    type MapContext,
+import type {
+    DrawMode,
+    MapContext,
 } from "@/arches_vue_components/components/MapComponent/types.ts";
 
 const { context = undefined } = defineProps<{

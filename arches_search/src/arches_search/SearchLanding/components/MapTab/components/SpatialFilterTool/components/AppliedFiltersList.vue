@@ -13,7 +13,7 @@ import {
 import { useResolvedMapContext } from "@/arches_vue_components/components/MapComponent/composables/useMapContext.ts";
 
 import type { Feature } from "geojson";
-import { type MapContext } from "@/arches_vue_components/components/MapComponent/types.ts";
+import type { MapContext } from "@/arches_vue_components/components/MapComponent/types.ts";
 
 interface AppliedFilter {
     featureId: string;
