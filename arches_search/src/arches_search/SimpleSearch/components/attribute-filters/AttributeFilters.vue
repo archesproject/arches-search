@@ -61,6 +61,7 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
             v-else
             :multiple="true"
             :value="[]"
+            :lazy="true"
         >
             <AccordionPanel
                 v-for="node in nodes"
