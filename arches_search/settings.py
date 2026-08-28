@@ -148,6 +148,7 @@ INSTALLED_APPS = (
     "pgtrigger",
     # "silk",
     "arches_search",  # Ensure the project is listed before any other arches applications
+    "arches_resource_sets",
     "arches_modular_reports",
     "arches_vue_components",
     "arches_controlled_lists",

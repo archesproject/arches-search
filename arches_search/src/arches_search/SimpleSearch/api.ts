@@ -1,7 +1,9 @@
 import Cookies from "js-cookie";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
+import { getItemLabel } from "@/arches_controlled_lists/utils.ts";
 
+import type { ControlledListItem } from "@/arches_controlled_lists/types.ts";
 import type {
     GroupPayload,
     SearchResults,
@@ -102,6 +104,8 @@ export async function fetchNodeFilterConfig(
 
 export async function fetchControlledListItems(
     listId: string,
+    language: string,
+    systemLanguage: string,
 ): Promise<
     Array<{ id: string; label: string; uri: string; sortorder: number }>
 > {
@@ -112,22 +116,14 @@ export async function fetchControlledListItems(
         throw new Error(response.statusText);
     }
     const data = await response.json();
-    return (data.items as Array<Record<string, unknown>>)
-        .filter((item: Record<string, unknown>) => !item.guide)
-        .map((item: Record<string, unknown>) => {
-            const values = item.values as Array<{
-                valuetype_id: string;
-                language_id: string;
-                value: string;
-            }>;
-            const prefLabel = values.find(
-                (v) => v.valuetype_id === "prefLabel",
-            );
+    return (data.items as ControlledListItem[])
+        .filter((item) => !item.guide)
+        .map((item) => {
             return {
-                id: item.id as string,
-                label: prefLabel?.value ?? (item.uri as string),
-                uri: item.uri as string,
-                sortorder: item.sortorder as number,
+                id: item.id,
+                label: getItemLabel(item, language, systemLanguage).value,
+                uri: item.uri,
+                sortorder: item.sortorder,
             };
         });
 }
