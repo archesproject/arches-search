@@ -15,7 +15,7 @@ export interface SearchDefinition {
     terms: SerializedTerm[];
     queries: Record<string, GroupPayload>;
     graphIds: string[];
-    mapFilter?: FeatureCollection | null;
+    mapFilter: FeatureCollection | null;
 }
 
 export const TERM_KIND_CONTROLLED_TERM = "controlled-term";
