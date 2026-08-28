@@ -9,7 +9,7 @@ import { routeNames } from "@/arches_search/routes.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
 
 import type { FeatureCollection } from "geojson";
-import type { MapInteractionTool } from "@/arches_vue_components/components/MapComponent/types.ts";
+import { type MapInteractionTool } from "@/arches_vue_components/components/MapComponent/types.ts";
 
 const NO_INTERACTION_TOOLS: MapInteractionTool[] = [];
 

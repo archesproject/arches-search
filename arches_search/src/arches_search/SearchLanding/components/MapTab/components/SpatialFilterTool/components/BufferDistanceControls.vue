@@ -15,7 +15,7 @@ import {
 } from "@/arches_vue_components/components/MapComponent/constants.ts";
 import { useResolvedMapContext } from "@/arches_vue_components/components/MapComponent/composables/useMapContext.ts";
 
-import type { MapContext } from "@/arches_vue_components/components/MapComponent/types.ts";
+import { type MapContext } from "@/arches_vue_components/components/MapComponent/types.ts";
 
 const { context = undefined } = defineProps<{
     context?: MapContext;
