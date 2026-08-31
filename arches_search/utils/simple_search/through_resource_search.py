@@ -6,21 +6,24 @@ from arches.app.models.models import (
 )
 
 from arches_search.models.models import TermSearch
-from arches_search.utils.simple_search.term_matching import build_term_match_filter
+from arches_search.utils.simple_search.term_matching import (
+    build_term_match_filter,
+    datatype_for_term,
+)
 
 
-def get_related_resources_by_text(search_terms, target_graphid):
+def get_related_resources_by_text(terms, target_graphid):
     """
     Returns a queryset of (resourceinstanceid,) tuples for resources of
-    target_graphid that match ALL of the given search terms, following
-    up to 2 hops through resource_x_resource from text-matching resources.
+    target_graphid that match ALL of the given terms, following
+    up to 2 hops through resource_x_resource from matching resources.
     """
     result = None
 
-    for term in search_terms:
-        # Resources matching this search term (any graph)
+    for term in terms:
+        # Resources matching this term (any graph)
         initial_match_ids = TermSearch.objects.filter(
-            build_term_match_filter(term)
+            build_term_match_filter(term["text"], datatype=datatype_for_term(term))
         ).values("resourceinstanceid")
 
         # Non-target-graph resources among the initial matches

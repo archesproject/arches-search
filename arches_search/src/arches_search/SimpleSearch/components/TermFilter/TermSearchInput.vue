@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import AutoComplete from "primevue/autocomplete";
@@ -10,23 +9,29 @@ import Tabs from "primevue/tabs";
 
 import SuggestionOption from "@/arches_search/SimpleSearch/components/TermFilter/components/SuggestionOption.vue";
 
-import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useTermSuggestions } from "@/arches_search/SimpleSearch/composables/useTermSuggestions.ts";
 import { getTermKind } from "@/arches_search/SimpleSearch/components/TermFilter/suggestion-utils.ts";
 
 import { TERM_KIND_RECORD } from "@/arches_search/SimpleSearch/types.ts";
-import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    TermKind,
+    TermSuggestion,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 interface TermSuggestionSelectEvent {
     value: TermSuggestion;
 }
 
-const { filterKey } = defineProps<{
-    filterKey: string;
+const SUBMIT_EVENT = "submit" as const;
+
+const emit = defineEmits<{
+    (
+        event: "submit",
+        payload: { text: string; termKind?: TermKind; icon?: string },
+    ): void;
 }>();
 
 const { $gettext } = useGettext();
-const searchFilters = useSearchFilters();
 
 const {
     autoCompleteRef,
@@ -44,55 +49,11 @@ const {
     markSuggestionHandled,
 } = useTermSuggestions();
 
-const selectedTerms = ref<Array<TermSuggestion>>([]);
-
-watch(
-    selectedTerms,
-    (selectedTermValues, previousSelectedTerms) => {
-        const previousTermTexts = new Set(
-            previousSelectedTerms.map((term) => term.text),
-        );
-        const selectedTermTexts = new Set(
-            selectedTermValues.map((term) => term.text),
-        );
-
-        for (const previousTerm of previousSelectedTerms) {
-            if (!selectedTermTexts.has(previousTerm.text)) {
-                searchFilters.clearTermFilter(termKey(previousTerm.text));
-            }
-        }
-
-        for (const selectedTerm of selectedTermValues) {
-            if (!previousTermTexts.has(selectedTerm.text)) {
-                const termKind = getTermKind(selectedTerm);
-                const isRecordTerm = termKind === TERM_KIND_RECORD;
-                searchFilters.setTermFilter(
-                    termKey(selectedTerm.text),
-                    selectedTerm.text,
-                    () => removeTerm(selectedTerm.text),
-                    undefined,
-                    termKind,
-                    isRecordTerm ? selectedTerm.graph_icon : undefined,
-                );
-            }
-        }
-    },
-    { deep: true },
-);
-
-function termKey(termValue: string): string {
-    return `${filterKey}:${termValue}`;
-}
-
-function removeTerm(termValue: string): void {
-    selectedTerms.value = selectedTerms.value.filter(
-        (term) => term.text !== termValue,
-    );
-}
+let stagedSuggestion: TermSuggestion | null = null;
 
 function onSelect(event: TermSuggestionSelectEvent): void {
-    selectedTerms.value = [...selectedTerms.value, event.value];
-    inputText.value = "";
+    stagedSuggestion = event.value;
+    inputText.value = event.value.text;
     markSuggestionHandled();
 }
 
@@ -105,22 +66,35 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function submitSearch(): void {
-    const suggestionToSubmit = resolveSubmitCandidate();
+    const trimmedInputText = inputText.value.trim();
+    let suggestionToSubmit: TermSuggestion | null;
+    if (stagedSuggestion?.text === trimmedInputText) {
+        suggestionToSubmit = stagedSuggestion;
+    } else {
+        suggestionToSubmit = resolveSubmitCandidate();
+    }
+
     if (!suggestionToSubmit) {
         return;
     }
 
-    onSelect({ value: suggestionToSubmit });
+    emitSubmit(suggestionToSubmit);
+}
+
+function emitSubmit(suggestion: TermSuggestion): void {
+    const termKind = getTermKind(suggestion);
+    const isRecordTerm = termKind === TERM_KIND_RECORD;
+    emit(SUBMIT_EVENT, {
+        text: suggestion.text,
+        termKind,
+        icon: isRecordTerm ? suggestion.graph_icon : undefined,
+    });
 }
 </script>
 
 <template>
     <div class="search-bar">
         <span class="search-bar-inner">
-            <i
-                aria-hidden="true"
-                class="pi pi-search search-icon"
-            />
             <AutoComplete
                 ref="autoCompleteRef"
                 v-model="inputText"
@@ -128,7 +102,7 @@ function submitSearch(): void {
                 overlay-class="term-filter-overlay"
                 option-label="text"
                 scroll-height="32rem"
-                append-to="self"
+                append-to="body"
                 :auto-option-focus="true"
                 :empty-search-message="emptySearchMessage"
                 :fluid="true"
@@ -187,35 +161,30 @@ function submitSearch(): void {
 .search-bar {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1.2rem 1.6rem;
-    background-color: var(--p-content-background);
-}
-
-.search-bar .search-icon {
-    font-size: 1.5rem;
-    color: var(--p-text-muted-color, var(--p-surface-500));
-    flex-shrink: 0;
+    gap: 0;
+    padding: 0;
+    background: var(--arches-search-hero-search-bg);
+    border-radius: var(--arches-search-hero-search-radius);
+    box-shadow: var(--arches-search-hero-search-shadow);
 }
 
 .search-bar .search-bar-inner {
     display: flex;
     align-items: center;
     flex: 1;
-    max-width: 40%;
     gap: 1rem;
-    background-color: var(--arches-search-page-bg);
-    border: 0.15rem solid var(--p-content-border-color);
-    border-radius: 0.8rem;
-    padding: 0 1.4rem;
+    padding-inline: 2rem 0;
+    border: none;
+    border-radius: var(--arches-search-hero-search-radius) 0 0
+        var(--arches-search-hero-search-radius);
+    background: transparent;
     transition:
         border-color 0.15s,
         box-shadow 0.15s;
 }
 
 .search-bar .search-bar-inner:focus-within {
-    border-color: var(--p-primary-color);
-    box-shadow: 0 0 0 0.3rem var(--p-primary-100);
+    box-shadow: none;
 }
 
 .search-bar .search-input {
@@ -225,7 +194,7 @@ function submitSearch(): void {
 .search-bar :deep(.search-input .p-autocomplete-input) {
     border: none;
     box-shadow: none;
-    padding: 1.2rem 0;
+    padding: 1.4rem 0;
     font-size: 1.4rem;
     width: 100%;
     background-color: transparent;
@@ -243,10 +212,11 @@ function submitSearch(): void {
 }
 
 .search-bar .search-button {
-    font-size: var(--p-arches-search-font-size);
-    font-weight: 700;
-    padding: 1rem 2rem;
-    border-radius: 0.8rem;
+    padding: 1.4rem 2.4rem;
+    border-radius: 0 var(--arches-search-hero-search-radius)
+        var(--arches-search-hero-search-radius) 0;
+    font-size: var(--arches-search-hero-search-btn-font-size);
+    font-weight: var(--arches-search-hero-search-btn-font-weight);
     white-space: nowrap;
 }
 
@@ -254,41 +224,6 @@ function submitSearch(): void {
     display: inline-flex;
     align-items: center;
     font-size: 1.4rem;
-}
-
-.search-bar :deep(.term-filter-overlay.p-autocomplete-overlay) {
-    overflow: hidden;
-    border-width: 0.15rem;
-    border-radius: 0.8rem;
-    box-shadow: var(--arches-search-overlay-shadow);
-    max-width: 48rem;
-}
-
-.search-bar :deep(.term-filter-overlay .p-autocomplete-list) {
-    gap: 0;
-    padding: 0;
-}
-
-.search-bar :deep(.term-filter-overlay .p-autocomplete-option) {
-    border-radius: 0;
-    border-block-end: 0.1rem solid var(--p-content-border-color);
-    padding: 0.8rem 1.4rem;
-}
-
-.search-bar :deep(.term-filter-overlay .p-autocomplete-option:last-child) {
-    border-block-end: none;
-}
-
-.search-bar :deep(.term-filter-overlay .p-autocomplete-option:hover),
-.search-bar :deep(.term-filter-overlay .p-autocomplete-option.p-focus) {
-    background: var(--p-highlight-background);
-}
-
-.search-bar :deep(.term-filter-overlay .p-autocomplete-empty-message) {
-    padding: 1.2rem 1.4rem;
-    font-size: 1.3rem;
-    color: var(--p-text-muted-color, var(--p-surface-500));
-    text-align: center;
 }
 
 .suggestion-tab-bar {
