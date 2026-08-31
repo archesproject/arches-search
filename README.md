@@ -258,6 +258,46 @@ In this example `height` is a `number` node, so it renders as a numeric range/va
 
 ---
 
+## Requesting Extra Columns
+
+`SimpleSearchAPI` and `AdvancedSearchAPI` accept an `extra_columns` key in the request body and return each requested node's value as aliasedNodeData on every resource in the response.
+
+### Request
+
+```json
+{
+    "extra_columns": [
+        { "graph_slug": "person", "node_alias": "birth_date" },
+        { "graph_slug": "person", "node_alias": "known_languages" }
+    ]
+}
+```
+
+`graph_slug` and `node_alias` are both required — an alias alone isn't unique across graphs. A malformed entry returns `400`.
+
+### Response
+
+Each resource gets an `extra_columns` object, scoped to its own graph and keyed by `node_alias`:
+
+```json
+{
+    "resourceinstanceid": "9c858901-8a57-4791-81fe-4c455b099bc9",
+    "extra_columns": {
+        "birth_date": [
+            { "display_value": "1987-04-12", "node_value": "1987-04-12", "details": [] }
+        ],
+        "known_languages": [
+            { "display_value": "English", "node_value": "de9b1471-...", "details": [] },
+            { "display_value": "French", "node_value": "77c2a933-...", "details": [] }
+        ]
+    }
+}
+```
+
+Values are aliasedNodeData (`display_value`, `node_value`, `details`), resolved live from the resource's tiles rather than a search index. A key only appears when the node resolves, belongs to that resource's graph, and the user has `read_nodegroup` permission, otherwise it's absent.
+
+---
+
 ## Extending Advanced Search for a Custom Datatype
 
 A custom datatype needs four things to work with Advanced Search:

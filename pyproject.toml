@@ -27,6 +27,7 @@ dependencies = [
     "arches<8.3.0,>=8.2.0a9",
     "arches-controlled-lists>=1.3.0a2",
     "arches-modular-reports>=2.1.0a1",
+    "arches-querysets>=1.3.0a0",
     "arches-resource-sets>=0.1.0a0",
     "arches-vue-components>=2.1.0a1",
 ]

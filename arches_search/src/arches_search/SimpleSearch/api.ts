@@ -44,6 +44,7 @@ export async function fetchSearchResults({
     mapFilter = null,
     page = 1,
     sort,
+    extraColumns,
 }: {
     terms?: { type: string; text: string; inverted: boolean }[];
     query?: GroupPayload;
@@ -51,6 +52,7 @@ export async function fetchSearchResults({
     mapFilter?: FeatureCollection | null;
     page?: number;
     sort?: SortSpec[];
+    extraColumns?: { graph_slug: string; node_alias: string }[];
 } = {}): Promise<SearchResults> {
     const requestPayload: Record<string, unknown> = {
         graphIds: graphIds,
@@ -62,6 +64,9 @@ export async function fetchSearchResults({
 
     if (sort !== undefined) {
         requestPayload.sort = sort;
+    }
+    if (extraColumns !== undefined) {
+        requestPayload.extra_columns = extraColumns;
     }
 
     const response = await fetch(

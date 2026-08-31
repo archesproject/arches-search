@@ -1,12 +1,17 @@
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 
 from arches.app.utils import permission_backend
-from arches.app.utils.betterJSONSerializer import JSONDeserializer
+from arches.app.utils.betterJSONSerializer import JSONDeserializer, JSONSerializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
 from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
+)
+from arches_search.utils.extra_columns import (
+    attach_extra_columns,
+    validate_extra_columns,
 )
 from arches_search.utils.search_aggregation import build_aggregations
 from arches_search.utils.search_sort import SortResolver
@@ -15,6 +20,12 @@ from arches_search.utils.search_sort import SortResolver
 class AdvancedSearchAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
+
+        extra_columns_spec = body.get("extra_columns")
+        try:
+            validate_extra_columns(extra_columns_spec)
+        except ValidationError as error:
+            return JSONResponse({"error": str(error)}, status=400)
 
         results_queryset = AdvancedSearchQueryCompiler(body).compile()
         results_queryset = permission_backend.filter_resource_queryset(
@@ -34,9 +45,21 @@ class AdvancedSearchAPI(APIBase):
         if raw_aggregations:
             aggregations = build_aggregations(results_queryset, raw_aggregations)
 
+        resources = list(page.object_list)
+        extra_columns_by_resource = attach_extra_columns(
+            resources, extra_columns_spec, request.user
+        )
+        serialized_resources = [
+            {
+                **JSONSerializer().serializeToPython(resource),
+                "extra_columns": extra_columns_by_resource.get(str(resource.pk), {}),
+            }
+            for resource in resources
+        ]
+
         return JSONResponse(
             {
-                "resources": list(page.object_list),
+                "resources": serialized_resources,
                 "pagination": {
                     "page": page.number,
                     "page_size": page_size,
