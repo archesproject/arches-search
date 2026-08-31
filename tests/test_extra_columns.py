@@ -269,7 +269,7 @@ class ExtraColumnsTests(TestCase):
     def test_no_spec_returns_empty_dict(self):
         self.assertEqual(
             attach_extra_columns([self.resource], None, self.user),
-            {str(self.resource.pk): {}},
+            {},
         )
 
     def test_column_absent_for_resource_on_different_graph(self):

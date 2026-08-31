@@ -66,7 +66,7 @@ def resolve_node_refs(extra_columns_spec, user):
 
 def attach_extra_columns(resources, extra_columns_spec, user):
     if not extra_columns_spec:
-        return {str(resource.pk): {} for resource in resources}
+        return {}
 
     result = {}
     resourceinstanceids_by_graph_id = {}
