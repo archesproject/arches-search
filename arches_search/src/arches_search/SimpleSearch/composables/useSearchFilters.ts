@@ -8,7 +8,10 @@ import {
 } from "@/arches_search/SimpleSearch/api.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
-import { ClauseSubjectTypeToken, LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    ClauseSubjectTypeToken,
+    LogicToken,
+} from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     GroupPayload,
     SearchResults,
@@ -288,7 +291,8 @@ function createSearchFilters(): SearchFilters {
     function isNodeAgnosticDateQuery(payload: GroupPayload): boolean {
         return (
             payload.clauses.length === 1 &&
-            payload.clauses[0].subject.type === ClauseSubjectTypeToken.SEARCH_MODELS
+            payload.clauses[0].subject.type ===
+                ClauseSubjectTypeToken.SEARCH_MODELS
         );
     }
 
@@ -300,7 +304,9 @@ function createSearchFilters(): SearchFilters {
             const [fromOperand, toOperand] = payload.clauses[0].operands;
             return {
                 from: fromOperand.value as string,
-                to: (toOperand?.value as string | undefined) ?? (fromOperand.value as string),
+                to:
+                    (toOperand?.value as string | undefined) ??
+                    (fromOperand.value as string),
             };
         }
         return null;
