@@ -45,7 +45,9 @@ class AdvancedSearchQueryCompiler:
 
         # Injected registries let a caller compiling many payloads (e.g. SearchCompiler,
         # once per resource graph) share one instance instead of rebuilding it each time.
-        self.facet_registry = facet_registry if facet_registry is not None else FacetRegistry()
+        self.facet_registry = (
+            facet_registry if facet_registry is not None else FacetRegistry()
+        )
         self.search_model_registry = (
             search_model_registry
             if search_model_registry is not None

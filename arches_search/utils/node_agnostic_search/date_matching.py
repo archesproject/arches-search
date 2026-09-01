@@ -15,7 +15,10 @@ def get_related_resources_by_date_range(date_from, date_to, target_graphid, max_
     (the same conversion the compiled DATE/EDTF facets use) instead of re-deriving it.
     """
     normalized_operands, _ = DateSearch.normalize_operands(
-        [{"type": "LITERAL", "value": date_from}, {"type": "LITERAL", "value": date_to}],
+        [
+            {"type": "LITERAL", "value": date_from},
+            {"type": "LITERAL", "value": date_to},
+        ],
         datatype_name="date",
     )
     normalized_from = normalized_operands[0]["value"]
@@ -29,6 +32,7 @@ def get_related_resources_by_date_range(date_from, date_to, target_graphid, max_
     ).values("resourceinstanceid")
 
     direct_match_ids = ResourceInstance.objects.filter(
-        Q(resourceinstanceid__in=date_matches) | Q(resourceinstanceid__in=date_range_matches)
+        Q(resourceinstanceid__in=date_matches)
+        | Q(resourceinstanceid__in=date_range_matches)
     ).values("resourceinstanceid")
     return expand_matches_via_relationships(direct_match_ids, target_graphid, max_hops)

@@ -109,7 +109,10 @@ class RelationshipTraversalTests(TestCase):
         matches = self._matched_ids(1)
         self.assertEqual(
             matches,
-            {self.target_direct.resourceinstanceid, self.target_one_hop.resourceinstanceid},
+            {
+                self.target_direct.resourceinstanceid,
+                self.target_one_hop.resourceinstanceid,
+            },
         )
         self.assertNotIn(self.target_two_hop.resourceinstanceid, matches)
 

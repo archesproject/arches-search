@@ -8,7 +8,12 @@ from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import GEOSGeometry
 from django.test import TestCase
 
-from arches.app.models.models import GraphModel, ResourceInstance, ResourceXResource, TileModel
+from arches.app.models.models import (
+    GraphModel,
+    ResourceInstance,
+    ResourceXResource,
+    TileModel,
+)
 
 from arches_search.models.models import DateSearch, GeometrySearch, TermSearch
 from arches_search.utils.advanced_search.advanced_search import (
@@ -134,7 +139,9 @@ class SearchCompilerTests(TestCase):
 
     def test_text_match_direct_only_max_hops_zero(self):
         result = self._search(
-            node_agnostic_filters=[{"type": "TEXT_MATCH", "value": ["amber"], "max_hops": 0}]
+            node_agnostic_filters=[
+                {"type": "TEXT_MATCH", "value": ["amber"], "max_hops": 0}
+            ]
         )
         self.assertEqual(
             self._result_ids(result),
@@ -143,9 +150,13 @@ class SearchCompilerTests(TestCase):
 
     def test_text_match_excludes_non_matching_resource(self):
         result = self._search(
-            node_agnostic_filters=[{"type": "TEXT_MATCH", "value": ["amber"], "max_hops": 0}]
+            node_agnostic_filters=[
+                {"type": "TEXT_MATCH", "value": ["amber"], "max_hops": 0}
+            ]
         )
-        self.assertNotIn(self.quartz_mineral.resourceinstanceid, self._result_ids(result))
+        self.assertNotIn(
+            self.quartz_mineral.resourceinstanceid, self._result_ids(result)
+        )
 
     # --- GEO_INTERSECTS ---
 
@@ -158,9 +169,7 @@ class SearchCompilerTests(TestCase):
                     "properties": {},
                     "geometry": {
                         "type": "Polygon",
-                        "coordinates": [
-                            [[5, 5], [15, 5], [15, 15], [5, 15], [5, 5]]
-                        ],
+                        "coordinates": [[[5, 5], [15, 5], [15, 15], [5, 15], [5, 5]]],
                     },
                 }
             ],
@@ -223,7 +232,9 @@ class SearchCompilerTests(TestCase):
         }
 
     def test_advanced_search_query_is_noop_for_other_graphs(self):
-        result = self._search(advanced_search_query=self._advanced_search_body(self.graph_a))
+        result = self._search(
+            advanced_search_query=self._advanced_search_body(self.graph_a)
+        )
         ids = self._result_ids(result)
         # An empty-clauses query on graph_a matches every graph_a resource; graph_b
         # is untouched by the query (a no-op there) but graph_b resources are still
@@ -236,12 +247,18 @@ class SearchCompilerTests(TestCase):
 
     # --- resource_type_counts always covers every active graph ---
 
-    def test_resource_type_counts_cover_every_active_graph_regardless_of_graph_ids(self):
+    def test_resource_type_counts_cover_every_active_graph_regardless_of_graph_ids(
+        self,
+    ):
         result = self._search(
             graph_ids=[str(self.graph_a.graphid)],
-            node_agnostic_filters=[{"type": "TEXT_MATCH", "value": ["amber"], "max_hops": 0}],
+            node_agnostic_filters=[
+                {"type": "TEXT_MATCH", "value": ["amber"], "max_hops": 0}
+            ],
         )
-        counts_by_graph_id = {row["graph_id"]: row["count"] for row in result.resource_type_counts}
+        counts_by_graph_id = {
+            row["graph_id"]: row["count"] for row in result.resource_type_counts
+        }
         self.assertEqual(counts_by_graph_id[str(self.graph_a.graphid)], 1)
         self.assertEqual(counts_by_graph_id[str(self.graph_b.graphid)], 1)
         self.assertEqual(result.all_resource_count, 2)

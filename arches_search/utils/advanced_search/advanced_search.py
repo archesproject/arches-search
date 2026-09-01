@@ -75,7 +75,9 @@ def resolve_graph_metadata_by_slug(graph_slugs):
 def union_all(querysets):
     querysets = list(querysets)
     if not querysets:
-        return ResourceInstance.objects.none().values_list("resourceinstanceid", flat=True)
+        return ResourceInstance.objects.none().values_list(
+            "resourceinstanceid", flat=True
+        )
     if len(querysets) == 1:
         return querysets[0]
     # resourceinstanceid is a globally-unique UUID PK, disjoint across graphs.
@@ -90,7 +92,9 @@ def validate_node_agnostic_filters(node_agnostic_filters):
 
     for filter_entry in node_agnostic_filters:
         if not isinstance(filter_entry, dict):
-            raise ValidationError(_("Each node_agnostic_filters entry must be an object."))
+            raise ValidationError(
+                _("Each node_agnostic_filters entry must be an object.")
+            )
 
         filter_type = filter_entry.get("type")
         if filter_type not in NODE_AGNOSTIC_FILTER_TYPES:
@@ -100,8 +104,10 @@ def validate_node_agnostic_filters(node_agnostic_filters):
             )
 
         max_hops = filter_entry.get("max_hops", 0)
-        if not isinstance(max_hops, int) or isinstance(max_hops, bool) or not (
-            0 <= max_hops <= MAX_ALLOWED_HOPS
+        if (
+            not isinstance(max_hops, int)
+            or isinstance(max_hops, bool)
+            or not (0 <= max_hops <= MAX_ALLOWED_HOPS)
         ):
             raise ValidationError(
                 _("max_hops must be an integer between 0 and %(max)s.")
@@ -128,7 +134,9 @@ def validate_node_agnostic_filters(node_agnostic_filters):
                 or not isinstance(value.get("to"), str)
             ):
                 raise ValidationError(
-                    _('DATE_RANGE value must be an object with "from" and "to" strings.')
+                    _(
+                        'DATE_RANGE value must be an object with "from" and "to" strings.'
+                    )
                 )
 
 
@@ -141,7 +149,9 @@ def build_graph_payload(graph_slug, advanced_search_query):
 def _resolve_filter_entry(filter_entry, graph_id, max_hops):
     filter_type = filter_entry["type"]
     if filter_type == "TEXT_MATCH":
-        return get_related_resources_by_text(filter_entry["value"], graph_id, max_hops=max_hops)
+        return get_related_resources_by_text(
+            filter_entry["value"], graph_id, max_hops=max_hops
+        )
     if filter_type == "GEO_INTERSECTS":
         return get_related_resources_by_geometry(
             filter_entry["value"], graph_id, max_hops=max_hops
@@ -179,15 +189,21 @@ class SearchCompiler:
                 if graph_id not in active_graph_ids
             ]
             if missing_graph_ids:
-                extra_requested_graphs += resolve_graph_metadata_by_id(missing_graph_ids)
+                extra_requested_graphs += resolve_graph_metadata_by_id(
+                    missing_graph_ids
+                )
 
         if self.search_payload.advanced_search_query:
-            query_graph_slug = self.search_payload.advanced_search_query.get("graph_slug")
+            query_graph_slug = self.search_payload.advanced_search_query.get(
+                "graph_slug"
+            )
             already_covered_slugs = active_graph_slugs | {
                 slug for _gid, slug, _name, _icon in extra_requested_graphs
             }
             if query_graph_slug and query_graph_slug not in already_covered_slugs:
-                extra_requested_graphs += resolve_graph_metadata_by_slug([query_graph_slug])
+                extra_requested_graphs += resolve_graph_metadata_by_slug(
+                    [query_graph_slug]
+                )
 
         graphs_to_search = active_graphs + extra_requested_graphs
 
