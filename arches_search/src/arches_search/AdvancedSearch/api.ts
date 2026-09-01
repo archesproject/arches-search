@@ -6,11 +6,12 @@ export async function getSearchResults(
     searchQuery: GroupPayload,
     options?: { page?: number; pageSize?: number },
 ) {
-    const requestPayload: GroupPayload & {
+    const requestPayload: {
+        advanced_search_query: GroupPayload;
         page?: number;
         page_size?: number;
     } = {
-        ...searchQuery,
+        advanced_search_query: searchQuery,
     };
 
     if (options && options.page !== undefined) {
@@ -21,7 +22,7 @@ export async function getSearchResults(
         requestPayload.page_size = options.pageSize;
     }
 
-    const url = generateArchesURL("arches_search:advanced_search");
+    const url = generateArchesURL("arches_search:search");
 
     const response = await fetch(url, {
         method: "POST",
