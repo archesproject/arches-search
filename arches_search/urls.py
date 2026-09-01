@@ -3,7 +3,6 @@ from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.urls import include, path
 
-from arches_search.views.api.advanced_search import AdvancedSearchAPI
 from arches_search.views.api.advanced_search_sql import AdvancedSearchSQLAPI
 from arches_search.views.api.advanced_search_facet import (
     DatatypeFacetsAPI,
@@ -34,10 +33,10 @@ from arches_search.views.api.search_mvt import (
     SearchMVTContextAPI,
 )
 from arches_search.views.api.search_export import SearchExportAPI
-from arches_search.views.api.simple_search import SimpleSearchAPI
+from arches_search.views.api.search import SearchAPI
 
 urlpatterns = [
-    path("api/advanced-search", AdvancedSearchAPI.as_view(), name="advanced_search"),
+    path("api/search", SearchAPI.as_view(), name="search"),
     path(
         "api/advanced-search/sql",
         AdvancedSearchSQLAPI.as_view(),
@@ -112,11 +111,6 @@ urlpatterns = [
         "api/term-suggestions",
         TermSuggestionView.as_view(),
         name="term_suggestion_search",
-    ),
-    path(
-        "api/arches-search",
-        SimpleSearchAPI.as_view(),
-        name="arches_search",
     ),
     path(
         "api/arches-search/mvt-context",

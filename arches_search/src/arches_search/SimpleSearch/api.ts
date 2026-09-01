@@ -16,12 +16,102 @@ import type {
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
 
+interface SearchRequestTerm {
+    type: string;
+    text: string;
+    inverted: boolean;
+}
+
+interface DateRangeFilter {
+    from: string;
+    to: string;
+}
+
+interface NodeAgnosticFilter {
+    type: "TEXT_MATCH" | "GEO_INTERSECTS" | "DATE_RANGE";
+    value: string[] | FeatureCollection | DateRangeFilter;
+    max_hops: number;
+}
+
+function buildNodeAgnosticFilters(
+    terms: SearchRequestTerm[],
+    mapFilter: FeatureCollection | null,
+    dateRange: DateRangeFilter | null,
+): NodeAgnosticFilter[] | null {
+    const filters: NodeAgnosticFilter[] = [];
+
+    if (terms.length > 0) {
+        filters.push({
+            type: "TEXT_MATCH",
+            value: terms.map((term) => term.text),
+            max_hops: 2,
+        });
+    }
+
+    if (mapFilter && mapFilter.features && mapFilter.features.length > 0) {
+        filters.push({ type: "GEO_INTERSECTS", value: mapFilter, max_hops: 0 });
+    }
+
+    if (dateRange) {
+        filters.push({ type: "DATE_RANGE", value: dateRange, max_hops: 0 });
+    }
+
+    return filters.length > 0 ? filters : null;
+}
+
+function buildSearchApiRequestBody({
+    terms,
+    query,
+    graphIds,
+    mapFilter,
+    dateRange,
+    page,
+    sort,
+}: {
+    terms: SearchRequestTerm[];
+    query?: GroupPayload;
+    graphIds: string[];
+    mapFilter: FeatureCollection | null;
+    dateRange?: DateRangeFilter | null;
+    page?: number;
+    sort?: SortSpec[];
+}): Record<string, unknown> {
+    const requestPayload: Record<string, unknown> = {
+        graph_ids: graphIds.length > 0 ? graphIds : null,
+        node_agnostic_filters: buildNodeAgnosticFilters(
+            terms,
+            mapFilter,
+            dateRange ?? null,
+        ),
+        advanced_search_query:
+            query && Object.keys(query).length > 0 ? query : null,
+    };
+
+    if (page !== undefined) {
+        requestPayload.page = page;
+    }
+    if (sort !== undefined) {
+        requestPayload.sort = sort;
+    }
+
+    return requestPayload;
+}
+
 export async function createSearchMVTContext(params: {
-    terms?: { type: string; text: string; inverted: boolean }[];
+    terms?: SearchRequestTerm[];
     query?: GroupPayload;
     graphIds?: string[];
     mapFilter?: FeatureCollection | null;
+    dateRange?: DateRangeFilter | null;
 }): Promise<{ context_id: string }> {
+    const requestPayload = buildSearchApiRequestBody({
+        terms: params.terms ?? [],
+        query: params.query,
+        graphIds: params.graphIds ?? [],
+        mapFilter: params.mapFilter ?? null,
+        dateRange: params.dateRange ?? null,
+    });
+
     const url = generateArchesURL("arches_search:search_mvt_context");
     const response = await fetch(url, {
         method: "POST",
@@ -29,7 +119,7 @@ export async function createSearchMVTContext(params: {
             "Content-Type": "application/json",
             "X-CSRFToken": Cookies.get("csrftoken") || "",
         },
-        body: JSON.stringify(params),
+        body: JSON.stringify(requestPayload),
     });
     if (!response.ok) {
         throw new Error(response.statusText);
@@ -42,30 +132,30 @@ export async function fetchSearchResults({
     query = {} as GroupPayload,
     graphIds = [],
     mapFilter = null,
+    dateRange = null,
     page = 1,
     sort,
 }: {
-    terms?: { type: string; text: string; inverted: boolean }[];
+    terms?: SearchRequestTerm[];
     query?: GroupPayload;
     graphIds?: string[];
     mapFilter?: FeatureCollection | null;
+    dateRange?: DateRangeFilter | null;
     page?: number;
     sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
-    const requestPayload: Record<string, unknown> = {
-        graphIds: graphIds,
-        terms: terms,
-        query: query,
-        mapFilter: mapFilter,
-        page: page,
-    };
-
-    if (sort !== undefined) {
-        requestPayload.sort = sort;
-    }
+    const requestPayload = buildSearchApiRequestBody({
+        terms,
+        query,
+        graphIds,
+        mapFilter,
+        dateRange,
+        page,
+        sort,
+    });
 
     const response = await fetch(
-        `${generateArchesURL("arches_search:arches_search")}`,
+        `${generateArchesURL("arches_search:search")}`,
         {
             method: "POST",
             headers: {
@@ -201,15 +291,27 @@ export async function exportSearchResults({
     terms = [],
     query,
     graphIds = [],
+    dateRange = null,
     filename = "search_export",
     allDescriptors = false,
 }: {
-    terms?: { type: string; text: string; inverted: boolean }[];
+    terms?: SearchRequestTerm[];
     query?: GroupPayload;
     graphIds?: string[];
+    dateRange?: DateRangeFilter | null;
     filename?: string;
     allDescriptors?: boolean;
 }): Promise<void> {
+    const requestPayload = buildSearchApiRequestBody({
+        terms,
+        query,
+        graphIds,
+        mapFilter: null,
+        dateRange,
+    });
+    requestPayload.filename = filename;
+    requestPayload.allDescriptors = allDescriptors;
+
     const response = await fetch(
         generateArchesURL("arches_search:search_export"),
         {
@@ -218,13 +320,7 @@ export async function exportSearchResults({
                 "Content-Type": "application/json",
                 "X-CSRFToken": Cookies.get("csrftoken") || "",
             },
-            body: JSON.stringify({
-                terms,
-                query,
-                graphIds,
-                filename,
-                allDescriptors,
-            }),
+            body: JSON.stringify(requestPayload),
         },
     );
 

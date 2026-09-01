@@ -11,7 +11,8 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.simple_search.search_queryset import build_search_queryset
+from arches_search.utils.advanced_search.advanced_search import SearchCompiler
+from arches_search.views.api.search import build_search_payload
 
 MVT_LAYER_NAME = "search-results"
 CONTEXT_CACHE_TIMEOUT = 3600
@@ -70,9 +71,9 @@ class SearchMVTAPI(APIBase):
         if cached_tile is not None:
             return HttpResponse(cached_tile, content_type="application/x-protobuf")
 
-        search_results_queryset = build_search_queryset(body, request.user).values(
-            "resourceinstanceid"
-        )
+        search_payload = build_search_payload(body)
+        search_result = SearchCompiler(search_payload, request.user).compile()
+        search_results_queryset = search_result.results.values("resourceinstanceid")
         mvt_tile = self._generate_tile(search_results_queryset, zoom, x, y)
 
         mvt_cache.set(tile_key, mvt_tile, settings.TILE_CACHE_TIMEOUT)

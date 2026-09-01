@@ -5,7 +5,7 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.advanced_search.advanced_search import (
+from arches_search.utils.advanced_search.graph_query_compiler import (
     AdvancedSearchQueryCompiler,
 )
 
