@@ -8,7 +8,7 @@ import {
 } from "@/arches_search/SimpleSearch/api.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
-import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
+import { ClauseSubjectTypeToken, LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     GroupPayload,
     SearchResults,
@@ -33,10 +33,16 @@ interface SearchRequestTerm {
     inverted: boolean;
 }
 
+interface DateRangeFilter {
+    from: string;
+    to: string;
+}
+
 interface ExportPayload {
     terms: SearchRequestTerm[];
     query: GroupPayload | undefined;
     graphIds: string[];
+    dateRange: DateRangeFilter | null;
 }
 
 interface SearchFilters {
@@ -234,6 +240,7 @@ function createSearchFilters(): SearchFilters {
                 const searchParams = {
                     terms: getRequestTerms(),
                     query: getRequestQuery(),
+                    dateRange: getNodeAgnosticDateRange(),
                     page,
                     graphIds: requestGraphs.map((graph) => graph.id as string),
                     mapFilter: mapFilter.value,
@@ -278,8 +285,31 @@ function createSearchFilters(): SearchFilters {
         }));
     }
 
+    function isNodeAgnosticDateQuery(payload: GroupPayload): boolean {
+        return (
+            payload.clauses.length === 1 &&
+            payload.clauses[0].subject.type === ClauseSubjectTypeToken.SEARCH_MODELS
+        );
+    }
+
+    function getNodeAgnosticDateRange(): DateRangeFilter | null {
+        for (const payload of queries.value.values()) {
+            if (!isNodeAgnosticDateQuery(payload)) {
+                continue;
+            }
+            const [fromOperand, toOperand] = payload.clauses[0].operands;
+            return {
+                from: fromOperand.value as string,
+                to: (toOperand?.value as string | undefined) ?? (fromOperand.value as string),
+            };
+        }
+        return null;
+    }
+
     function getRequestQuery(): GroupPayload | undefined {
-        const queryList = [...queries.value.values()];
+        const queryList = [...queries.value.values()].filter(
+            (payload) => !isNodeAgnosticDateQuery(payload),
+        );
         if (queryList.length === 0) return undefined;
         if (queryList.length === 1) return queryList[0];
         return {
@@ -350,6 +380,7 @@ function createSearchFilters(): SearchFilters {
             terms: getRequestTerms(),
             query: getRequestQuery(),
             graphIds: activeGraphs.value.map((graph) => graph.id as string),
+            dateRange: getNodeAgnosticDateRange(),
         };
     }
 

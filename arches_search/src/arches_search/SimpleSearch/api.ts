@@ -22,15 +22,21 @@ interface SearchRequestTerm {
     inverted: boolean;
 }
 
+interface DateRangeFilter {
+    from: string;
+    to: string;
+}
+
 interface NodeAgnosticFilter {
-    type: "TEXT_MATCH" | "GEO_INTERSECTS";
-    value: string[] | FeatureCollection;
+    type: "TEXT_MATCH" | "GEO_INTERSECTS" | "DATE_RANGE";
+    value: string[] | FeatureCollection | DateRangeFilter;
     max_hops: number;
 }
 
 function buildNodeAgnosticFilters(
     terms: SearchRequestTerm[],
     mapFilter: FeatureCollection | null,
+    dateRange: DateRangeFilter | null,
 ): NodeAgnosticFilter[] | null {
     const filters: NodeAgnosticFilter[] = [];
 
@@ -46,6 +52,10 @@ function buildNodeAgnosticFilters(
         filters.push({ type: "GEO_INTERSECTS", value: mapFilter, max_hops: 0 });
     }
 
+    if (dateRange) {
+        filters.push({ type: "DATE_RANGE", value: dateRange, max_hops: 0 });
+    }
+
     return filters.length > 0 ? filters : null;
 }
 
@@ -54,6 +64,7 @@ function buildSearchApiRequestBody({
     query,
     graphIds,
     mapFilter,
+    dateRange,
     page,
     sort,
 }: {
@@ -61,12 +72,17 @@ function buildSearchApiRequestBody({
     query?: GroupPayload;
     graphIds: string[];
     mapFilter: FeatureCollection | null;
+    dateRange?: DateRangeFilter | null;
     page?: number;
     sort?: SortSpec[];
 }): Record<string, unknown> {
     const requestPayload: Record<string, unknown> = {
         graph_ids: graphIds.length > 0 ? graphIds : null,
-        node_agnostic_filters: buildNodeAgnosticFilters(terms, mapFilter),
+        node_agnostic_filters: buildNodeAgnosticFilters(
+            terms,
+            mapFilter,
+            dateRange ?? null,
+        ),
         advanced_search_query:
             query && Object.keys(query).length > 0 ? query : null,
     };
@@ -86,12 +102,14 @@ export async function createSearchMVTContext(params: {
     query?: GroupPayload;
     graphIds?: string[];
     mapFilter?: FeatureCollection | null;
+    dateRange?: DateRangeFilter | null;
 }): Promise<{ context_id: string }> {
     const requestPayload = buildSearchApiRequestBody({
         terms: params.terms ?? [],
         query: params.query,
         graphIds: params.graphIds ?? [],
         mapFilter: params.mapFilter ?? null,
+        dateRange: params.dateRange ?? null,
     });
 
     const url = generateArchesURL("arches_search:search_mvt_context");
@@ -114,6 +132,7 @@ export async function fetchSearchResults({
     query = {} as GroupPayload,
     graphIds = [],
     mapFilter = null,
+    dateRange = null,
     page = 1,
     sort,
 }: {
@@ -121,6 +140,7 @@ export async function fetchSearchResults({
     query?: GroupPayload;
     graphIds?: string[];
     mapFilter?: FeatureCollection | null;
+    dateRange?: DateRangeFilter | null;
     page?: number;
     sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
@@ -129,6 +149,7 @@ export async function fetchSearchResults({
         query,
         graphIds,
         mapFilter,
+        dateRange,
         page,
         sort,
     });
@@ -270,12 +291,14 @@ export async function exportSearchResults({
     terms = [],
     query,
     graphIds = [],
+    dateRange = null,
     filename = "search_export",
     allDescriptors = false,
 }: {
     terms?: SearchRequestTerm[];
     query?: GroupPayload;
     graphIds?: string[];
+    dateRange?: DateRangeFilter | null;
     filename?: string;
     allDescriptors?: boolean;
 }): Promise<void> {
@@ -284,6 +307,7 @@ export async function exportSearchResults({
         query,
         graphIds,
         mapFilter: null,
+        dateRange,
     });
     requestPayload.filename = filename;
     requestPayload.allDescriptors = allDescriptors;
