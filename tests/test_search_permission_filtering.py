@@ -92,13 +92,13 @@ class SearchPermissionFilteringTest(TestCase):
             resource["resourceinstanceid"] for resource in response.json()["resources"]
         }
 
-    # --- SimpleSearchAPI ---
+    # --- SearchAPI: graph_ids scoping (no advanced_search_query) ---
 
-    def test_simple_search_excludes_ungranted_resource_for_member(self):
+    def test_search_excludes_ungranted_resource_for_member(self):
         self.client.force_login(self.member)
         response = self.client.post(
-            reverse("arches_search"),
-            json.dumps({"graphId": str(self.graph.graphid)}),
+            reverse("search"),
+            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
             content_type="application/json",
         )
 
@@ -110,11 +110,11 @@ class SearchPermissionFilteringTest(TestCase):
         with self.subTest("restricted resource hidden"):
             self.assertNotIn(str(self.restricted_resource.resourceinstanceid), ids)
 
-    def test_simple_search_excludes_all_resources_for_outsider(self):
+    def test_search_excludes_all_resources_for_outsider(self):
         self.client.force_login(self.outsider)
         response = self.client.post(
-            reverse("arches_search"),
-            json.dumps({"graphId": str(self.graph.graphid)}),
+            reverse("search"),
+            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
             content_type="application/json",
         )
 
@@ -126,11 +126,11 @@ class SearchPermissionFilteringTest(TestCase):
         with self.subTest("restricted resource hidden"):
             self.assertNotIn(str(self.restricted_resource.resourceinstanceid), ids)
 
-    def test_simple_search_owner_sees_owned_resource(self):
+    def test_search_owner_sees_owned_resource(self):
         self.client.force_login(self.outsider)
         response = self.client.post(
-            reverse("arches_search"),
-            json.dumps({"graphId": str(self.graph.graphid)}),
+            reverse("search"),
+            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
             content_type="application/json",
         )
 
@@ -140,11 +140,11 @@ class SearchPermissionFilteringTest(TestCase):
         with self.subTest("owned resource visible"):
             self.assertIn(str(self.owned_resource.resourceinstanceid), ids)
 
-    def test_simple_search_superuser_sees_all_resources(self):
+    def test_search_superuser_sees_all_resources(self):
         self.client.force_login(self.admin)
         response = self.client.post(
-            reverse("arches_search"),
-            json.dumps({"graphId": str(self.graph.graphid)}),
+            reverse("search"),
+            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
             content_type="application/json",
         )
 
@@ -158,7 +158,7 @@ class SearchPermissionFilteringTest(TestCase):
         with self.subTest("owned resource visible"):
             self.assertIn(str(self.owned_resource.resourceinstanceid), ids)
 
-    # --- AdvancedSearchAPI ---
+    # --- SearchAPI: advanced_search_query ---
 
     def _advanced_search_body(self):
         return {
@@ -171,11 +171,13 @@ class SearchPermissionFilteringTest(TestCase):
             "relationship": None,
         }
 
-    def test_advanced_search_excludes_ungranted_resource_for_member(self):
+    def test_search_with_advanced_search_query_excludes_ungranted_resource_for_member(
+        self,
+    ):
         self.client.force_login(self.member)
         response = self.client.post(
-            reverse("advanced_search"),
-            json.dumps(self._advanced_search_body()),
+            reverse("search"),
+            json.dumps({"advanced_search_query": self._advanced_search_body()}),
             content_type="application/json",
         )
 
