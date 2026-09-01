@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from django.db.models import QuerySet
 from django.utils.translation import gettext as _
 from arches.app.models import models as arches_models
@@ -33,13 +33,24 @@ from arches_search.utils.advanced_search.payload_validator import PayloadValidat
 
 
 class AdvancedSearchQueryCompiler:
-    def __init__(self, payload_query: Dict[str, Any]) -> None:
+    def __init__(
+        self,
+        payload_query: Dict[str, Any],
+        facet_registry: Optional[FacetRegistry] = None,
+        search_model_registry: Optional[SearchModelRegistry] = None,
+    ) -> None:
         PayloadValidator().validate(payload_query)
 
         self.payload_query = payload_query
 
-        self.facet_registry = FacetRegistry()
-        self.search_model_registry = SearchModelRegistry()
+        # Injected registries let a caller compiling many payloads (e.g. SearchCompiler,
+        # once per resource graph) share one instance instead of rebuilding it each time.
+        self.facet_registry = facet_registry if facet_registry is not None else FacetRegistry()
+        self.search_model_registry = (
+            search_model_registry
+            if search_model_registry is not None
+            else SearchModelRegistry()
+        )
         self.node_alias_registry = NodeAliasDatatypeRegistry(payload_query)
         self.path_navigator = PathNavigator(
             self.search_model_registry, self.node_alias_registry
