@@ -27,6 +27,9 @@ from arches_search.utils.node_agnostic_search.relationship_traversal import (
 from arches_search.utils.node_agnostic_search.term_matching import (
     get_related_resources_by_text,
 )
+from arches_search.utils.resource_field_search.resolver import (
+    build_resource_field_filter,
+)
 
 NODE_AGNOSTIC_FILTER_TYPES = {"TEXT_MATCH", "GEO_INTERSECTS", "DATE_RANGE"}
 
@@ -36,6 +39,10 @@ class SearchPayload:
     graph_ids: Optional[List[str]]
     node_agnostic_filters: Optional[List[Dict[str, Any]]]
     advanced_search_query: Optional[Dict[str, Any]]
+    # Filters on ResourceInstance's own columns (lifecycle state, creator, ...).
+    # Graph-agnostic, so unlike advanced_search_query it is applied once across
+    # the unioned result set rather than per graph.
+    resource_field_filters: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass(frozen=True)
@@ -216,6 +223,15 @@ class SearchCompiler:
         all_matching_resources = ResourceInstance.objects.filter(
             resourceinstanceid__in=union_all(per_graph_id_querysets)
         )
+
+        resource_field_predicate = build_resource_field_filter(
+            self.user, self.search_payload.resource_field_filters
+        )
+        if resource_field_predicate is not None:
+            all_matching_resources = all_matching_resources.filter(
+                resource_field_predicate
+            )
+
         permission_filtered_resources = permission_backend.filter_resource_queryset(
             self.user, all_matching_resources
         )

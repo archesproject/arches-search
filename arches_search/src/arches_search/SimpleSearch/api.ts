@@ -13,6 +13,8 @@ import type {
     SavedSearch,
     SortSpec,
     TermSuggestion,
+    ResourceFieldFilter,
+    ResourceFieldMetadata,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
 
@@ -65,6 +67,7 @@ function buildSearchApiRequestBody({
     graphIds,
     mapFilter,
     dateRange,
+    resourceFieldFilters,
     page,
     sort,
 }: {
@@ -73,6 +76,7 @@ function buildSearchApiRequestBody({
     graphIds: string[];
     mapFilter: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
+    resourceFieldFilters?: ResourceFieldFilter[] | null;
     page?: number;
     sort?: SortSpec[];
 }): Record<string, unknown> {
@@ -85,6 +89,10 @@ function buildSearchApiRequestBody({
         ),
         advanced_search_query:
             query && Object.keys(query).length > 0 ? query : null,
+        resource_field_filters:
+            resourceFieldFilters && resourceFieldFilters.length > 0
+                ? resourceFieldFilters
+                : null,
     };
 
     if (page !== undefined) {
@@ -133,6 +141,7 @@ export async function fetchSearchResults({
     graphIds = [],
     mapFilter = null,
     dateRange = null,
+    resourceFieldFilters = null,
     page = 1,
     sort,
 }: {
@@ -141,6 +150,7 @@ export async function fetchSearchResults({
     graphIds?: string[];
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
+    resourceFieldFilters?: ResourceFieldFilter[] | null;
     page?: number;
     sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
@@ -150,6 +160,7 @@ export async function fetchSearchResults({
         graphIds,
         mapFilter,
         dateRange,
+        resourceFieldFilters,
         page,
         sort,
     });
@@ -335,4 +346,23 @@ export async function exportSearchResults({
     anchor.download = filename;
     anchor.click();
     window.URL.revokeObjectURL(url);
+}
+
+export async function fetchResourceFieldMetadata(
+    graphIds: string[] = [],
+): Promise<ResourceFieldMetadata[]> {
+    const searchParams = new URLSearchParams();
+    graphIds.forEach((graphId) => searchParams.append("graph_ids", graphId));
+
+    const url = `${generateArchesURL(
+        "arches_search:resource_field_metadata",
+    )}?${searchParams}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+        throw new Error(response.statusText);
+    }
+
+    const responseJson = await response.json();
+    return responseJson.fields;
 }

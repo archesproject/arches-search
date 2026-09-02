@@ -10,8 +10,18 @@ from arches_search.utils.advanced_search.advanced_search import (
     SearchPayload,
     validate_node_agnostic_filters,
 )
+from arches_search.utils.extra_columns import (
+    annotate_node_columns,
+    column_keys,
+    format_node_columns,
+    resolve_node_columns,
+    validate_extra_columns,
+)
+from arches_search.utils.resource_field_search.validators import (
+    validate_resource_field_filters,
+)
 from arches_search.utils.search_aggregation import build_aggregations
-from arches_search.utils.search_sort import SortResolver
+from arches_search.utils.search_sort import SORT_TYPE_EXTRA_COLUMN, SortResolver
 
 
 def build_search_payload(body):
@@ -19,6 +29,7 @@ def build_search_payload(body):
         graph_ids=body.get("graph_ids") or None,
         node_agnostic_filters=body.get("node_agnostic_filters"),
         advanced_search_query=body.get("advanced_search_query"),
+        resource_field_filters=body.get("resource_field_filters"),
     )
 
 
@@ -28,13 +39,41 @@ class SearchAPI(APIBase):
 
         try:
             validate_node_agnostic_filters(body.get("node_agnostic_filters"))
+            validate_resource_field_filters(body.get("resource_field_filters"))
+            validate_extra_columns(body.get("extra_columns"))
         except ValidationError as error:
             return JSONResponse({"error": str(error)}, status=400)
 
         search_payload = build_search_payload(body)
         search_result = SearchCompiler(search_payload, request.user).compile()
 
-        results_queryset = SortResolver(body.get("sort")).apply(search_result.results)
+        sort_specs = body.get("sort")
+        # Sorting by a node value needs that value annotated onto the queryset,
+        # so collect the columns the sort needs alongside the ones requested for
+        # display and resolve both in one pass -- a column used for both then
+        # costs a single annotation.
+        requested_column_keys = column_keys(body.get("extra_columns"))
+        # Guarded rather than trusting the shape: SortResolver validates the
+        # sort payload, but it does not run until further down.
+        for sort_spec in sort_specs if isinstance(sort_specs, list) else []:
+            if (
+                isinstance(sort_spec, dict)
+                and sort_spec.get("type") == SORT_TYPE_EXTRA_COLUMN
+                and isinstance(sort_spec.get("graph_slug"), str)
+                and isinstance(sort_spec.get("node_alias"), str)
+            ):
+                sort_key = (sort_spec["graph_slug"], sort_spec["node_alias"])
+                if sort_key not in requested_column_keys:
+                    requested_column_keys.append(sort_key)
+
+        nodes_by_key = resolve_node_columns(requested_column_keys, request.user)
+        annotated_queryset, annotation_names = annotate_node_columns(
+            search_result.results, nodes_by_key
+        )
+
+        results_queryset = SortResolver(sort_specs).apply(
+            annotated_queryset, node_column_annotations=annotation_names
+        )
         page_number = body.get("page", 1)
         page_size = body.get("page_size", 20)
         paginator = Paginator(results_queryset, page_size)
@@ -49,10 +88,17 @@ class SearchAPI(APIBase):
             else {}
         )
 
-        serialized_resources = [
-            JSONSerializer().serializeToPython(resource)
-            for resource in results_page.object_list
-        ]
+        page_resources = list(results_page.object_list)
+        extra_columns_by_resource = format_node_columns(
+            page_resources, nodes_by_key, annotation_names
+        )
+        serialized_resources = []
+        for resource in page_resources:
+            serialized = JSONSerializer().serializeToPython(resource)
+            serialized["extra_columns"] = extra_columns_by_resource.get(
+                str(resource.pk), {}
+            )
+            serialized_resources.append(serialized)
 
         return JSONResponse(
             {

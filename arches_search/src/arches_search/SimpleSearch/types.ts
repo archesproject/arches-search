@@ -107,7 +107,43 @@ export type SortDirection = "asc" | "desc";
 
 export type SortSpec =
     | { type: "primary_name"; direction: SortDirection }
-    | { type: "created_time"; direction: SortDirection };
+    | { type: "created_time"; direction: SortDirection }
+    | { type: "resource_field"; field: string; direction: SortDirection }
+    | {
+          type: "extra_column";
+          graph_slug: string;
+          node_alias: string;
+          direction: SortDirection;
+      };
+
+export type ResourceFieldKind =
+    | "USER"
+    | "CHOICE"
+    | "BOOLEAN"
+    | "DATE"
+    | "ID"
+    | "TEXT";
+
+export interface ResourceFieldChoice {
+    value: string;
+    label: string;
+}
+
+export interface ResourceFieldMetadata {
+    field: string;
+    label: string;
+    kind: ResourceFieldKind;
+    operators: string[];
+    is_groupable: boolean;
+    is_user_relation: boolean;
+    choices?: ResourceFieldChoice[];
+}
+
+export interface ResourceFieldFilter {
+    field: string;
+    operator: string;
+    value?: unknown;
+}
 
 export interface SavedSearch {
     savedsearchid: string;

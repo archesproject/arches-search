@@ -6,8 +6,14 @@ used in advanced search queries within the Arches search system.
 from arches.app.models.models import TileModel
 from django.apps import apps
 from django.db import models
-from django.db.models import OuterRef, Subquery, Q, QuerySet
+from django.db.models import F, OuterRef, Subquery, Q, QuerySet
 from typing import Optional, Dict, Any, List, Union, Callable
+
+from arches_search.utils.resource_field_search.grouping import (
+    is_resource_field_spec,
+    resolve_group_by_path,
+    resolve_metric_path,
+)
 
 
 def get_search_model(search_table: str) -> models.Model:
@@ -239,6 +245,19 @@ def build_aggregations(
         # Apply group-by subqueries
         for group_spec in group_bys:
             field_alias = group_spec["alias"]
+            if is_resource_field_spec(group_spec):
+                # A resource field is already a column on the row being grouped,
+                # so it needs a plain reference rather than a correlated subquery.
+                local_queryset = local_queryset.annotate(
+                    **{
+                        field_alias: F(
+                            resolve_group_by_path(
+                                group_spec, aggregate_by_tile=aggregate_by_tile
+                            )
+                        )
+                    }
+                )
+                continue
             local_queryset = local_queryset.annotate(
                 **{
                     field_alias: build_subquery(
@@ -254,6 +273,17 @@ def build_aggregations(
         for metric_spec in metrics:
             alias = metric_spec["alias"]
             fn = metric_spec["fn"]
+            if is_resource_field_spec(metric_spec):
+                # Aggregating a column of the row itself (e.g. counting rows per
+                # group) needs a plain aggregate, not a correlated subquery, and
+                # must skip the Count->Sum rewrite below, which exists only to
+                # roll per-tile counts up to the resource.
+                metric_annotations[alias] = get_aggregate_function(fn)(
+                    resolve_metric_path(
+                        metric_spec, aggregate_by_tile=aggregate_by_tile
+                    )
+                )
+                continue
             # we need to handle Count differently because when we do counts per resource
             # we want to sum the counts of each tile, not count the counts from each tile
             # which would always be 1 per resource

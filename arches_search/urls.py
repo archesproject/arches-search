@@ -24,6 +24,7 @@ from arches_search.views.api.relatable_node_tree_for_graph import (
     RelatableNodesTreeForGraphPairAPI,
 )
 from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
+from arches_search.views.api.resource_field_metadata import ResourceFieldMetadataAPI
 from arches_search.views.api.saved_search import SavedSearchAPI
 from arches_search.views.api.search_config import NodeFilterConfigAPI
 from arches_search.views.api.term_suggestions import TermSuggestionView
@@ -61,6 +62,11 @@ urlpatterns = [
         "api/advanced-search/facets",
         AllDatatypeFacetsAPI.as_view(),
         name="all_datatype_facets",
+    ),
+    path(
+        "api/advanced-search/resource-fields",
+        ResourceFieldMetadataAPI.as_view(),
+        name="resource_field_metadata",
     ),
     path(
         "api/advanced-search/graph/models",

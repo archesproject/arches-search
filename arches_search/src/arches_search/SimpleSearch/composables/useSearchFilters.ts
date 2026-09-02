@@ -23,6 +23,7 @@ import {
 } from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ActiveFilter,
+    ResourceFieldFilter,
     ResourceType,
     SearchDefinition,
     SortSpec,
@@ -54,6 +55,7 @@ interface SearchFilters {
     currentPage: Ref<number>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
+    resourceFieldFilters: Ref<Map<string, ResourceFieldFilter>>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
     resultsGraphs: Ref<ResourceType[]>;
@@ -68,6 +70,11 @@ interface SearchFilters {
     search(page?: number): void;
     setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
+    setResourceFieldFilter(
+        field: string,
+        filter: ResourceFieldFilter | null,
+    ): void;
+    clearResourceFieldFilters(): void;
     setSort(next: SortSpec[]): void;
     setTermFilter(
         key: string,
@@ -93,6 +100,11 @@ function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const mapFilter = ref<FeatureCollection | null>(null);
+    // Keyed by field name so re-selecting a field replaces its filter rather
+    // than stacking a second, contradictory one.
+    const resourceFieldFilters = ref<Map<string, ResourceFieldFilter>>(
+        new Map(),
+    );
     const activeGraphs = ref<ResourceType[]>([]);
     const resultsGraphs = ref<ResourceType[]>([]);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
@@ -247,6 +259,7 @@ function createSearchFilters(): SearchFilters {
                     page,
                     graphIds: requestGraphs.map((graph) => graph.id as string),
                     mapFilter: mapFilter.value,
+                    resourceFieldFilters: getRequestResourceFieldFilters(),
                     sort: sort.value,
                 };
 
@@ -310,6 +323,32 @@ function createSearchFilters(): SearchFilters {
             };
         }
         return null;
+    }
+
+    function setResourceFieldFilter(
+        field: string,
+        filter: ResourceFieldFilter | null,
+    ) {
+        const next = new Map(resourceFieldFilters.value);
+        if (filter === null) {
+            next.delete(field);
+        } else {
+            next.set(field, filter);
+        }
+        resourceFieldFilters.value = next;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function clearResourceFieldFilters() {
+        resourceFieldFilters.value = new Map();
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function getRequestResourceFieldFilters(): ResourceFieldFilter[] | null {
+        const filters = [...resourceFieldFilters.value.values()];
+        return filters.length > 0 ? filters : null;
     }
 
     function getRequestQuery(): GroupPayload | undefined {
@@ -403,9 +442,12 @@ function createSearchFilters(): SearchFilters {
         isSearching,
         mapFilter,
         queries: queriesView,
+        resourceFieldFilters,
         resultsTileUrl,
         resultsGraphs,
         search,
+        setResourceFieldFilter,
+        clearResourceFieldFilters,
         searchResults,
         setMapFilter,
         setQuery,
