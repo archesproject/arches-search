@@ -102,37 +102,44 @@ pip install arches-search
     b. If not using the Github CLI: `git clone https://github.com/archesproject/arches.git`
 
 3. Create a virtual environment outside of both repositories:
+
     ```
     python3 -m venv ENV
     ```
 
 4. Activate the virtual environment in your terminal:
+
     ```
     source ENV/bin/activate
     ```
 
 5. Navigate to the `arches-search` directory, and install the project (with development dependencies):
+
     ```
     cd arches-search
     pip install -e . --group dev
     ```
 
 6. Also install core arches for local development:
+
     ```
     pip install -e ../arches
     ```
 
 7. Install the pre-commit hooks:
+
     ```
     pre-commit install
     ```
 
 8. Run the Django server:
+
     ```
     python manage.py runserver
     ```
 
 9. (From the `arches-search` top-level directory) install the frontend dependencies:
+
     ```
     npm install
     ```
@@ -144,6 +151,7 @@ pip install arches-search
     b. If you're not planning on editing HTML/CSS/JavaScript files, run `npm run build_development`
 
 11. Setup the database:
+
     ```
     python manage.py setup_db
     ```
@@ -219,8 +227,8 @@ GET /api/advanced-search/graph/<graph_id>/search-config?slug=filtering
 
 The API resolves each configured alias to a concrete node and returns its `datatype` (along with the node's id, nodegroup id, resolved label, sortorder, and node config). On the front end, the node's datatype is looked up in the attribute-filter **registry**, which maps a datatype to the widget that renders it and the function that turns the widget's value into a search query. Out of the box the registry supports:
 
-| Datatype    | Widget            | Behavior                                                                                            |
-| ----------- | ----------------- | --------------------------------------------------------------------------------------------------- |
+| Datatype    | Widget            | Behavior                                                                                             |
+| ----------- | ----------------- | ---------------------------------------------------------------------------------------------------- |
 | `number`    | `NumericFilter`   | Accepts discrete values and ranges (e.g. `9-10, 12`), OR-combined into `EQUALS` / `BETWEEN` clauses. |
 | `reference` | `ReferenceFilter` | Lets the user pick one or more controlled-list values, combined into a `REFERENCES_ANY` clause.      |
 
@@ -351,3 +359,179 @@ class MyAppConfig(AppConfig):
 ```
 
 This is opt-in; a datatype with no normalizer just passes its value through untouched. Most scalar datatypes (numbers, booleans) don't need one at all.
+
+## Searching on Resource Fields
+
+`advanced_search_query` matches values stored in tiles, and it is anchored to a
+single graph. A resource's own columns — its lifecycle state, who created it,
+when it was made — are not tile data and mean the same thing on every graph, so
+they are a separate, graph-agnostic facet: `resource_field_filters`.
+
+Which fields are available is derived from `ResourceInstance` itself, not from a
+hardcoded list. Each concrete model field is mapped to an operator vocabulary by
+its **Django field class**, so a column added to core becomes filterable,
+sortable and groupable with no change here. Fields whose class has no mapping
+(`name` and `descriptors`, both JSON-backed) fall out automatically.
+
+| Field class                   | Operators                                                             |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `ForeignKey`                  | `EQUALS`, `IN`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`                       |
+| `UUIDField`                   | `EQUALS`, `IN`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`                       |
+| `DateTimeField` / `DateField` | `EQUALS`, `RANGE`, `BEFORE`, `AFTER`, `HAS_ANY_VALUE`, `HAS_NO_VALUE` |
+| `CharField` / `TextField`     | `EQUALS`, `CONTAINS`, `STARTS_WITH`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`  |
+| `BooleanField`                | `IS_TRUE`, `IS_FALSE`                                                 |
+
+A foreign key to the user model also gets the zero-arity `IS_CURRENT_USER` and
+`IS_NOT_CURRENT_USER`, plus exactly one hop to that user's `username` — nothing
+else on the user model is reachable.
+
+Fetch the vocabulary rather than hardcoding it. `graph_ids` is optional and
+scopes choice lists such as lifecycle states, which differ per graph:
+
+```
+GET /arches_search/api/advanced-search/resource-fields?graph_ids=<uuid>
+```
+
+### Projecting and sorting node values
+
+`extra_columns` annotates a node's value onto each result row. The same
+annotation backs both display and `ORDER BY`, so a column used for sorting and
+display costs one annotation, not two. A node that does not resolve, or whose
+nodegroup the requester cannot read, is simply absent from the response.
+
+### Example payload
+
+`POST /arches_search/api/search`
+
+The facets compose: `advanced_search_query` matches tile values on one graph,
+`resource_field_filters` narrows by the resource's own columns, and
+`extra_columns` projects node values onto the rows for display and sorting.
+
+```json
+{
+    "graph_ids": ["a1b2c3d4-0000-0000-0000-000000000000"],
+    "advanced_search_query": {
+        "graph_slug": "my_resource_graph",
+        "scope": "RESOURCE",
+        "logic": "AND",
+        "clauses": [
+            {
+                "type": "LITERAL",
+                "quantifier": "ANY",
+                "subject": {
+                    "type": "NODE",
+                    "graph_slug": "my_resource_graph",
+                    "node_alias": "material",
+                    "search_models": []
+                },
+                "operator": "LIKE",
+                "operands": [{ "type": "LITERAL", "value": "bronze" }]
+            }
+        ],
+        "groups": [],
+        "aggregations": [],
+        "relationship": null
+    },
+    "resource_field_filters": [
+        { "field": "principaluser", "operator": "IS_CURRENT_USER" },
+        {
+            "field": "resource_instance_lifecycle_state",
+            "operator": "IN",
+            "value": ["b2c3d4e5-0000-0000-0000-000000000000"]
+        },
+        {
+            "field": "createdtime",
+            "operator": "RANGE",
+            "value": { "from": "2025-01-01", "to": "2025-12-31" }
+        }
+    ],
+    "extra_columns": [
+        { "graph_slug": "my_resource_graph", "node_alias": "name" },
+        { "graph_slug": "my_resource_graph", "node_alias": "height" }
+    ],
+    "sort": [
+        {
+            "type": "extra_column",
+            "graph_slug": "my_resource_graph",
+            "node_alias": "height",
+            "direction": "desc"
+        }
+    ],
+    "page": 1,
+    "page_size": 20
+}
+```
+
+Each resource in the response carries its requested columns. Values are always a
+list, so a client never has to branch on cardinality:
+
+```json
+{
+    "resources": [
+        {
+            "resourceinstanceid": "c3d4e5f6-0000-0000-0000-000000000000",
+            "extra_columns": {
+                "name": [
+                    {
+                        "node_value": "Bronze bowl",
+                        "display_value": "Bronze bowl",
+                        "details": []
+                    }
+                ],
+                "height": [
+                    { "node_value": 12, "display_value": "12", "details": [] }
+                ]
+            }
+        }
+    ],
+    "pagination": {
+        "page": 1,
+        "page_size": 20,
+        "total_results": 1,
+        "num_pages": 1,
+        "has_next": false,
+        "has_previous": false
+    }
+}
+```
+
+### Sorting and grouping
+
+`sort` accepts `resource_field` alongside `extra_column`. Foreign keys order by
+the related record's label rather than its opaque primary key, and nulls sort
+last in both directions so a nullable column does not lead on `desc`:
+
+```json
+{
+    "sort": [
+        {
+            "type": "resource_field",
+            "field": "resource_instance_lifecycle_state",
+            "direction": "asc"
+        }
+    ]
+}
+```
+
+`aggregations` accepts a `RESOURCE_FIELD` group-by for any field the registry
+reports as groupable — foreign keys and booleans:
+
+```json
+{
+    "aggregations": [
+        {
+            "type": "RESOURCE_FIELD",
+            "field": "resource_instance_lifecycle_state"
+        }
+    ]
+}
+```
+
+### Permissions
+
+`resource_field_filters` narrows the candidate set and nothing more.
+`permission_backend.filter_resource_queryset` runs unconditionally as the final
+step, so no filter value can surface a resource the requester could not
+otherwise see. `IS_CURRENT_USER` resolves server-side from the request user;
+for an unauthenticated request it matches nothing rather than matching every
+resource with no creator.

@@ -340,7 +340,7 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
-    function clearResourceFieldFilters() {
+    function clearResourceFieldFilters(): void {
         resourceFieldFilters.value = new Map();
         currentPage.value = FIRST_SEARCH_PAGE;
         search();
