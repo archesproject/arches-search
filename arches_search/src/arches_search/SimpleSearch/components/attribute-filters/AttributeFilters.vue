@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Accordion from "primevue/accordion";
@@ -23,6 +24,8 @@ const emit = defineEmits<{
     (event: "update:value", nodeAlias: string, value: unknown): void;
     (event: "close"): void;
 }>();
+
+const expandedPanels = ref<string[]>([]);
 
 function componentFor(node: NodeFilterConfigNode): Component | null {
     return getAttributeFilterEntry(node.datatype)?.component ?? null;
@@ -59,8 +62,9 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
 
         <Accordion
             v-else
+            v-model:value="expandedPanels"
             :multiple="true"
-            :value="[]"
+            :lazy="true"
         >
             <AccordionPanel
                 v-for="node in nodes"
