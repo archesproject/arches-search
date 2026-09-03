@@ -1,7 +1,7 @@
 """
 Turns validated resource_field_filters entries into a Django Q object.
 
-Every entry is resolved against ResourceFieldRegistry, so only fields the
+Every entry is resolved against ResourceInstanceFieldRegistry, so only fields the
 registry discovered are reachable; a client-supplied string is never used to
 build an ORM lookup path directly.
 """
@@ -9,10 +9,11 @@ build an ORM lookup path directly.
 from typing import Any, Dict, List, Optional
 
 from django.db.models import Q
+from django.utils.translation import get_language
 
 from arches_search.utils.resource_field_search.field_registry import (
-    ResourceFieldDescriptor,
-    get_resource_field_registry,
+    ResourceInstanceField,
+    get_resource_instance_fields,
 )
 
 # A predicate that is always false, without hitting the database.
@@ -56,7 +57,7 @@ def _operands_for(facet, value, current_user_id) -> Optional[List[Any]]:
 
 
 def _build_entry_predicate(
-    descriptor: ResourceFieldDescriptor,
+    descriptor: ResourceInstanceField,
     facet,
     value: Any,
     current_user_id: Optional[int],
@@ -75,7 +76,9 @@ def _build_entry_predicate(
         # creator-less resource; a negative one constrains nothing.
         return None if facet.is_orm_template_negated else MATCH_NOTHING
 
-    lookup = facet.orm_template.format(col=descriptor.orm_path)
+    lookup = facet.orm_template.format(
+        col=descriptor.orm_path, language=get_language() or "en"
+    )
 
     if facet.arity == 0:
         value_for_lookup = True
@@ -89,7 +92,7 @@ def _build_entry_predicate(
     if not facet.is_orm_template_negated:
         return predicate
 
-    if descriptor.is_nullable:
+    if "current_user" in (facet.param_formats or []) and descriptor.is_nullable:
         # Under SQL's three-valued logic a bare negation drops NULL rows, which
         # would hide creator-less resources from "is not me".
         return ~predicate | Q(**{f"{descriptor.orm_path}__isnull": True})
@@ -110,7 +113,7 @@ def build_resource_field_filter(
     if not filter_entries:
         return None
 
-    registry = registry or get_resource_field_registry()
+    registry = registry or get_resource_instance_fields()
     current_user_id = _current_user_id(user)
 
     combined: Optional[Q] = None
@@ -123,7 +126,9 @@ def build_resource_field_filter(
 
         facet = descriptor.facet_for(filter_entry["operator"])
         if facet is None:
-            return MATCH_NOTHING
+            raise ValueError(
+                f"Unsupported resource field operator: {filter_entry['operator']}"
+            )
 
         predicate = _build_entry_predicate(
             descriptor=descriptor,

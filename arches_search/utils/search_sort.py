@@ -7,7 +7,7 @@ from django.db.models.functions import Lower
 from django.utils.translation import get_language, gettext as _
 
 from arches_search.utils.resource_field_search.field_registry import (
-    get_resource_field_registry,
+    get_resource_instance_fields,
 )
 
 SORT_TYPE_PRIMARY_NAME = "primary_name"
@@ -46,7 +46,7 @@ class SortResolver:
       - "created_time": sort by ResourceInstance.createdtime (the resource's
         actual creation timestamp — there is no "last modified" field to
         sort by instead).
-      - "resource_field": sort by any field ResourceFieldRegistry exposes, named
+      - "resource_field": sort by any field ResourceInstanceFieldRegistry exposes, named
         by an extra "field" key. Foreign keys order by the related record's
         label (e.g. a lifecycle state's name) rather than by its opaque primary
         key, and nulls always sort last regardless of direction.
@@ -121,7 +121,7 @@ class SortResolver:
 
     @staticmethod
     def _apply_resource_field(queryset: QuerySet, spec: Dict[str, Any], index: int):
-        descriptor = get_resource_field_registry().get(spec["field"])
+        descriptor = get_resource_instance_fields().get(spec["field"])
         direction = spec.get("direction", DIRECTION_ASC)
 
         if descriptor.label_orm_path and (
@@ -195,7 +195,7 @@ class SortResolver:
                 field_name = spec.get("field")
                 if (
                     not isinstance(field_name, str)
-                    or get_resource_field_registry().get(field_name) is None
+                    or get_resource_instance_fields().get(field_name) is None
                 ):
                     raise ValidationError(
                         _("sort[%(i)s] has unsupported field %(field)s.")

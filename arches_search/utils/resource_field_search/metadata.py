@@ -9,14 +9,8 @@ from typing import Any, Dict, Iterable, List
 from arches.app.models.models import GraphModel, ResourceInstanceLifecycleState
 
 from arches_search.utils.resource_field_search.field_registry import (
-    get_resource_field_registry,
+    get_resource_instance_fields,
 )
-
-# Related models whose rows are safe and bounded to enumerate as pick-list
-# choices. Enumerating an arbitrary related table could be unbounded (and could
-# expose rows a caller has no business listing), so this is opt-in rather than
-# applied to every foreign key.
-CHOICE_ENUMERABLE_MODELS = {ResourceInstanceLifecycleState.__name__}
 
 
 def _serialize_descriptor(descriptor) -> Dict[str, Any]:
@@ -57,9 +51,9 @@ def resource_field_metadata(graph_ids: Iterable[str]) -> List[Dict[str, Any]]:
     """Every filterable field, with pick-list choices where they are bounded."""
     fields = []
 
-    for descriptor in get_resource_field_registry().all():
+    for descriptor in get_resource_instance_fields().all():
         serialized = _serialize_descriptor(descriptor)
-        if descriptor.metadata.get("related_model") in CHOICE_ENUMERABLE_MODELS:
+        if descriptor.has_enumerable_choices:
             serialized["choices"] = _lifecycle_state_choices(graph_ids)
         fields.append(serialized)
 

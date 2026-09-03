@@ -13,27 +13,18 @@ from django.contrib.postgres.search import SearchVector
 from django.conf import settings
 
 
-class ResourceFieldFacet(models.Model):
+class SearchFacet(models.Model):
     """
-    An operator available on a ResourceInstance column, and how it compiles.
+    An operator, and how it compiles to an ORM predicate.
 
-    The resource-field sibling of AdvancedSearchFacet: that one is keyed by
-    datatype because it targets tile values, this one by Django field class
-    because it targets the resource's own columns. Both carry an orm_template
-    that PredicateBuilder turns into a Q, so an operator is added by inserting a
-    row rather than by editing a branch.
+    Shared by the concrete facet models: AdvancedSearchFacet, which targets tile
+    values and is keyed by datatype, and ResourceFieldFacet, which targets a
+    column on the resource itself and is keyed by Django field class. Both are
+    consumed the same way, since PredicateBuilder only reads what is declared
+    here.
     """
 
     id = models.AutoField(primary_key=True)
-    field_class = models.CharField(
-        max_length=255,
-        verbose_name=_("Field Class"),
-        help_text=_(
-            "Dotted path of the Django model field class this facet applies to, "
-            "e.g. 'django.db.models.BooleanField'. Matched by isinstance, so a "
-            "more specific class takes precedence over its base."
-        ),
-    )
     label = I18n_TextField()
     operator = models.CharField(max_length=50)
     arity = models.PositiveSmallIntegerField(default=0)
@@ -43,20 +34,10 @@ class ResourceFieldFacet(models.Model):
     sortorder = models.PositiveSmallIntegerField()
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["field_class", "operator"],
-                name="unique_operator_per_field_class",
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.field_class}: {self.operator}"
+        abstract = True
 
 
-class AdvancedSearchFacet(models.Model):
-    id = models.AutoField(primary_key=True)
-    arity = models.PositiveSmallIntegerField(default=0)
+class AdvancedSearchFacet(SearchFacet):
     datatype = models.ForeignKey(
         "models.DDataType",
         on_delete=models.CASCADE,
@@ -64,12 +45,6 @@ class AdvancedSearchFacet(models.Model):
         verbose_name=_("Data Type"),
         help_text=_("The data type to which the advanced search facet applies."),
     )
-    label = I18n_TextField()
-    operator = models.CharField(max_length=50)
-    param_formats = models.JSONField(default=list, blank=True)
-    sortorder = models.PositiveSmallIntegerField()
-    orm_template = models.CharField(max_length=255, blank=True)
-    is_orm_template_negated = models.BooleanField(default=False)
     filter_field = models.CharField(
         max_length=100,
         blank=True,
@@ -133,6 +108,29 @@ class AdvancedSearchFacet(models.Model):
         if not self.filter_field or resolved_filter_value is None:
             return rows
         return rows.filter(**{self.filter_field: resolved_filter_value})
+
+
+class ResourceFieldFacet(SearchFacet):
+    field_class = models.CharField(
+        max_length=255,
+        verbose_name=_("Field Class"),
+        help_text=_(
+            "Dotted path of the Django model field class this facet applies to, "
+            "e.g. 'django.db.models.BooleanField'. Matched by isinstance, so a "
+            "more specific class takes precedence over its base."
+        ),
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["field_class", "operator"],
+                name="unique_operator_per_field_class",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.field_class}: {self.operator}"
 
 
 def _get_operand_normalizer(datatype_name):

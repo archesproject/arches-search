@@ -7,6 +7,7 @@ DATE_TIME = "django.db.models.DateTimeField"
 DATE = "django.db.models.DateField"
 TEXT = "django.db.models.TextField"
 CHAR = "django.db.models.CharField"
+I18N_TEXT = "arches.app.models.fields.i18n.I18n_TextField"
 
 PRESENCE = [
     {
@@ -21,33 +22,44 @@ PRESENCE = [
         "operator": "HAS_NO_VALUE",
         "arity": 0,
         "orm_template": "{col}__isnull",
-        "is_orm_template_negated": False,
     },
 ]
 
 EQUALITY = [
-    {"label": "is", "operator": "EQUALS", "arity": 1, "orm_template": "{col}"},
-    {"label": "is one of", "operator": "IN", "arity": 1, "orm_template": "{col}__in"},
+    {
+        "label": "is",
+        "operator": "EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}",
+    },
+    {
+        "label": "is one of",
+        "operator": "IN",
+        "arity": 1,
+        "param_formats": ["{values}"],
+        "orm_template": "{col}__in",
+    },
 ]
 
-TEXT_MATCHING = [
-    {"label": "is", "operator": "EQUALS", "arity": 1, "orm_template": "{col}"},
+TEXT_MATCHING = EQUALITY + [
     {
         "label": "contains",
         "operator": "CONTAINS",
         "arity": 1,
+        "param_formats": ["%{value}%"],
         "orm_template": "{col}__icontains",
     },
     {
         "label": "starts with",
         "operator": "STARTS_WITH",
         "arity": 1,
+        "param_formats": ["{value}%"],
         "orm_template": "{col}__istartswith",
     },
 ]
 
-DATE_COMPARISON = [
-    {"label": "is", "operator": "EQUALS", "arity": 1, "orm_template": "{col}"},
+DATE_COMPARISON = EQUALITY[:1] + [
     {
         "label": "is between",
         "operator": "RANGE",
@@ -59,11 +71,19 @@ DATE_COMPARISON = [
         "label": "is before",
         "operator": "BEFORE",
         "arity": 1,
+        "param_formats": ["{value}"],
         "orm_template": "{col}__lt",
     },
-    {"label": "is after", "operator": "AFTER", "arity": 1, "orm_template": "{col}__gt"},
+    {
+        "label": "is after",
+        "operator": "AFTER",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__gt",
+    },
 ]
 
+# The operand comes from the request user, not the client payload.
 CURRENT_USER = [
     {
         "label": "is me",
@@ -79,6 +99,32 @@ CURRENT_USER = [
         "param_formats": ["current_user"],
         "orm_template": "{col}",
         "is_orm_template_negated": True,
+    },
+]
+
+# Stored as {language: value}, so the lookup is keyed by the active language.
+# {language} is substituted alongside {col} when the template is compiled.
+I18N_TEXT_MATCHING = [
+    {
+        "label": "is",
+        "operator": "EQUALS",
+        "arity": 1,
+        "param_formats": ["{value}"],
+        "orm_template": "{col}__{language}",
+    },
+    {
+        "label": "contains",
+        "operator": "CONTAINS",
+        "arity": 1,
+        "param_formats": ["%{value}%"],
+        "orm_template": "{col}__{language}__icontains",
+    },
+    {
+        "label": "starts with",
+        "operator": "STARTS_WITH",
+        "arity": 1,
+        "param_formats": ["{value}%"],
+        "orm_template": "{col}__{language}__istartswith",
     },
 ]
 
@@ -104,6 +150,7 @@ FACETS_BY_FIELD_CLASS = {
     DATE: DATE_COMPARISON + PRESENCE,
     TEXT: TEXT_MATCHING + PRESENCE,
     CHAR: TEXT_MATCHING + PRESENCE,
+    I18N_TEXT: I18N_TEXT_MATCHING + PRESENCE,
 }
 
 
@@ -130,9 +177,7 @@ def seed_resource_field_facets(apps, schema_editor):
 
 def unseed_resource_field_facets(apps, schema_editor):
     ResourceFieldFacet = apps.get_model("arches_search", "ResourceFieldFacet")
-    ResourceFieldFacet.objects.filter(
-        field_class__in=FACETS_BY_FIELD_CLASS.keys()
-    ).delete()
+    ResourceFieldFacet.objects.all().delete()
 
 
 class Migration(migrations.Migration):

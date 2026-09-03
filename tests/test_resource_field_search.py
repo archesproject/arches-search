@@ -21,7 +21,8 @@ import uuid
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from django.test import SimpleTestCase, TestCase
+from django.utils import translation
+from django.test import TestCase
 from django.urls import reverse
 
 from arches.app.models.models import (
@@ -37,18 +38,7 @@ from arches_search.utils.advanced_search.advanced_search import (
     SearchPayload,
 )
 from arches_search.utils.resource_field_search.field_registry import (
-    OPERATOR_AFTER,
-    OPERATOR_BEFORE,
-    OPERATOR_CONTAINS,
-    OPERATOR_EQUALS,
-    OPERATOR_HAS_ANY_VALUE,
-    OPERATOR_HAS_NO_VALUE,
-    OPERATOR_IN,
-    OPERATOR_IS_CURRENT_USER,
-    OPERATOR_IS_NOT_CURRENT_USER,
-    OPERATOR_RANGE,
-    OPERATOR_STARTS_WITH,
-    get_resource_field_registry,
+    get_resource_instance_fields,
 )
 from arches_search.utils.resource_field_search.grouping import (
     GROUP_BY_TYPE_RESOURCE_FIELD,
@@ -73,12 +63,27 @@ from arches_search.utils.search_sort import (
 # Registry discovery
 # ---------------------------------------------------------------------------
 
+# Operator tokens, named here for readability. Production code never branches on
+# these: which operators exist, and what they accept, is seeded as
+# AdvancedSearchFacet rows.
+OPERATOR_EQUALS = "EQUALS"
+OPERATOR_IN = "IN"
+OPERATOR_CONTAINS = "CONTAINS"
+OPERATOR_STARTS_WITH = "STARTS_WITH"
+OPERATOR_RANGE = "RANGE"
+OPERATOR_BEFORE = "BEFORE"
+OPERATOR_AFTER = "AFTER"
+OPERATOR_HAS_ANY_VALUE = "HAS_ANY_VALUE"
+OPERATOR_HAS_NO_VALUE = "HAS_NO_VALUE"
+OPERATOR_IS_CURRENT_USER = "IS_CURRENT_USER"
+OPERATOR_IS_NOT_CURRENT_USER = "IS_NOT_CURRENT_USER"
 
-class ResourceFieldRegistryTests(SimpleTestCase):
+
+class ResourceInstanceFieldRegistryTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.registry = get_resource_field_registry()
+        cls.registry = get_resource_instance_fields()
 
     def test_discovers_scalar_and_relation_fields(self):
         for expected in [
@@ -92,10 +97,15 @@ class ResourceFieldRegistryTests(SimpleTestCase):
                 self.registry.get(expected), f"{expected} should be queryable"
             )
 
-    def test_json_backed_fields_are_not_exposed(self):
-        # name/descriptors are I18n_TextField/JSONField, which have no operator
-        # vocabulary. They fall out of discovery without a name-based denylist.
-        self.assertIsNone(self.registry.get("name"))
+    def test_i18n_text_fields_are_queryable(self):
+        """name is an I18n_TextField; it is searched in the active language."""
+        descriptor = self.registry.get("name")
+
+        self.assertIsNotNone(descriptor)
+        self.assertIn(OPERATOR_CONTAINS, descriptor.operators)
+
+    def test_untyped_json_fields_are_not_exposed(self):
+        """descriptors is a bare JSONField with no facet rows, so it never appears."""
         self.assertIsNone(self.registry.get("descriptors"))
 
     def test_sensitive_user_columns_are_unreachable(self):
@@ -145,7 +155,7 @@ class ResourceFieldRegistryTests(SimpleTestCase):
 # ---------------------------------------------------------------------------
 
 
-class ResourceFieldFilterValidationTests(SimpleTestCase):
+class ResourceFieldFilterValidationTests(TestCase):
     def test_none_is_allowed(self):
         validate_resource_field_filters(None)
 
@@ -220,7 +230,7 @@ class ResourceFieldFilterValidationTests(SimpleTestCase):
 # ---------------------------------------------------------------------------
 
 
-class ResourceFieldPredicateTests(SimpleTestCase):
+class ResourceFieldPredicateTests(TestCase):
     """
     Each operator compiles to the ORM predicate it claims to.
 
@@ -232,7 +242,7 @@ class ResourceFieldPredicateTests(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.registry = get_resource_field_registry()
+        cls.registry = get_resource_instance_fields()
 
     def _predicate(self, field, operator, value=None, user=AnonymousUser()):
         entry = {"field": field, "operator": operator}
@@ -267,10 +277,18 @@ class ResourceFieldPredicateTests(SimpleTestCase):
                     self._predicate("createdtime", operator, value), expected
                 )
 
+    def test_i18n_text_operators_key_on_the_active_language(self):
+        """name is stored as {language: value}, so the lookup carries the language."""
+        with translation.override("en"):
+            self.assertEqual(
+                self._predicate("name", OPERATOR_CONTAINS, "bronze"),
+                Q(name__en__icontains="bronze"),
+            )
+
     def test_presence_operators_compile_to_isnull_lookups(self):
         self.assertEqual(
             self._predicate("principaluser", OPERATOR_HAS_ANY_VALUE),
-            Q(principaluser_id__isnull=False),
+            ~Q(principaluser_id__isnull=True),
         )
         self.assertEqual(
             self._predicate("principaluser", OPERATOR_HAS_NO_VALUE),
@@ -323,7 +341,7 @@ class ResourceFieldPredicateTests(SimpleTestCase):
         )
 
 
-class ResourceFieldValueShapeValidationTests(SimpleTestCase):
+class ResourceFieldValueShapeValidationTests(TestCase):
     """
     Each operator rejects a malformed value rather than passing it to the ORM.
 
@@ -788,14 +806,14 @@ class ResourceFieldSearchAPITests(TestCase):
 
         with self.subTest("exposes lifecycle state with choices"):
             lifecycle = by_name["resource_instance_lifecycle_state"]
-            self.assertEqual(lifecycle["kind"], "CHOICE")
+            self.assertEqual(lifecycle["kind"], "ForeignKey")
             self.assertIn(
                 str(self.state.pk),
                 {choice["value"] for choice in lifecycle["choices"]},
             )
 
         with self.subTest("exposes creator as a user field"):
-            self.assertEqual(by_name["principaluser"]["kind"], "USER")
+            self.assertTrue(by_name["principaluser"]["is_user_relation"])
             self.assertIn(
                 OPERATOR_IS_CURRENT_USER, by_name["principaluser"]["operators"]
             )

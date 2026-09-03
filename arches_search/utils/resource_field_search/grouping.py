@@ -13,7 +13,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
 from arches_search.utils.resource_field_search.field_registry import (
-    get_resource_field_registry,
+    get_resource_instance_fields,
 )
 
 GROUP_BY_TYPE_RESOURCE_FIELD = "RESOURCE_FIELD"
@@ -47,7 +47,7 @@ def resolve_group_by_path(
     The ORM path to group by, resolved through the registry so a group-by can
     only name a field the registry actually exposes.
     """
-    registry = registry or get_resource_field_registry()
+    registry = registry or get_resource_instance_fields()
     descriptor = _resolve_descriptor(group_spec, registry)
 
     if not descriptor.is_groupable:
@@ -74,7 +74,7 @@ def resolve_metric_path(
     group). Unlike group-by, cardinality is irrelevant here -- the field is
     being aggregated, not bucketed -- so only registry membership is required.
     """
-    registry = registry or get_resource_field_registry()
+    registry = registry or get_resource_instance_fields()
     descriptor = _resolve_descriptor(metric_spec, registry)
 
     if aggregate_by_tile:
