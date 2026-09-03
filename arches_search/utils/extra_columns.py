@@ -17,7 +17,6 @@ are simply absent from the response. "No such node", "not permitted", and "that
 resource is on a different graph" are deliberately indistinguishable.
 """
 
-import logging
 import hashlib
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -34,9 +33,6 @@ from arches_querysets.utils.models import get_tile_values_for_resource
 ANNOTATION_PREFIX = "_arches_search_node_col_"
 
 NodeColumnKey = Tuple[str, str]
-
-
-logger = logging.getLogger(__name__)
 
 
 def annotation_name_for(graph_slug: str, node_alias: str) -> str:
@@ -111,23 +107,17 @@ def resolve_node_columns(
         .select_related("nodegroup", "graph")
     )
 
-    readable_nodegroups = set(
-        permission_backend.get_nodegroups_by_perm(user, "models.read_nodegroup")
+    candidate_nodes = candidate_nodes.filter(
+        nodegroup__in=permission_backend.get_nodegroups_by_perm(
+            user, "models.read_nodegroup"
+        )
     )
-    readable_nodegroup_ids = {
-        getattr(nodegroup, "pk", nodegroup) for nodegroup in readable_nodegroups
+
+    return {
+        (node.graph.slug, node.alias): node
+        for node in candidate_nodes
+        if (node.graph.slug, node.alias) in keys
     }
-
-    nodes_by_key = {}
-    for node in candidate_nodes:
-        key = (node.graph.slug, node.alias)
-        if key not in keys:
-            continue
-        if node.nodegroup_id not in readable_nodegroup_ids:
-            continue
-        nodes_by_key[key] = node
-
-    return nodes_by_key
 
 
 def _graph_nodes_for(graph_slug: str) -> List[Node]:
@@ -195,42 +185,21 @@ def format_node_columns(
 
         for key, node in nodes_by_key.items():
             graph_slug, node_alias = key
-            # A resource on another graph simply has no value for this column.
-            if (
-                str(getattr(resource, "graph_id", ""))
-                and resource.graph.slug != graph_slug
-            ):
+            # A resource on another graph has no value for this column.
+            if resource.graph_id != node.graph_id:
                 continue
 
-            raw_value = getattr(resource, annotation_names[key], None)
+            raw_value = getattr(resource, annotation_names[key])
             values = raw_value if isinstance(raw_value, list) else [raw_value]
 
             formatted = []
             for value in values:
                 if value is None:
                     continue
-                try:
-                    # An unsaved TileTree is enough to format a value: the
-                    # display path reads the value out of tile.data, so putting
-                    # the annotated value there gives the same result a
-                    # persisted tile would, with no arches-querysets change.
-                    stand_in_tile = TileTree(
-                        data={str(node.pk): value}, resourceinstance=resource
-                    )
-                    formatted.append(stand_in_tile.get_value_with_context(node, value))
-                except Exception:
-                    # One misconfigured node must not take down the whole
-                    # response; that column is simply omitted for this row.
-                    # Logged rather than passed over silently: swallowing this
-                    # makes a broken formatter indistinguishable from a
-                    # resource that genuinely has no value for the column.
-                    logger.warning(
-                        "Could not format node column %s for resource %s",
-                        node_alias,
-                        resource_id,
-                        exc_info=True,
-                    )
-                    continue
+                stand_in_tile = TileTree(
+                    data={str(node.pk): value}, resourceinstance=resource
+                )
+                formatted.append(stand_in_tile.get_value_with_context(node, value))
             columns[node_alias] = formatted
 
         columns_by_resource[resource_id] = columns

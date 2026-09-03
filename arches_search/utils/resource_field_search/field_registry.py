@@ -10,10 +10,8 @@ columns such as ``principaluser__password`` unreachable.
 """
 
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any, Dict, Optional, Tuple
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
@@ -25,10 +23,6 @@ from arches.app.models.models import ResourceInstance
 # rather than mapped per model, so a relation Arches adds later resolves without
 # a change here.
 LABEL_FIELD_CANDIDATES = ("name", "username", "label", "title")
-
-# Related models bounded enough to enumerate as pick-list choices. Overridable,
-# since which models qualify is a project's judgement, not a fixed fact.
-DEFAULT_CHOICE_ENUMERABLE_MODELS = frozenset({"ResourceInstanceLifecycleState"})
 
 CURRENT_USER_FORMAT = "current_user"
 
@@ -45,7 +39,6 @@ class ResourceInstanceField:
     is_groupable: bool = False
     is_user_relation: bool = False
     is_nullable: bool = False
-    related_model_name: str = ""
     # Foreign keys sort by the related record's label, not its primary key.
     label_orm_path: Optional[str] = None
     label_is_i18n_json: bool = False
@@ -61,10 +54,6 @@ class ResourceInstanceField:
     def facet_for(self, operator: str) -> Optional[Any]:
         return self.facets.get(operator)
 
-    @property
-    def has_enumerable_choices(self) -> bool:
-        return self.related_model_name in _choice_enumerable_models()
-
 
 class ResourceInstanceFieldRegistry:
     """
@@ -74,8 +63,8 @@ class ResourceInstanceFieldRegistry:
     the four cannot drift apart.
     """
 
-    def __init__(self, model=ResourceInstance) -> None:
-        self.model = model
+    def __init__(self) -> None:
+        self._facets = sorted(_resource_field_facets(), key=lambda row: row.sortorder)
         self._fields: Dict[str, ResourceInstanceField] = self._discover()
 
     def get(self, field_name: str) -> Optional[ResourceInstanceField]:
@@ -87,13 +76,33 @@ class ResourceInstanceFieldRegistry:
     def all(self) -> Tuple[ResourceInstanceField, ...]:
         return tuple(self._fields[name] for name in self.names())
 
-    def groupable(self) -> Tuple[ResourceInstanceField, ...]:
-        return tuple(field for field in self.all() if field.is_groupable)
+    def _facets_for(
+        self, model_field, allow_current_user: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Facet rows applying to this field, keyed by operator.
+
+        Matched by isinstance against each row's field_class, most specific
+        first, so a subclass beats its base. A current-user operand only makes
+        sense on a relation to the user model.
+        """
+        facets: Dict[str, Any] = {}
+
+        for facet in self._facets:
+            if not allow_current_user and CURRENT_USER_FORMAT in (
+                facet.param_formats or []
+            ):
+                continue
+            field_class = _import_field_class(facet.field_class)
+            if field_class is not None and isinstance(model_field, field_class):
+                facets.setdefault(facet.operator, facet)
+
+        return facets
 
     def _discover(self) -> Dict[str, ResourceInstanceField]:
         fields: Dict[str, ResourceInstanceField] = {}
 
-        for model_field in self.model._meta.get_fields():
+        for model_field in ResourceInstance._meta.get_fields():
             if not _is_scalar_column(model_field):
                 continue
 
@@ -101,7 +110,7 @@ class ResourceInstanceFieldRegistry:
             related_model = model_field.related_model if is_relation else None
             is_user_relation = is_relation and related_model is get_user_model()
 
-            facets = _facets_for(model_field, allow_current_user=is_user_relation)
+            facets = self._facets_for(model_field, allow_current_user=is_user_relation)
             if not facets:
                 continue
 
@@ -122,7 +131,7 @@ class ResourceInstanceFieldRegistry:
             )
 
             if label_orm_path and label_field is not None:
-                label_facets = _facets_for(label_field)
+                label_facets = self._facets_for(label_field)
                 if label_facets:
                     fields[label_orm_path] = _build_field(
                         name=label_orm_path,
@@ -161,7 +170,6 @@ def _build_field(
         is_groupable=is_groupable,
         is_user_relation=is_user_relation,
         is_nullable=bool(getattr(model_field, "null", False)),
-        related_model_name=related_model.__name__ if related_model else "",
         label_orm_path=label_orm_path,
         label_is_i18n_json=isinstance(label_field, models.JSONField),
         label_is_text=isinstance(label_field, (models.CharField, models.TextField)),
@@ -177,28 +185,6 @@ def _is_scalar_column(model_field) -> bool:
     )
 
 
-def _facets_for(model_field, allow_current_user: bool = True) -> Dict[str, Any]:
-    """
-    Facet rows applying to this field, keyed by operator.
-
-    Matched by isinstance against each row's field_class, most specific first,
-    so a subclass beats its base. A current-user operand only makes sense on a
-    relation to the user model.
-    """
-    facets: Dict[str, Any] = {}
-
-    for facet in sorted(_resource_field_facets(), key=lambda row: row.sortorder):
-        if not allow_current_user and CURRENT_USER_FORMAT in (
-            facet.param_formats or []
-        ):
-            continue
-        field_class = _import_field_class(facet.field_class)
-        if field_class is not None and isinstance(model_field, field_class):
-            facets.setdefault(facet.operator, facet)
-
-    return facets
-
-
 def _is_groupable(model_field) -> bool:
     """Groupable when the domain is bounded; a timestamp or key is not."""
     return bool(
@@ -206,16 +192,6 @@ def _is_groupable(model_field) -> bool:
         or model_field.one_to_one
         or model_field.choices
         or isinstance(model_field, models.BooleanField)
-    )
-
-
-def _choice_enumerable_models() -> frozenset:
-    return frozenset(
-        getattr(
-            settings,
-            "RESOURCE_FIELD_CHOICE_ENUMERABLE_MODELS",
-            DEFAULT_CHOICE_ENUMERABLE_MODELS,
-        )
     )
 
 
@@ -237,14 +213,12 @@ def _label_field_for(related_model):
     return None, None
 
 
-@lru_cache(maxsize=1)
 def _resource_field_facets() -> Tuple[Any, ...]:
     from arches_search.models.models import ResourceFieldFacet
 
     return tuple(ResourceFieldFacet.objects.all())
 
 
-@lru_cache(maxsize=None)
 def _import_field_class(dotted_path: str) -> Optional[type]:
     try:
         imported = import_string(dotted_path)
@@ -253,7 +227,12 @@ def _import_field_class(dotted_path: str) -> Optional[type]:
     return imported if isinstance(imported, type) else None
 
 
-@lru_cache(maxsize=1)
 def get_resource_instance_fields() -> ResourceInstanceFieldRegistry:
-    """Process-wide registry. The model layout cannot change at runtime."""
+    """
+    Build the registry.
+
+    Not cached: the facet rows it reads are data, and a process-wide cache would
+    serve a stale operator set after they change. Callers that touch it more than
+    once in a request should build it once and pass it along.
+    """
     return ResourceInstanceFieldRegistry()

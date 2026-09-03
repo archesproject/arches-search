@@ -119,16 +119,7 @@ def build_resource_field_filter(
     combined: Optional[Q] = None
     for filter_entry in filter_entries:
         descriptor = registry.get(filter_entry["field"])
-        if descriptor is None:
-            # Validation rejects unknown fields; treat any that reach here as
-            # matching nothing rather than silently widening the result set.
-            return MATCH_NOTHING
-
         facet = descriptor.facet_for(filter_entry["operator"])
-        if facet is None:
-            raise ValueError(
-                f"Unsupported resource field operator: {filter_entry['operator']}"
-            )
 
         predicate = _build_entry_predicate(
             descriptor=descriptor,

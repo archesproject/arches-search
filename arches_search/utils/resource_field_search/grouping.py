@@ -41,13 +41,12 @@ def _resolve_descriptor(spec: Dict[str, Any], registry) -> Optional[Any]:
 def resolve_group_by_path(
     group_spec: Dict[str, Any],
     aggregate_by_tile: bool = False,
-    registry=None,
 ) -> str:
     """
     The ORM path to group by, resolved through the registry so a group-by can
     only name a field the registry actually exposes.
     """
-    registry = registry or get_resource_instance_fields()
+    registry = get_resource_instance_fields()
     descriptor = _resolve_descriptor(group_spec, registry)
 
     if not descriptor.is_groupable:
@@ -67,14 +66,13 @@ def resolve_group_by_path(
 def resolve_metric_path(
     metric_spec: Dict[str, Any],
     aggregate_by_tile: bool = False,
-    registry=None,
 ) -> str:
     """
     The ORM path for a metric over a resource field (e.g. counting rows per
     group). Unlike group-by, cardinality is irrelevant here -- the field is
     being aggregated, not bucketed -- so only registry membership is required.
     """
-    registry = registry or get_resource_instance_fields()
+    registry = get_resource_instance_fields()
     descriptor = _resolve_descriptor(metric_spec, registry)
 
     if aggregate_by_tile:

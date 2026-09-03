@@ -53,7 +53,7 @@ def resource_field_metadata(graph_ids: Iterable[str]) -> List[Dict[str, Any]]:
 
     for descriptor in get_resource_instance_fields().all():
         serialized = _serialize_descriptor(descriptor)
-        if descriptor.has_enumerable_choices:
+        if descriptor.name == "resource_instance_lifecycle_state":
             serialized["choices"] = _lifecycle_state_choices(graph_ids)
         fields.append(serialized)
 

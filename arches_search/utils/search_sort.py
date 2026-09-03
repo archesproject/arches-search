@@ -124,9 +124,7 @@ class SortResolver:
         descriptor = get_resource_instance_fields().get(spec["field"])
         direction = spec.get("direction", DIRECTION_ASC)
 
-        if descriptor.label_orm_path and (
-            descriptor.label_is_i18n_json or descriptor.label_is_text
-        ):
+        if descriptor.label_is_i18n_json or descriptor.label_is_text:
             # Ordering by a foreign key's raw id is meaningless to a reader, so
             # sort by the related record's label instead.
             if descriptor.label_is_i18n_json:

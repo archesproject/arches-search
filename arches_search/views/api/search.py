@@ -41,37 +41,30 @@ class SearchAPI(APIBase):
             validate_node_agnostic_filters(body.get("node_agnostic_filters"))
             validate_resource_field_filters(body.get("resource_field_filters"))
             validate_extra_columns(body.get("extra_columns"))
+            sort_resolver = SortResolver(body.get("sort"))
         except ValidationError as error:
             return JSONResponse({"error": str(error)}, status=400)
 
         search_payload = build_search_payload(body)
         search_result = SearchCompiler(search_payload, request.user).compile()
 
-        sort_specs = body.get("sort")
         # Sorting by a node value needs that value annotated onto the queryset,
         # so collect the columns the sort needs alongside the ones requested for
-        # display and resolve both in one pass -- a column used for both then
-        # costs a single annotation.
+        # display and resolve both in one pass.
         requested_column_keys = column_keys(body.get("extra_columns"))
-        # Guarded rather than trusting the shape: SortResolver validates the
-        # sort payload, but it does not run until further down.
-        for sort_spec in sort_specs if isinstance(sort_specs, list) else []:
-            if (
-                isinstance(sort_spec, dict)
-                and sort_spec.get("type") == SORT_TYPE_EXTRA_COLUMN
-                and isinstance(sort_spec.get("graph_slug"), str)
-                and isinstance(sort_spec.get("node_alias"), str)
-            ):
-                sort_key = (sort_spec["graph_slug"], sort_spec["node_alias"])
-                if sort_key not in requested_column_keys:
-                    requested_column_keys.append(sort_key)
+        for sort_spec in sort_resolver.sort_specs:
+            if sort_spec["type"] != SORT_TYPE_EXTRA_COLUMN:
+                continue
+            sort_key = (sort_spec["graph_slug"], sort_spec["node_alias"])
+            if sort_key not in requested_column_keys:
+                requested_column_keys.append(sort_key)
 
         nodes_by_key = resolve_node_columns(requested_column_keys, request.user)
         annotated_queryset, annotation_names = annotate_node_columns(
             search_result.results, nodes_by_key
         )
 
-        results_queryset = SortResolver(sort_specs).apply(
+        results_queryset = sort_resolver.apply(
             annotated_queryset, node_column_annotations=annotation_names
         )
         page_number = body.get("page", 1)

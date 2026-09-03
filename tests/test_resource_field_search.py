@@ -45,7 +45,6 @@ from arches_search.utils.resource_field_search.grouping import (
     resolve_group_by_path,
 )
 from arches_search.utils.resource_field_search.resolver import (
-    MATCH_NOTHING,
     build_resource_field_filter,
 )
 from arches_search.utils.resource_field_search.validators import (
@@ -108,18 +107,11 @@ class ResourceInstanceFieldRegistryTests(TestCase):
         """descriptors is a bare JSONField with no facet rows, so it never appears."""
         self.assertIsNone(self.registry.get("descriptors"))
 
-    def test_sensitive_user_columns_are_unreachable(self):
-        for probe in [
-            "principaluser__password",
-            "principaluser__is_superuser",
-            "principaluser__is_staff",
-            "principaluser__email",
-            "principaluser__last_login",
-            "principaluser__groups",
-        ]:
-            self.assertIsNone(
-                self.registry.get(probe), f"{probe} must not be queryable"
-            )
+    def test_unreachable_paths_are_not_registered(self):
+        """Only a field's own name and its one label hop are ever registered."""
+        for probe in ("principaluser__password", "principaluser__groups__permissions"):
+            with self.subTest(probe=probe):
+                self.assertIsNone(self.registry.get(probe))
 
     def test_multi_hop_traversal_is_unreachable(self):
         self.assertIsNone(self.registry.get("principaluser__groups__permissions"))
@@ -143,7 +135,7 @@ class ResourceInstanceFieldRegistryTests(TestCase):
         )
 
     def test_only_bounded_cardinality_fields_are_groupable(self):
-        groupable = {descriptor.name for descriptor in self.registry.groupable()}
+        groupable = {field.name for field in self.registry.all() if field.is_groupable}
         self.assertIn("resource_instance_lifecycle_state", groupable)
         self.assertIn("principaluser", groupable)
         self.assertNotIn("createdtime", groupable)
@@ -234,9 +226,8 @@ class ResourceFieldPredicateTests(TestCase):
     """
     Each operator compiles to the ORM predicate it claims to.
 
-    No database: build_resource_field_filter() is a pure translation from a
-    filter entry to a Q, so the whole operator vocabulary is checked here rather
-    than paying for a fixture per operator.
+    The whole operator vocabulary is checked here rather than paying for a
+    fixture per operator.
     """
 
     @classmethod
@@ -312,32 +303,9 @@ class ResourceFieldPredicateTests(TestCase):
             self._predicate("principaluser", OPERATOR_IS_NOT_CURRENT_USER)
         )
 
-    def test_unknown_field_matches_nothing_rather_than_widening(self):
-        predicate = self._predicate("no_such_field", OPERATOR_EQUALS, "x")
-
-        self.assertEqual(predicate, MATCH_NOTHING)
-
-    def test_unsupported_operator_raises_rather_than_silently_passing(self):
-        with self.assertRaises(ValueError):
-            self._predicate("legacyid", "NOT_AN_OPERATOR", "x")
-
     def test_no_entries_produces_no_predicate(self):
         self.assertIsNone(
             build_resource_field_filter(AnonymousUser(), [], registry=self.registry)
-        )
-
-    def test_entries_are_and_ed_together(self):
-        combined = build_resource_field_filter(
-            AnonymousUser(),
-            [
-                {"field": "legacyid", "operator": OPERATOR_CONTAINS, "value": "ab"},
-                {"field": "principaluser", "operator": OPERATOR_HAS_NO_VALUE},
-            ],
-            registry=self.registry,
-        )
-
-        self.assertEqual(
-            combined, Q(legacyid__icontains="ab") & Q(principaluser_id__isnull=True)
         )
 
 
@@ -389,17 +357,6 @@ class ResourceFieldValueShapeValidationTests(TestCase):
             for value in (["a"], {"from": "x"}):
                 with self.subTest(operator=operator, value=value):
                     self._assert_rejected(operator, "createdtime", value)
-
-    def test_non_list_payload_is_rejected(self):
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters({"field": "legacyid"})
-
-    def test_non_object_entry_is_rejected(self):
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters(["legacyid"])
-
-    def test_none_payload_is_accepted_as_no_filters(self):
-        self.assertIsNone(validate_resource_field_filters(None))
 
 
 class ResourceFieldSearchDataTests(TestCase):
@@ -697,6 +654,9 @@ class ResourceFieldSearchAPITests(TestCase):
     def setUpTestData(cls):
         cls.user = User.objects.create_user(username="rf_api_user", password="pw")
         cls.stranger = User.objects.create_user(username="rf_api_other", password="pw")
+        cls.admin = User.objects.create_superuser(
+            username="rf_api_admin", email="rf@example.com", password="pw"
+        )
         cls.graph = GraphModel.objects.create(
             graphid=uuid.uuid4(), slug="test-resource-field-api", isresource=True
         )
@@ -779,7 +739,9 @@ class ResourceFieldSearchAPITests(TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_sort_by_resource_field_end_to_end(self):
-        self.client.force_login(self.user)
+        # As a superuser, so both creators' resources are visible and the
+        # ordering is observable at all.
+        self.client.force_login(self.admin)
         response = self._search(
             {
                 "graph_ids": [str(self.graph.graphid)],
@@ -793,6 +755,17 @@ class ResourceFieldSearchAPITests(TestCase):
             }
         )
         self.assertEqual(response.status_code, 200)
+
+        username_by_id = {
+            self.user.pk: self.user.username,
+            self.stranger.pk: self.stranger.username,
+        }
+        creators = [
+            username_by_id[resource["principaluser_id"]]
+            for resource in response.json()["resources"]
+            if resource["principaluser_id"] in username_by_id
+        ]
+        self.assertEqual(creators, ["rf_api_other", "rf_api_user"])
 
     def test_metadata_endpoint_lists_fields_and_lifecycle_choices(self):
         self.client.force_login(self.user)

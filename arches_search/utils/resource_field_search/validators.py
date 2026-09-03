@@ -25,13 +25,13 @@ SCALAR_FORMAT = "{value}"
 CURRENT_USER_FORMAT = "current_user"
 
 
-def validate_resource_field_filters(resource_field_filters: Any, registry=None) -> None:
+def validate_resource_field_filters(resource_field_filters: Any) -> None:
     if resource_field_filters is None:
         return
     if not isinstance(resource_field_filters, list):
         raise ValidationError(_("resource_field_filters must be a list."))
 
-    registry = registry or get_resource_instance_fields()
+    registry = get_resource_instance_fields()
 
     for index, filter_entry in enumerate(resource_field_filters):
         _validate_entry(filter_entry, index, registry)
