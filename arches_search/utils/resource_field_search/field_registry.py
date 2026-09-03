@@ -158,7 +158,7 @@ def _kind_for_field(model_field, is_user_relation: bool) -> str:
     return ""
 
 
-def _label_field_for(related_model):
+def _label_field_for(related_model) -> Optional[str]:
     """
     The one field of a related model reachable by a single hop.
 

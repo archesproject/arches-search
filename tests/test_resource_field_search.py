@@ -20,6 +20,7 @@ import uuid
 
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
@@ -36,11 +37,17 @@ from arches_search.utils.advanced_search.advanced_search import (
     SearchPayload,
 )
 from arches_search.utils.resource_field_search.field_registry import (
+    OPERATOR_AFTER,
+    OPERATOR_BEFORE,
     OPERATOR_CONTAINS,
     OPERATOR_EQUALS,
+    OPERATOR_HAS_ANY_VALUE,
+    OPERATOR_HAS_NO_VALUE,
     OPERATOR_IN,
     OPERATOR_IS_CURRENT_USER,
     OPERATOR_IS_NOT_CURRENT_USER,
+    OPERATOR_RANGE,
+    OPERATOR_STARTS_WITH,
     get_resource_field_registry,
 )
 from arches_search.utils.resource_field_search.grouping import (
@@ -48,6 +55,7 @@ from arches_search.utils.resource_field_search.grouping import (
     resolve_group_by_path,
 )
 from arches_search.utils.resource_field_search.resolver import (
+    MATCH_NOTHING,
     build_resource_field_filter,
 )
 from arches_search.utils.resource_field_search.validators import (
@@ -210,6 +218,170 @@ class ResourceFieldFilterValidationTests(SimpleTestCase):
 # ---------------------------------------------------------------------------
 # Filtering, sorting and grouping against real rows
 # ---------------------------------------------------------------------------
+
+
+class ResourceFieldPredicateTests(SimpleTestCase):
+    """
+    Each operator compiles to the ORM predicate it claims to.
+
+    No database: build_resource_field_filter() is a pure translation from a
+    filter entry to a Q, so the whole operator vocabulary is checked here rather
+    than paying for a fixture per operator.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.registry = get_resource_field_registry()
+
+    def _predicate(self, field, operator, value=None, user=AnonymousUser()):
+        entry = {"field": field, "operator": operator}
+        if value is not None:
+            entry["value"] = value
+        return build_resource_field_filter(user, [entry], registry=self.registry)
+
+    def test_scalar_operators_compile_to_expected_lookups(self):
+        cases = [
+            (OPERATOR_EQUALS, "legacyid", "abc", Q(legacyid="abc")),
+            (OPERATOR_IN, "legacyid", ["a", "b"], Q(legacyid__in=["a", "b"])),
+            (OPERATOR_CONTAINS, "legacyid", "ab", Q(legacyid__icontains="ab")),
+            (OPERATOR_STARTS_WITH, "legacyid", "ab", Q(legacyid__istartswith="ab")),
+        ]
+        for operator, field, value, expected in cases:
+            with self.subTest(operator=operator):
+                self.assertEqual(self._predicate(field, operator, value), expected)
+
+    def test_date_operators_compile_to_expected_lookups(self):
+        cases = [
+            (
+                OPERATOR_RANGE,
+                {"from": "2020-01-01", "to": "2020-12-31"},
+                Q(createdtime__range=("2020-01-01", "2020-12-31")),
+            ),
+            (OPERATOR_BEFORE, "2020-01-01", Q(createdtime__lt="2020-01-01")),
+            (OPERATOR_AFTER, "2020-01-01", Q(createdtime__gt="2020-01-01")),
+        ]
+        for operator, value, expected in cases:
+            with self.subTest(operator=operator):
+                self.assertEqual(
+                    self._predicate("createdtime", operator, value), expected
+                )
+
+    def test_presence_operators_compile_to_isnull_lookups(self):
+        self.assertEqual(
+            self._predicate("principaluser", OPERATOR_HAS_ANY_VALUE),
+            Q(principaluser_id__isnull=False),
+        )
+        self.assertEqual(
+            self._predicate("principaluser", OPERATOR_HAS_NO_VALUE),
+            Q(principaluser_id__isnull=True),
+        )
+
+    def test_is_not_current_user_keeps_creatorless_resources(self):
+        """A bare ~Q would drop NULL-creator rows under SQL three-valued logic."""
+        user = User(id=42, username="someone")
+        predicate = self._predicate(
+            "principaluser", OPERATOR_IS_NOT_CURRENT_USER, user=user
+        )
+
+        self.assertEqual(
+            predicate, ~Q(principaluser_id=42) | Q(principaluser_id__isnull=True)
+        )
+
+    def test_anonymous_is_not_current_user_constrains_nothing(self):
+        """There is no identity to exclude, so the filter must not narrow."""
+        self.assertIsNone(
+            self._predicate("principaluser", OPERATOR_IS_NOT_CURRENT_USER)
+        )
+
+    def test_unknown_field_matches_nothing_rather_than_widening(self):
+        predicate = self._predicate("no_such_field", OPERATOR_EQUALS, "x")
+
+        self.assertEqual(predicate, MATCH_NOTHING)
+
+    def test_unsupported_operator_raises_rather_than_silently_passing(self):
+        with self.assertRaises(ValueError):
+            self._predicate("legacyid", "NOT_AN_OPERATOR", "x")
+
+    def test_no_entries_produces_no_predicate(self):
+        self.assertIsNone(
+            build_resource_field_filter(AnonymousUser(), [], registry=self.registry)
+        )
+
+    def test_entries_are_and_ed_together(self):
+        combined = build_resource_field_filter(
+            AnonymousUser(),
+            [
+                {"field": "legacyid", "operator": OPERATOR_CONTAINS, "value": "ab"},
+                {"field": "principaluser", "operator": OPERATOR_HAS_NO_VALUE},
+            ],
+            registry=self.registry,
+        )
+
+        self.assertEqual(
+            combined, Q(legacyid__icontains="ab") & Q(principaluser_id__isnull=True)
+        )
+
+
+class ResourceFieldValueShapeValidationTests(SimpleTestCase):
+    """
+    Each operator rejects a malformed value rather than passing it to the ORM.
+
+    A bad shape that reaches the query layer surfaces as a 500 (or, worse, a
+    silently wrong result set), so these are 400s raised up front.
+    """
+
+    def _assert_rejected(self, operator, field, value):
+        with self.assertRaises(ValidationError):
+            validate_resource_field_filters(
+                [{"field": field, "operator": operator, "value": value}]
+            )
+
+    def _assert_accepted(self, operator, field, value):
+        validate_resource_field_filters(
+            [{"field": field, "operator": operator, "value": value}]
+        )
+
+    def test_in_requires_a_non_empty_list(self):
+        # A relation field, since IN is only offered for FK/UUID fields -- using
+        # a text field here would fail on operator support, not value shape.
+        field = "resource_instance_lifecycle_state"
+        for value in ([], "not-a-list", None):
+            with self.subTest(value=value):
+                self._assert_rejected(OPERATOR_IN, field, value)
+        self._assert_accepted(OPERATOR_IN, field, [str(uuid.uuid4())])
+
+    def test_range_requires_both_bounds(self):
+        for value in ({"from": "2020-01-01"}, {"to": "2020-01-01"}, {}, "nope"):
+            with self.subTest(value=value):
+                self._assert_rejected(OPERATOR_RANGE, "createdtime", value)
+        self._assert_accepted(
+            OPERATOR_RANGE, "createdtime", {"from": "2020-01-01", "to": "2020-12-31"}
+        )
+
+    def test_text_operators_require_a_non_empty_string(self):
+        for operator in (OPERATOR_CONTAINS, OPERATOR_STARTS_WITH):
+            for value in ("", ["a"], 5):
+                with self.subTest(operator=operator, value=value):
+                    self._assert_rejected(operator, "legacyid", value)
+            self._assert_accepted(operator, "legacyid", "ab")
+
+    def test_single_value_operators_reject_collections(self):
+        for operator in (OPERATOR_EQUALS, OPERATOR_BEFORE, OPERATOR_AFTER):
+            for value in (["a"], {"from": "x"}):
+                with self.subTest(operator=operator, value=value):
+                    self._assert_rejected(operator, "createdtime", value)
+
+    def test_non_list_payload_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            validate_resource_field_filters({"field": "legacyid"})
+
+    def test_non_object_entry_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            validate_resource_field_filters(["legacyid"])
+
+    def test_none_payload_is_accepted_as_no_filters(self):
+        self.assertIsNone(validate_resource_field_filters(None))
 
 
 class ResourceFieldSearchDataTests(TestCase):

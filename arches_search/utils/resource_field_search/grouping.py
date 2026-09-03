@@ -7,7 +7,7 @@ produce roughly one bucket per row, which is never a useful aggregation and is
 an easy way to make the database do a lot of pointless work.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
@@ -28,7 +28,7 @@ def is_resource_field_spec(spec: Dict[str, Any]) -> bool:
     return spec.get("type") == GROUP_BY_TYPE_RESOURCE_FIELD
 
 
-def _resolve_descriptor(spec: Dict[str, Any], registry):
+def _resolve_descriptor(spec: Dict[str, Any], registry) -> Optional[Any]:
     field_name = spec.get("field")
     descriptor = registry.get(field_name) if isinstance(field_name, str) else None
     if descriptor is None:

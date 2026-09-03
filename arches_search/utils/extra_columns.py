@@ -143,7 +143,9 @@ def _graph_nodes_for(graph_slug: str) -> List[Node]:
     )
 
 
-def annotate_node_columns(queryset, nodes_by_key: Dict[NodeColumnKey, Node]):
+def annotate_node_columns(
+    queryset, nodes_by_key: Dict[NodeColumnKey, Node]
+) -> Tuple[Any, Dict[NodeColumnKey, str]]:
     """
     Annotate each resolved node's value onto the resource queryset.
 
