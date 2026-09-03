@@ -11,19 +11,6 @@ from typing import Any, Dict, List, Optional
 from django.db.models import Q
 
 from arches_search.utils.resource_field_search.field_registry import (
-    OPERATOR_AFTER,
-    OPERATOR_BEFORE,
-    OPERATOR_CONTAINS,
-    OPERATOR_EQUALS,
-    OPERATOR_HAS_ANY_VALUE,
-    OPERATOR_HAS_NO_VALUE,
-    OPERATOR_IN,
-    OPERATOR_IS_CURRENT_USER,
-    OPERATOR_IS_FALSE,
-    OPERATOR_IS_NOT_CURRENT_USER,
-    OPERATOR_IS_TRUE,
-    OPERATOR_RANGE,
-    OPERATOR_STARTS_WITH,
     ResourceFieldDescriptor,
     get_resource_field_registry,
 )
@@ -46,55 +33,67 @@ def _current_user_id(user) -> Optional[int]:
     return user.id
 
 
+def _operands_for(facet, value, current_user_id) -> Optional[List[Any]]:
+    """
+    The operand list a facet's template expects, or None to skip the entry.
+
+    param_formats names how the payload value maps onto the template: "from"/"to"
+    unpacks a range object, and "current_user" means the value comes from the
+    request rather than the client.
+    """
+    param_formats = list(facet.param_formats or [])
+
+    if "current_user" in param_formats:
+        return None if current_user_id is None else [current_user_id]
+
+    if facet.arity == 0:
+        return []
+
+    if param_formats and isinstance(value, dict):
+        return [value[key] for key in param_formats]
+
+    return [value]
+
+
 def _build_entry_predicate(
     descriptor: ResourceFieldDescriptor,
-    operator: str,
+    facet,
     value: Any,
     current_user_id: Optional[int],
 ) -> Optional[Q]:
-    path = descriptor.orm_path
+    """
+    Compile one entry the same way PredicateBuilder compiles a tile facet.
 
-    if operator == OPERATOR_EQUALS:
-        return Q(**{path: value})
-    if operator == OPERATOR_IN:
-        return Q(**{f"{path}__in": value})
-    if operator == OPERATOR_CONTAINS:
-        return Q(**{f"{path}__icontains": value})
-    if operator == OPERATOR_STARTS_WITH:
-        return Q(**{f"{path}__istartswith": value})
-    if operator == OPERATOR_RANGE:
-        return Q(**{f"{path}__range": (value["from"], value["to"])})
-    if operator == OPERATOR_BEFORE:
-        return Q(**{f"{path}__lt": value})
-    if operator == OPERATOR_AFTER:
-        return Q(**{f"{path}__gt": value})
-    if operator == OPERATOR_IS_TRUE:
-        return Q(**{path: True})
-    if operator == OPERATOR_IS_FALSE:
-        return Q(**{path: False})
-    if operator == OPERATOR_HAS_ANY_VALUE:
-        return Q(**{f"{path}__isnull": False})
-    if operator == OPERATOR_HAS_NO_VALUE:
-        return Q(**{f"{path}__isnull": True})
+    The lookup comes from the facet row's orm_template, so an operator is added
+    by seeding a row rather than by adding a branch here.
+    """
+    operands = _operands_for(facet, value, current_user_id)
 
-    if operator == OPERATOR_IS_CURRENT_USER:
-        # The compared value comes only from the request's authenticated user.
-        # Anonymous requests match nothing rather than matching creator-less
-        # resources.
-        if current_user_id is None:
-            return MATCH_NOTHING
-        return Q(**{path: current_user_id})
+    if operands is None:
+        # A current-user operator with no identity to compare against. An
+        # affirmative one matches nothing rather than matching every
+        # creator-less resource; a negative one constrains nothing.
+        return None if facet.is_orm_template_negated else MATCH_NOTHING
 
-    if operator == OPERATOR_IS_NOT_CURRENT_USER:
-        if current_user_id is None:
-            # No identity to exclude, so this constrains nothing.
-            return None
-        # Spelled out rather than relying on ~Q alone: under SQL's three-valued
-        # logic a bare negation drops rows where the column is NULL, which would
-        # silently hide creator-less resources from "not mine".
-        return ~Q(**{path: current_user_id}) | Q(**{f"{path}__isnull": True})
+    lookup = facet.orm_template.format(col=descriptor.orm_path)
 
-    raise ValueError(f"Unsupported resource field operator: {operator}")
+    if facet.arity == 0:
+        value_for_lookup = True
+    elif facet.arity == 1:
+        value_for_lookup = operands[0]
+    else:
+        value_for_lookup = tuple(operands)
+
+    predicate = Q(**{lookup: value_for_lookup})
+
+    if not facet.is_orm_template_negated:
+        return predicate
+
+    if descriptor.is_nullable:
+        # Under SQL's three-valued logic a bare negation drops NULL rows, which
+        # would hide creator-less resources from "is not me".
+        return ~predicate | Q(**{f"{descriptor.orm_path}__isnull": True})
+    return ~predicate
 
 
 def build_resource_field_filter(
@@ -122,9 +121,13 @@ def build_resource_field_filter(
             # matching nothing rather than silently widening the result set.
             return MATCH_NOTHING
 
+        facet = descriptor.facet_for(filter_entry["operator"])
+        if facet is None:
+            return MATCH_NOTHING
+
         predicate = _build_entry_predicate(
             descriptor=descriptor,
-            operator=filter_entry["operator"],
+            facet=facet,
             value=filter_entry.get("value"),
             current_user_id=current_user_id,
         )

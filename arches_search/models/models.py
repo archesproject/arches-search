@@ -13,6 +13,47 @@ from django.contrib.postgres.search import SearchVector
 from django.conf import settings
 
 
+class ResourceFieldFacet(models.Model):
+    """
+    An operator available on a ResourceInstance column, and how it compiles.
+
+    The resource-field sibling of AdvancedSearchFacet: that one is keyed by
+    datatype because it targets tile values, this one by Django field class
+    because it targets the resource's own columns. Both carry an orm_template
+    that PredicateBuilder turns into a Q, so an operator is added by inserting a
+    row rather than by editing a branch.
+    """
+
+    id = models.AutoField(primary_key=True)
+    field_class = models.CharField(
+        max_length=255,
+        verbose_name=_("Field Class"),
+        help_text=_(
+            "Dotted path of the Django model field class this facet applies to, "
+            "e.g. 'django.db.models.BooleanField'. Matched by isinstance, so a "
+            "more specific class takes precedence over its base."
+        ),
+    )
+    label = I18n_TextField()
+    operator = models.CharField(max_length=50)
+    arity = models.PositiveSmallIntegerField(default=0)
+    param_formats = models.JSONField(default=list, blank=True)
+    orm_template = models.CharField(max_length=255, blank=True)
+    is_orm_template_negated = models.BooleanField(default=False)
+    sortorder = models.PositiveSmallIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["field_class", "operator"],
+                name="unique_operator_per_field_class",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.field_class}: {self.operator}"
+
+
 class AdvancedSearchFacet(models.Model):
     id = models.AutoField(primary_key=True)
     arity = models.PositiveSmallIntegerField(default=0)

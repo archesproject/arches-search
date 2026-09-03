@@ -22,6 +22,8 @@ from dataclasses import dataclass, field as dataclass_field
 from functools import lru_cache
 from typing import Any, Dict, Optional, Tuple
 
+from django.utils.module_loading import import_string
+
 from django.contrib.auth import get_user_model
 from django.db import models
 
@@ -55,36 +57,37 @@ ZERO_ARITY_OPERATORS = frozenset(
     }
 )
 
-_PRESENCE_OPERATORS = (OPERATOR_HAS_ANY_VALUE, OPERATOR_HAS_NO_VALUE)
 
-# Django field class -> supported operators. Evaluated in order, first
-# isinstance() match wins, so more specific classes must precede their bases
-# (DateTimeField subclasses DateField; JSONField is deliberately absent).
-FIELD_CLASS_OPERATORS: Tuple[Tuple[type, Tuple[str, ...]], ...] = (
-    (models.BooleanField, (OPERATOR_IS_TRUE, OPERATOR_IS_FALSE)),
-    (models.ForeignKey, (OPERATOR_EQUALS, OPERATOR_IN) + _PRESENCE_OPERATORS),
-    (models.UUIDField, (OPERATOR_EQUALS, OPERATOR_IN) + _PRESENCE_OPERATORS),
-    (
-        models.DateTimeField,
-        (OPERATOR_EQUALS, OPERATOR_RANGE, OPERATOR_BEFORE, OPERATOR_AFTER)
-        + _PRESENCE_OPERATORS,
-    ),
-    (
-        models.DateField,
-        (OPERATOR_EQUALS, OPERATOR_RANGE, OPERATOR_BEFORE, OPERATOR_AFTER)
-        + _PRESENCE_OPERATORS,
-    ),
-    (
-        models.TextField,
-        (OPERATOR_EQUALS, OPERATOR_CONTAINS, OPERATOR_STARTS_WITH)
-        + _PRESENCE_OPERATORS,
-    ),
-    (
-        models.CharField,
-        (OPERATOR_EQUALS, OPERATOR_CONTAINS, OPERATOR_STARTS_WITH)
-        + _PRESENCE_OPERATORS,
-    ),
-)
+def _facets_for_field(model_field) -> Dict[str, Any]:
+    """
+    Facet rows applying to this field, keyed by operator.
+
+    Matched by isinstance against each row's field_class, most specific first,
+    so DateTimeField beats DateField and a subclass beats its base.
+    """
+    matches: Dict[str, Any] = {}
+    for facet in sorted(_all_resource_field_facets(), key=lambda row: row.sortorder):
+        field_class = _import_field_class(facet.field_class)
+        if field_class is not None and isinstance(model_field, field_class):
+            matches.setdefault(facet.operator, facet)
+    return matches
+
+
+@lru_cache(maxsize=1)
+def _all_resource_field_facets() -> Tuple[Any, ...]:
+    from arches_search.models.models import ResourceFieldFacet
+
+    return tuple(ResourceFieldFacet.objects.all())
+
+
+@lru_cache(maxsize=None)
+def _import_field_class(dotted_path: str) -> Optional[type]:
+    try:
+        imported = import_string(dotted_path)
+    except ImportError:
+        return None
+    return imported if isinstance(imported, type) else None
+
 
 # Field classes whose cardinality is naturally bounded, and which are therefore
 # meaningful to group by. Grouping on a timestamp or a primary key would produce
@@ -132,17 +135,20 @@ class ResourceFieldDescriptor:
     label_orm_path: Optional[str] = None
     label_is_i18n_json: bool = False
     label_is_text: bool = False
+    is_nullable: bool = False
+    # operator -> ResourceFieldFacet, so the resolver compiles from a row.
+    facets: Dict[str, Any] = dataclass_field(default_factory=dict)
     metadata: Dict[str, Any] = dataclass_field(default_factory=dict)
 
     def supports(self, operator: str) -> bool:
         return operator in self.operators
 
+    def facet_for(self, operator: str) -> Optional[Any]:
+        return self.facets.get(operator)
+
 
 def _operators_for_field(model_field) -> Tuple[str, ...]:
-    for field_class, operators in FIELD_CLASS_OPERATORS:
-        if isinstance(model_field, field_class):
-            return operators
-    return ()
+    return tuple(_facets_for_field(model_field))
 
 
 def _is_groupable(model_field) -> bool:
@@ -209,12 +215,6 @@ class ResourceFieldRegistry:
             related_model = model_field.related_model if is_relation else None
             is_user_relation = is_relation and related_model is get_user_model()
 
-            if is_user_relation:
-                operators = operators + (
-                    OPERATOR_IS_CURRENT_USER,
-                    OPERATOR_IS_NOT_CURRENT_USER,
-                )
-
             label_name, label_field = _label_field_for(related_model)
             label_orm_path = f"{model_field.name}__{label_name}" if label_name else None
 
@@ -226,6 +226,8 @@ class ResourceFieldRegistry:
                 # compares raw key values without a join.
                 orm_path=model_field.attname,
                 operators=operators,
+                facets=_facets_for_field(model_field),
+                is_nullable=bool(getattr(model_field, "null", False)),
                 is_groupable=_is_groupable(model_field),
                 is_user_relation=is_user_relation,
                 label_orm_path=label_orm_path,
@@ -248,6 +250,8 @@ class ResourceFieldRegistry:
                         kind=_kind_for_field(label_field, False),
                         orm_path=label_orm_path,
                         operators=label_operators,
+                        facets=_facets_for_field(label_field),
+                        is_nullable=bool(getattr(label_field, "null", False)),
                         is_groupable=False,
                         is_user_relation=is_user_relation,
                         metadata={"related_model": related_model.__name__},
