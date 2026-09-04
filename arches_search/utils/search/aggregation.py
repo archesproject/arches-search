@@ -245,8 +245,7 @@ def build_aggregations(
     """
     results: Dict[str, Union[List[Dict[str, Any]], Dict[str, Any]]] = {}
 
-    # One registry for every spec below. Resolving each separately rebuilt it
-    # each time -- a query and an import per facet row, repeated.
+    # Built once: resolving each spec separately rebuilt it every time.
     resource_field_registry = (
         get_resource_instance_fields()
         if _needs_resource_field_registry(aggregations)

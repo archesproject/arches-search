@@ -49,9 +49,8 @@ from arches_search.utils.search.sorting import (
 # Registry discovery
 # ---------------------------------------------------------------------------
 
-# Operator tokens, named here for readability. Production code never branches on
-# these: which operators exist, and what they accept, is seeded as
-# AdvancedSearchFacet rows.
+# Named for readability only: production never branches on these, they are
+# seeded as AdvancedSearchFacet rows.
 OPERATOR_EQUALS = "EQUALS"
 OPERATOR_IN = "IN"
 OPERATOR_CONTAINS = "CONTAINS"
@@ -180,10 +179,8 @@ class ResourceFieldFixtureMixin:
         )
 
         lifecycle = ResourceInstanceLifecycle.objects.create(name="rf lifecycle")
-        # Ids deliberately ordered against the labels: by id "Submitted" comes
-        # first, by label it comes last. Without that, a sort test asserting
-        # label order passes or fails on whichever random uuid4 came up, which
-        # is how it can look green while ordering by the raw key.
+        # Ids ordered against the labels on purpose: with random uuid4s a
+        # label-order test passes or fails on chance.
         cls.state_draft = ResourceInstanceLifecycleState.objects.create(
             pk=uuid.UUID("ffffffff-0000-0000-0000-00000000000d"),
             name="Draft",

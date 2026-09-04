@@ -52,8 +52,6 @@ class PayloadValidator:
                 params={"location": location, "keys": ", ".join(sorted(missing_keys))},
             )
 
-        # A group's graph_slug names the resource model its clauses address, and
-        # for the top-level group, the resource model the payload returns.
         graph_slug_value = group_payload["graph_slug"]
         if not isinstance(graph_slug_value, str) or not graph_slug_value:
             raise ValidationError(
@@ -170,11 +168,8 @@ class PayloadValidator:
                 },
             )
 
-        # A quantifier asks "how many of this resource's values must match", and
-        # a resource field has exactly one. ALL and NONE therefore have nothing
-        # to quantify over, and honouring them would mean inventing a meaning --
-        # so they are refused rather than ignored, which would hand back the
-        # opposite result set without a word.
+        # A resource field holds one value, so ALL and NONE have nothing to
+        # quantify over. Refused rather than ignored: NONE reads as a negation.
         subject_value = clause_payload.get("subject")
         if (
             isinstance(subject_value, dict)

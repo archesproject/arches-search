@@ -45,8 +45,7 @@ def active_resource_graph_ids():
 
 
 def resolve_graph_metadata_by_slug(graph_slugs):
-    # isresource=True because a branch graph holds no resources: searching one
-    # costs a query and can only ever return nothing.
+    # A branch graph holds no resources, so searching one can only return nothing.
     return _resolve_graph_metadata(slug__in=graph_slugs, isresource=True)
 
 
@@ -86,10 +85,8 @@ class SearchCompiler:
         active_graphs = active_resource_graph_ids()
         active_graph_slugs = {slug for _gid, slug, _name, _icon in active_graphs}
 
-        # graph_slugs, and each advanced search payload's own graph_slug, can
-        # name a graph outside the "active" universe (e.g. is_active=False) and
-        # must still be searchable -- only resource_type_counts is restricted to
-        # active graphs.
+        # A named graph may be inactive and must still be searchable; only
+        # resource_type_counts is restricted to active graphs.
         requested_slugs = list(self.search_payload.graph_slugs or [])
         queried_slugs = [
             graph_payload.get("graph_slug")
@@ -108,9 +105,6 @@ class SearchCompiler:
 
         graphs_to_search = active_graphs + extra_requested_graphs
 
-        # A payload whose graph_slug matches nothing in scope would otherwise be
-        # dropped without a word -- and the graph it was meant to filter would
-        # come back whole, which reads as a working search returning too much.
         searchable_slugs = {slug for _gid, slug, _name, _icon in graphs_to_search}
         unmatched_slugs = sorted(
             {
@@ -152,8 +146,7 @@ class SearchCompiler:
                 count=Count("resourceinstanceid")
             )
         }
-        # Built from the ordered list rather than the id set: a facet panel
-        # rendered from this must not reshuffle between requests.
+        # Ordered, so a facet panel built from this does not reshuffle.
         resource_type_counts = [
             {
                 "graph_id": graph_id,
@@ -176,9 +169,8 @@ class SearchCompiler:
                 if graph_metadata_by_id.get(graph_id, (None,))[0] in requested_slug_set
             )
         else:
-            # graph_slugs is the selector, so naming nothing selects nothing. The
-            # counts above still cover every active graph, which is what lets a
-            # caller see what naming one would get them.
+            # The counts above still cover every graph, so a caller can see
+            # what selecting one would return.
             scoped_results = permission_filtered_resources.none()
             scoped_count = 0
 

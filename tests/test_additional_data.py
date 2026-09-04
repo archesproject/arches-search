@@ -389,8 +389,7 @@ class AdditionalDataAPITests(TestCase):
         )
 
     def test_an_unqueryable_field_is_a_400(self):
-        # Unlike a node, which is silently omitted -- the registry is public, so
-        # naming a bad field is a client bug worth reporting.
+        # Unlike a node, which is silently omitted: the registry is public.
         self.client.force_login(self.admin)
         response = self._search(
             {

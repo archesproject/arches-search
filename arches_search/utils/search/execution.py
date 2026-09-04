@@ -38,17 +38,14 @@ def execute_search(search_request: SearchRequest, user) -> SearchResponse:
     validate_paging(search_request.page, search_request.page_size)
     sort_resolver = SortResolver(search_request.sort)
 
-    # Each advanced search payload validates itself as it compiles, so compiling
-    # belongs in the same guarded stretch as the checks above: an unknown field
-    # or operator is a bad request, not a 500.
+    # Compiling validates the payload as it goes, so it belongs inside the same
+    # guarded stretch: an unknown field is a bad request, not a 500.
     search_result = SearchCompiler(payload, user).compile()
 
     additional_data = AdditionalData(
         search_request.additional_data,
         user,
-        # Ordering by a node value needs that value annotated too. A node wanted
-        # for both display and ordering still resolves to one annotation,
-        # because the name comes from the node rather than its position.
+        # Ordering by a node value needs it annotated too.
         also_project_nodes=_node_keys_an_ordering_needs(sort_resolver),
     )
 
@@ -66,8 +63,6 @@ def execute_search(search_request: SearchRequest, user) -> SearchResponse:
         page_resources = list(results_page.object_list)
         has_next, has_previous = results_page.has_next(), results_page.has_previous()
     except EmptyPage:
-        # Asking for a page past the end is not an error -- num_pages below says
-        # where the end is, so an empty page is the honest answer.
         page_resources = []
         has_next, has_previous = False, True
 

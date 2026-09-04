@@ -59,8 +59,6 @@ watchEffect(async () => {
 });
 
 async function loadResourceTypes(): Promise<void> {
-    // The list lives on the store because a search needs it too -- "All" has to
-    // be spelled out as slugs before the request goes out.
     try {
         hasResourceTypeLoadError.value = false;
         await loadAvailableGraphs();

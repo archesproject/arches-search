@@ -152,10 +152,8 @@ class SearchCompilerTests(TestCase):
         term_search=None,
         advanced_search_queries=None,
     ):
-        # graph_slugs selects what is searched, so these tests name the fixture's
-        # whole universe unless they are specifically about selection. The
-        # signature is explicit rather than **kwargs so that a renamed payload key
-        # is a TypeError instead of a quietly unfiltered search.
+        # Explicit rather than **kwargs, so a renamed payload key is a
+        # TypeError instead of a quietly unfiltered search.
         payload = SearchPayload(
             graph_slugs=(
                 [self.graph_a.slug, self.graph_b.slug]
@@ -305,8 +303,7 @@ class SearchCompilerTests(TestCase):
             advanced_search_queries=[self._advanced_search_body(self.graph_a)]
         )
         ids = self._result_ids(result)
-        # An empty clause list narrows nothing, so every searched resource comes
-        # back regardless of which graph the query names.
+        # An empty clause list narrows nothing.
         self.assertIn(self.amber_mineral.resourceinstanceid, ids)
         self.assertIn(self.quartz_mineral.resourceinstanceid, ids)
         self.assertIn(self.amber_site.resourceinstanceid, ids)
@@ -439,8 +436,7 @@ class SearchCompilerTests(TestCase):
         self.assertEqual(result.scoped_count, 0)
 
     def test_counts_still_report_what_selecting_a_graph_would_return(self):
-        # Nothing selected, so nothing is returned -- but the counts still say
-        # what is out there, which is how a caller knows what to select.
+        # Nothing returned, but the counts still say what is out there.
         result = self._search(graph_slugs=None)
 
         counts_by_graph_id = {
@@ -486,9 +482,8 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        # The fixture exists for AdvancedSearchQueryCompiler, which never
-        # consults is_active. SearchCompiler searches active graphs, so these
-        # have to look like the real thing.
+        # The fixture never sets is_active; SearchCompiler only searches
+        # active graphs.
         GraphModel.objects.filter(
             graphid__in=[cls.person_graph.graphid, cls.dog_graph.graphid]
         ).update(is_active=True)
@@ -620,8 +615,6 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
         self.assertEqual(self._ids(result), {PERSON_A_ID})
 
     def test_two_payloads_for_one_graph_are_rejected(self):
-        # Silently applying one and dropping the other would be the worst
-        # outcome, so this is refused up front.
         with self.assertRaises(ValidationError):
             validate_advanced_search_queries(
                 [self._person_payload("FOO"), self._person_payload("BAR")]

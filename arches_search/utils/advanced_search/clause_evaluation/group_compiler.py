@@ -166,10 +166,8 @@ class GroupCompiler:
         self,
         group_payload: Dict[str, Any],
     ) -> Q:
-        # Re-checked per group, not only at the entry point: this recurses into
-        # subgroups, and a subgroup carries its own scope. Checking only the
-        # outermost one would reject a TILE-scoped resource field clause at the
-        # top and quietly apply it one level down.
+        # Per group, not just the entry point: this recurses, and a subgroup
+        # carries its own scope.
         self._reject_resource_field_clauses_under_tile_scope(group_payload)
 
         predicate_fragments: List[Q] = []

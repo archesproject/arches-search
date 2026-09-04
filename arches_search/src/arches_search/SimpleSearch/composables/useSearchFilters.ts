@@ -111,9 +111,7 @@ function createSearchFilters(): SearchFilters {
         new Map(),
     );
     const activeGraphs = ref<ResourceType[]>([]);
-    // Every searchable resource model. "All" is expressed as an empty
-    // activeGraphs, and the API needs that spelled out as slugs, so the list has
-    // to be on hand before a search goes out.
+    // "All" is an empty activeGraphs, and the API needs it spelled out.
     const availableGraphs = ref<ResourceType[]>([]);
     let availableGraphsRequest: Promise<void> | null = null;
     const resultsGraphs = ref<ResourceType[]>([]);
@@ -235,8 +233,7 @@ function createSearchFilters(): SearchFilters {
                         }));
                 })
                 .catch((error) => {
-                    // Leave it unset so a later search can try again rather than
-                    // being stuck with an empty list forever.
+                    // Unset, so a later search can retry.
                     availableGraphsRequest = null;
                     throw error;
                 });
@@ -436,9 +433,8 @@ function createSearchFilters(): SearchFilters {
     async function applySearchDefinition(
         definition: SearchDefinition,
     ): Promise<void> {
-        // The slugs are resolved against the real resource models, so a restored
-        // type behaves like one the user just picked. Stubs would not: a null id
-        // is the "all types" sentinel elsewhere in the UI.
+        // Resolved against real resource models: a null id is the "all types"
+        // sentinel elsewhere in the UI.
         await loadAvailableGraphs();
 
         // Clear current state first. Each setter triggers a debounced search,

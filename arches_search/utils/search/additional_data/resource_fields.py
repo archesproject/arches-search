@@ -20,8 +20,7 @@ from arches_search.utils.resource_field_search.field_registry import (
 )
 from arches_search.utils.resource_field_search.labels import label_expression
 
-# Namespaced so these cannot collide with a node annotation, a sort annotation,
-# or a real column.
+# Namespaced so these cannot collide with another annotation or a real column.
 ANNOTATION_PREFIX = "_arches_search_resource_field_"
 
 

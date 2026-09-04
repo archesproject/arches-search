@@ -34,8 +34,7 @@ interface TermSearch {
     max_hops: number;
 }
 
-// Terms are matched anywhere and then walked back across relationships, so a
-// Site can be found by its related Person's name.
+// Matched anywhere, then walked across relationships.
 const TERM_SEARCH_MAX_HOPS = 2;
 
 function buildTermSearch(terms: SearchRequestTerm[]): TermSearch | null {
@@ -130,9 +129,8 @@ function isRangeValue(value: unknown): value is { from: unknown; to: unknown } {
 }
 
 function buildResourceFieldOperands(value: unknown): ClauseOperand[] {
-    // Mirrors the facet rows' param_formats: no value means the operator takes
-    // no operand (the presence checks, and the current-user ones the server
-    // fills in itself), a from/to pair is two operands, anything else is one.
+    // Mirrors the facet rows' param_formats: no value means no operand, a
+    // from/to pair is two, anything else is one.
     if (value === undefined || value === null) {
         return [];
     }
@@ -172,10 +170,9 @@ function buildAdvancedSearchQueries(
         return baseQuery ? [baseQuery] : null;
     }
 
-    // A clause only filters the graph whose payload it sits in, so every clause
-    // is repeated once per requested resource model. The advanced query nests
-    // inside the payload for its own graph, which keeps it AND-ed as a whole
-    // even when its own logic is OR.
+    // A clause only filters the graph whose payload it sits in, so each is
+    // repeated per resource model. The advanced query nests rather than merges,
+    // so it stays AND-ed even when its own logic is OR.
     const targetSlugs =
         graphSlugs.length > 0
             ? graphSlugs

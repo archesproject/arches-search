@@ -70,7 +70,5 @@ class ResourceFieldClauseEvaluator:
             user_id=current_user_id(self.user),
         )
 
-        # None means the clause constrains nothing. That has to be spelled as a
-        # predicate true for every row, not an empty Q: Django absorbs an empty
-        # Q when combining, so inside an OR it would mean the opposite.
+        # None means the clause constrains nothing.
         return MATCH_EVERYTHING if predicate is None else predicate

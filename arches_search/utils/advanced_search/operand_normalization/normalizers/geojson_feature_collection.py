@@ -26,10 +26,8 @@ class GeojsonFeatureCollectionOperandNormalizer(BaseOperandNormalizer):
         if isinstance(value, dict):
             value = json.dumps(value)
 
-        # A malformed operand is a bad request. Left to raise, GEOSGeometry and
-        # the antimeridian split throw GEOSException/ValueError, neither of
-        # which is a ValidationError -- so the same endpoint would answer 400
-        # for a bad FeatureCollection and 500 for a bad geometry.
+        # GEOSGeometry raises GEOSException/ValueError, which would surface as
+        # a 500 where a bad FeatureCollection gives a 400.
         try:
             geom = GEOSGeometry(value, srid=4326)
             split = GeoUtils().split_polygon_at_antimeridian(geom)

@@ -70,9 +70,7 @@ class ClauseReducer:
                 continue
 
             if subject.get("type") == SUBJECT_TYPE_RESOURCE_FIELD:
-                # A resource field is a column on the anchor row, so it applies
-                # here regardless of which graph the relationship traverses into
-                # -- it has no graph_slug to match against the anchor's.
+                # A column on the anchor row: no graph_slug to match against.
                 anchor_predicate_fragments.append(
                     self.resource_field_clause_evaluator.build_predicate(clause_payload)
                 )

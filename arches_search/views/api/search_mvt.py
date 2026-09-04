@@ -57,9 +57,7 @@ class SearchMVTContextAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
 
-        # Checked here rather than when a tile is drawn: a bad payload should be
-        # a 400 on the request that supplied it, not an opaque failure later on
-        # a tile fetch with no way to report it.
+        # Checked here, not at tile time, where there is no way to report it.
         try:
             validate_search_payload(SearchPayload.from_body(body))
         except ValidationError as error:

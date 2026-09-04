@@ -18,9 +18,7 @@ from arches_search.utils.resource_field_search.field_registry import (
 
 SORT_TYPE_PRIMARY_NAME = "primary_name"
 SORT_TYPE_CREATED_TIME = "created_time"
-# Ordering names what it orders by with the same tokens a clause subject and an
-# additional_data entry use, so one vocabulary covers filtering, projection and
-# ordering alike.
+# The same tokens a clause subject and an additional_data entry use.
 SORT_TYPE_RESOURCE_FIELD = SUBJECT_TYPE_RESOURCE_FIELD
 SORT_TYPE_NODE = SUBJECT_TYPE_NODE
 DIRECTION_ASC = "asc"
@@ -149,9 +147,9 @@ class SortResolver:
         descriptor = self.resource_field_registry.get(spec["field"])
         direction = spec.get("direction", DIRECTION_ASC)
 
-        # Ordering by a foreign key's raw id is meaningless to a reader, so sort
-        # by the related record's label instead. Lower() here and not in the
-        # shared helper: ordering ignores case, projection must not.
+        # Sort a foreign key by the related record's label, not its raw id.
+        # Lower() here and not in the helper: projection needs the label as
+        # stored.
         label = label_expression(descriptor)
         if label is not None:
             label_annotation = f"_sort_resource_field_{index}"

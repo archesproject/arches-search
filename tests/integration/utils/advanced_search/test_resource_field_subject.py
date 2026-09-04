@@ -113,8 +113,6 @@ class ResourceFieldSubjectStructureTests(SimpleTestCase):
             self._validate({"type": "RESOURCE_FIELD"})
 
     def test_node_addressing_is_rejected_on_a_field_subject(self):
-        # A resource field has no graph or tile to address. Carrying node keys
-        # anyway is a client bug worth surfacing rather than ignoring.
         with self.assertRaises(ValidationError):
             self._validate(
                 {
@@ -151,8 +149,7 @@ class ResourceFieldClauseValidationTests(TestCase):
             self._build("createdtime", OPERATOR_CONTAINS, "x")
 
     def test_is_current_user_rejects_supplied_operand(self):
-        # Supplying an operand here is an attempt to filter as somebody else; it
-        # must fail loudly rather than be quietly discarded.
+        # Supplying one is an attempt to filter as somebody else.
         with self.assertRaises(ValidationError):
             self._build("principaluser", OPERATOR_IS_CURRENT_USER, 1)
 
@@ -326,8 +323,7 @@ class ResourceFieldOperandShapeTests(TestCase):
         )
 
     def test_in_requires_a_non_empty_list(self):
-        # A relation field, since IN is only offered for FK/UUID fields -- using
-        # a text field here would fail on operator support, not operand shape.
+        # A relation field: IN is only offered for FK/UUID fields.
         field = "resource_instance_lifecycle_state"
         for value in ([], "not-a-list", None):
             with self.subTest(value=value):
@@ -400,7 +396,6 @@ class ResourceFieldClauseFilteringTests(ResourceFieldFixtureMixin, TestCase):
         self.assertNotIn(self.unowned.pk, matched)
 
     def test_is_not_current_user_includes_creatorless_resources(self):
-        # A bare negation would drop NULL rows under three-valued logic.
         self.assertEqual(
             self._filtered_ids(
                 self.owner,
@@ -450,10 +445,7 @@ class ResourceFieldClauseFilteringTests(ResourceFieldFixtureMixin, TestCase):
         )
 
     def test_clauses_combine_with_or(self):
-        # OR is reachable now that these are clauses in the query tree rather
-        # than a flat list of filters that could only be AND-ed. Compiled
-        # without the permission layer so the assertion is about OR alone --
-        # bounding by permissions has its own tests below.
+        # Compiled without the permission layer, so this is about OR alone.
         query = advanced_search_query(
             self.graph.slug,
             resource_field_clause(
@@ -513,7 +505,6 @@ class ResourceFieldClauseFilteringTests(ResourceFieldFixtureMixin, TestCase):
         )
         self.assertEqual(visible, set())
 
-        # The same clause, run by someone who may see those rows, does match.
         owner_visible = set(
             SearchCompiler(payload, self.owner)
             .compile()
@@ -599,9 +590,8 @@ class ResourceFieldClausePlacementTests(AdvancedSearchSetupMixin, TestCase):
         self.assertEqual(self._matches(nested), {PERSON_A_ID, DOG_A_ID})
 
     def test_filters_the_anchor_side_of_a_relationship(self):
-        # person_b and person_c are the ones with pets. Constraining the anchor
-        # to owned resources leaves none of them, because the owned person has
-        # no pets -- if the clause were dropped, this would match both.
+        # Only person_b and person_c have pets, and neither is owned -- so a
+        # dropped clause would match both instead of none.
         baseline = self._matches(self._group(relationship=self.PETS_RELATIONSHIP))
         self.assertEqual(baseline, {PERSON_B_ID, PERSON_C_ID})
 
@@ -670,8 +660,7 @@ class ResourceFieldClausePlacementTests(AdvancedSearchSetupMixin, TestCase):
 
 class ResourceFieldRelatedClauseTests(SimpleTestCase):
     def test_related_clause_error_names_the_right_requirements(self):
-        # The node-subject message would tell someone to add a graph_slug, which
-        # is exactly the wrong advice for a resource field subject.
+        # The node-subject message would say "add a graph_slug" -- wrong advice.
         clause = resource_field_clause("principaluser", OPERATOR_IS_CURRENT_USER)
         clause["type"] = "RELATED"
 

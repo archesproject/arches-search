@@ -25,10 +25,8 @@ class SearchExportAPI(APIBase):
 
         language = None if all_descriptors else get_language()
 
-        # Only the matching queryset is needed, so this stops short of the
-        # projection and pagination execute_search layers on top -- but the same
-        # payload checks still run, or an export could quietly cover a different
-        # set of resources than the search it came from.
+        # Only the queryset is needed, but the same payload checks must run or
+        # an export could cover a different set than the search it came from.
         search_payload = SearchPayload.from_body(body)
         try:
             validate_search_payload(search_payload)

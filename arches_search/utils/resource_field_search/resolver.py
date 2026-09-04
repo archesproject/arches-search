@@ -18,10 +18,8 @@ from arches_search.utils.resource_field_search.field_registry import (
     ResourceInstanceField,
 )
 
-# Predicates that are unconditionally false and unconditionally true, without
-# hitting the database. An empty Q() cannot stand in for the second: Django
-# absorbs it when combining, so "constrains nothing" would silently become
-# "matches nothing" inside an OR.
+# An empty Q() cannot stand in for MATCH_EVERYTHING: Django absorbs it when
+# combining, so inside an OR it would mean the opposite.
 MATCH_NOTHING = Q(pk__in=[])
 MATCH_EVERYTHING = ~Q(pk__in=[])
 
@@ -142,9 +140,8 @@ def build_resource_field_predicate(
     operands = _operands_for(facet, operand_values, user_id)
 
     if operands is None:
-        # A current-user operator with no identity to compare against. An
-        # affirmative one matches nothing rather than matching every
-        # creator-less resource; a negative one constrains nothing.
+        # No identity to compare against: "is me" must match nothing rather
+        # than every creator-less resource.
         return None if facet.is_orm_template_negated else MATCH_NOTHING
 
     lookup = facet.orm_template.format(
@@ -163,7 +160,6 @@ def build_resource_field_predicate(
     if not facet.is_orm_template_negated:
         return predicate
 
-    # A bare negation is enough: Django compiles ~Q(col=x) to
-    # NOT (col = x AND col IS NOT NULL), so rows with no value are kept -- which
-    # is what makes creator-less resources show up under "is not me".
+    # Django compiles ~Q(col=x) to NOT (col = x AND col IS NOT NULL), so rows
+    # with no value are already kept.
     return ~predicate

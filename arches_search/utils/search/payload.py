@@ -17,15 +17,10 @@ DEFAULT_PAGE_SIZE = 20
 
 @dataclass(frozen=True)
 class SearchPayload:
-    # Which resource models to search. A graph named here with no matching
-    # advanced_search_queries entry is returned unfiltered.
+    # A graph named here with no matching payload is returned unfiltered.
     graph_slugs: Optional[List[str]]
-    # Terms matched against every indexed text value on a resource, optionally
-    # expanded across relationships. This is the only filter that reaches
-    # outside the graph being searched; everything else is a clause.
+    # The only filter that reaches outside the graph being searched.
     term_search: Optional[Dict[str, Any]]
-    # One advanced search payload per graph being filtered. Each entry names the
-    # resource model it returns in its own graph_slug.
     advanced_search_queries: Optional[List[Dict[str, Any]]]
 
     @classmethod

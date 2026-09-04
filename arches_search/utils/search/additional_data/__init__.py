@@ -87,10 +87,8 @@ class AdditionalData:
         user,
         also_project_nodes: Iterable[NodeKey] = (),
     ):
-        # also_project_nodes carries what an ordering needs. It is taken here
-        # rather than added afterwards so there is no call order to get wrong: a
-        # node added after annotate() would never be annotated, and the sort
-        # would quietly fall back to no ordering at all.
+        # Taken here rather than added later: a node added after annotate()
+        # would never be annotated.
         node_keys = node_values.keys(
             _entries_of_type(additional_data, SUBJECT_TYPE_NODE)
         )
@@ -120,8 +118,6 @@ class AdditionalData:
 
     def format(self, resources) -> Dict[str, Dict[str, Any]]:
         if not self._annotated:
-            # Every value is read from an annotation, so formatting first would
-            # return a row of empty columns rather than fail.
             raise RuntimeError("annotate() must run before format().")
 
         node_data = node_values.format_values(

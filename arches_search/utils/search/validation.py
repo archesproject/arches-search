@@ -11,8 +11,6 @@ from django.utils.translation import gettext as _
 
 from arches_search.utils.term_search.relationship_expansion import MAX_ALLOWED_HOPS
 
-# A page big enough for any real client, small enough that one request cannot
-# ask the server to serialize an entire corpus.
 MAX_PAGE_SIZE = 200
 
 
