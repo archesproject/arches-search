@@ -23,10 +23,6 @@ from arches_search.utils.search.sorting import (
     SortResolver,
 )
 
-# ---------------------------------------------------------------------------
-# Validation
-# ---------------------------------------------------------------------------
-
 
 class SortResolverValidationTests(SimpleTestCase):
     def test_none_uses_default_sort(self):
@@ -64,11 +60,6 @@ class SortResolverValidationTests(SimpleTestCase):
     def test_omitted_direction_defaults_to_asc(self):
         resolver = SortResolver([{"type": SORT_TYPE_PRIMARY_NAME}])
         self.assertEqual(resolver.sort_specs, [{"type": SORT_TYPE_PRIMARY_NAME}])
-
-
-# ---------------------------------------------------------------------------
-# Apply (integration with a real queryset)
-# ---------------------------------------------------------------------------
 
 
 class SortResolverApplyTests(TestCase):

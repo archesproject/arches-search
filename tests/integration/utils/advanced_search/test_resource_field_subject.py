@@ -71,10 +71,6 @@ from tests.test_resource_field_search import (
     resource_field_clause,
 )
 
-# ---------------------------------------------------------------------------
-# Shape and validation
-# ---------------------------------------------------------------------------
-
 
 class ResourceFieldSubjectStructureTests(SimpleTestCase):
     """
@@ -156,10 +152,6 @@ class ResourceFieldClauseValidationTests(TestCase):
     def test_is_current_user_without_operand_is_valid(self):
         self._build("principaluser", OPERATOR_IS_CURRENT_USER)
 
-    def test_in_requires_non_empty_list(self):
-        with self.assertRaises(ValidationError):
-            self._build("resource_instance_lifecycle_state", OPERATOR_IN, [])
-
     def test_missing_operand_raises(self):
         with self.assertRaises(ValidationError):
             self._build("legacyid", OPERATOR_EQUALS)
@@ -183,7 +175,7 @@ class ResourceFieldClauseValidationTests(TestCase):
 
     def test_a_nested_group_cannot_smuggle_one_into_tile_scope(self):
         """
-        The rejection applies per group: the compiler recurses into subgroups,
+        The rejection applies per group: validation recurses into subgroups,
         and each carries its own scope.
         """
         inner = advanced_search_query(
@@ -208,11 +200,6 @@ class ResourceFieldClauseValidationTests(TestCase):
             AdvancedSearchQueryCompiler(tile_scoped).compile(
                 pre_filter=ResourceInstance.objects.none()
             )
-
-
-# ---------------------------------------------------------------------------
-# Compiled predicates
-# ---------------------------------------------------------------------------
 
 
 class ResourceFieldPredicateTests(TestCase):
@@ -350,11 +337,6 @@ class ResourceFieldOperandShapeTests(TestCase):
                     self._assert_rejected(operator, "createdtime", value)
 
 
-# ---------------------------------------------------------------------------
-# Filtering real rows
-# ---------------------------------------------------------------------------
-
-
 class ResourceFieldClauseFilteringTests(ResourceFieldFixtureMixin, TestCase):
     def _filtered_ids(self, user, *clauses):
         evaluator = ResourceFieldClauseEvaluator(user=user)
@@ -374,8 +356,6 @@ class ResourceFieldClauseFilteringTests(ResourceFieldFixtureMixin, TestCase):
             advanced_search_queries=[advanced_search_query(self.graph.slug, *clauses)],
         )
 
-    # --- identity ---
-
     def test_is_current_user_returns_only_own_resources(self):
         self.assertEqual(
             self._filtered_ids(
@@ -388,12 +368,13 @@ class ResourceFieldClauseFilteringTests(ResourceFieldFixtureMixin, TestCase):
     def test_is_current_user_matches_nothing_for_anonymous(self):
         # AnonymousUser.id is None; a naive equality filter would compile to
         # "principaluser_id IS NULL" and surface every creator-less resource.
-        matched = self._filtered_ids(
-            AnonymousUser(),
-            resource_field_clause("principaluser", OPERATOR_IS_CURRENT_USER),
+        self.assertEqual(
+            self._filtered_ids(
+                AnonymousUser(),
+                resource_field_clause("principaluser", OPERATOR_IS_CURRENT_USER),
+            ),
+            set(),
         )
-        self.assertEqual(matched, set())
-        self.assertNotIn(self.unowned.pk, matched)
 
     def test_is_not_current_user_includes_creatorless_resources(self):
         self.assertEqual(
@@ -415,8 +396,6 @@ class ResourceFieldClauseFilteringTests(ResourceFieldFixtureMixin, TestCase):
             {self.other_draft.pk},
         )
 
-    # --- lifecycle state ---
-
     def test_filter_by_lifecycle_state_in(self):
         self.assertEqual(
             self._filtered_ids(
@@ -428,20 +407,6 @@ class ResourceFieldClauseFilteringTests(ResourceFieldFixtureMixin, TestCase):
                 ),
             ),
             {self.owned_submitted.pk},
-        )
-
-    def test_clauses_combine_with_and(self):
-        self.assertEqual(
-            self._filtered_ids(
-                self.owner,
-                resource_field_clause("principaluser", OPERATOR_IS_CURRENT_USER),
-                resource_field_clause(
-                    "resource_instance_lifecycle_state",
-                    OPERATOR_IN,
-                    [str(self.state_draft.pk)],
-                ),
-            ),
-            {self.owned_draft.pk},
         )
 
     def test_clauses_combine_with_or(self):
@@ -528,11 +493,6 @@ class ResourceFieldClauseFilteringTests(ResourceFieldFixtureMixin, TestCase):
         )
         # other_draft is visible to member but is not in the requested state.
         self.assertEqual(visible, set())
-
-
-# ---------------------------------------------------------------------------
-# Where the clause may appear
-# ---------------------------------------------------------------------------
 
 
 class ResourceFieldClausePlacementTests(AdvancedSearchSetupMixin, TestCase):

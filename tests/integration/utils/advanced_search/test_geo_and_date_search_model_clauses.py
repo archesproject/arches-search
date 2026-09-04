@@ -1,15 +1,6 @@
 """
 Geometry and date filtering as SEARCH_MODELS clauses.
 
-These replaced node_agnostic_filters' GEO_INTERSECTS and DATE_RANGE entries.
-Both were only ever sent with max_hops=0, which reduced the old relationship
-expansion to "resources of this graph that matched" -- a plain graph-scoped
-clause -- so the move cost nothing.
-
-Every expected set below was established by asserting equality with the filter
-it replaced, on this fixture, before that filter was deleted. They are the
-record of that parity.
-
 Term search is not here: it is sent with max_hops=2 and its cross-resource
 expansion is not clause-shaped, so it remains its own payload key.
 
@@ -164,8 +155,6 @@ class GeoAndDateSearchModelClauseTests(TestCase):
             .values_list("resourceinstanceid", flat=True)
         )
 
-    # --- geometry ---
-
     def test_geo_clause_matches_only_the_resource_in_the_box(self):
         matched = self._via_clause(
             ["GeometrySearch"],
@@ -233,8 +222,6 @@ class GeoAndDateSearchModelClauseTests(TestCase):
             [{"type": "GEO_LITERAL", "value": two_features}],
         )
         self.assertEqual(matched, {self.inside_box.pk, self.inside_second_feature.pk})
-
-    # --- dates ---
 
     def test_date_clause_matches_a_date_and_an_overlapping_range(self):
         """

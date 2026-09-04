@@ -259,7 +259,7 @@ class AdditionalDataAPITests(TestCase):
             resource_instance_lifecycle=lifecycle,
         )
         cls.resource = ResourceInstance(
-            resourceinstanceid=uuid.uuid4(),
+            resourceinstanceid=uuid.UUID(int=0),
             graph=cls.graph,
             principaluser=cls.admin,
             resource_instance_lifecycle_state=cls.lifecycle_state,
@@ -270,6 +270,21 @@ class AdditionalDataAPITests(TestCase):
             resourceinstance=cls.resource,
             nodegroup=cls.nodegroup,
             data={str(cls.title_node.pk): "a projected value"},
+        )
+        # Sorts first by title, last by id -- so a dropped sort key, leaving
+        # only the id tie-break, fails this rather than passing on chance.
+        cls.first_by_title = ResourceInstance(
+            resourceinstanceid=uuid.UUID(int=(1 << 128) - 1),
+            graph=cls.graph,
+            principaluser=cls.admin,
+            resource_instance_lifecycle_state=cls.lifecycle_state,
+        )
+        cls.first_by_title.save()
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=cls.first_by_title,
+            nodegroup=cls.nodegroup,
+            data={str(cls.title_node.pk): "a first value"},
         )
 
     def _search(self, body):
@@ -314,8 +329,6 @@ class AdditionalDataAPITests(TestCase):
             if resource["resourceinstanceid"] == str(self.resource.pk)
         )
         return row["additional_data"]
-
-    # --- RESOURCE_FIELD entries ---
 
     def test_a_foreign_key_field_carries_its_label(self):
         """
@@ -415,4 +428,12 @@ class AdditionalDataAPITests(TestCase):
                 ],
             }
         )
+
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [
+                resource["resourceinstanceid"]
+                for resource in response.json()["resources"]
+            ],
+            [str(self.first_by_title.pk), str(self.resource.pk)],
+        )

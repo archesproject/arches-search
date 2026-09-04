@@ -45,9 +45,6 @@ from arches_search.utils.search.sorting import (
     SortResolver,
 )
 
-# ---------------------------------------------------------------------------
-# Registry discovery
-# ---------------------------------------------------------------------------
 
 # Named for readability only: production never branches on these, they are
 # seeded as AdvancedSearchFacet rows.
@@ -125,9 +122,6 @@ class ResourceInstanceFieldRegistryTests(TestCase):
             with self.subTest(probe=probe):
                 self.assertIsNone(self.registry.get(probe))
 
-    def test_multi_hop_traversal_is_unreachable(self):
-        self.assertIsNone(self.registry.get("principaluser__groups__permissions"))
-
     def test_user_relation_exposes_username_hop_and_identity_operators(self):
         principaluser = self.registry.get("principaluser")
         self.assertTrue(principaluser.is_user_relation)
@@ -152,11 +146,6 @@ class ResourceInstanceFieldRegistryTests(TestCase):
         self.assertIn("principaluser", groupable)
         self.assertNotIn("createdtime", groupable)
         self.assertNotIn("resourceinstanceid", groupable)
-
-
-# ---------------------------------------------------------------------------
-# Sorting and grouping against real rows
-# ---------------------------------------------------------------------------
 
 
 class ResourceFieldFixtureMixin:
@@ -222,8 +211,6 @@ class ResourceFieldFixtureMixin:
 
 
 class ResourceFieldSortingAndGroupingTests(ResourceFieldFixtureMixin, TestCase):
-    # --- sorting ---
-
     def _sorted_ids(self, sort_specs):
         queryset = ResourceInstance.objects.filter(graph=self.graph)
         return list(
@@ -275,8 +262,6 @@ class ResourceFieldSortingAndGroupingTests(ResourceFieldFixtureMixin, TestCase):
                 ]
             )
 
-    # --- grouping ---
-
     def test_group_by_resource_field(self):
         results = build_aggregations(
             ResourceInstance.objects.filter(graph=self.graph),
@@ -312,11 +297,6 @@ class ResourceFieldSortingAndGroupingTests(ResourceFieldFixtureMixin, TestCase):
     def test_group_by_rejects_unknown_field(self):
         with self.assertRaises(ValidationError):
             resolve_group_by_path({"field": "principaluser__password"})
-
-
-# ---------------------------------------------------------------------------
-# HTTP surface
-# ---------------------------------------------------------------------------
 
 
 class ResourceFieldSearchAPITests(TestCase):

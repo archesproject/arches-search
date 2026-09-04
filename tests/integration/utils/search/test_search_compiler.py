@@ -168,8 +168,6 @@ class SearchCompilerTests(TestCase):
     def _result_ids(self, result):
         return set(result.results.values_list("resourceinstanceid", flat=True))
 
-    # --- term_search, with hop expansion ---
-
     def _search_models_payloads(self, search_models, operator, operands):
         """
         The same clause for every graph in the fixture.
@@ -217,8 +215,6 @@ class SearchCompilerTests(TestCase):
             self.quartz_mineral.resourceinstanceid, self._result_ids(result)
         )
 
-    # --- GEO_INTERSECTS ---
-
     def test_geo_intersects_matches_only_resource_inside_drawn_shape(self):
         feature_collection = {
             "type": "FeatureCollection",
@@ -244,8 +240,6 @@ class SearchCompilerTests(TestCase):
             self._result_ids(result), {self.amber_mineral.resourceinstanceid}
         )
 
-    # --- DATE_RANGE ---
-
     def test_date_range_matches_only_resource_in_range(self):
         result = self._search(
             advanced_search_queries=self._search_models_payloads(
@@ -260,8 +254,6 @@ class SearchCompilerTests(TestCase):
         self.assertEqual(
             self._result_ids(result), {self.amber_mineral.resourceinstanceid}
         )
-
-    # --- combined filters AND together ---
 
     def test_term_search_and_a_date_clause_and_together(self):
         """
@@ -285,8 +277,6 @@ class SearchCompilerTests(TestCase):
             self._result_ids(result), {self.amber_mineral.resourceinstanceid}
         )
 
-    # --- advanced_search_queries scoping ---
-
     def _advanced_search_body(self, graph):
         return {
             "graph_slug": graph.slug,
@@ -307,8 +297,6 @@ class SearchCompilerTests(TestCase):
         self.assertIn(self.amber_mineral.resourceinstanceid, ids)
         self.assertIn(self.quartz_mineral.resourceinstanceid, ids)
         self.assertIn(self.amber_site.resourceinstanceid, ids)
-
-    # --- the wire contract ---
 
     def test_term_search_over_http(self):
         """
@@ -427,25 +415,18 @@ class SearchCompilerTests(TestCase):
             [str(self.graph_a.graphid), str(self.graph_b.graphid)],
         )
 
-    # --- graph_slugs is the selector ---
-
-    def test_selecting_no_graphs_returns_nothing(self):
+    def test_selecting_no_graphs_returns_nothing_but_still_counts(self):
         result = self._search(graph_slugs=None)
 
         self.assertEqual(self._result_ids(result), set())
         self.assertEqual(result.scoped_count, 0)
 
-    def test_counts_still_report_what_selecting_a_graph_would_return(self):
         # Nothing returned, but the counts still say what is out there.
-        result = self._search(graph_slugs=None)
-
         counts_by_graph_id = {
             row["graph_id"]: row["count"] for row in result.resource_type_counts
         }
         self.assertEqual(counts_by_graph_id[str(self.graph_a.graphid)], 2)
         self.assertEqual(counts_by_graph_id[str(self.graph_b.graphid)], 1)
-
-    # --- resource_type_counts always covers every active graph ---
 
     def test_resource_type_counts_cover_every_active_graph_regardless_of_graph_slugs(
         self,
@@ -576,6 +557,11 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
             self.assertEqual(ids & self.PERSON_IDS, {PERSON_A_ID})
         with self.subTest("the unaddressed graph comes through whole"):
             self.assertEqual(ids & self.DOG_IDS, self.DOG_IDS)
+        with self.subTest("and the counts agree"):
+            self.assertEqual(self._count_for(result, self.person_graph.graphid), 1)
+            self.assertEqual(
+                self._count_for(result, self.dog_graph.graphid), len(self.DOG_IDS)
+            )
 
     def test_a_payload_matching_nothing_does_not_take_other_graphs_with_it(self):
         result = self._search(
@@ -597,16 +583,6 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
 
         self.assertEqual(ids & self.PERSON_IDS, {PERSON_A_ID})
         self.assertEqual(ids & self.DOG_IDS, {DOG_B_ID, DOG_D_ID})
-
-    def test_counts_reflect_the_unaddressed_graph(self):
-        result = self._search(
-            [self._person_payload("FOO")], graph_slugs=["person", "dog"]
-        )
-
-        self.assertEqual(self._count_for(result, self.person_graph.graphid), 1)
-        self.assertEqual(
-            self._count_for(result, self.dog_graph.graphid), len(self.DOG_IDS)
-        )
 
     def test_graph_slugs_still_scopes_the_returned_rows(self):
         # The dog graph is filtered out by scoping, not by the person payload.
