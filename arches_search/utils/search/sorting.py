@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from django.core.exceptions import ValidationError
 from django.db.models import F, QuerySet
@@ -32,39 +32,32 @@ ALLOWED_SORT_TYPES = {
     SORT_TYPE_NODE,
 }
 
-# Applied when no sort is supplied in the payload. Empty = no user-visible
-# ordering (the id tie-break still runs for stable pagination). Populate with
-# sort specs — e.g. [{"type": SORT_TYPE_PRIMARY_NAME, "direction": DIRECTION_ASC}]
-# — to preset an ordering without requiring the user to pick one.
+# Applied when the payload names no sort. Empty means no user-visible ordering;
+# the id tie-break still runs.
 DEFAULT_SORT: List[Dict[str, Any]] = []
+
+Ordering = Any
+
+
+def _ordering(field: F, spec: Dict[str, Any], nulls_last: Optional[bool] = None):
+    # nulls_last must be True or None; Django rejects False.
+    if spec.get("direction", DIRECTION_ASC) == DIRECTION_ASC:
+        return field.asc(nulls_last=nulls_last)
+    return field.desc(nulls_last=nulls_last)
 
 
 class SortResolver:
     """
-    Applies a list of sort specs to a ResourceInstance queryset.
+    Applies sort specs to a ResourceInstance queryset.
 
-    Each spec is a dict: {"type": "<sort_type>", "direction": "asc"|"desc", ...}.
-    Extra keys may be used by specific sort types (e.g. node sorts in the future).
+    A spec is {"type": ..., "direction": "asc"|"desc"} plus whatever the type
+    needs: "field" for RESOURCE_FIELD, "graph_slug"/"node_alias" for NODE.
 
-    Registered sort types:
-      - "primary_name": sort by descriptors[active-language].name
-        (case-insensitive). Numbers and symbols fall wherever Postgres places
-        them in standard text ordering.
-      - "created_time": sort by ResourceInstance.createdtime (the resource's
-        actual creation timestamp — there is no "last modified" field to
-        sort by instead).
-      - "RESOURCE_FIELD": sort by any field ResourceInstanceFieldRegistry
-        exposes, named by an extra "field" key. Foreign keys order by the related record's
-        label (e.g. a lifecycle state's name) rather than by its opaque primary
-        key, and nulls always sort last regardless of direction.
-      - "NODE": sort by a node (tile) value, named by additional
-        "graph_slug"/"node_alias" keys. Requires the caller to have annotated
-        the value onto the queryset first (see search.additional_data) and to pass
-        the resulting names as node_column_annotations; a column the requester
-        may not read is silently skipped rather than reported.
+    A NODE sort reads an annotation the caller must already have applied (see
+    search.additional_data) and passed as node_column_annotations. A node the
+    requester cannot read is skipped rather than reported.
 
-    The resolver always appends a stable tie-break on resourceinstanceid so
-    paginated results are deterministic.
+    A tie-break on resourceinstanceid is always appended, so paging is stable.
     """
 
     def __init__(self, sort_specs: Optional[List[Dict[str, Any]]] = None) -> None:
@@ -76,14 +69,7 @@ class SortResolver:
 
     @property
     def resource_field_registry(self) -> ResourceInstanceFieldRegistry:
-        """
-        Built on first use, then reused.
-
-        A SortResolver is constructed for every search, most of which never sort
-        by a resource field -- so building this eagerly would add a query to all
-        of them. Validation and ordering both read it, and several specs may
-        name a field, so it is built once rather than per spec.
-        """
+        """Built on first use: it costs a query, and most searches never sort by one."""
         if self._resource_field_registry is None:
             self._resource_field_registry = get_resource_instance_fields()
         return self._resource_field_registry
@@ -93,100 +79,81 @@ class SortResolver:
         queryset: QuerySet,
         node_column_annotations: Optional[Dict[Any, str]] = None,
     ) -> QuerySet:
-        order_expressions: List[Any] = []
         node_column_annotations = node_column_annotations or {}
+        order_expressions: List[Ordering] = []
 
         for index, spec in enumerate(self.sort_specs):
-            if spec["type"] == SORT_TYPE_PRIMARY_NAME:
-                queryset, ordering = self._apply_primary_name(queryset, spec, index)
+            sort_type = spec["type"]
+            if sort_type == SORT_TYPE_PRIMARY_NAME:
+                queryset, ordering = self._primary_name(queryset, spec, index)
+            elif sort_type == SORT_TYPE_CREATED_TIME:
+                queryset, ordering = self._created_time(queryset, spec)
+            elif sort_type == SORT_TYPE_RESOURCE_FIELD:
+                queryset, ordering = self._resource_field(queryset, spec, index)
+            else:
+                queryset, ordering = self._node_value(
+                    queryset, spec, node_column_annotations
+                )
+
+            if ordering is not None:
                 order_expressions.append(ordering)
-            elif spec["type"] == SORT_TYPE_CREATED_TIME:
-                order_expressions.append(self._apply_created_time(spec))
-            elif spec["type"] == SORT_TYPE_RESOURCE_FIELD:
-                queryset, ordering = self._apply_resource_field(queryset, spec, index)
-                order_expressions.append(ordering)
-            elif spec["type"] == SORT_TYPE_NODE:
-                ordering = self._apply_node_value(spec, node_column_annotations)
-                if ordering is not None:
-                    order_expressions.append(ordering)
 
         order_expressions.append(F("resourceinstanceid").asc())
         return queryset.order_by(*order_expressions)
 
-    @staticmethod
-    def _apply_primary_name(queryset: QuerySet, spec: Dict[str, Any], index: int):
-        language = get_language() or "en"
-        name_annotation = f"_sort_primary_name_{index}"
-
+    def _primary_name(
+        self, queryset: QuerySet, spec: Dict[str, Any], index: int
+    ) -> Tuple[QuerySet, Ordering]:
+        annotation = f"_sort_primary_name_{index}"
         queryset = queryset.annotate(
             **{
-                name_annotation: Lower(
-                    KeyTextTransform("name", KeyTextTransform(language, "descriptors"))
+                annotation: Lower(
+                    KeyTextTransform(
+                        "name", KeyTextTransform(get_language() or "en", "descriptors")
+                    )
                 )
             }
         )
+        return queryset, _ordering(F(annotation), spec)
 
-        direction = spec.get("direction", DIRECTION_ASC)
-        name_field = F(name_annotation)
-        ordering = name_field.asc() if direction == DIRECTION_ASC else name_field.desc()
-        return queryset, ordering
+    def _created_time(
+        self, queryset: QuerySet, spec: Dict[str, Any]
+    ) -> Tuple[QuerySet, Ordering]:
+        return queryset, _ordering(F("createdtime"), spec)
 
-    @staticmethod
-    def _apply_created_time(spec: Dict[str, Any]):
-        direction = spec.get("direction", DIRECTION_ASC)
-        created_time_field = F("createdtime")
-        return (
-            created_time_field.asc()
-            if direction == DIRECTION_ASC
-            else created_time_field.desc()
-        )
-
-    def _apply_resource_field(
+    def _resource_field(
         self, queryset: QuerySet, spec: Dict[str, Any], index: int
-    ):
+    ) -> Tuple[QuerySet, Ordering]:
         descriptor = self.resource_field_registry.get(spec["field"])
-        direction = spec.get("direction", DIRECTION_ASC)
 
-        # Sort a foreign key by the related record's label, not its raw id.
-        # Lower() here and not in the helper: projection needs the label as
-        # stored.
+        # Order a foreign key by the related record's label, not its raw id.
+        # Lower() lives here, not in label_expression: projection wants the
+        # label as stored.
         label = label_expression(descriptor)
-        if label is not None:
-            label_annotation = f"_sort_resource_field_{index}"
-            queryset = queryset.annotate(**{label_annotation: Lower(label)})
-            sort_field = F(label_annotation)
-        else:
+        if label is None:
             sort_field = F(descriptor.orm_path)
+        else:
+            annotation = f"_sort_resource_field_{index}"
+            queryset = queryset.annotate(**{annotation: Lower(label)})
+            sort_field = F(annotation)
 
-        # Nullable columns (principaluser, for one) otherwise lead on DESC in
-        # Postgres, which reads as a bug to anyone scanning the first page.
-        ordering = (
-            sort_field.asc(nulls_last=True)
-            if direction == DIRECTION_ASC
-            else sort_field.desc(nulls_last=True)
-        )
-        return queryset, ordering
+        # A nullable column would otherwise lead on DESC in Postgres.
+        return queryset, _ordering(sort_field, spec, nulls_last=True)
 
-    @staticmethod
-    def _apply_node_value(
-        spec: Dict[str, Any], node_column_annotations: Dict[Any, str]
-    ):
-        annotation_name = node_column_annotations.get(
+    def _node_value(
+        self,
+        queryset: QuerySet,
+        spec: Dict[str, Any],
+        node_column_annotations: Dict[Any, str],
+    ) -> Tuple[QuerySet, Ordering]:
+        annotation = node_column_annotations.get(
             (spec["graph_slug"], spec["node_alias"])
         )
-        if annotation_name is None:
-            # The node did not resolve or is not readable by this user. Skipping
-            # keeps that indistinguishable from "no such node", matching how
-            # additional_data omits rather than reports such columns.
-            return None
-
-        direction = spec.get("direction", DIRECTION_ASC)
-        sort_field = F(annotation_name)
-        return (
-            sort_field.asc(nulls_last=True)
-            if direction == DIRECTION_ASC
-            else sort_field.desc(nulls_last=True)
-        )
+        if annotation is None:
+            # Unresolved or unreadable, kept indistinguishable from "no such
+            # node" the way additional_data omits such columns.
+            return queryset, None
+        return queryset, _ordering(F(annotation), spec, nulls_last=True)
 
     def _validate(self, sort_specs: Any) -> None:
         if not isinstance(sort_specs, list):
@@ -224,8 +191,7 @@ class SortResolver:
                             % {"i": index, "key": key}
                         )
 
-            direction = spec.get("direction", DIRECTION_ASC)
-            if direction not in ALLOWED_DIRECTIONS:
+            if spec.get("direction", DIRECTION_ASC) not in ALLOWED_DIRECTIONS:
                 raise ValidationError(
                     _("sort[%(i)s] direction must be one of asc, desc.") % {"i": index}
                 )

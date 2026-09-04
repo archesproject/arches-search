@@ -8,7 +8,7 @@ Search as a callable, independent of any HTTP endpoint.
 Callers wanting only the matching queryset -- an export, a map tile -- can use
 SearchCompiler directly and skip the projection and pagination above it.
 
-    payload.py     what a search is asked for, and what it returns
+    types.py       what a search is asked for, and what it returns
     validation.py  the shape of those keys, checked before anything compiles
     compiler.py    payload -> matching resources, one graph at a time
     additional_data/ values carried on each row: node values and
@@ -20,7 +20,7 @@ SearchCompiler directly and skip the projection and pagination above it.
 
 from arches_search.utils.search.compiler import SearchCompiler
 from arches_search.utils.search.execution import execute_search
-from arches_search.utils.search.payload import (
+from arches_search.utils.search.types import (
     SearchPayload,
     SearchRequest,
     SearchResponse,

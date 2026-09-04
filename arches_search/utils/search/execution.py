@@ -17,7 +17,7 @@ from arches_search.utils.search.additional_data.additional_data import (
     validate_additional_data,
 )
 from arches_search.utils.search.compiler import SearchCompiler
-from arches_search.utils.search.payload import SearchRequest, SearchResponse
+from arches_search.utils.search.types import SearchRequest, SearchResponse
 from arches_search.utils.search.validation import (
     validate_paging,
     validate_search_payload,

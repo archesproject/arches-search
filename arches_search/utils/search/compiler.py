@@ -22,7 +22,7 @@ from arches_search.utils.advanced_search.registries.facet_registry import FacetR
 from arches_search.utils.advanced_search.registries.search_model_registry import (
     SearchModelRegistry,
 )
-from arches_search.utils.search.payload import SearchPayload, SearchResult
+from arches_search.utils.search.types import SearchPayload, SearchResult
 from arches_search.utils.term_search.matching import get_related_resources_by_text
 
 
