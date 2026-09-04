@@ -24,7 +24,7 @@ def _serialize_descriptor(descriptor) -> Dict[str, Any]:
     }
 
 
-def _lifecycle_state_choices(graph_ids: Iterable[str]) -> List[Dict[str, str]]:
+def _lifecycle_state_choices(graph_slugs: Iterable[str]) -> List[Dict[str, str]]:
     """
     Lifecycle states, narrowed to the graphs in play when the caller names them.
 
@@ -33,9 +33,9 @@ def _lifecycle_state_choices(graph_ids: Iterable[str]) -> List[Dict[str, str]]:
     """
     states = ResourceInstanceLifecycleState.objects.all()
 
-    if graph_ids:
+    if graph_slugs:
         lifecycle_ids = (
-            GraphModel.objects.filter(graphid__in=graph_ids)
+            GraphModel.objects.filter(slug__in=graph_slugs)
             .exclude(resource_instance_lifecycle__isnull=True)
             .values_list("resource_instance_lifecycle_id", flat=True)
         )
@@ -47,14 +47,14 @@ def _lifecycle_state_choices(graph_ids: Iterable[str]) -> List[Dict[str, str]]:
     ]
 
 
-def resource_field_metadata(graph_ids: Iterable[str]) -> List[Dict[str, Any]]:
+def resource_field_metadata(graph_slugs: Iterable[str]) -> List[Dict[str, Any]]:
     """Every filterable field, with pick-list choices where they are bounded."""
     fields = []
 
     for descriptor in get_resource_instance_fields().all():
         serialized = _serialize_descriptor(descriptor)
         if descriptor.name == "resource_instance_lifecycle_state":
-            serialized["choices"] = _lifecycle_state_choices(graph_ids)
+            serialized["choices"] = _lifecycle_state_choices(graph_slugs)
         fields.append(serialized)
 
     return fields

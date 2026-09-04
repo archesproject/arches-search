@@ -3,7 +3,9 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
 from arches_search.utils.advanced_search.constants import (
+    QUANTIFIER_ANY,
     SUBJECT_TYPE_NODE,
+    SUBJECT_TYPE_RESOURCE_FIELD,
     SUBJECT_TYPE_SEARCH_MODELS,
 )
 from arches_search.utils.advanced_search.relationship_utils import (
@@ -31,6 +33,7 @@ class PayloadValidator:
     REQUIRED_OPERAND_KEYS = {"type", "value"}
     REQUIRED_RELATIONSHIP_KEYS = {"path", "is_inverse", "traversal_quantifier"}
     REQUIRED_SUBJECT_KEYS = {"type", "graph_slug", "node_alias", "search_models"}
+    REQUIRED_RESOURCE_FIELD_SUBJECT_KEYS = {"type", "field"}
 
     def validate(self, root_payload: Dict[str, Any]) -> None:
         if not isinstance(root_payload, dict):
@@ -49,6 +52,8 @@ class PayloadValidator:
                 params={"location": location, "keys": ", ".join(sorted(missing_keys))},
             )
 
+        # A group's graph_slug names the resource model its clauses address, and
+        # for the top-level group, the resource model the payload returns.
         graph_slug_value = group_payload["graph_slug"]
         if not isinstance(graph_slug_value, str) or not graph_slug_value:
             raise ValidationError(
@@ -165,16 +170,29 @@ class PayloadValidator:
                 },
             )
 
+        # A quantifier asks "how many of this resource's values must match", and
+        # a resource field has exactly one. ALL and NONE therefore have nothing
+        # to quantify over, and honouring them would mean inventing a meaning --
+        # so they are refused rather than ignored, which would hand back the
+        # opposite result set without a word.
+        subject_value = clause_payload.get("subject")
+        if (
+            isinstance(subject_value, dict)
+            and subject_value.get("type") == SUBJECT_TYPE_RESOURCE_FIELD
+            and quantifier_value != QUANTIFIER_ANY
+        ):
+            raise ValidationError(
+                _(
+                    "%(location)s resource field subjects take quantifier "
+                    "%(any)s: a resource field holds a single value."
+                ),
+                params={"location": location, "any": QUANTIFIER_ANY},
+            )
+
         subject_value = clause_payload["subject"]
         if not self._is_valid_subject_dict(subject_value, clause_type):
             raise ValidationError(
-                _(
-                    "%(location)s subject must be an object with type, graph_slug, "
-                    "node_alias, and search_models. Node subjects require a non-empty "
-                    "node_alias and empty search_models. Search-model subjects require "
-                    "an empty node_alias and a non-empty search_models list. RELATED "
-                    "clauses must use a node subject."
-                ),
+                self._subject_error_message(subject_value),
                 params={"location": location},
             )
 
@@ -299,9 +317,37 @@ class PayloadValidator:
                 },
             )
 
+    @staticmethod
+    def _subject_error_message(subject: Any) -> str:
+        """
+        The requirements for the kind of subject that was actually sent.
+
+        Telling someone whose resource field subject was rejected to add a
+        graph_slug would send them the wrong way entirely.
+        """
+        if (
+            isinstance(subject, dict)
+            and subject.get("type") == SUBJECT_TYPE_RESOURCE_FIELD
+        ):
+            return _(
+                "%(location)s resource field subject must be an object with "
+                "exactly type and field, and cannot be used on a RELATED clause."
+            )
+        return _(
+            "%(location)s subject must be an object with type, graph_slug, "
+            "node_alias, and search_models. Node subjects require a non-empty "
+            "node_alias and empty search_models. Search-model subjects require "
+            "an empty node_alias and a non-empty search_models list. Resource "
+            "field subjects use type and field only. RELATED clauses must use a "
+            "node subject."
+        )
+
     def _is_valid_subject_dict(self, subject: Any, clause_type: str) -> bool:
         if not isinstance(subject, dict):
             return False
+
+        if subject.get("type") == SUBJECT_TYPE_RESOURCE_FIELD:
+            return self._is_valid_resource_field_subject(subject, clause_type)
 
         missing_keys = self.REQUIRED_SUBJECT_KEYS - set(subject.keys())
         if missing_keys:
@@ -334,6 +380,25 @@ class PayloadValidator:
             return bool(node_alias) and len(search_models) == 0
 
         return node_alias == "" and len(search_models) > 0
+
+    def _is_valid_resource_field_subject(
+        self, subject: Dict[str, Any], clause_type: str
+    ) -> bool:
+        """
+        A resource field subject names one column on the resource row itself, so
+        it carries none of a node subject's graph/tile addressing.
+
+        Only the shape is settled here. Whether the field and operator exist is
+        settled at compile time against ResourceInstanceFieldRegistry, which
+        reads the database -- this validator stays free of queries.
+        """
+        if clause_type == "RELATED":
+            return False
+
+        if set(subject.keys()) != self.REQUIRED_RESOURCE_FIELD_SUBJECT_KEYS:
+            return False
+
+        return isinstance(subject["field"], str) and bool(subject["field"])
 
     def _is_valid_path_list(self, subject_path: Any) -> bool:
         if not isinstance(subject_path, list) or len(subject_path) == 0:

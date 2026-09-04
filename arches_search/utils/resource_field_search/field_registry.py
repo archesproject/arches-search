@@ -48,9 +48,6 @@ class ResourceInstanceField:
     def operators(self) -> Tuple[str, ...]:
         return tuple(self.facets)
 
-    def supports(self, operator: str) -> bool:
-        return operator in self.facets
-
     def facet_for(self, operator: str) -> Optional[Any]:
         return self.facets.get(operator)
 

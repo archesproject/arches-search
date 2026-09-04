@@ -2,6 +2,7 @@ import { computed, inject, provide, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
+import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
     createSearchMVTContext,
     fetchSearchResults,
@@ -13,6 +14,7 @@ import {
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
+    GraphModel,
     GroupPayload,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
@@ -45,13 +47,16 @@ interface DateRangeFilter {
 interface ExportPayload {
     terms: SearchRequestTerm[];
     query: GroupPayload | undefined;
-    graphIds: string[];
+    graphSlugs: string[];
     dateRange: DateRangeFilter | null;
+    resourceFieldFilters: ResourceFieldFilter[] | null;
 }
 
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
     activeGraphs: Ref<ResourceType[]>;
+    availableGraphs: Ref<ResourceType[]>;
+    loadAvailableGraphs(): Promise<void>;
     currentPage: Ref<number>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
@@ -61,7 +66,7 @@ interface SearchFilters {
     resultsGraphs: Ref<ResourceType[]>;
     searchResults: Ref<SearchResults>;
     sort: Ref<SortSpec[]>;
-    applySearchDefinition(definition: SearchDefinition): void;
+    applySearchDefinition(definition: SearchDefinition): Promise<void>;
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
@@ -106,6 +111,11 @@ function createSearchFilters(): SearchFilters {
         new Map(),
     );
     const activeGraphs = ref<ResourceType[]>([]);
+    // Every searchable resource model. "All" is expressed as an empty
+    // activeGraphs, and the API needs that spelled out as slugs, so the list has
+    // to be on hand before a search goes out.
+    const availableGraphs = ref<ResourceType[]>([]);
+    let availableGraphsRequest: Promise<void> | null = null;
     const resultsGraphs = ref<ResourceType[]>([]);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
     const isSearching = ref(false);
@@ -211,6 +221,37 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function loadAvailableGraphs(): Promise<void> {
+        if (!availableGraphsRequest) {
+            availableGraphsRequest = getGraphs()
+                .then((graphs: GraphModel[]) => {
+                    availableGraphs.value = graphs
+                        .filter((graph) => graph.isresource && graph.is_active)
+                        .map((graph) => ({
+                            id: graph.graphid,
+                            slug: graph.slug,
+                            label: graph.name,
+                            icon: graph.iconclass,
+                        }));
+                })
+                .catch((error) => {
+                    // Leave it unset so a later search can try again rather than
+                    // being stuck with an empty list forever.
+                    availableGraphsRequest = null;
+                    throw error;
+                });
+        }
+        return availableGraphsRequest;
+    }
+
+    function getRequestGraphs(): ResourceType[] {
+        // No selection means every resource model, which the API wants named
+        // rather than implied.
+        return activeGraphs.value.length > 0
+            ? activeGraphs.value
+            : availableGraphs.value;
+    }
+
     function setGraphs(graphs: ResourceType[]): void {
         activeGraphs.value = graphs;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -251,13 +292,14 @@ function createSearchFilters(): SearchFilters {
             isSearching.value = true;
 
             try {
-                const requestGraphs = activeGraphs.value;
+                await loadAvailableGraphs();
+                const requestGraphs = getRequestGraphs();
                 const searchParams = {
                     terms: getRequestTerms(),
                     query: getRequestQuery(),
-                    dateRange: getNodeAgnosticDateRange(),
+                    dateRange: getTimeFilterRange(),
                     page,
-                    graphIds: requestGraphs.map((graph) => graph.id as string),
+                    graphSlugs: requestGraphs.map((graph) => graph.slug),
                     mapFilter: mapFilter.value,
                     resourceFieldFilters: getRequestResourceFieldFilters(),
                     sort: sort.value,
@@ -301,7 +343,7 @@ function createSearchFilters(): SearchFilters {
         }));
     }
 
-    function isNodeAgnosticDateQuery(payload: GroupPayload): boolean {
+    function isTimeFilterQuery(payload: GroupPayload): boolean {
         return (
             payload.clauses.length === 1 &&
             payload.clauses[0].subject.type ===
@@ -309,9 +351,9 @@ function createSearchFilters(): SearchFilters {
         );
     }
 
-    function getNodeAgnosticDateRange(): DateRangeFilter | null {
+    function getTimeFilterRange(): DateRangeFilter | null {
         for (const payload of queries.value.values()) {
-            if (!isNodeAgnosticDateQuery(payload)) {
+            if (!isTimeFilterQuery(payload)) {
                 continue;
             }
             const [fromOperand, toOperand] = payload.clauses[0].operands;
@@ -353,7 +395,7 @@ function createSearchFilters(): SearchFilters {
 
     function getRequestQuery(): GroupPayload | undefined {
         const queryList = [...queries.value.values()].filter(
-            (payload) => !isNodeAgnosticDateQuery(payload),
+            (payload) => !isTimeFilterQuery(payload),
         );
         if (queryList.length === 0) return undefined;
         if (queryList.length === 1) return queryList[0];
@@ -387,11 +429,18 @@ function createSearchFilters(): SearchFilters {
         return {
             terms: serializedTerms,
             queries: Object.fromEntries(queries.value),
-            graphIds: activeGraphs.value.map((graph) => graph.id as string),
+            graphSlugs: getRequestGraphs().map((graph) => graph.slug),
         };
     }
 
-    function applySearchDefinition(definition: SearchDefinition): void {
+    async function applySearchDefinition(
+        definition: SearchDefinition,
+    ): Promise<void> {
+        // The slugs are resolved against the real resource models, so a restored
+        // type behaves like one the user just picked. Stubs would not: a null id
+        // is the "all types" sentinel elsewhere in the UI.
+        await loadAvailableGraphs();
+
         // Clear current state first. Each setter triggers a debounced search,
         // so the cascade collapses to a single fetch on the trailing edge.
         for (const id of [...terms.value.keys()]) {
@@ -402,7 +451,11 @@ function createSearchFilters(): SearchFilters {
         }
 
         setGraphs(
-            definition.graphIds.map((id) => ({ id, label: "", icon: "" })),
+            definition.graphSlugs
+                .map((slug) =>
+                    availableGraphs.value.find((graph) => graph.slug === slug),
+                )
+                .filter((graph): graph is ResourceType => graph !== undefined),
         );
 
         for (const term of definition.terms) {
@@ -424,14 +477,17 @@ function createSearchFilters(): SearchFilters {
         return {
             terms: getRequestTerms(),
             query: getRequestQuery(),
-            graphIds: activeGraphs.value.map((graph) => graph.id as string),
-            dateRange: getNodeAgnosticDateRange(),
+            graphSlugs: getRequestGraphs().map((graph) => graph.slug),
+            dateRange: getTimeFilterRange(),
+            resourceFieldFilters: getRequestResourceFieldFilters(),
         };
     }
 
     return {
         activeFilters,
         activeGraphs,
+        availableGraphs,
+        loadAvailableGraphs,
         applySearchDefinition,
         clearMapFilter,
         clearQuery,

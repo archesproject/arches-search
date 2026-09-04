@@ -1,5 +1,5 @@
 """
-Resolution of resource-field group-by specs for search_aggregation.
+Resolution of resource-field group-by specs for search.aggregation.
 
 Grouping is restricted to fields whose cardinality is naturally bounded
 (foreign keys and booleans). Grouping by a timestamp or a primary key would
@@ -12,11 +12,16 @@ from typing import Any, Dict, Optional
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
+from arches_search.utils.advanced_search.constants import (
+    SUBJECT_TYPE_RESOURCE_FIELD,
+)
 from arches_search.utils.resource_field_search.field_registry import (
+    ResourceInstanceFieldRegistry,
     get_resource_instance_fields,
 )
 
-GROUP_BY_TYPE_RESOURCE_FIELD = "RESOURCE_FIELD"
+# The same token a clause subject and an additional_data entry use.
+GROUP_BY_TYPE_RESOURCE_FIELD = SUBJECT_TYPE_RESOURCE_FIELD
 
 # TileModel's forward relation to the row a resource-field lives on, used when
 # aggregating at tile granularity.
@@ -41,12 +46,17 @@ def _resolve_descriptor(spec: Dict[str, Any], registry) -> Optional[Any]:
 def resolve_group_by_path(
     group_spec: Dict[str, Any],
     aggregate_by_tile: bool = False,
+    registry: Optional[ResourceInstanceFieldRegistry] = None,
 ) -> str:
     """
     The ORM path to group by, resolved through the registry so a group-by can
     only name a field the registry actually exposes.
+
+    Pass `registry` when resolving several specs: building it costs a query and
+    an import per facet row, and the whole point of one registry is that the
+    consumers cannot disagree about what exists.
     """
-    registry = get_resource_instance_fields()
+    registry = registry or get_resource_instance_fields()
     descriptor = _resolve_descriptor(group_spec, registry)
 
     if not descriptor.is_groupable:
@@ -66,13 +76,14 @@ def resolve_group_by_path(
 def resolve_metric_path(
     metric_spec: Dict[str, Any],
     aggregate_by_tile: bool = False,
+    registry: Optional[ResourceInstanceFieldRegistry] = None,
 ) -> str:
     """
     The ORM path for a metric over a resource field (e.g. counting rows per
     group). Unlike group-by, cardinality is irrelevant here -- the field is
     being aggregated, not bucketed -- so only registry membership is required.
     """
-    registry = get_resource_instance_fields()
+    registry = registry or get_resource_instance_fields()
     descriptor = _resolve_descriptor(metric_spec, registry)
 
     if aggregate_by_tile:

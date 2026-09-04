@@ -29,42 +29,183 @@ interface DateRangeFilter {
     to: string;
 }
 
-interface NodeAgnosticFilter {
-    type: "TEXT_MATCH" | "GEO_INTERSECTS" | "DATE_RANGE";
-    value: string[] | FeatureCollection | DateRangeFilter;
+interface TermSearch {
+    terms: string[];
     max_hops: number;
 }
 
-function buildNodeAgnosticFilters(
-    terms: SearchRequestTerm[],
+// Terms are matched anywhere and then walked back across relationships, so a
+// Site can be found by its related Person's name.
+const TERM_SEARCH_MAX_HOPS = 2;
+
+function buildTermSearch(terms: SearchRequestTerm[]): TermSearch | null {
+    if (terms.length === 0) {
+        return null;
+    }
+    return {
+        terms: terms.map((term) => term.text),
+        max_hops: TERM_SEARCH_MAX_HOPS,
+    };
+}
+
+function hasDrawnArea(mapFilter: FeatureCollection | null): boolean {
+    return Boolean(
+        mapFilter && mapFilter.features && mapFilter.features.length,
+    );
+}
+
+function buildSearchModelClauses(
+    graphSlug: string,
     mapFilter: FeatureCollection | null,
     dateRange: DateRangeFilter | null,
-): NodeAgnosticFilter[] | null {
-    const filters: NodeAgnosticFilter[] = [];
+): SearchClause[] {
+    const clauses: SearchClause[] = [];
 
-    if (terms.length > 0) {
-        filters.push({
-            type: "TEXT_MATCH",
-            value: terms.map((term) => term.text),
-            max_hops: 2,
+    if (hasDrawnArea(mapFilter)) {
+        clauses.push({
+            type: "LITERAL",
+            quantifier: "ANY",
+            subject: {
+                type: "SEARCH_MODELS",
+                graph_slug: graphSlug,
+                node_alias: "",
+                search_models: ["GeometrySearch"],
+            },
+            operator: "GEO_INTERSECTS",
+            operands: [{ type: "GEO_LITERAL", value: mapFilter }],
         });
     }
 
-    if (mapFilter && mapFilter.features && mapFilter.features.length > 0) {
-        filters.push({ type: "GEO_INTERSECTS", value: mapFilter, max_hops: 0 });
-    }
-
     if (dateRange) {
-        filters.push({ type: "DATE_RANGE", value: dateRange, max_hops: 0 });
+        // Both models, so a stored range overlapping the window qualifies and
+        // not just a single date sitting inside it.
+        clauses.push({
+            type: "LITERAL",
+            quantifier: "ANY",
+            subject: {
+                type: "SEARCH_MODELS",
+                graph_slug: graphSlug,
+                node_alias: "",
+                search_models: ["DateSearch", "DateRangeSearch"],
+            },
+            operator: "BETWEEN",
+            operands: [
+                { type: "LITERAL", value: dateRange.from },
+                { type: "LITERAL", value: dateRange.to },
+            ],
+        });
     }
 
-    return filters.length > 0 ? filters : null;
+    return clauses;
+}
+
+interface ClauseOperand {
+    type: "LITERAL" | "GEO_LITERAL";
+    value: unknown;
+}
+
+interface SearchClause {
+    type: "LITERAL";
+    quantifier: "ANY";
+    subject:
+        | { type: "RESOURCE_FIELD"; field: string }
+        | {
+              type: "SEARCH_MODELS";
+              graph_slug: string;
+              node_alias: "";
+              search_models: string[];
+          };
+    operator: string;
+    operands: ClauseOperand[];
+}
+
+function isRangeValue(value: unknown): value is { from: unknown; to: unknown } {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value) &&
+        "from" in value &&
+        "to" in value
+    );
+}
+
+function buildResourceFieldOperands(value: unknown): ClauseOperand[] {
+    // Mirrors the facet rows' param_formats: no value means the operator takes
+    // no operand (the presence checks, and the current-user ones the server
+    // fills in itself), a from/to pair is two operands, anything else is one.
+    if (value === undefined || value === null) {
+        return [];
+    }
+    if (isRangeValue(value)) {
+        return [
+            { type: "LITERAL", value: value.from },
+            { type: "LITERAL", value: value.to },
+        ];
+    }
+    return [{ type: "LITERAL", value }];
+}
+
+function buildAdvancedSearchQueries(
+    query: GroupPayload | undefined,
+    resourceFieldFilters: ResourceFieldFilter[] | null | undefined,
+    mapFilter: FeatureCollection | null,
+    dateRange: DateRangeFilter | null,
+    graphSlugs: string[],
+): Array<GroupPayload | Record<string, unknown>> | null {
+    const baseQuery = query && Object.keys(query).length > 0 ? query : null;
+    const resourceFieldClauses: SearchClause[] = (
+        resourceFieldFilters ?? []
+    ).map((filter) => ({
+        type: "LITERAL",
+        quantifier: "ANY",
+        subject: { type: "RESOURCE_FIELD", field: filter.field },
+        operator: filter.operator,
+        operands: buildResourceFieldOperands(filter.value),
+    }));
+
+    const hasClausesToPlace =
+        resourceFieldClauses.length > 0 ||
+        hasDrawnArea(mapFilter) ||
+        Boolean(dateRange);
+
+    if (!hasClausesToPlace) {
+        return baseQuery ? [baseQuery] : null;
+    }
+
+    // A clause only filters the graph whose payload it sits in, so every clause
+    // is repeated once per requested resource model. The advanced query nests
+    // inside the payload for its own graph, which keeps it AND-ed as a whole
+    // even when its own logic is OR.
+    const targetSlugs =
+        graphSlugs.length > 0
+            ? graphSlugs
+            : baseQuery
+              ? [baseQuery.graph_slug]
+              : [];
+
+    if (targetSlugs.length === 0) {
+        return null;
+    }
+
+    return targetSlugs.map((graphSlug) => ({
+        graph_slug: graphSlug,
+        scope: "RESOURCE",
+        logic: "AND",
+        clauses: [
+            ...resourceFieldClauses,
+            ...buildSearchModelClauses(graphSlug, mapFilter, dateRange),
+        ],
+        groups:
+            baseQuery && baseQuery.graph_slug === graphSlug ? [baseQuery] : [],
+        aggregations: [],
+        relationship: null,
+    }));
 }
 
 function buildSearchApiRequestBody({
     terms,
     query,
-    graphIds,
+    graphSlugs,
     mapFilter,
     dateRange,
     resourceFieldFilters,
@@ -73,7 +214,7 @@ function buildSearchApiRequestBody({
 }: {
     terms: SearchRequestTerm[];
     query?: GroupPayload;
-    graphIds: string[];
+    graphSlugs: string[];
     mapFilter: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
@@ -81,18 +222,15 @@ function buildSearchApiRequestBody({
     sort?: SortSpec[];
 }): Record<string, unknown> {
     const requestPayload: Record<string, unknown> = {
-        graph_ids: graphIds.length > 0 ? graphIds : null,
-        node_agnostic_filters: buildNodeAgnosticFilters(
-            terms,
+        graph_slugs: graphSlugs.length > 0 ? graphSlugs : null,
+        term_search: buildTermSearch(terms),
+        advanced_search_queries: buildAdvancedSearchQueries(
+            query,
+            resourceFieldFilters,
             mapFilter,
             dateRange ?? null,
+            graphSlugs,
         ),
-        advanced_search_query:
-            query && Object.keys(query).length > 0 ? query : null,
-        resource_field_filters:
-            resourceFieldFilters && resourceFieldFilters.length > 0
-                ? resourceFieldFilters
-                : null,
     };
 
     if (page !== undefined) {
@@ -108,16 +246,18 @@ function buildSearchApiRequestBody({
 export async function createSearchMVTContext(params: {
     terms?: SearchRequestTerm[];
     query?: GroupPayload;
-    graphIds?: string[];
+    graphSlugs?: string[];
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
+    resourceFieldFilters?: ResourceFieldFilter[] | null;
 }): Promise<{ context_id: string }> {
     const requestPayload = buildSearchApiRequestBody({
         terms: params.terms ?? [],
         query: params.query,
-        graphIds: params.graphIds ?? [],
+        graphSlugs: params.graphSlugs ?? [],
         mapFilter: params.mapFilter ?? null,
         dateRange: params.dateRange ?? null,
+        resourceFieldFilters: params.resourceFieldFilters ?? null,
     });
 
     const url = generateArchesURL("arches_search:search_mvt_context");
@@ -138,7 +278,7 @@ export async function createSearchMVTContext(params: {
 export async function fetchSearchResults({
     terms = [],
     query = {} as GroupPayload,
-    graphIds = [],
+    graphSlugs = [],
     mapFilter = null,
     dateRange = null,
     resourceFieldFilters = null,
@@ -147,7 +287,7 @@ export async function fetchSearchResults({
 }: {
     terms?: SearchRequestTerm[];
     query?: GroupPayload;
-    graphIds?: string[];
+    graphSlugs?: string[];
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
@@ -157,7 +297,7 @@ export async function fetchSearchResults({
     const requestPayload = buildSearchApiRequestBody({
         terms,
         query,
-        graphIds,
+        graphSlugs,
         mapFilter,
         dateRange,
         resourceFieldFilters,
@@ -301,24 +441,27 @@ export async function deleteSavedSearch(savedsearchid: string): Promise<void> {
 export async function exportSearchResults({
     terms = [],
     query,
-    graphIds = [],
+    graphSlugs = [],
     dateRange = null,
+    resourceFieldFilters = null,
     filename = "search_export",
     allDescriptors = false,
 }: {
     terms?: SearchRequestTerm[];
     query?: GroupPayload;
-    graphIds?: string[];
+    graphSlugs?: string[];
     dateRange?: DateRangeFilter | null;
+    resourceFieldFilters?: ResourceFieldFilter[] | null;
     filename?: string;
     allDescriptors?: boolean;
 }): Promise<void> {
     const requestPayload = buildSearchApiRequestBody({
         terms,
         query,
-        graphIds,
+        graphSlugs,
         mapFilter: null,
         dateRange,
+        resourceFieldFilters,
     });
     requestPayload.filename = filename;
     requestPayload.allDescriptors = allDescriptors;
@@ -349,10 +492,12 @@ export async function exportSearchResults({
 }
 
 export async function fetchResourceFieldMetadata(
-    graphIds: string[] = [],
+    graphSlugs: string[] = [],
 ): Promise<ResourceFieldMetadata[]> {
     const searchParams = new URLSearchParams();
-    graphIds.forEach((graphId) => searchParams.append("graph_ids", graphId));
+    graphSlugs.forEach((graphSlug) =>
+        searchParams.append("graph_slugs", graphSlug),
+    );
 
     const url = `${generateArchesURL(
         "arches_search:resource_field_metadata",

@@ -1,16 +1,16 @@
 """
-Tests for filtering, sorting, and grouping search results by ResourceInstance
-system-level fields.
+Tests for the resource-field capability itself: which fields are queryable, and
+sorting and grouping search results by them.
+
+The RESOURCE_FIELD clause subject that filters on these fields is an advanced
+search concern and is tested with the other subject types, in
+tests/integration/utils/advanced_search/test_resource_field_subject.py.
 
 Covers:
   - Registry discovery: which fields are exposed is derived from the model, and
     sensitive related-model columns are unreachable by construction.
-  - Payload validation, including that an IS_CURRENT_USER clause carrying a
-    user id is rejected rather than silently ignored.
-  - Resolver/queryset behavior, including the AnonymousUser case and the
-    guarantee that a resource-field filter can only narrow what the permission
-    framework already allows.
   - resource_field sorting (label ordering, nulls last) and grouping.
+  - The HTTP surface, end to end.
 
 python manage.py test tests.test_resource_field_search --settings="tests.test_settings"
 """
@@ -18,10 +18,8 @@ python manage.py test tests.test_resource_field_search --settings="tests.test_se
 import json
 import uuid
 
-from django.contrib.auth.models import AnonymousUser, Group, User
+from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
-from django.db.models import Q
-from django.utils import translation
 from django.test import TestCase
 from django.urls import reverse
 
@@ -31,12 +29,7 @@ from arches.app.models.models import (
     ResourceInstanceLifecycle,
     ResourceInstanceLifecycleState,
 )
-from arches.app.utils.permission_backend import assign_perm
 
-from arches_search.utils.advanced_search.advanced_search import (
-    SearchCompiler,
-    SearchPayload,
-)
 from arches_search.utils.resource_field_search.field_registry import (
     get_resource_instance_fields,
 )
@@ -44,14 +37,8 @@ from arches_search.utils.resource_field_search.grouping import (
     GROUP_BY_TYPE_RESOURCE_FIELD,
     resolve_group_by_path,
 )
-from arches_search.utils.resource_field_search.resolver import (
-    build_resource_field_filter,
-)
-from arches_search.utils.resource_field_search.validators import (
-    validate_resource_field_filters,
-)
-from arches_search.utils.search_aggregation import build_aggregations
-from arches_search.utils.search_sort import (
+from arches_search.utils.search.aggregation import build_aggregations
+from arches_search.utils.search.sorting import (
     DIRECTION_ASC,
     DIRECTION_DESC,
     SORT_TYPE_RESOURCE_FIELD,
@@ -76,6 +63,32 @@ OPERATOR_HAS_ANY_VALUE = "HAS_ANY_VALUE"
 OPERATOR_HAS_NO_VALUE = "HAS_NO_VALUE"
 OPERATOR_IS_CURRENT_USER = "IS_CURRENT_USER"
 OPERATOR_IS_NOT_CURRENT_USER = "IS_NOT_CURRENT_USER"
+
+
+def resource_field_clause(field, operator, *operand_values):
+    """A LITERAL clause whose subject is a column on the resource row."""
+    return {
+        "type": "LITERAL",
+        "quantifier": "ANY",
+        "subject": {"type": "RESOURCE_FIELD", "field": field},
+        "operator": operator,
+        "operands": [
+            {"type": "LITERAL", "value": operand_value}
+            for operand_value in operand_values
+        ],
+    }
+
+
+def advanced_search_query(graph_slug, *clauses, logic="AND"):
+    return {
+        "graph_slug": graph_slug,
+        "scope": "RESOURCE",
+        "logic": logic,
+        "clauses": list(clauses),
+        "groups": [],
+        "aggregations": [],
+        "relationship": None,
+    }
 
 
 class ResourceInstanceFieldRegistryTests(TestCase):
@@ -143,223 +156,17 @@ class ResourceInstanceFieldRegistryTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Validation
+# Sorting and grouping against real rows
 # ---------------------------------------------------------------------------
 
 
-class ResourceFieldFilterValidationTests(TestCase):
-    def test_none_is_allowed(self):
-        validate_resource_field_filters(None)
-
-    def test_non_list_raises(self):
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters({"field": "principaluser"})
-
-    def test_unknown_field_raises(self):
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters(
-                [{"field": "not_a_field", "operator": OPERATOR_EQUALS, "value": 1}]
-            )
-
-    def test_sensitive_field_raises(self):
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters(
-                [
-                    {
-                        "field": "principaluser__password",
-                        "operator": OPERATOR_EQUALS,
-                        "value": "x",
-                    }
-                ]
-            )
-
-    def test_operator_not_supported_for_field_raises(self):
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters(
-                [{"field": "createdtime", "operator": OPERATOR_CONTAINS, "value": "x"}]
-            )
-
-    def test_is_current_user_rejects_supplied_value(self):
-        # Supplying a value here is an attempt to filter as somebody else; it
-        # must fail loudly rather than be quietly discarded.
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters(
-                [
-                    {
-                        "field": "principaluser",
-                        "operator": OPERATOR_IS_CURRENT_USER,
-                        "value": 1,
-                    }
-                ]
-            )
-
-    def test_is_current_user_without_value_is_valid(self):
-        validate_resource_field_filters(
-            [{"field": "principaluser", "operator": OPERATOR_IS_CURRENT_USER}]
-        )
-
-    def test_in_requires_non_empty_list(self):
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters(
-                [
-                    {
-                        "field": "resource_instance_lifecycle_state",
-                        "operator": OPERATOR_IN,
-                        "value": [],
-                    }
-                ]
-            )
-
-    def test_missing_value_raises(self):
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters(
-                [{"field": "legacyid", "operator": OPERATOR_EQUALS}]
-            )
-
-
-# ---------------------------------------------------------------------------
-# Filtering, sorting and grouping against real rows
-# ---------------------------------------------------------------------------
-
-
-class ResourceFieldPredicateTests(TestCase):
+class ResourceFieldFixtureMixin:
     """
-    Each operator compiles to the ORM predicate it claims to.
-
-    The whole operator vocabulary is checked here rather than paying for a
-    fixture per operator.
+    Two users, a group, and four resources on one graph: two owned by `owner`
+    (one draft, one submitted), one owned by `other`, and one with no creator
+    recorded -- the case a naive "created by me" filter would wrongly match.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.registry = get_resource_instance_fields()
-
-    def _predicate(self, field, operator, value=None, user=AnonymousUser()):
-        entry = {"field": field, "operator": operator}
-        if value is not None:
-            entry["value"] = value
-        return build_resource_field_filter(user, [entry], registry=self.registry)
-
-    def test_scalar_operators_compile_to_expected_lookups(self):
-        cases = [
-            (OPERATOR_EQUALS, "legacyid", "abc", Q(legacyid="abc")),
-            (OPERATOR_IN, "legacyid", ["a", "b"], Q(legacyid__in=["a", "b"])),
-            (OPERATOR_CONTAINS, "legacyid", "ab", Q(legacyid__icontains="ab")),
-            (OPERATOR_STARTS_WITH, "legacyid", "ab", Q(legacyid__istartswith="ab")),
-        ]
-        for operator, field, value, expected in cases:
-            with self.subTest(operator=operator):
-                self.assertEqual(self._predicate(field, operator, value), expected)
-
-    def test_date_operators_compile_to_expected_lookups(self):
-        cases = [
-            (
-                OPERATOR_RANGE,
-                {"from": "2020-01-01", "to": "2020-12-31"},
-                Q(createdtime__range=("2020-01-01", "2020-12-31")),
-            ),
-            (OPERATOR_BEFORE, "2020-01-01", Q(createdtime__lt="2020-01-01")),
-            (OPERATOR_AFTER, "2020-01-01", Q(createdtime__gt="2020-01-01")),
-        ]
-        for operator, value, expected in cases:
-            with self.subTest(operator=operator):
-                self.assertEqual(
-                    self._predicate("createdtime", operator, value), expected
-                )
-
-    def test_i18n_text_operators_key_on_the_active_language(self):
-        """name is stored as {language: value}, so the lookup carries the language."""
-        with translation.override("en"):
-            self.assertEqual(
-                self._predicate("name", OPERATOR_CONTAINS, "bronze"),
-                Q(name__en__icontains="bronze"),
-            )
-
-    def test_presence_operators_compile_to_isnull_lookups(self):
-        self.assertEqual(
-            self._predicate("principaluser", OPERATOR_HAS_ANY_VALUE),
-            ~Q(principaluser_id__isnull=True),
-        )
-        self.assertEqual(
-            self._predicate("principaluser", OPERATOR_HAS_NO_VALUE),
-            Q(principaluser_id__isnull=True),
-        )
-
-    def test_is_not_current_user_keeps_creatorless_resources(self):
-        """A bare ~Q would drop NULL-creator rows under SQL three-valued logic."""
-        user = User(id=42, username="someone")
-        predicate = self._predicate(
-            "principaluser", OPERATOR_IS_NOT_CURRENT_USER, user=user
-        )
-
-        self.assertEqual(
-            predicate, ~Q(principaluser_id=42) | Q(principaluser_id__isnull=True)
-        )
-
-    def test_anonymous_is_not_current_user_constrains_nothing(self):
-        """There is no identity to exclude, so the filter must not narrow."""
-        self.assertIsNone(
-            self._predicate("principaluser", OPERATOR_IS_NOT_CURRENT_USER)
-        )
-
-    def test_no_entries_produces_no_predicate(self):
-        self.assertIsNone(
-            build_resource_field_filter(AnonymousUser(), [], registry=self.registry)
-        )
-
-
-class ResourceFieldValueShapeValidationTests(TestCase):
-    """
-    Each operator rejects a malformed value rather than passing it to the ORM.
-
-    A bad shape that reaches the query layer surfaces as a 500 (or, worse, a
-    silently wrong result set), so these are 400s raised up front.
-    """
-
-    def _assert_rejected(self, operator, field, value):
-        with self.assertRaises(ValidationError):
-            validate_resource_field_filters(
-                [{"field": field, "operator": operator, "value": value}]
-            )
-
-    def _assert_accepted(self, operator, field, value):
-        validate_resource_field_filters(
-            [{"field": field, "operator": operator, "value": value}]
-        )
-
-    def test_in_requires_a_non_empty_list(self):
-        # A relation field, since IN is only offered for FK/UUID fields -- using
-        # a text field here would fail on operator support, not value shape.
-        field = "resource_instance_lifecycle_state"
-        for value in ([], "not-a-list", None):
-            with self.subTest(value=value):
-                self._assert_rejected(OPERATOR_IN, field, value)
-        self._assert_accepted(OPERATOR_IN, field, [str(uuid.uuid4())])
-
-    def test_range_requires_both_bounds(self):
-        for value in ({"from": "2020-01-01"}, {"to": "2020-01-01"}, {}, "nope"):
-            with self.subTest(value=value):
-                self._assert_rejected(OPERATOR_RANGE, "createdtime", value)
-        self._assert_accepted(
-            OPERATOR_RANGE, "createdtime", {"from": "2020-01-01", "to": "2020-12-31"}
-        )
-
-    def test_text_operators_require_a_non_empty_string(self):
-        for operator in (OPERATOR_CONTAINS, OPERATOR_STARTS_WITH):
-            for value in ("", ["a"], 5):
-                with self.subTest(operator=operator, value=value):
-                    self._assert_rejected(operator, "legacyid", value)
-            self._assert_accepted(operator, "legacyid", "ab")
-
-    def test_single_value_operators_reject_collections(self):
-        for operator in (OPERATOR_EQUALS, OPERATOR_BEFORE, OPERATOR_AFTER):
-            for value in (["a"], {"from": "x"}):
-                with self.subTest(operator=operator, value=value):
-                    self._assert_rejected(operator, "createdtime", value)
-
-
-class ResourceFieldSearchDataTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.owner = User.objects.create_user(username="rf_owner", password="pw")
@@ -373,13 +180,19 @@ class ResourceFieldSearchDataTests(TestCase):
         )
 
         lifecycle = ResourceInstanceLifecycle.objects.create(name="rf lifecycle")
+        # Ids deliberately ordered against the labels: by id "Submitted" comes
+        # first, by label it comes last. Without that, a sort test asserting
+        # label order passes or fails on whichever random uuid4 came up, which
+        # is how it can look green while ordering by the raw key.
         cls.state_draft = ResourceInstanceLifecycleState.objects.create(
+            pk=uuid.UUID("ffffffff-0000-0000-0000-00000000000d"),
             name="Draft",
             action_label="Draft",
             is_initial_state=True,
             resource_instance_lifecycle=lifecycle,
         )
         cls.state_submitted = ResourceInstanceLifecycleState.objects.create(
+            pk=uuid.UUID("00000000-0000-0000-0000-00000000005b"),
             name="Submitted",
             action_label="Submit",
             resource_instance_lifecycle=lifecycle,
@@ -410,148 +223,8 @@ class ResourceFieldSearchDataTests(TestCase):
         resource.save()
         return resource
 
-    def _filtered_ids(self, user, filter_entries):
-        predicate = build_resource_field_filter(user, filter_entries)
-        queryset = ResourceInstance.objects.filter(graph=self.graph)
-        if predicate is not None:
-            queryset = queryset.filter(predicate)
-        return set(queryset.values_list("resourceinstanceid", flat=True))
 
-    # --- identity ---
-
-    def test_is_current_user_returns_only_own_resources(self):
-        self.assertEqual(
-            self._filtered_ids(
-                self.owner,
-                [{"field": "principaluser", "operator": OPERATOR_IS_CURRENT_USER}],
-            ),
-            {self.owned_draft.pk, self.owned_submitted.pk},
-        )
-
-    def test_is_current_user_matches_nothing_for_anonymous(self):
-        # AnonymousUser.id is None; a naive equality filter would compile to
-        # "principaluser_id IS NULL" and surface every creator-less resource.
-        matched = self._filtered_ids(
-            AnonymousUser(),
-            [{"field": "principaluser", "operator": OPERATOR_IS_CURRENT_USER}],
-        )
-        self.assertEqual(matched, set())
-        self.assertNotIn(self.unowned.pk, matched)
-
-    def test_is_not_current_user_includes_creatorless_resources(self):
-        # A bare negation would drop NULL rows under three-valued logic.
-        self.assertEqual(
-            self._filtered_ids(
-                self.owner,
-                [{"field": "principaluser", "operator": OPERATOR_IS_NOT_CURRENT_USER}],
-            ),
-            {self.other_draft.pk, self.unowned.pk},
-        )
-
-    def test_filter_by_username_hop(self):
-        self.assertEqual(
-            self._filtered_ids(
-                self.owner,
-                [
-                    {
-                        "field": "principaluser__username",
-                        "operator": OPERATOR_EQUALS,
-                        "value": "rf_other",
-                    }
-                ],
-            ),
-            {self.other_draft.pk},
-        )
-
-    # --- lifecycle state ---
-
-    def test_filter_by_lifecycle_state_in(self):
-        self.assertEqual(
-            self._filtered_ids(
-                self.owner,
-                [
-                    {
-                        "field": "resource_instance_lifecycle_state",
-                        "operator": OPERATOR_IN,
-                        "value": [str(self.state_submitted.pk)],
-                    }
-                ],
-            ),
-            {self.owned_submitted.pk},
-        )
-
-    def test_filters_combine_with_and(self):
-        self.assertEqual(
-            self._filtered_ids(
-                self.owner,
-                [
-                    {"field": "principaluser", "operator": OPERATOR_IS_CURRENT_USER},
-                    {
-                        "field": "resource_instance_lifecycle_state",
-                        "operator": OPERATOR_IN,
-                        "value": [str(self.state_draft.pk)],
-                    },
-                ],
-            ),
-            {self.owned_draft.pk},
-        )
-
-    # --- permission bounding ---
-
-    def test_filter_cannot_surface_resources_the_user_cannot_see(self):
-        """
-        A resource-field filter only narrows; the permission framework remains
-        the authority on what is visible.
-        """
-        payload = SearchPayload(
-            graph_ids=[str(self.graph.graphid)],
-            node_agnostic_filters=None,
-            advanced_search_query=None,
-            resource_field_filters=[
-                {
-                    "field": "principaluser__username",
-                    "operator": OPERATOR_EQUALS,
-                    "value": "rf_owner",
-                }
-            ],
-        )
-        visible = set(
-            SearchCompiler(payload, self.member)
-            .compile()
-            .results.values_list("resourceinstanceid", flat=True)
-        )
-        self.assertEqual(visible, set())
-
-        # The same filter, run by someone who may see those rows, does match.
-        owner_visible = set(
-            SearchCompiler(payload, self.owner)
-            .compile()
-            .results.values_list("resourceinstanceid", flat=True)
-        )
-        self.assertEqual(owner_visible, {self.owned_draft.pk, self.owned_submitted.pk})
-
-    def test_granted_resource_still_requires_the_filter_to_match(self):
-        assign_perm("view_resourceinstance", self.group, self.other_draft)
-        payload = SearchPayload(
-            graph_ids=[str(self.graph.graphid)],
-            node_agnostic_filters=None,
-            advanced_search_query=None,
-            resource_field_filters=[
-                {
-                    "field": "resource_instance_lifecycle_state",
-                    "operator": OPERATOR_IN,
-                    "value": [str(self.state_submitted.pk)],
-                }
-            ],
-        )
-        visible = set(
-            SearchCompiler(payload, self.member)
-            .compile()
-            .results.values_list("resourceinstanceid", flat=True)
-        )
-        # other_draft is visible to member but is not in the requested state.
-        self.assertEqual(visible, set())
-
+class ResourceFieldSortingAndGroupingTests(ResourceFieldFixtureMixin, TestCase):
     # --- sorting ---
 
     def _sorted_ids(self, sort_specs):
@@ -694,9 +367,14 @@ class ResourceFieldSearchAPITests(TestCase):
         self.client.force_login(self.user)
         response = self._search(
             {
-                "graph_ids": [str(self.graph.graphid)],
-                "resource_field_filters": [
-                    {"field": "principaluser", "operator": OPERATOR_IS_CURRENT_USER}
+                "graph_slugs": [self.graph.slug],
+                "advanced_search_queries": [
+                    advanced_search_query(
+                        self.graph.slug,
+                        resource_field_clause(
+                            "principaluser", OPERATOR_IS_CURRENT_USER
+                        ),
+                    )
                 ],
             }
         )
@@ -706,17 +384,18 @@ class ResourceFieldSearchAPITests(TestCase):
         }
         self.assertEqual(ids, {str(self.mine.resourceinstanceid)})
 
-    def test_spoofed_current_user_value_is_rejected(self):
+    def test_spoofed_current_user_operand_is_rejected(self):
         self.client.force_login(self.user)
         response = self._search(
             {
-                "graph_ids": [str(self.graph.graphid)],
-                "resource_field_filters": [
-                    {
-                        "field": "principaluser",
-                        "operator": OPERATOR_IS_CURRENT_USER,
-                        "value": self.stranger.id,
-                    }
+                "graph_slugs": [self.graph.slug],
+                "advanced_search_queries": [
+                    advanced_search_query(
+                        self.graph.slug,
+                        resource_field_clause(
+                            "principaluser", OPERATOR_IS_CURRENT_USER, self.stranger.id
+                        ),
+                    )
                 ],
             }
         )
@@ -726,13 +405,14 @@ class ResourceFieldSearchAPITests(TestCase):
         self.client.force_login(self.user)
         response = self._search(
             {
-                "graph_ids": [str(self.graph.graphid)],
-                "resource_field_filters": [
-                    {
-                        "field": "principaluser__password",
-                        "operator": OPERATOR_EQUALS,
-                        "value": "x",
-                    }
+                "graph_slugs": [self.graph.slug],
+                "advanced_search_queries": [
+                    advanced_search_query(
+                        self.graph.slug,
+                        resource_field_clause(
+                            "principaluser__password", OPERATOR_EQUALS, "x"
+                        ),
+                    )
                 ],
             }
         )
@@ -744,7 +424,7 @@ class ResourceFieldSearchAPITests(TestCase):
         self.client.force_login(self.admin)
         response = self._search(
             {
-                "graph_ids": [str(self.graph.graphid)],
+                "graph_slugs": [self.graph.slug],
                 "sort": [
                     {
                         "type": SORT_TYPE_RESOURCE_FIELD,
@@ -771,7 +451,7 @@ class ResourceFieldSearchAPITests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(
             reverse("resource_field_metadata"),
-            {"graph_ids": [str(self.graph.graphid)]},
+            {"graph_slugs": [self.graph.slug]},
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()["fields"]

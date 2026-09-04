@@ -7,11 +7,15 @@ export async function getSearchResults(
     options?: { page?: number; pageSize?: number },
 ) {
     const requestPayload: {
-        advanced_search_query: GroupPayload;
+        graph_slugs: string[];
+        advanced_search_queries: GroupPayload[];
         page?: number;
         page_size?: number;
     } = {
-        advanced_search_query: searchQuery,
+        // This page runs one query, against the resource model that query names.
+        // graph_slugs is the selector, so it has to say so explicitly.
+        graph_slugs: [searchQuery.graph_slug],
+        advanced_search_queries: [searchQuery],
     };
 
     if (options && options.page !== undefined) {

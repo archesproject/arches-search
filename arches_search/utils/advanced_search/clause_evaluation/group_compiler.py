@@ -1,6 +1,8 @@
 from typing import Any, Dict, List, Optional, Tuple
 
+from django.core.exceptions import ValidationError
 from django.db.models import Exists, OuterRef, Q
+from django.utils.translation import gettext as _
 
 from arches.app.models import models as arches_models
 from arches_search.utils.advanced_search.clause_evaluation.clause_reducer import (
@@ -11,6 +13,9 @@ from arches_search.utils.advanced_search.clause_evaluation.literal_clause_evalua
 )
 from arches_search.utils.advanced_search.clause_evaluation.related_clause_evaluator import (
     RelatedClauseEvaluator,
+)
+from arches_search.utils.advanced_search.clause_evaluation.resource_field_clause_evaluator import (
+    ResourceFieldClauseEvaluator,
 )
 from arches_search.utils.advanced_search.clause_evaluation.tile_scope_evaluator import (
     TileScopeEvaluator,
@@ -27,6 +32,7 @@ from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
     SCOPE_TILE,
+    SUBJECT_TYPE_RESOURCE_FIELD,
 )
 
 
@@ -37,12 +43,14 @@ class GroupCompiler:
         literal_clause_evaluator: LiteralClauseEvaluator,
         related_clause_evaluator: RelatedClauseEvaluator,
         tile_scope_evaluator: TileScopeEvaluator,
+        resource_field_clause_evaluator: ResourceFieldClauseEvaluator,
         path_navigator,
     ) -> None:
         self.clause_reducer = clause_reducer
         self.literal_clause_evaluator = literal_clause_evaluator
         self.related_clause_evaluator = related_clause_evaluator
         self.tile_scope_evaluator = tile_scope_evaluator
+        self.resource_field_clause_evaluator = resource_field_clause_evaluator
         self.path_navigator = path_navigator
 
     def compile(
@@ -54,6 +62,8 @@ class GroupCompiler:
         relationship_block = group_payload["relationship"]
 
         has_relationship = has_relationship_path(relationship_block)
+
+        self._reject_resource_field_clauses_under_tile_scope(group_payload)
 
         if scope_token == SCOPE_TILE and not has_relationship:
             return self._compile_tile_scope_without_relationship(
@@ -70,6 +80,25 @@ class GroupCompiler:
             group_payload=group_payload,
             group_logic_token=group_logic_token,
         )
+
+    @staticmethod
+    def _reject_resource_field_clauses_under_tile_scope(
+        group_payload: Dict[str, Any],
+    ) -> None:
+        """
+        A resource field is a column on the resource, not a value in a tile, so
+        under TILE scope it has nothing to be evaluated against. Rejecting it is
+        the difference between a clear error and a quietly ignored filter.
+        """
+        if group_payload["scope"].upper() != SCOPE_TILE:
+            return
+
+        for clause_payload in group_payload["clauses"]:
+            subject = clause_payload.get("subject") or {}
+            if subject.get("type") == SUBJECT_TYPE_RESOURCE_FIELD:
+                raise ValidationError(
+                    _("Resource field subjects are not supported under TILE scope.")
+                )
 
     def _group_has_any_relationship(self, group_payload: Dict[str, Any]) -> bool:
         if has_relationship_path(group_payload.get("relationship")):
@@ -137,9 +166,21 @@ class GroupCompiler:
         self,
         group_payload: Dict[str, Any],
     ) -> Q:
+        # Re-checked per group, not only at the entry point: this recurses into
+        # subgroups, and a subgroup carries its own scope. Checking only the
+        # outermost one would reject a TILE-scoped resource field clause at the
+        # top and quietly apply it one level down.
+        self._reject_resource_field_clauses_under_tile_scope(group_payload)
+
         predicate_fragments: List[Q] = []
 
         for clause_payload in group_payload["clauses"]:
+            if clause_payload["subject"].get("type") == SUBJECT_TYPE_RESOURCE_FIELD:
+                predicate_fragments.append(
+                    self.resource_field_clause_evaluator.build_predicate(clause_payload)
+                )
+                continue
+
             if clause_payload["type"] == CLAUSE_TYPE_LITERAL:
                 exists_expression = self.literal_clause_evaluator.build_anchor_exists(
                     clause_payload

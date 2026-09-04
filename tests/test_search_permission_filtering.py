@@ -92,13 +92,13 @@ class SearchPermissionFilteringTest(TestCase):
             resource["resourceinstanceid"] for resource in response.json()["resources"]
         }
 
-    # --- SearchAPI: graph_ids scoping (no advanced_search_query) ---
+    # --- SearchAPI: graph_slugs scoping (no advanced_search_query) ---
 
     def test_search_excludes_ungranted_resource_for_member(self):
         self.client.force_login(self.member)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
+            json.dumps({"graph_slugs": [self.graph.slug]}),
             content_type="application/json",
         )
 
@@ -114,7 +114,7 @@ class SearchPermissionFilteringTest(TestCase):
         self.client.force_login(self.outsider)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
+            json.dumps({"graph_slugs": [self.graph.slug]}),
             content_type="application/json",
         )
 
@@ -130,7 +130,7 @@ class SearchPermissionFilteringTest(TestCase):
         self.client.force_login(self.outsider)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
+            json.dumps({"graph_slugs": [self.graph.slug]}),
             content_type="application/json",
         )
 
@@ -144,7 +144,7 @@ class SearchPermissionFilteringTest(TestCase):
         self.client.force_login(self.admin)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
+            json.dumps({"graph_slugs": [self.graph.slug]}),
             content_type="application/json",
         )
 
@@ -177,7 +177,12 @@ class SearchPermissionFilteringTest(TestCase):
         self.client.force_login(self.member)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"advanced_search_query": self._advanced_search_body()}),
+            json.dumps(
+                {
+                    "graph_slugs": [self.graph.slug],
+                    "advanced_search_queries": [self._advanced_search_body()],
+                }
+            ),
             content_type="application/json",
         )
 

@@ -415,8 +415,8 @@ const allActiveFilters = computed<ActiveFilter[]>(() => [
     ...attributeActiveFilters.value,
 ]);
 
-function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
-    applySearchDefinition(parseSearchDefinition(queryDefinition));
+async function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
+    await applySearchDefinition(parseSearchDefinition(queryDefinition));
     filterValues.value = {};
 }
 
@@ -445,11 +445,13 @@ function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
             ? (raw.queries as SearchDefinition["queries"])
             : {};
 
-    const graphIds = Array.isArray(raw.graphIds)
-        ? raw.graphIds.filter((id): id is string => typeof id === "string")
+    const graphSlugs = Array.isArray(raw.graphSlugs)
+        ? raw.graphSlugs.filter(
+              (slug): slug is string => typeof slug === "string",
+          )
         : [];
 
-    return { terms, queries: queriesIn, graphIds };
+    return { terms, queries: queriesIn, graphSlugs };
 }
 </script>
 

@@ -1,26 +1,35 @@
 """
-Turns validated resource_field_filters entries into a Django Q object.
+Compiles one resource field clause into a Django Q object.
 
-Every entry is resolved against ResourceInstanceFieldRegistry, so only fields the
-registry discovered are reachable; a client-supplied string is never used to
-build an ORM lookup path directly.
+Fields and operators are resolved against ResourceInstanceFieldRegistry, so a
+client-supplied string is never used to build an ORM lookup path directly, and
+the lookup itself comes from the facet row's orm_template -- an operator is
+added by seeding a row rather than by adding a branch here.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
+from django.core.exceptions import ValidationError
 from django.db.models import Q
-from django.utils.translation import get_language
+from django.utils.translation import get_language, gettext as _
 
 from arches_search.utils.resource_field_search.field_registry import (
+    CURRENT_USER_FORMAT,
     ResourceInstanceField,
-    get_resource_instance_fields,
 )
 
-# A predicate that is always false, without hitting the database.
+# Predicates that are unconditionally false and unconditionally true, without
+# hitting the database. An empty Q() cannot stand in for the second: Django
+# absorbs it when combining, so "constrains nothing" would silently become
+# "matches nothing" inside an OR.
 MATCH_NOTHING = Q(pk__in=[])
+MATCH_EVERYTHING = ~Q(pk__in=[])
+
+# The param_formats vocabulary a facet row uses to describe its operands.
+LIST_FORMAT = "{values}"
 
 
-def _current_user_id(user) -> Optional[int]:
+def current_user_id(user) -> Optional[int]:
     """
     The requesting user's id, or None when there isn't one.
 
@@ -34,41 +43,103 @@ def _current_user_id(user) -> Optional[int]:
     return user.id
 
 
-def _operands_for(facet, value, current_user_id) -> Optional[List[Any]]:
+def _expected_operand_count(facet) -> int:
     """
-    The operand list a facet's template expects, or None to skip the entry.
+    How many operands a facet's template consumes.
 
-    param_formats names how the payload value maps onto the template: "from"/"to"
-    unpacks a range object, and "current_user" means the value comes from the
-    request rather than the client.
+    param_formats names the template's parameters, so its length is the count --
+    except for "current_user", which is filled from the request, and arity 0
+    operators, which compare against presence rather than a value.
     """
     param_formats = list(facet.param_formats or [])
+    if CURRENT_USER_FORMAT in param_formats or facet.arity == 0:
+        return 0
+    return max(len(param_formats), 1)
 
-    if "current_user" in param_formats:
-        return None if current_user_id is None else [current_user_id]
 
+def _operand_shape_error(param_format: str, value: Any) -> Optional[str]:
+    """
+    Why `value` cannot fill `param_format`, or None when it can.
+
+    The vocabulary is the facet row's own, so a newly seeded operator is
+    validated by the row that defines it rather than by a branch added here:
+    "{values}" takes a list, a format carrying "%" is a substring match and so
+    needs text, any other "{...}" placeholder takes one scalar, and a bare name
+    is a key of a composite value (a range's "from"/"to") that must be present.
+    """
+    if param_format == LIST_FORMAT:
+        if not isinstance(value, list) or not value:
+            return _("takes a non-empty list")
+        return None
+
+    if "%" in param_format:
+        if not isinstance(value, str) or not value:
+            return _("takes a non-empty string")
+        return None
+
+    if "{" in param_format:
+        if isinstance(value, (list, dict)):
+            return _("takes a single value")
+        return None
+
+    if value is None:
+        return _("requires a %(param)s value") % {"param": param_format}
+    return None
+
+
+def validate_operands(
+    facet, operand_values: List[Any], field_name: str, operator_token: str
+) -> None:
+    """
+    Raise unless the operands match what the facet's param_formats describe.
+    """
+    required_count = _expected_operand_count(facet)
+    if len(operand_values) != required_count:
+        raise ValidationError(
+            _(
+                "Operator %(operator)s on resource field %(field)s takes "
+                "%(expected)s operand(s), got %(actual)s."
+            ),
+            params={
+                "operator": operator_token,
+                "field": field_name,
+                "expected": required_count,
+                "actual": len(operand_values),
+            },
+        )
+
+    param_formats = list(facet.param_formats or [])
+    for param_format, value in zip(param_formats, operand_values):
+        shape_error = _operand_shape_error(param_format, value)
+        if shape_error is not None:
+            raise ValidationError(
+                _("Operator %(operator)s on resource field %(field)s %(reason)s."),
+                params={
+                    "operator": operator_token,
+                    "field": field_name,
+                    "reason": shape_error,
+                },
+            )
+
+
+def _operands_for(facet, operand_values: List[Any], user_id) -> Optional[List[Any]]:
+    if "current_user" in list(facet.param_formats or []):
+        return None if user_id is None else [user_id]
     if facet.arity == 0:
         return []
-
-    if param_formats and isinstance(value, dict):
-        return [value[key] for key in param_formats]
-
-    return [value]
+    return list(operand_values)
 
 
-def _build_entry_predicate(
+def build_resource_field_predicate(
     descriptor: ResourceInstanceField,
     facet,
-    value: Any,
-    current_user_id: Optional[int],
+    operand_values: List[Any],
+    user_id: Optional[int],
 ) -> Optional[Q]:
     """
-    Compile one entry the same way PredicateBuilder compiles a tile facet.
-
-    The lookup comes from the facet row's orm_template, so an operator is added
-    by seeding a row rather than by adding a branch here.
+    The Q for one clause, or None when the clause constrains nothing.
     """
-    operands = _operands_for(facet, value, current_user_id)
+    operands = _operands_for(facet, operand_values, user_id)
 
     if operands is None:
         # A current-user operator with no identity to compare against. An
@@ -92,43 +163,7 @@ def _build_entry_predicate(
     if not facet.is_orm_template_negated:
         return predicate
 
-    if "current_user" in (facet.param_formats or []) and descriptor.is_nullable:
-        # Under SQL's three-valued logic a bare negation drops NULL rows, which
-        # would hide creator-less resources from "is not me".
-        return ~predicate | Q(**{f"{descriptor.orm_path}__isnull": True})
+    # A bare negation is enough: Django compiles ~Q(col=x) to
+    # NOT (col = x AND col IS NOT NULL), so rows with no value are kept -- which
+    # is what makes creator-less resources show up under "is not me".
     return ~predicate
-
-
-def build_resource_field_filter(
-    user,
-    filter_entries: Optional[List[Dict[str, Any]]],
-    registry=None,
-) -> Optional[Q]:
-    """
-    Combine resource_field_filters entries into a single AND-ed Q, or None when
-    there is nothing to apply.
-
-    Entries are assumed to have passed validate_resource_field_filters().
-    """
-    if not filter_entries:
-        return None
-
-    registry = registry or get_resource_instance_fields()
-    current_user_id = _current_user_id(user)
-
-    combined: Optional[Q] = None
-    for filter_entry in filter_entries:
-        descriptor = registry.get(filter_entry["field"])
-        facet = descriptor.facet_for(filter_entry["operator"])
-
-        predicate = _build_entry_predicate(
-            descriptor=descriptor,
-            facet=facet,
-            value=filter_entry.get("value"),
-            current_user_id=current_user_id,
-        )
-        if predicate is None:
-            continue
-        combined = predicate if combined is None else (combined & predicate)
-
-    return combined

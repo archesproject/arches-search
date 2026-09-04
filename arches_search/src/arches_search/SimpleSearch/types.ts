@@ -2,6 +2,8 @@ import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 
 export interface ResourceType {
     id: string | null; // graph id; null = "all types"
+    // The search API addresses resource models by slug, not id.
+    slug: string;
     label: string;
     icon: string;
 }
@@ -12,7 +14,7 @@ export interface ResourceType {
 export interface SearchDefinition {
     terms: SerializedTerm[];
     queries: Record<string, GroupPayload>;
-    graphIds: string[];
+    graphSlugs: string[];
 }
 
 export const TERM_KIND_CONTROLLED_TERM = "controlled-term";
@@ -108,9 +110,9 @@ export type SortDirection = "asc" | "desc";
 export type SortSpec =
     | { type: "primary_name"; direction: SortDirection }
     | { type: "created_time"; direction: SortDirection }
-    | { type: "resource_field"; field: string; direction: SortDirection }
+    | { type: "RESOURCE_FIELD"; field: string; direction: SortDirection }
     | {
-          type: "extra_column";
+          type: "NODE";
           graph_slug: string;
           node_alias: string;
           direction: SortDirection;
