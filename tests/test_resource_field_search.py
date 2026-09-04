@@ -45,7 +45,6 @@ from arches_search.utils.search.sorting import (
     SortResolver,
 )
 
-
 # Named for readability only: production never branches on these, they are
 # seeded as AdvancedSearchFacet rows.
 OPERATOR_EQUALS = "EQUALS"
