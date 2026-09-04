@@ -154,7 +154,7 @@ export interface DateRangeFilter {
 export interface ResourceFieldFilter {
     field: string;
     operator: string;
-    value?: unknown;
+    operands?: unknown[];
 }
 
 export interface SavedSearch {
