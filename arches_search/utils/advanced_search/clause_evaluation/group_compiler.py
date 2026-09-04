@@ -1,8 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
-from django.core.exceptions import ValidationError
 from django.db.models import Exists, OuterRef, Q
-from django.utils.translation import gettext as _
 
 from arches.app.models import models as arches_models
 from arches_search.utils.advanced_search.clause_evaluation.clause_reducer import (
@@ -63,8 +61,6 @@ class GroupCompiler:
 
         has_relationship = has_relationship_path(relationship_block)
 
-        self._reject_resource_field_clauses_under_tile_scope(group_payload)
-
         if scope_token == SCOPE_TILE and not has_relationship:
             return self._compile_tile_scope_without_relationship(
                 group_payload=group_payload,
@@ -80,25 +76,6 @@ class GroupCompiler:
             group_payload=group_payload,
             group_logic_token=group_logic_token,
         )
-
-    @staticmethod
-    def _reject_resource_field_clauses_under_tile_scope(
-        group_payload: Dict[str, Any],
-    ) -> None:
-        """
-        A resource field is a column on the resource, not a value in a tile, so
-        under TILE scope it has nothing to be evaluated against. Rejecting it is
-        the difference between a clear error and a quietly ignored filter.
-        """
-        if group_payload["scope"].upper() != SCOPE_TILE:
-            return
-
-        for clause_payload in group_payload["clauses"]:
-            subject = clause_payload.get("subject") or {}
-            if subject.get("type") == SUBJECT_TYPE_RESOURCE_FIELD:
-                raise ValidationError(
-                    _("Resource field subjects are not supported under TILE scope.")
-                )
 
     def _group_has_any_relationship(self, group_payload: Dict[str, Any]) -> bool:
         if has_relationship_path(group_payload.get("relationship")):
@@ -166,10 +143,6 @@ class GroupCompiler:
         self,
         group_payload: Dict[str, Any],
     ) -> Q:
-        # Per group, not just the entry point: this recurses, and a subgroup
-        # carries its own scope.
-        self._reject_resource_field_clauses_under_tile_scope(group_payload)
-
         predicate_fragments: List[Q] = []
 
         for clause_payload in group_payload["clauses"]:

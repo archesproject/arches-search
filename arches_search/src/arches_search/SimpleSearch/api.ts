@@ -3,39 +3,50 @@ import Cookies from "js-cookie";
 import { generateArchesURL } from "@/arches_vue_components/application";
 import { getItemLabel } from "@/arches_controlled_lists/utils.ts";
 
+import type { FeatureCollection } from "geojson";
+
 import type { ControlledListItem } from "@/arches_controlled_lists/types.ts";
 import type {
     GroupPayload,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
+    DateRangeFilter,
     NodeFilterConfigResponse,
-    SavedSearch,
-    SortSpec,
-    TermSuggestion,
     ResourceFieldFilter,
     ResourceFieldMetadata,
+    SavedSearch,
+    SearchRequestTerm,
+    SortSpec,
+    TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
-import type { FeatureCollection } from "geojson";
 
-interface SearchRequestTerm {
-    type: string;
-    text: string;
-    inverted: boolean;
-}
-
-interface DateRangeFilter {
-    from: string;
-    to: string;
-}
+const TERM_SEARCH_MAX_HOPS = 2;
 
 interface TermSearch {
     terms: string[];
     max_hops: number;
 }
 
-// Matched anywhere, then walked across relationships.
-const TERM_SEARCH_MAX_HOPS = 2;
+interface ClauseOperand {
+    type: "LITERAL" | "GEO_LITERAL";
+    value: unknown;
+}
+
+interface SearchClause {
+    type: "LITERAL";
+    quantifier: "ANY";
+    subject:
+        | { type: "RESOURCE_FIELD"; field: string }
+        | {
+              type: "SEARCH_MODELS";
+              graph_slug: string;
+              node_alias: "";
+              search_models: string[];
+          };
+    operator: string;
+    operands: ClauseOperand[];
+}
 
 function buildTermSearch(terms: SearchRequestTerm[]): TermSearch | null {
     if (terms.length === 0) {
@@ -98,26 +109,6 @@ function buildSearchModelClauses(
     return clauses;
 }
 
-interface ClauseOperand {
-    type: "LITERAL" | "GEO_LITERAL";
-    value: unknown;
-}
-
-interface SearchClause {
-    type: "LITERAL";
-    quantifier: "ANY";
-    subject:
-        | { type: "RESOURCE_FIELD"; field: string }
-        | {
-              type: "SEARCH_MODELS";
-              graph_slug: string;
-              node_alias: "";
-              search_models: string[];
-          };
-    operator: string;
-    operands: ClauseOperand[];
-}
-
 function isRangeValue(value: unknown): value is { from: unknown; to: unknown } {
     return (
         typeof value === "object" &&
@@ -173,13 +164,10 @@ function buildAdvancedSearchQueries(
     // A clause only filters the graph whose payload it sits in, so each is
     // repeated per resource model. The advanced query nests rather than merges,
     // so it stays AND-ed even when its own logic is OR.
-    const targetSlugs =
-        graphSlugs.length > 0
-            ? graphSlugs
-            : baseQuery
-              ? [baseQuery.graph_slug]
-              : [];
-
+    let targetSlugs = graphSlugs;
+    if (targetSlugs.length === 0 && baseQuery) {
+        targetSlugs = [baseQuery.graph_slug];
+    }
     if (targetSlugs.length === 0) {
         return null;
     }
@@ -302,17 +290,14 @@ export async function fetchSearchResults({
         sort,
     });
 
-    const response = await fetch(
-        `${generateArchesURL("arches_search:search")}`,
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": Cookies.get("csrftoken") || "",
-            },
-            body: JSON.stringify(requestPayload),
+    const response = await fetch(generateArchesURL("arches_search:search"), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": Cookies.get("csrftoken") || "",
         },
-    );
+        body: JSON.stringify(requestPayload),
+    });
 
     if (!response.ok) {
         throw new Error(response.statusText);
@@ -325,9 +310,12 @@ export async function fetchNodeFilterConfig(
     graphId: string,
     slug = "filtering",
 ): Promise<NodeFilterConfigResponse> {
-    const params = new URLSearchParams({ slug });
     const response = await fetch(
-        `${generateArchesURL("arches_search:node_filter_config_for_graph", { graph_id: graphId })}?${params.toString()}`,
+        generateArchesURL(
+            "arches_search:node_filter_config_for_graph",
+            { graph_id: graphId },
+            { slug },
+        ),
     );
     if (!response.ok) {
         throw new Error(response.statusText);
@@ -343,7 +331,11 @@ export async function fetchControlledListItems(
     Array<{ id: string; label: string; uri: string; sortorder: number }>
 > {
     const response = await fetch(
-        `${generateArchesURL("arches_controlled_lists:controlled_list", { list_id: listId })}?flat=true`,
+        generateArchesURL(
+            "arches_controlled_lists:controlled_list",
+            { list_id: listId },
+            { flat: "true" },
+        ),
     );
     if (!response.ok) {
         throw new Error(response.statusText);
@@ -364,9 +356,12 @@ export async function fetchControlledListItems(
 export async function fetchSearchTermSuggestions(
     query: string,
 ): Promise<TermSuggestion[]> {
-    const params = new URLSearchParams({ q: query, lang: "*", flat: "true" });
     const response = await fetch(
-        `${generateArchesURL("arches_search:term_suggestion_search")}?${params.toString()}`,
+        generateArchesURL(
+            "arches_search:term_suggestion_search",
+            {},
+            { q: query, lang: "*", flat: "true" },
+        ),
     );
     const results = await response.json();
     const suggestions = results.results as Array<TermSuggestion>;
@@ -381,12 +376,12 @@ export async function getSavedSearches(
     scope: "mine" | "shared" = "mine",
     search = "",
 ): Promise<SavedSearch[]> {
-    const params = new URLSearchParams({ scope });
+    const queryParameters: Record<string, string> = { scope };
     if (search) {
-        params.set("search", search);
+        queryParameters.search = search;
     }
     const response = await fetch(
-        `${generateArchesURL("arches_search:saved_searches")}?${params.toString()}`,
+        generateArchesURL("arches_search:saved_searches", {}, queryParameters),
     );
     if (!response.ok) {
         throw new Error(response.statusText);
@@ -422,7 +417,7 @@ export async function createSavedSearch(
 
 export async function deleteSavedSearch(savedsearchid: string): Promise<void> {
     const response = await fetch(
-        `${generateArchesURL("arches_search:saved_searches")}/${savedsearchid}`,
+        generateArchesURL("arches_search:saved_search", { savedsearchid }),
         {
             method: "DELETE",
             headers: {

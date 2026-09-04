@@ -4,6 +4,7 @@ from django.utils.translation import gettext as _
 
 from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_ANY,
+    SCOPE_TILE,
     SUBJECT_TYPE_NODE,
     SUBJECT_TYPE_RESOURCE_FIELD,
     SUBJECT_TYPE_SEARCH_MODELS,
@@ -109,7 +110,9 @@ class PayloadValidator:
 
         for clause_index, clause_payload in enumerate(clauses_value):
             self._validate_clause(
-                clause_payload, location_parts + [f"clauses[{clause_index}]"]
+                clause_payload,
+                location_parts + [f"clauses[{clause_index}]"],
+                scope_value,
             )
 
         for subgroup_index, subgroup_payload in enumerate(groups_value):
@@ -131,7 +134,7 @@ class PayloadValidator:
             )
 
     def _validate_clause(
-        self, clause_payload: Dict[str, Any], location_parts: List[str]
+        self, clause_payload: Dict[str, Any], location_parts: List[str], scope: str
     ) -> None:
         location = " > ".join(location_parts)
 
@@ -168,14 +171,15 @@ class PayloadValidator:
                 },
             )
 
-        # A resource field holds one value, so ALL and NONE have nothing to
-        # quantify over. Refused rather than ignored: NONE reads as a negation.
-        subject_value = clause_payload.get("subject")
-        if (
+        subject_value = clause_payload["subject"]
+        is_resource_field = (
             isinstance(subject_value, dict)
             and subject_value.get("type") == SUBJECT_TYPE_RESOURCE_FIELD
-            and quantifier_value != QUANTIFIER_ANY
-        ):
+        )
+
+        # A resource field holds one value, so ALL and NONE have nothing to
+        # quantify over. Refused rather than ignored: NONE reads as a negation.
+        if is_resource_field and quantifier_value != QUANTIFIER_ANY:
             raise ValidationError(
                 _(
                     "%(location)s resource field subjects take quantifier "
@@ -184,7 +188,16 @@ class PayloadValidator:
                 params={"location": location, "any": QUANTIFIER_ANY},
             )
 
-        subject_value = clause_payload["subject"]
+        # A resource field is a column on the resource, not a value in a tile,
+        # so under TILE scope there is nothing for it to be evaluated against.
+        if is_resource_field and scope == SCOPE_TILE:
+            raise ValidationError(
+                _(
+                    "%(location)s resource field subjects are not supported under %(scope)s scope."
+                ),
+                params={"location": location, "scope": SCOPE_TILE},
+            )
+
         if not self._is_valid_subject_dict(subject_value, clause_type):
             raise ValidationError(
                 self._subject_error_message(subject_value),

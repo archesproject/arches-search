@@ -25,24 +25,15 @@ import {
 } from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ActiveFilter,
+    DateRangeFilter,
     ResourceFieldFilter,
     ResourceType,
     SearchDefinition,
+    SearchRequestTerm,
     SortSpec,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
-
-interface SearchRequestTerm {
-    type: string;
-    text: string;
-    inverted: boolean;
-}
-
-interface DateRangeFilter {
-    from: string;
-    to: string;
-}
 
 interface ExportPayload {
     terms: SearchRequestTerm[];
@@ -244,9 +235,10 @@ function createSearchFilters(): SearchFilters {
     function getRequestGraphs(): ResourceType[] {
         // "All" is an empty activeGraphs; the API will not accept that as a
         // selection, so it has to be spelled out.
-        return activeGraphs.value.length > 0
-            ? activeGraphs.value
-            : availableGraphs.value;
+        if (activeGraphs.value.length > 0) {
+            return activeGraphs.value;
+        }
+        return availableGraphs.value;
     }
 
     function setGraphs(graphs: ResourceType[]): void {
@@ -433,8 +425,6 @@ function createSearchFilters(): SearchFilters {
     async function applySearchDefinition(
         definition: SearchDefinition,
     ): Promise<void> {
-        // Resolved against real resource models: a null id is the "all types"
-        // sentinel elsewhere in the UI.
         await loadAvailableGraphs();
 
         // Clear current state first. Each setter triggers a debounced search,

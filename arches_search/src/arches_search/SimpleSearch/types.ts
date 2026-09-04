@@ -2,7 +2,6 @@ import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 
 export interface ResourceType {
     id: string | null; // graph id; null = "all types"
-    // The search API addresses resource models by slug, not id.
     slug: string;
     label: string;
     icon: string;
@@ -31,6 +30,12 @@ export interface SerializedTerm {
     termKind?: TermKind;
     icon?: string;
     options?: Record<string, unknown>;
+}
+
+export interface SearchRequestTerm {
+    type: string;
+    text: string;
+    inverted: boolean;
 }
 
 export interface TermSuggestion {
@@ -139,6 +144,11 @@ export interface ResourceFieldMetadata {
     is_groupable: boolean;
     is_user_relation: boolean;
     choices?: ResourceFieldChoice[];
+}
+
+export interface DateRangeFilter {
+    from: string;
+    to: string;
 }
 
 export interface ResourceFieldFilter {
