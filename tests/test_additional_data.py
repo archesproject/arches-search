@@ -23,8 +23,8 @@ from arches.app.models.models import (
     TileModel,
 )
 
-from arches_search.utils.search.additional_data import (
-    node_values,
+from arches_search.utils.search.additional_data import node_values
+from arches_search.utils.search.additional_data.additional_data import (
     validate_additional_data,
 )
 from arches_search.utils.search.additional_data.node_values import (

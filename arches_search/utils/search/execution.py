@@ -12,7 +12,7 @@ from django.core.paginator import EmptyPage, Paginator
 
 from arches.app.utils.betterJSONSerializer import JSONSerializer
 
-from arches_search.utils.search.additional_data import (
+from arches_search.utils.search.additional_data.additional_data import (
     AdditionalData,
     validate_additional_data,
 )
