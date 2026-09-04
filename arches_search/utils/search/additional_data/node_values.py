@@ -1,0 +1,167 @@
+"""
+Projecting node (tile) values onto search results.
+
+A search result row is a ResourceInstance, so a node's value is not on the row:
+it lives in tile data. Filtering already handles that with existence subqueries,
+but an Exists() answers only "does a matching value exist" -- it cannot be
+selected or ordered by. This module annotates the *value itself* onto the result
+queryset using arches_querysets' node-value expression, which makes the same
+annotation usable for both display and sorting.
+
+The annotation is applied before pagination so ordering applies to the whole
+result set rather than to one page, and so the values arrive with the page
+instead of costing a follow-up query per column.
+
+Nodes that do not resolve, or whose nodegroup the requesting user cannot read,
+are simply absent from the response. "No such node", "not permitted", and "that
+resource is on a different graph" are deliberately indistinguishable.
+"""
+
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+
+from arches.app.models.models import Node
+from arches.app.utils import permission_backend
+
+from arches_querysets.models import TileTree
+from arches_querysets.utils.models import get_tile_values_for_resource
+
+# Positional, and namespaced so they cannot collide with a real column. Callers
+# find a column's name through the dict annotate() returns, never by rebuilding it.
+ANNOTATION_PREFIX = "_arches_search_node_col_"
+
+NodeColumnKey = Tuple[str, str]
+
+
+def keys(entries: Optional[List[Dict[str, Any]]]) -> List[NodeColumnKey]:
+    """The (graph_slug, node_alias) pairs named by NODE entries, deduplicated."""
+    if not entries:
+        return []
+    return list(
+        dict.fromkeys((entry["graph_slug"], entry["node_alias"]) for entry in entries)
+    )
+
+
+def resolve(node_keys: Iterable[NodeColumnKey], user) -> Dict[NodeColumnKey, Node]:
+    """
+    Resolve (graph_slug, node_alias) pairs to Node rows the user may read.
+
+    Unresolvable and unpermitted keys are dropped rather than reported, so the
+    response cannot be used to probe which nodes exist.
+    """
+    node_keys = list(node_keys)
+    if not node_keys:
+        return {}
+
+    graph_slugs = {graph_slug for graph_slug, _alias in node_keys}
+    node_aliases = {node_alias for _slug, node_alias in node_keys}
+
+    candidate_nodes = (
+        Node.objects.filter(
+            graph__slug__in=graph_slugs,
+            alias__in=node_aliases,
+            source_identifier=None,
+        )
+        .exclude(datatype="semantic")
+        .exclude(nodegroup=None)
+        .select_related("nodegroup", "graph")
+    )
+
+    candidate_nodes = candidate_nodes.filter(
+        nodegroup__in=permission_backend.get_nodegroups_by_perm(
+            user, "models.read_nodegroup"
+        )
+    )
+
+    return {
+        (node.graph.slug, node.alias): node
+        for node in candidate_nodes
+        if (node.graph.slug, node.alias) in node_keys
+    }
+
+
+def _graph_nodes_for(graph_slug: str) -> List[Node]:
+    """
+    Every node of a graph, which get_tile_values_for_resource() needs in order
+    to work out whether any nodegroup in the node's hierarchy is cardinality-n.
+    """
+    return list(
+        Node.objects.filter(graph__slug=graph_slug, source_identifier=None)
+        .exclude(datatype="semantic")
+        .exclude(nodegroup=None)
+        .select_related("nodegroup__parentnodegroup")
+    )
+
+
+def annotate(
+    queryset, nodes_by_key: Dict[NodeColumnKey, Node]
+) -> Tuple[Any, Dict[NodeColumnKey, str]]:
+    """
+    Annotate each resolved node's value onto the resource queryset.
+
+    Returns (queryset, {key: annotation_name}).
+    """
+    if not nodes_by_key:
+        return queryset, {}
+
+    graph_nodes_cache: Dict[str, List[Node]] = {}
+    annotations: Dict[str, Any] = {}
+    annotation_names: Dict[NodeColumnKey, str] = {}
+
+    for index, (key, node) in enumerate(nodes_by_key.items()):
+        graph_slug, _node_alias = key
+        if graph_slug not in graph_nodes_cache:
+            graph_nodes_cache[graph_slug] = _graph_nodes_for(graph_slug)
+
+        annotation_name = f"{ANNOTATION_PREFIX}{index}"
+        annotations[annotation_name] = get_tile_values_for_resource(
+            node, graph_nodes_cache[graph_slug]
+        )
+        annotation_names[key] = annotation_name
+
+    return queryset.annotate(**annotations), annotation_names
+
+
+def format_values(
+    resources,
+    nodes_by_key: Dict[NodeColumnKey, Node],
+    annotation_names: Dict[NodeColumnKey, str],
+) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+    """
+    Build {resourceinstanceid: {node_alias: [{node_value, display_value,
+    details}, ...]}} from values already annotated onto the fetched rows.
+
+    Values are always a list, even for a cardinality-1 node, so a client does
+    not have to branch on cardinality.
+    """
+    if not nodes_by_key:
+        return {}
+
+    columns_by_resource: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+
+    for resource in resources:
+        resource_id = str(resource.pk)
+        columns: Dict[str, List[Dict[str, Any]]] = {}
+
+        for key, node in nodes_by_key.items():
+            graph_slug, node_alias = key
+            # A resource on another graph has no value for this column.
+            if resource.graph_id != node.graph_id:
+                continue
+
+            raw_value = getattr(resource, annotation_names[key])
+            values = raw_value if isinstance(raw_value, list) else [raw_value]
+
+            formatted = []
+            for value in values:
+                if value is None:
+                    continue
+                stand_in_tile = TileTree(
+                    data={str(node.pk): value}, resourceinstance=resource
+                )
+                formatted.append(stand_in_tile.get_value_with_context(node, value))
+            columns[node_alias] = formatted
+
+        columns_by_resource[resource_id] = columns
+
+    return columns_by_resource

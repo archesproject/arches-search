@@ -2,6 +2,7 @@ import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 
 export interface ResourceType {
     id: string | null; // graph id; null = "all types"
+    slug: string;
     label: string;
     icon: string;
 }
@@ -12,7 +13,7 @@ export interface ResourceType {
 export interface SearchDefinition {
     terms: SerializedTerm[];
     queries: Record<string, GroupPayload>;
-    graphIds: string[];
+    graphSlugs: string[];
 }
 
 export const TERM_KIND_CONTROLLED_TERM = "controlled-term";
@@ -29,6 +30,12 @@ export interface SerializedTerm {
     termKind?: TermKind;
     icon?: string;
     options?: Record<string, unknown>;
+}
+
+export interface SearchRequestTerm {
+    type: string;
+    text: string;
+    inverted: boolean;
 }
 
 export interface TermSuggestion {
@@ -107,7 +114,48 @@ export type SortDirection = "asc" | "desc";
 
 export type SortSpec =
     | { type: "primary_name"; direction: SortDirection }
-    | { type: "created_time"; direction: SortDirection };
+    | { type: "created_time"; direction: SortDirection }
+    | { type: "RESOURCE_FIELD"; field: string; direction: SortDirection }
+    | {
+          type: "NODE";
+          graph_slug: string;
+          node_alias: string;
+          direction: SortDirection;
+      };
+
+export type ResourceFieldKind =
+    | "USER"
+    | "CHOICE"
+    | "BOOLEAN"
+    | "DATE"
+    | "ID"
+    | "TEXT";
+
+export interface ResourceFieldChoice {
+    value: string;
+    label: string;
+}
+
+export interface ResourceFieldMetadata {
+    field: string;
+    label: string;
+    kind: ResourceFieldKind;
+    operators: string[];
+    is_groupable: boolean;
+    is_user_relation: boolean;
+    choices?: ResourceFieldChoice[];
+}
+
+export interface DateRangeFilter {
+    from: string;
+    to: string;
+}
+
+export interface ResourceFieldFilter {
+    field: string;
+    operator: string;
+    operands?: unknown[];
+}
 
 export interface SavedSearch {
     savedsearchid: string;

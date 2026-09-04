@@ -12,6 +12,9 @@ from arches_search.utils.advanced_search.clause_evaluation.literal_clause_evalua
 from arches_search.utils.advanced_search.clause_evaluation.related_clause_evaluator import (
     RelatedClauseEvaluator,
 )
+from arches_search.utils.advanced_search.clause_evaluation.resource_field_clause_evaluator import (
+    ResourceFieldClauseEvaluator,
+)
 from arches_search.utils.advanced_search.clause_evaluation.tile_scope_evaluator import (
     TileScopeEvaluator,
 )
@@ -27,6 +30,7 @@ from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
     SCOPE_TILE,
+    SUBJECT_TYPE_RESOURCE_FIELD,
 )
 
 
@@ -37,12 +41,14 @@ class GroupCompiler:
         literal_clause_evaluator: LiteralClauseEvaluator,
         related_clause_evaluator: RelatedClauseEvaluator,
         tile_scope_evaluator: TileScopeEvaluator,
+        resource_field_clause_evaluator: ResourceFieldClauseEvaluator,
         path_navigator,
     ) -> None:
         self.clause_reducer = clause_reducer
         self.literal_clause_evaluator = literal_clause_evaluator
         self.related_clause_evaluator = related_clause_evaluator
         self.tile_scope_evaluator = tile_scope_evaluator
+        self.resource_field_clause_evaluator = resource_field_clause_evaluator
         self.path_navigator = path_navigator
 
     def compile(
@@ -140,6 +146,12 @@ class GroupCompiler:
         predicate_fragments: List[Q] = []
 
         for clause_payload in group_payload["clauses"]:
+            if clause_payload["subject"].get("type") == SUBJECT_TYPE_RESOURCE_FIELD:
+                predicate_fragments.append(
+                    self.resource_field_clause_evaluator.build_predicate(clause_payload)
+                )
+                continue
+
             if clause_payload["type"] == CLAUSE_TYPE_LITERAL:
                 exists_expression = self.literal_clause_evaluator.build_anchor_exists(
                     clause_payload

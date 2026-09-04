@@ -8,6 +8,9 @@ from arches_search.utils.advanced_search.clause_evaluation.literal_clause_evalua
 from arches_search.utils.advanced_search.clause_evaluation.related_clause_evaluator import (
     RelatedClauseEvaluator,
 )
+from arches_search.utils.advanced_search.clause_evaluation.resource_field_clause_evaluator import (
+    ResourceFieldClauseEvaluator,
+)
 from arches_search.utils.advanced_search.clause_evaluation.tile_scope_evaluator import (
     TileScopeEvaluator,
 )
@@ -25,6 +28,7 @@ from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_ANY,
     QUANTIFIER_NONE,
     SUBJECT_TYPE_NODE,
+    SUBJECT_TYPE_RESOURCE_FIELD,
 )
 from arches_search.utils.advanced_search.specs import ClauseReductionResult
 
@@ -35,6 +39,7 @@ class ClauseReducer:
         literal_clause_evaluator: LiteralClauseEvaluator,
         related_clause_evaluator: RelatedClauseEvaluator,
         tile_scope_evaluator: TileScopeEvaluator,
+        resource_field_clause_evaluator: ResourceFieldClauseEvaluator,
         facet_registry,
         path_navigator,
         node_alias_datatype_registry: NodeAliasDatatypeRegistry,
@@ -42,6 +47,7 @@ class ClauseReducer:
         self.literal_clause_evaluator = literal_clause_evaluator
         self.related_clause_evaluator = related_clause_evaluator
         self.tile_scope_evaluator = tile_scope_evaluator
+        self.resource_field_clause_evaluator = resource_field_clause_evaluator
         self.facet_registry = facet_registry
         self.path_navigator = path_navigator
         self.node_alias_datatype_registry = node_alias_datatype_registry
@@ -52,7 +58,7 @@ class ClauseReducer:
         logic: str,
     ) -> Tuple[Q, bool]:
         anchor_graph_slug = group_payload["graph_slug"]
-        anchor_exists_expressions: List[Exists] = []
+        anchor_predicate_fragments: List[Q] = []
 
         for clause_payload in group_payload.get("clauses") or []:
             clause_type_token = clause_payload.get("type")
@@ -63,32 +69,37 @@ class ClauseReducer:
             if not subject:
                 continue
 
+            if subject.get("type") == SUBJECT_TYPE_RESOURCE_FIELD:
+                # A column on the anchor row: no graph_slug to match against.
+                anchor_predicate_fragments.append(
+                    self.resource_field_clause_evaluator.build_predicate(clause_payload)
+                )
+                continue
+
             subject_graph_slug = subject.get("graph_slug", "")
             if subject_graph_slug != anchor_graph_slug:
                 continue
 
-            exists_expression = self.literal_clause_evaluator.build_anchor_exists(
-                clause_payload
+            anchor_predicate_fragments.append(
+                Q(self.literal_clause_evaluator.build_anchor_exists(clause_payload))
             )
-            anchor_exists_expressions.append(exists_expression)
 
-        if not anchor_exists_expressions:
+        if not anchor_predicate_fragments:
             return Q(), False
 
         if logic == LOGIC_OR:
             combined_predicate: Optional[Q] = None
-            for exists_expression in anchor_exists_expressions:
-                exists_q = Q(exists_expression)
+            for predicate_fragment in anchor_predicate_fragments:
                 combined_predicate = (
-                    exists_q
+                    predicate_fragment
                     if combined_predicate is None
-                    else (combined_predicate | exists_q)
+                    else (combined_predicate | predicate_fragment)
                 )
             return combined_predicate or Q(), True
 
         combined_predicate = Q()
-        for exists_expression in anchor_exists_expressions:
-            combined_predicate &= Q(exists_expression)
+        for predicate_fragment in anchor_predicate_fragments:
+            combined_predicate &= predicate_fragment
 
         return combined_predicate, True
 

@@ -6,8 +6,17 @@ used in advanced search queries within the Arches search system.
 from arches.app.models.models import TileModel
 from django.apps import apps
 from django.db import models
-from django.db.models import OuterRef, Subquery, Q, QuerySet
+from django.db.models import F, OuterRef, Subquery, Q, QuerySet
 from typing import Optional, Dict, Any, List, Union, Callable
+
+from arches_search.utils.resource_field_search.field_registry import (
+    get_resource_instance_fields,
+)
+from arches_search.utils.resource_field_search.grouping import (
+    is_resource_field_spec,
+    resolve_group_by_path,
+    resolve_metric_path,
+)
 
 
 def get_search_model(search_table: str) -> models.Model:
@@ -201,6 +210,21 @@ def build_subquery(
     return subquery
 
 
+def _needs_resource_field_registry(aggregations: List[Dict[str, Any]]) -> bool:
+    """
+    Whether any spec here names a resource field.
+
+    Checked up front because building the registry costs a query, and an
+    aggregation over node values alone never touches it.
+    """
+    return any(
+        is_resource_field_spec(spec)
+        for aggregation in aggregations
+        for spec in (aggregation.get("group_by") or [])
+        + (aggregation.get("metrics") or [])
+    )
+
+
 def build_aggregations(
     queryset: QuerySet,
     aggregations: List[Dict[str, Any]],
@@ -221,6 +245,13 @@ def build_aggregations(
     """
     results: Dict[str, Union[List[Dict[str, Any]], Dict[str, Any]]] = {}
 
+    # Built once: resolving each spec separately rebuilt it every time.
+    resource_field_registry = (
+        get_resource_instance_fields()
+        if _needs_resource_field_registry(aggregations)
+        else None
+    )
+
     for agg in aggregations:
         name = agg["name"]
 
@@ -239,6 +270,21 @@ def build_aggregations(
         # Apply group-by subqueries
         for group_spec in group_bys:
             field_alias = group_spec["alias"]
+            if is_resource_field_spec(group_spec):
+                # A resource field is already a column on the row being grouped,
+                # so it needs a plain reference rather than a correlated subquery.
+                local_queryset = local_queryset.annotate(
+                    **{
+                        field_alias: F(
+                            resolve_group_by_path(
+                                group_spec,
+                                aggregate_by_tile=aggregate_by_tile,
+                                registry=resource_field_registry,
+                            )
+                        )
+                    }
+                )
+                continue
             local_queryset = local_queryset.annotate(
                 **{
                     field_alias: build_subquery(
@@ -254,6 +300,19 @@ def build_aggregations(
         for metric_spec in metrics:
             alias = metric_spec["alias"]
             fn = metric_spec["fn"]
+            if is_resource_field_spec(metric_spec):
+                # Aggregating a column of the row itself (e.g. counting rows per
+                # group) needs a plain aggregate, not a correlated subquery, and
+                # must skip the Count->Sum rewrite below, which exists only to
+                # roll per-tile counts up to the resource.
+                metric_annotations[alias] = get_aggregate_function(fn)(
+                    resolve_metric_path(
+                        metric_spec,
+                        aggregate_by_tile=aggregate_by_tile,
+                        registry=resource_field_registry,
+                    )
+                )
+                continue
             # we need to handle Count differently because when we do counts per resource
             # we want to sum the counts of each tile, not count the counts from each tile
             # which would always be 1 per resource

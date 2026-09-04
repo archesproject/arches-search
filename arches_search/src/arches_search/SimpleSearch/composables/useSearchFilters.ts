@@ -2,6 +2,7 @@ import { computed, inject, provide, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
+import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
     createSearchMVTContext,
     fetchSearchResults,
@@ -13,6 +14,7 @@ import {
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
+    GraphModel,
     GroupPayload,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
@@ -23,43 +25,39 @@ import {
 } from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ActiveFilter,
+    DateRangeFilter,
+    ResourceFieldFilter,
     ResourceType,
     SearchDefinition,
+    SearchRequestTerm,
     SortSpec,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
 
-interface SearchRequestTerm {
-    type: string;
-    text: string;
-    inverted: boolean;
-}
-
-interface DateRangeFilter {
-    from: string;
-    to: string;
-}
-
 interface ExportPayload {
     terms: SearchRequestTerm[];
     query: GroupPayload | undefined;
-    graphIds: string[];
+    graphSlugs: string[];
     dateRange: DateRangeFilter | null;
+    resourceFieldFilters: ResourceFieldFilter[] | null;
 }
 
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
     activeGraphs: Ref<ResourceType[]>;
+    availableGraphs: Ref<ResourceType[]>;
+    loadAvailableGraphs(): Promise<void>;
     currentPage: Ref<number>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
+    resourceFieldFilters: Ref<Map<string, ResourceFieldFilter>>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
     resultsGraphs: Ref<ResourceType[]>;
     searchResults: Ref<SearchResults>;
     sort: Ref<SortSpec[]>;
-    applySearchDefinition(definition: SearchDefinition): void;
+    applySearchDefinition(definition: SearchDefinition): Promise<void>;
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
@@ -68,6 +66,11 @@ interface SearchFilters {
     search(page?: number): void;
     setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
+    setResourceFieldFilter(
+        field: string,
+        filter: ResourceFieldFilter | null,
+    ): void;
+    clearResourceFieldFilters(): void;
     setSort(next: SortSpec[]): void;
     setTermFilter(
         key: string,
@@ -93,7 +96,15 @@ function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const mapFilter = ref<FeatureCollection | null>(null);
+    // Keyed by field name so re-selecting a field replaces its filter rather
+    // than stacking a second, contradictory one.
+    const resourceFieldFilters = ref<Map<string, ResourceFieldFilter>>(
+        new Map(),
+    );
     const activeGraphs = ref<ResourceType[]>([]);
+    // Every searchable resource model.
+    const availableGraphs = ref<ResourceType[]>([]);
+    let availableGraphsRequest: Promise<void> | null = null;
     const resultsGraphs = ref<ResourceType[]>([]);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
     const isSearching = ref(false);
@@ -199,6 +210,37 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function loadAvailableGraphs(): Promise<void> {
+        if (!availableGraphsRequest) {
+            availableGraphsRequest = getGraphs()
+                .then((graphs: GraphModel[]) => {
+                    availableGraphs.value = graphs
+                        .filter((graph) => graph.isresource && graph.is_active)
+                        .map((graph) => ({
+                            id: graph.graphid,
+                            slug: graph.slug,
+                            label: graph.name,
+                            icon: graph.iconclass,
+                        }));
+                })
+                .catch((error) => {
+                    // Unset, so a later search can retry.
+                    availableGraphsRequest = null;
+                    throw error;
+                });
+        }
+        return availableGraphsRequest;
+    }
+
+    function getRequestGraphs(): ResourceType[] {
+        // "All" is an empty activeGraphs; the API will not accept that as a
+        // selection, so it has to be spelled out.
+        if (activeGraphs.value.length > 0) {
+            return activeGraphs.value;
+        }
+        return availableGraphs.value;
+    }
+
     function setGraphs(graphs: ResourceType[]): void {
         activeGraphs.value = graphs;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -239,14 +281,16 @@ function createSearchFilters(): SearchFilters {
             isSearching.value = true;
 
             try {
-                const requestGraphs = activeGraphs.value;
+                await loadAvailableGraphs();
+                const requestGraphs = getRequestGraphs();
                 const searchParams = {
                     terms: getRequestTerms(),
                     query: getRequestQuery(),
-                    dateRange: getNodeAgnosticDateRange(),
+                    dateRange: getTimeFilterRange(),
                     page,
-                    graphIds: requestGraphs.map((graph) => graph.id as string),
+                    graphSlugs: requestGraphs.map((graph) => graph.slug),
                     mapFilter: mapFilter.value,
+                    resourceFieldFilters: getRequestResourceFieldFilters(),
                     sort: sort.value,
                 };
 
@@ -288,7 +332,7 @@ function createSearchFilters(): SearchFilters {
         }));
     }
 
-    function isNodeAgnosticDateQuery(payload: GroupPayload): boolean {
+    function isTimeFilterQuery(payload: GroupPayload): boolean {
         return (
             payload.clauses.length === 1 &&
             payload.clauses[0].subject.type ===
@@ -296,9 +340,9 @@ function createSearchFilters(): SearchFilters {
         );
     }
 
-    function getNodeAgnosticDateRange(): DateRangeFilter | null {
+    function getTimeFilterRange(): DateRangeFilter | null {
         for (const payload of queries.value.values()) {
-            if (!isNodeAgnosticDateQuery(payload)) {
+            if (!isTimeFilterQuery(payload)) {
                 continue;
             }
             const [fromOperand, toOperand] = payload.clauses[0].operands;
@@ -312,9 +356,35 @@ function createSearchFilters(): SearchFilters {
         return null;
     }
 
+    function setResourceFieldFilter(
+        field: string,
+        filter: ResourceFieldFilter | null,
+    ) {
+        const next = new Map(resourceFieldFilters.value);
+        if (filter === null) {
+            next.delete(field);
+        } else {
+            next.set(field, filter);
+        }
+        resourceFieldFilters.value = next;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function clearResourceFieldFilters(): void {
+        resourceFieldFilters.value = new Map();
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function getRequestResourceFieldFilters(): ResourceFieldFilter[] | null {
+        const filters = [...resourceFieldFilters.value.values()];
+        return filters.length > 0 ? filters : null;
+    }
+
     function getRequestQuery(): GroupPayload | undefined {
         const queryList = [...queries.value.values()].filter(
-            (payload) => !isNodeAgnosticDateQuery(payload),
+            (payload) => !isTimeFilterQuery(payload),
         );
         if (queryList.length === 0) return undefined;
         if (queryList.length === 1) return queryList[0];
@@ -348,11 +418,15 @@ function createSearchFilters(): SearchFilters {
         return {
             terms: serializedTerms,
             queries: Object.fromEntries(queries.value),
-            graphIds: activeGraphs.value.map((graph) => graph.id as string),
+            graphSlugs: getRequestGraphs().map((graph) => graph.slug),
         };
     }
 
-    function applySearchDefinition(definition: SearchDefinition): void {
+    async function applySearchDefinition(
+        definition: SearchDefinition,
+    ): Promise<void> {
+        await loadAvailableGraphs();
+
         // Clear current state first. Each setter triggers a debounced search,
         // so the cascade collapses to a single fetch on the trailing edge.
         for (const id of [...terms.value.keys()]) {
@@ -363,7 +437,11 @@ function createSearchFilters(): SearchFilters {
         }
 
         setGraphs(
-            definition.graphIds.map((id) => ({ id, label: "", icon: "" })),
+            definition.graphSlugs
+                .map((slug) =>
+                    availableGraphs.value.find((graph) => graph.slug === slug),
+                )
+                .filter((graph): graph is ResourceType => graph !== undefined),
         );
 
         for (const term of definition.terms) {
@@ -385,14 +463,17 @@ function createSearchFilters(): SearchFilters {
         return {
             terms: getRequestTerms(),
             query: getRequestQuery(),
-            graphIds: activeGraphs.value.map((graph) => graph.id as string),
-            dateRange: getNodeAgnosticDateRange(),
+            graphSlugs: getRequestGraphs().map((graph) => graph.slug),
+            dateRange: getTimeFilterRange(),
+            resourceFieldFilters: getRequestResourceFieldFilters(),
         };
     }
 
     return {
         activeFilters,
         activeGraphs,
+        availableGraphs,
+        loadAvailableGraphs,
         applySearchDefinition,
         clearMapFilter,
         clearQuery,
@@ -403,9 +484,12 @@ function createSearchFilters(): SearchFilters {
         isSearching,
         mapFilter,
         queries: queriesView,
+        resourceFieldFilters,
         resultsTileUrl,
         resultsGraphs,
         search,
+        setResourceFieldFilter,
+        clearResourceFieldFilters,
         searchResults,
         setMapFilter,
         setQuery,

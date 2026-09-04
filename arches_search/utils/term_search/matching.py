@@ -3,7 +3,7 @@ from django.db.models import Q
 
 from arches.app.models.models import ResourceInstance
 from arches_search.models.models import TermSearch
-from arches_search.utils.node_agnostic_search.relationship_traversal import (
+from arches_search.utils.term_search.relationship_expansion import (
     expand_matches_via_relationships,
 )
 

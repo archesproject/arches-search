@@ -4,23 +4,26 @@ import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
 
-import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
-import type { GraphModel } from "@/arches_search/AdvancedSearch/types.ts";
 import type { ResourceType } from "@/arches_search/SimpleSearch/types.ts";
 
 const RESOURCE_TYPE_FALLBACK_KEY = "__all__";
 
 const { $gettext, current } = useGettext();
-const { toggleGraph, activeGraphs, searchResults } = useSearchFilters();
+const {
+    toggleGraph,
+    activeGraphs,
+    availableGraphs,
+    loadAvailableGraphs,
+    searchResults,
+} = useSearchFilters();
 
 const compactCountFormatter = computed(
     () => new Intl.NumberFormat(current, { notation: "compact" }),
 );
 const fullCountFormatter = computed(() => new Intl.NumberFormat(current));
 
-const resourceTypes = ref<ResourceType[]>([]);
 const hasResourceTypeLoadError = ref(false);
 
 const resourceTypeLoadErrorMessage = computed(() =>
@@ -29,13 +32,14 @@ const resourceTypeLoadErrorMessage = computed(() =>
 
 const allResourceType = computed<ResourceType>(() => ({
     id: null,
+    slug: "",
     label: $gettext("All"),
     icon: "",
 }));
 
 const displayedResourceTypes = computed<ResourceType[]>(() => [
     allResourceType.value,
-    ...resourceTypes.value,
+    ...availableGraphs.value,
 ]);
 
 const resourceTypeCountsByGraphId = computed<Map<string, number>>(() => {
@@ -57,18 +61,9 @@ watchEffect(async () => {
 async function loadResourceTypes(): Promise<void> {
     try {
         hasResourceTypeLoadError.value = false;
-
-        const graphs: GraphModel[] = await getGraphs();
-        resourceTypes.value = graphs
-            .filter((graph) => graph.isresource && graph.is_active)
-            .map((graph) => ({
-                id: graph.graphid,
-                label: graph.name,
-                icon: graph.iconclass,
-            }));
+        await loadAvailableGraphs();
     } catch (error) {
         console.error(error);
-        resourceTypes.value = [];
         hasResourceTypeLoadError.value = true;
     }
 }
