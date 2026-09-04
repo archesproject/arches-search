@@ -1,6 +1,6 @@
 # Welcome to Arches Search!
 
-Arches Search is an Arches application that provides a modern, configurable search experience for Arches. It ships a Simple Search interface with per-graph attribute filters, an Advanced Search query builder, map-based (MVT) search, saved and shareable searches, and supporting search indexes.
+Arches Search is an Arches application that replaces core search. It ships a Simple Search interface with per-graph attribute filters, an Advanced Search query builder, map-based (MVT) search, saved and shareable searches, and the indexes behind them.
 
 Please see the [project page](http://archesproject.org/) for more information on the Arches project.
 
@@ -232,7 +232,7 @@ The API resolves each configured alias to a concrete node and returns its `datat
 | `number`    | `NumericFilter`   | Accepts discrete values and ranges (e.g. `9-10, 12`), OR-combined into `EQUALS` / `BETWEEN` clauses. |
 | `reference` | `ReferenceFilter` | Lets the user pick one or more controlled-list values, combined into a `REFERENCES_ANY` clause.      |
 
-A configured node whose datatype is not in the registry is returned by the API but simply isn't rendered as a filter. To support a new datatype, register one entry in `arches_search/src/arches_search/SimpleSearch/components/attribute-filters/registry.ts` (a widget component plus a `buildQuery` function) — no changes to the configuration format are required.
+A configured node whose datatype is not in the registry is returned by the API but isn't rendered as a filter. To support a new datatype, register one entry in `arches_search/src/arches_search/SimpleSearch/components/attribute-filters/registry.ts` (a widget component plus a `buildQuery` function) — no changes to the configuration format are required.
 
 ### Example: creating a config in a data migration
 
@@ -448,12 +448,10 @@ names no graph and no node:
 }
 ```
 
-_Reads as:_ resources created by whoever is asking. The requester is never named
-in the payload — the server fills it in, so this clause means something different
-for each caller and cannot be used to search as somebody else.
-
-The empty `operands` is not an omission — the server fills the identity in. See
-[How many operands](#how-many-operands).
+_Reads as:_ resources created by whoever is asking. The empty `operands` is not
+an omission: the requester is never named in the payload, so this clause means
+something different for every caller and cannot be turned into a search for
+somebody else. See [How many operands](#how-many-operands).
 
 ### What each one can do
 
@@ -537,8 +535,7 @@ returns.
 
 `graph_slugs` chooses which resource models are searched. Within that set, a
 graph an entry addresses is filtered by it; a graph no entry addresses is
-returned whole. That is what lets you ask for two resource models and refine
-only one of them:
+returned whole. So you can ask for two resource models and refine only one:
 
 ```json
 {
@@ -573,7 +570,7 @@ only one of them:
 People are narrowed to those named FOO; every Dog comes back, because nothing
 addressed Dogs. Filtering both means a second entry with `"graph_slug": "dog"`.
 
-Two consequences worth knowing:
+Two things follow from that:
 
 -   **A payload that matches nothing does not take other graphs with it.** If no
     Person is named FOO, the Dogs are still returned — they were requested, and
@@ -597,13 +594,24 @@ shorthand for "everything" — a caller has to name the resource models it wants
 
 comes back with no resources. `resource_type_counts` and `all_resource_count`
 still cover every active graph, though, so a client can show what naming one
-would get — which is what the resource type facet is built on.
+would get. The resource type facet is built on exactly that.
 
 ### Validation
 
 Shape is checked up front, without touching the database. Whether a field,
 operator or node actually exists is settled as the query compiles, where the
-registries are available. Both surface as a `400`, not a `500`.
+registries are available. Either way you get a `400`, not a `500`.
+
+Three rules govern an entry's `graph_slug`. Each one guards a way a search can
+look like it worked when it didn't:
+
+-   **It must be present and non-empty.** Without one there is no resource model
+    for the entry to filter.
+-   **It must name a real resource model.** A typo used to drop the entry
+    without a word, and the graph it was meant to filter came back whole — a
+    search that appears to have worked and quietly returns too much.
+-   **Each graph may be addressed once**, as above: two entries for one graph is
+    a `400` rather than one of them being ignored.
 
 ## Term search
 
@@ -614,8 +622,8 @@ outside the graph being searched:
 "term_search": { "terms": ["amber"], "max_hops": 2 }
 ```
 
-Terms are matched against every indexed text value on a resource — you do not
-name a node — and then walked back across relationships, so a Site can be found
+Terms are matched against every indexed text value on a resource (you never
+name a node), then walked back across relationships, so a Site can be found
 because its related Person is named Amber. All terms must match; each is
 expanded independently and the results intersected, so a resource cannot qualify
 by reaching two different terms down two unrelated paths.
@@ -708,7 +716,7 @@ Fetch it rather than hardcoding it. `graph_slugs` is optional and scopes choice
 lists such as lifecycle states, which differ per graph:
 
 ```
-GET /arches_search/api/advanced-search/resource-fields?graph_slugs=<slug>
+GET /api/advanced-search/resource-fields?graph_slugs=<slug>
 ```
 
 ## Search results
@@ -737,20 +745,20 @@ you `resource_instance_lifecycle_state_id` is some UUID and nothing more; the
 label is the word a reader wants. Both keys are always present, with a null
 label for a field that names no related record (`createdtime`, `legacyid`).
 
-The two kinds come back separately, because their names can collide -- a node
+The two kinds come back separately, because their names can collide: a node
 aliased `principaluser` and the field of that name would otherwise fight over
 one key.
 
-They also differ on failure, deliberately. A node that does not resolve, or
-whose nodegroup the requester cannot read, is **silently absent** -- "no such
-node", "not permitted" and "wrong graph" are indistinguishable on purpose. An
+They fail differently, and that is intentional. A node that does not resolve,
+or whose nodegroup the requester cannot read, is **silently absent**: "no such
+node", "not permitted" and "wrong graph" all look identical from outside. An
 unqueryable resource field is a **400**: the registry is public (the metadata
 endpoint serves it), so silence would hide a client's mistake while protecting
 nothing.
 
 ### Example payload
 
-`POST /arches_search/api/search`
+`POST /api/search`
 
 **In plain English:** _"Of my own records on `my_resource_graph`, show me the
 bronze ones created in 2025 that are in one of these lifecycle states. Give me
@@ -855,7 +863,7 @@ and `sort` orders on one of them.
 }
 ```
 
-**What comes back:** the matching resources, each carrying the two requested
+**What comes back:** the matching resources, each carrying the requested
 columns, ordered by height descending — plus `pagination`, `resource_type_counts`
 and `all_resource_count` alongside them.
 
@@ -905,10 +913,26 @@ Values are always a list, so a client never has to branch on cardinality:
 
 ### Sorting and grouping
 
-`sort` names what it orders by with those same tokens -- `NODE` for a projected
-node value, `RESOURCE_FIELD` for a resource column. Foreign keys order by
-the related record's label rather than its opaque primary key, and nulls sort
-last in both directions so a nullable column does not lead on `desc`:
+`sort` is a list, applied in order:
+
+| `type`           | Orders by                                                                 | Also needs                  |
+| ---------------- | ------------------------------------------------------------------------- | --------------------------- |
+| `primary_name`   | the resource's descriptor name in the active language, case-insensitively | —                           |
+| `created_time`   | `createdtime`, the resource's creation timestamp                          | —                           |
+| `NODE`           | a projected node (tile) value                                             | `graph_slug`, `node_alias`  |
+| `RESOURCE_FIELD` | one of the resource's own columns                                         | `field`                     |
+
+`NODE` and `RESOURCE_FIELD` are the same tokens a clause subject uses.
+`primary_name` and `created_time` name no subject, so they stay lowercase.
+
+Ordering by a node value annotates it for you; it does not have to appear in
+`additional_data` as well. A node the requester may not read is skipped rather
+than reported, matching how projection omits it.
+
+Every sort is followed by a tie-break on `resourceinstanceid`, so paging stays
+stable when the sort key ties. Foreign keys order by the related record's label
+rather than its opaque primary key, and nulls sort last in both directions so a
+nullable column does not lead on `desc`:
 
 ```json
 {
@@ -922,9 +946,9 @@ last in both directions so a nullable column does not lead on `desc`:
 }
 ```
 
-_Reads as:_ order by lifecycle state, alphabetically by the state's **label** —
-"Draft" before "Submitted" — not by its UUID, which would be an arbitrary order
-that changes whenever the data is reloaded.
+_Reads as:_ order by lifecycle state alphabetically by the state's **label**, so
+"Draft" comes before "Submitted". Not by its UUID, which would be an arbitrary
+order that changes whenever the data is reloaded.
 
 `aggregations` accepts a `RESOURCE_FIELD` group-by for any field the registry
 reports as groupable — foreign keys and booleans, the ones with bounded
@@ -968,10 +992,6 @@ aliases you asked for:
 Three results in that state. The aggregation runs over the whole matching set,
 not just the current page, so a facet count does not change as you page through.
 
-Mind the casing: `sort` spells the discriminant `resource_field`, `aggregations`
-spells it `RESOURCE_FIELD`. They are separate vocabularies that happen to name
-the same idea.
-
 ### Permissions
 
 A resource field clause narrows the candidate set and nothing more.
@@ -980,3 +1000,50 @@ step, so no filter value can surface a resource the requester could not
 otherwise see. `IS_CURRENT_USER` resolves server-side from the request user;
 for an unauthenticated request it matches nothing rather than matching every
 resource with no creator.
+
+## Other endpoints
+
+These share the filtering vocabulary of `POST /api/search`, so anything you can
+express there works here too.
+
+### Export
+
+`POST /api/search-export` takes the same filtering payload and returns an
+`.xlsx` instead of JSON. Two extra keys: `filename` (default `search_export`,
+`.xlsx` appended if missing) and `allDescriptors` — when true the export carries
+every language rather than the active one.
+
+It runs the same `validate_search_payload` the search does, so an export cannot
+quietly cover a different set than the search it came from. `additional_data`,
+`sort` and `page` are ignored: an export is the whole matching set.
+
+### Map tiles
+
+Tiles come in two steps, because a tile response is protobuf and has nowhere to
+report a bad payload:
+
+```
+POST /api/arches-search/mvt-context                          -> { "context_id": "<uuid>" }
+GET  /api/arches-search/mvt/{context_id}/{zoom}/{x}/{y}.pbf
+```
+
+The context call validates the payload and caches it under a fresh id. Every
+tile after that reads the cached payload, so a malformed search fails once, as a
+`400` with a readable body, instead of as blank tiles. Tiles are cached per
+context, user and coordinate.
+
+### Saved searches
+
+```
+GET    /api/saved-searches?scope=mine|shared&search=<text>
+POST   /api/saved-searches
+DELETE /api/saved-searches/{savedsearchid}
+```
+
+`scope` defaults to `mine`; `shared` lists searches shared with the requester
+by user or by group.
+
+### Term suggestions
+
+`GET /api/term-suggestions?q=<text>` — the typeahead behind the search bar,
+returning the indexed terms a query prefix matches.
