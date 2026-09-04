@@ -169,7 +169,9 @@ watch(
 async function loadNodeFilterConfig(graphId: string): Promise<void> {
     try {
         const config = await fetchNodeFilterConfig(graphId);
-        nodeFilterConfigNodes.value = config.nodes;
+        nodeFilterConfigNodes.value = config.nodes.filter(
+            (node) => node.filterable,
+        );
     } catch (err) {
         console.error("[SimpleSearch] error loading filter config:", err);
         nodeFilterConfigNodes.value = [];

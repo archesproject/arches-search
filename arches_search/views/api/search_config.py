@@ -52,6 +52,8 @@ class NodeFilterConfigAPI(APIBase):
                     "datatype": node.datatype,
                     "config": node.config,
                     "sortorder": entry.get("sortorder", 0),
+                    "filterable": entry.get("filterable", False),
+                    "sortable": entry.get("sortable", False),
                 }
             )
 
