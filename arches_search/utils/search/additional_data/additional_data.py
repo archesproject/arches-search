@@ -27,8 +27,6 @@ from arches_search.utils.search.additional_data.node_values import (
     NodeColumnKey as NodeKey,
 )
 
-ENTRY_TYPES = (SUBJECT_TYPE_NODE, SUBJECT_TYPE_RESOURCE_FIELD)
-
 
 def validate_additional_data(additional_data: Any) -> None:
     """
@@ -40,6 +38,8 @@ def validate_additional_data(additional_data: Any) -> None:
     if not isinstance(additional_data, list):
         raise ValidationError(_("additional_data must be a list."))
 
+    allowed_types = (SUBJECT_TYPE_NODE, SUBJECT_TYPE_RESOURCE_FIELD)
+
     for index, entry in enumerate(additional_data):
         if not isinstance(entry, dict):
             raise ValidationError(
@@ -47,10 +47,10 @@ def validate_additional_data(additional_data: Any) -> None:
             )
 
         entry_type = entry.get("type")
-        if entry_type not in ENTRY_TYPES:
+        if entry_type not in allowed_types:
             raise ValidationError(
                 _("additional_data[%(i)s] type must be one of %(types)s.")
-                % {"i": index, "types": ", ".join(ENTRY_TYPES)}
+                % {"i": index, "types": ", ".join(allowed_types)}
             )
 
         required_keys = (
@@ -64,12 +64,6 @@ def validate_additional_data(additional_data: Any) -> None:
                     _("additional_data[%(i)s] requires a non-empty %(key)s.")
                     % {"i": index, "key": key}
                 )
-
-
-def _entries_of_type(additional_data, entry_type):
-    return [
-        entry for entry in (additional_data or []) if entry.get("type") == entry_type
-    ]
 
 
 class AdditionalData:
@@ -87,10 +81,9 @@ class AdditionalData:
         user,
         also_project_nodes: Iterable[NodeKey] = (),
     ):
-        # Taken here rather than added later: a node added after annotate()
-        # would never be annotated.
+        entries = additional_data or []
         node_keys = node_values.keys(
-            _entries_of_type(additional_data, SUBJECT_TYPE_NODE)
+            [entry for entry in entries if entry.get("type") == SUBJECT_TYPE_NODE]
         )
         for node_key in also_project_nodes:
             if node_key not in node_keys:
@@ -99,7 +92,11 @@ class AdditionalData:
         self.nodes_by_key = node_values.resolve(node_keys, user)
         self.fields_by_name = resource_fields.resolve(
             resource_fields.field_names(
-                _entries_of_type(additional_data, SUBJECT_TYPE_RESOURCE_FIELD)
+                [
+                    entry
+                    for entry in entries
+                    if entry.get("type") == SUBJECT_TYPE_RESOURCE_FIELD
+                ]
             )
         )
         self.node_annotation_names: Dict[NodeKey, str] = {}
