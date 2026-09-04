@@ -90,6 +90,8 @@ class Command(BaseCommand):
                         "label": str(node.name),
                         "sortorder": index,
                         "node_alias": node.alias,
+                        "filterable": False,
+                        "sortable": False,
                     }
                     for index, node in enumerate(filterable_nodes, start=0)
                 ]
