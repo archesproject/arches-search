@@ -204,6 +204,18 @@ const activeGraphLabel = computed<string | null>(
     () => singleActiveGraph.value?.label ?? null,
 );
 
+const filterableNodeFilterConfigNodes = computed<NodeFilterConfigNode[]>(() =>
+    nodeFilterConfigNodes.value.filter(
+        (node: NodeFilterConfigNode) => node.filterable,
+    ),
+);
+
+const sortableNodeFilterConfigNodes = computed<NodeFilterConfigNode[]>(() =>
+    nodeFilterConfigNodes.value.filter(
+        (node: NodeFilterConfigNode) => node.sortable,
+    ),
+);
+
 const activeGraphSlug = computed<string | null>(() => {
     if (!activeGraphId.value) {
         return null;
@@ -582,6 +594,7 @@ async function onRunSavedQuery(
                 >
                     <ResultsToolbar
                         :sort-value="sortValue"
+                        :sortable-nodes="sortableNodeFilterConfigNodes"
                         :show-filters="isAttributeFiltersOpen"
                         :show-map="isMapFilterOpen"
                         :has-map-filter="mapFilter !== null"
@@ -645,7 +658,7 @@ async function onRunSavedQuery(
                         />
                         <AttributeFilters
                             v-else-if="isAttributeFiltersActive"
-                            :nodes="nodeFilterConfigNodes"
+                            :nodes="filterableNodeFilterConfigNodes"
                             :values="filterValues"
                             @update:value="onAttributeFilterChange"
                             @close="closeSidePanel()"
