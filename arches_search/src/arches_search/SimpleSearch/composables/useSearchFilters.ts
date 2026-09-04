@@ -111,7 +111,7 @@ function createSearchFilters(): SearchFilters {
         new Map(),
     );
     const activeGraphs = ref<ResourceType[]>([]);
-    // "All" is an empty activeGraphs, and the API needs it spelled out.
+    // Every searchable resource model.
     const availableGraphs = ref<ResourceType[]>([]);
     let availableGraphsRequest: Promise<void> | null = null;
     const resultsGraphs = ref<ResourceType[]>([]);
@@ -242,8 +242,8 @@ function createSearchFilters(): SearchFilters {
     }
 
     function getRequestGraphs(): ResourceType[] {
-        // No selection means every resource model, which the API wants named
-        // rather than implied.
+        // "All" is an empty activeGraphs; the API will not accept that as a
+        // selection, so it has to be spelled out.
         return activeGraphs.value.length > 0
             ? activeGraphs.value
             : availableGraphs.value;
