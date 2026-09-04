@@ -360,18 +360,318 @@ class MyAppConfig(AppConfig):
 
 This is opt-in; a datatype with no normalizer just passes its value through untouched. Most scalar datatypes (numbers, booleans) don't need one at all.
 
+## Clause Subjects
+
+Every clause in an advanced search payload has the same five keys:
+
+```json
+{
+    "type": "LITERAL",
+    "quantifier": "ANY",
+    "subject": { "...": "what is being matched" },
+    "operator": "LIKE",
+    "operands": [{ "type": "LITERAL", "value": "bronze" }]
+}
+```
+
+The `subject` says _what_ is being matched. There are three kinds, and its
+`type` tells them apart.
+
+| Subject          | Matches                                           | Shape                                              |
+| ---------------- | ------------------------------------------------- | -------------------------------------------------- |
+| `NODE`           | one node's tile values, on one graph              | `graph_slug` + `node_alias`, empty `search_models` |
+| `SEARCH_MODELS`  | any node of the named index classes, on one graph | `graph_slug` + `search_models`, empty `node_alias` |
+| `RESOURCE_FIELD` | a column on the resource row itself               | `field`                                            |
+
+The table compares their shapes; each example below is a whole clause, so it can
+be lifted straight into `clauses`.
+
+**`NODE`** is the common case — a named node on a named graph:
+
+```json
+{
+    "type": "LITERAL",
+    "quantifier": "ANY",
+    "subject": {
+        "type": "NODE",
+        "graph_slug": "my_resource_graph",
+        "node_alias": "material",
+        "search_models": []
+    },
+    "operator": "LIKE",
+    "operands": [{ "type": "LITERAL", "value": "bronze" }]
+}
+```
+
+_Reads as:_ resources on `my_resource_graph` with a `material` value containing
+"bronze". Returns those resources — not the matching tiles.
+
+**`SEARCH_MODELS`** drops the node alias and names index classes instead, so one
+clause can span every node of that kind on the graph — "any string field on a
+Person contains X":
+
+```json
+{
+    "type": "LITERAL",
+    "quantifier": "ANY",
+    "subject": {
+        "type": "SEARCH_MODELS",
+        "graph_slug": "person",
+        "node_alias": "",
+        "search_models": ["TermSearch"]
+    },
+    "operator": "LIKE",
+    "operands": [{ "type": "LITERAL", "value": "CHARLIE" }]
+}
+```
+
+_Reads as:_ People with "CHARLIE" in **any** of their string fields — first name,
+nickname, whichever. You do not have to know which node it landed in.
+
+Name more than one class to span them — `["DateSearch", "DateRangeSearch"]`
+covers every time-ish node in one clause.
+
+Drop the operands and it becomes a presence check: `HAS_ANY_VALUE` asks whether
+the resource has any row of those classes at all, and `quantifier: "NONE"`
+inverts it into "has none".
+
+**`RESOURCE_FIELD`** addresses the resource row rather than its tiles, so it
+names no graph and no node:
+
+```json
+{
+    "type": "LITERAL",
+    "quantifier": "ANY",
+    "subject": { "type": "RESOURCE_FIELD", "field": "principaluser" },
+    "operator": "IS_CURRENT_USER",
+    "operands": []
+}
+```
+
+_Reads as:_ resources created by whoever is asking. The requester is never named
+in the payload — the server fills it in, so this clause means something different
+for each caller and cannot be used to search as somebody else.
+
+The empty `operands` is not an omission — the server fills the identity in. See
+[How many operands](#how-many-operands).
+
+### What each one can do
+
+The first two are reached with a correlated subquery against the denormalized
+search tables, which is why they need a graph and why `quantifier` (`ANY` /
+`ALL` / `NONE`) is meaningful: a node can hold many values across many tiles. A
+resource field is a single column on the row already being filtered, so it
+compiles to a plain predicate and its `quantifier` is ignored — send `ANY`.
+
+That difference sets the rules:
+
+-   **`RELATED` clauses require a `NODE` subject.** Traversal follows a node link.
+-   **`RESOURCE_FIELD` is rejected under `TILE` scope.** There is no tile for it to
+    be evaluated against, and a quietly ignored filter is worse than an error.
+-   **Every group still names a graph.** A resource field clause carries no graph
+    of its own, so the group it sits in decides which resource model it filters.
+    A payload for `person` holding `IS_CURRENT_USER` narrows People, not
+    everything — see [One payload per graph](#one-payload-per-graph).
+
+Otherwise a `RESOURCE_FIELD` clause goes anywhere an ordinary clause goes. It
+mixes with node clauses in one group, combines under the same `AND` / `OR`
+logic, nests in subgroups, and works on **either side of a relationship**:
+
+| Position                      |     |
+| ----------------------------- | --- |
+| Top-level group               | yes |
+| Nested subgroup               | yes |
+| `OR`-ed with a node clause    | yes |
+| Anchor side of a relationship | yes |
+| Child side of a relationship  | yes |
+| `TILE` scope                  | no  |
+| `RELATED` clause              | no  |
+
+On a relationship, which side it constrains follows from where you put it —
+in the traversing group it filters the anchor, in a subgroup under that group it
+filters the related resource. So "people whose pet I own" is a resource field
+clause on the child side, and "people I created who have any pet" is the same
+clause on the anchor side.
+
+```json
+{
+    "graph_slug": "person",
+    "scope": "RESOURCE",
+    "logic": "AND",
+    "clauses": [
+        {
+            "type": "LITERAL",
+            "quantifier": "ANY",
+            "subject": {
+                "type": "NODE",
+                "graph_slug": "person",
+                "node_alias": "last_name",
+                "search_models": []
+            },
+            "operator": "LIKE",
+            "operands": [{ "type": "LITERAL", "value": "rivera" }]
+        },
+        {
+            "type": "LITERAL",
+            "quantifier": "ANY",
+            "subject": { "type": "RESOURCE_FIELD", "field": "principaluser" },
+            "operator": "IS_CURRENT_USER",
+            "operands": []
+        }
+    ],
+    "groups": [],
+    "aggregations": [],
+    "relationship": null
+}
+```
+
+_Reads as:_ People surnamed Rivera **that I created**. One clause reaches into a
+tile, the other reads a column on the resource row, and `AND` applies to both the
+same way.
+
+### One payload per graph
+
+`advanced_search_queries` is a **list**. Each entry is a complete advanced
+search payload, and its `graph_slug` names the resource model that entry
+returns.
+
+`graph_slugs` chooses which resource models are searched. Within that set, a
+graph an entry addresses is filtered by it; a graph no entry addresses is
+returned whole. That is what lets you ask for two resource models and refine
+only one of them:
+
+```json
+{
+    "graph_slugs": ["person", "dog"],
+    "advanced_search_queries": [
+        {
+            "graph_slug": "person",
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "first_name",
+                        "search_models": []
+                    },
+                    "operator": "EQUALS",
+                    "operands": [{ "type": "LITERAL", "value": "FOO" }]
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": null
+        }
+    ]
+}
+```
+
+People are narrowed to those named FOO; every Dog comes back, because nothing
+addressed Dogs. Filtering both means a second entry with `"graph_slug": "dog"`.
+
+Two consequences worth knowing:
+
+-   **A payload that matches nothing does not take other graphs with it.** If no
+    Person is named FOO, the Dogs are still returned — they were requested, and
+    nothing said anything about them.
+-   **Each graph may be addressed once.** Two entries with the same `graph_slug`
+    is a `400`, because silently applying one and ignoring the other is the worst
+    available outcome.
+
+To exclude a resource model entirely, leave it out of `graph_slugs`. That is the
+selector; the payloads are the refinement.
+
+**Selecting nothing returns nothing.** An absent or empty `graph_slugs` is not a
+shorthand for "everything" — a caller has to name the resource models it wants:
+
+```json
+{
+    "graph_slugs": [],
+    "term_search": { "terms": ["amber"], "max_hops": 2 }
+}
+```
+
+comes back with no resources. `resource_type_counts` and `all_resource_count`
+still cover every active graph, though, so a client can show what naming one
+would get — which is what the resource type facet is built on.
+
+### Validation
+
+Shape is checked up front, without touching the database. Whether a field,
+operator or node actually exists is settled as the query compiles, where the
+registries are available. Both surface as a `400`, not a `500`.
+
+## Term search
+
+`term_search` is the one filter that is not a clause, and the one that reaches
+outside the graph being searched:
+
+```json
+"term_search": { "terms": ["amber"], "max_hops": 2 }
+```
+
+Terms are matched against every indexed text value on a resource — you do not
+name a node — and then walked back across relationships, so a Site can be found
+because its related Person is named Amber. All terms must match; each is
+expanded independently and the results intersected, so a resource cannot qualify
+by reaching two different terms down two unrelated paths.
+
+`max_hops` is capped at 2, and `0` means "match directly, do not traverse".
+
+**This is the only anonymous traversal in the API.** It follows any relationship,
+in either direction, ignoring ontology properties — which is why it is not a
+clause. A clause's `relationship` block is the opposite: a named node path, an
+explicit `is_inverse`, and a quantifier. Do not read the two as variations of one
+another, and do not call a clause's `relationship.path` segments "hops".
+
+Everything else that filters a graph's own data is a clause. Geometry and date
+filters used to sit beside `term_search` and are now ordinary `SEARCH_MODELS`
+clauses:
+
+```json
+{
+    "type": "LITERAL",
+    "quantifier": "ANY",
+    "subject": {
+        "type": "SEARCH_MODELS",
+        "graph_slug": "person",
+        "node_alias": "",
+        "search_models": ["DateSearch", "DateRangeSearch"]
+    },
+    "operator": "BETWEEN",
+    "operands": [
+        { "type": "LITERAL", "value": "1890-01-01" },
+        { "type": "LITERAL", "value": "1910-01-01" }
+    ]
+}
+```
+
+_Reads as:_ resources with a date in that window, **or** a stored date range
+overlapping it. Naming both models is what gets you the second half — each
+resolves its own facet and the two OR together.
+
+A `GEO_INTERSECTS` clause takes a whole GeoJSON `FeatureCollection` as a
+`GEO_LITERAL` operand. Per-feature `buffer_distance` / `buffer_units` are applied
+and the features unioned before the intersection, so a drawn area with a buffer
+behaves the same as it did as a map filter.
+
+**Composition.** `term_search` narrows each selected graph first, then that
+graph's payload narrows what is left. They always `AND`, in that order — a term
+search cannot be OR-ed against a clause or nested inside a group.
+
 ## Searching on Resource Fields
 
-`advanced_search_query` matches values stored in tiles, and it is anchored to a
-single graph. A resource's own columns — its lifecycle state, who created it,
-when it was made — are not tile data and mean the same thing on every graph, so
-they are a separate, graph-agnostic facet: `resource_field_filters`.
-
-Which fields are available is derived from `ResourceInstance` itself, not from a
-hardcoded list. Each concrete model field is mapped to an operator vocabulary by
-its **Django field class**, so a column added to core becomes filterable,
-sortable and groupable with no change here. Fields whose class has no mapping
-(`name` and `descriptors`, both JSON-backed) fall out automatically.
+A `RESOURCE_FIELD` subject reaches the resource's own columns — its lifecycle
+state, who created it, when it was made. Which fields exist is derived from
+`ResourceInstance` itself, not from a hardcoded list: each concrete model field
+is mapped to an operator vocabulary by its **Django field class**, so a column
+added to core becomes filterable, sortable and groupable with no change here.
+Fields whose class has no mapping (`name` and `descriptors`, both JSON-backed)
+fall out automatically.
 
 | Field class                   | Operators                                                             |
 | ----------------------------- | --------------------------------------------------------------------- |
@@ -381,77 +681,170 @@ sortable and groupable with no change here. Fields whose class has no mapping
 | `CharField` / `TextField`     | `EQUALS`, `CONTAINS`, `STARTS_WITH`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`  |
 | `BooleanField`                | `IS_TRUE`, `IS_FALSE`                                                 |
 
-A foreign key to the user model also gets the zero-arity `IS_CURRENT_USER` and
+A foreign key to the user model also gets `IS_CURRENT_USER` and
 `IS_NOT_CURRENT_USER`, plus exactly one hop to that user's `username` — nothing
 else on the user model is reachable.
 
-Fetch the vocabulary rather than hardcoding it. `graph_ids` is optional and
-scopes choice lists such as lifecycle states, which differ per graph:
+### How many operands
+
+An operator's operands are described by its facet row's `param_formats`, so the
+count follows from the row rather than from a rule written here:
+
+| Operators                                              | Operands                         |
+| ------------------------------------------------------ | -------------------------------- |
+| `HAS_ANY_VALUE`, `HAS_NO_VALUE`, `IS_TRUE`, `IS_FALSE` | none                             |
+| `IS_CURRENT_USER`, `IS_NOT_CURRENT_USER`               | none — the server fills these in |
+| `EQUALS`, `CONTAINS`, `STARTS_WITH`, `BEFORE`, `AFTER` | one                              |
+| `IN`                                                   | one, holding a non-empty list    |
+| `RANGE`                                                | two — lower bound, then upper    |
+
+Sending an operand to a current-user operator is a `400`, not a silent no-op:
+supplying one is an attempt to search as somebody else, and it should fail
+loudly.
+
+### Discovering the vocabulary
+
+Fetch it rather than hardcoding it. `graph_slugs` is optional and scopes choice
+lists such as lifecycle states, which differ per graph:
 
 ```
-GET /arches_search/api/advanced-search/resource-fields?graph_ids=<uuid>
+GET /arches_search/api/advanced-search/resource-fields?graph_slugs=<slug>
 ```
 
-### Projecting and sorting node values
+## Search results
 
-`extra_columns` annotates a node's value onto each result row. The same
-annotation backs both display and `ORDER BY`, so a column used for sorting and
-display costs one annotation, not two. A node that does not resolve, or whose
-nodegroup the requester cannot read, is simply absent from the response.
+What a search carries back, and how it is ordered.
+
+### Projecting additional data
+
+`additional_data` asks for values to be carried on each result row. An entry
+takes the same two shapes a clause subject does, and uses the same tokens:
+
+```json
+"additional_data": [
+    { "type": "NODE", "graph_slug": "my_resource_graph", "node_alias": "height" },
+    { "type": "RESOURCE_FIELD", "field": "resource_instance_lifecycle_state" }
+]
+```
+
+A **`NODE`** entry annotates a node's value onto the row. The same annotation
+backs both display and `ORDER BY`, so a value used for sorting and display costs
+one annotation, not two.
+
+A **`RESOURCE_FIELD`** entry carries the column's `value` **and** its `label`. A
+result row already includes the resource's raw columns, so on its own it tells
+you `resource_instance_lifecycle_state_id` is some UUID and nothing more; the
+label is the word a reader wants. Both keys are always present, with a null
+label for a field that names no related record (`createdtime`, `legacyid`).
+
+The two kinds come back separately, because their names can collide -- a node
+aliased `principaluser` and the field of that name would otherwise fight over
+one key.
+
+They also differ on failure, deliberately. A node that does not resolve, or
+whose nodegroup the requester cannot read, is **silently absent** -- "no such
+node", "not permitted" and "wrong graph" are indistinguishable on purpose. An
+unqueryable resource field is a **400**: the registry is public (the metadata
+endpoint serves it), so silence would hide a client's mistake while protecting
+nothing.
 
 ### Example payload
 
 `POST /arches_search/api/search`
 
-The facets compose: `advanced_search_query` matches tile values on one graph,
-`resource_field_filters` narrows by the resource's own columns, and
-`extra_columns` projects node values onto the rows for display and sorting.
+**In plain English:** _"Of my own records on `my_resource_graph`, show me the
+bronze ones created in 2025 that are in one of these lifecycle states. Give me
+each one's name, height and status, tallest first, twenty to a page."_
+
+That single sentence is the whole payload below: `graph_slugs` picks the resource
+model, the clauses narrow it (a tile value, the creator, the lifecycle state and
+a date range, all `AND`-ed), `additional_data` says what to carry on each row,
+and `sort` orders on one of them.
 
 ```json
 {
-    "graph_ids": ["a1b2c3d4-0000-0000-0000-000000000000"],
-    "advanced_search_query": {
-        "graph_slug": "my_resource_graph",
-        "scope": "RESOURCE",
-        "logic": "AND",
-        "clauses": [
-            {
-                "type": "LITERAL",
-                "quantifier": "ANY",
-                "subject": {
-                    "type": "NODE",
-                    "graph_slug": "my_resource_graph",
-                    "node_alias": "material",
-                    "search_models": []
+    "graph_slugs": ["my_resource_graph"],
+    "advanced_search_queries": [
+        {
+            "graph_slug": "my_resource_graph",
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": "my_resource_graph",
+                        "node_alias": "material",
+                        "search_models": []
+                    },
+                    "operator": "LIKE",
+                    "operands": [{ "type": "LITERAL", "value": "bronze" }]
                 },
-                "operator": "LIKE",
-                "operands": [{ "type": "LITERAL", "value": "bronze" }]
-            }
-        ],
-        "groups": [],
-        "aggregations": [],
-        "relationship": null
-    },
-    "resource_field_filters": [
-        { "field": "principaluser", "operator": "IS_CURRENT_USER" },
-        {
-            "field": "resource_instance_lifecycle_state",
-            "operator": "IN",
-            "value": ["b2c3d4e5-0000-0000-0000-000000000000"]
-        },
-        {
-            "field": "createdtime",
-            "operator": "RANGE",
-            "value": { "from": "2025-01-01", "to": "2025-12-31" }
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "RESOURCE_FIELD",
+                        "field": "principaluser"
+                    },
+                    "operator": "IS_CURRENT_USER",
+                    "operands": []
+                },
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "RESOURCE_FIELD",
+                        "field": "resource_instance_lifecycle_state"
+                    },
+                    "operator": "IN",
+                    "operands": [
+                        {
+                            "type": "LITERAL",
+                            "value": ["b2c3d4e5-0000-0000-0000-000000000000"]
+                        }
+                    ]
+                },
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "RESOURCE_FIELD",
+                        "field": "createdtime"
+                    },
+                    "operator": "RANGE",
+                    "operands": [
+                        { "type": "LITERAL", "value": "2025-01-01" },
+                        { "type": "LITERAL", "value": "2025-12-31" }
+                    ]
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": null
         }
     ],
-    "extra_columns": [
-        { "graph_slug": "my_resource_graph", "node_alias": "name" },
-        { "graph_slug": "my_resource_graph", "node_alias": "height" }
+    "additional_data": [
+        {
+            "type": "NODE",
+            "graph_slug": "my_resource_graph",
+            "node_alias": "name"
+        },
+        {
+            "type": "NODE",
+            "graph_slug": "my_resource_graph",
+            "node_alias": "height"
+        },
+        {
+            "type": "RESOURCE_FIELD",
+            "field": "resource_instance_lifecycle_state"
+        }
     ],
     "sort": [
         {
-            "type": "extra_column",
+            "type": "NODE",
             "graph_slug": "my_resource_graph",
             "node_alias": "height",
             "direction": "desc"
@@ -462,25 +855,40 @@ The facets compose: `advanced_search_query` matches tile values on one graph,
 }
 ```
 
-Each resource in the response carries its requested columns. Values are always a
-list, so a client never has to branch on cardinality:
+**What comes back:** the matching resources, each carrying the two requested
+columns, ordered by height descending — plus `pagination`, `resource_type_counts`
+and `all_resource_count` alongside them.
+
+Values are always a list, so a client never has to branch on cardinality:
 
 ```json
 {
     "resources": [
         {
             "resourceinstanceid": "c3d4e5f6-0000-0000-0000-000000000000",
-            "extra_columns": {
-                "name": [
-                    {
-                        "node_value": "Bronze bowl",
-                        "display_value": "Bronze bowl",
-                        "details": []
+            "additional_data": {
+                "node_values": {
+                    "name": [
+                        {
+                            "node_value": "Bronze bowl",
+                            "display_value": "Bronze bowl",
+                            "details": []
+                        }
+                    ],
+                    "height": [
+                        {
+                            "node_value": 12,
+                            "display_value": "12",
+                            "details": []
+                        }
+                    ]
+                },
+                "resource_fields": {
+                    "resource_instance_lifecycle_state": {
+                        "value": "b2c3d4e5-0000-0000-0000-000000000000",
+                        "label": "Draft"
                     }
-                ],
-                "height": [
-                    { "node_value": 12, "display_value": "12", "details": [] }
-                ]
+                }
             }
         }
     ],
@@ -497,7 +905,8 @@ list, so a client never has to branch on cardinality:
 
 ### Sorting and grouping
 
-`sort` accepts `resource_field` alongside `extra_column`. Foreign keys order by
+`sort` names what it orders by with those same tokens -- `NODE` for a projected
+node value, `RESOURCE_FIELD` for a resource column. Foreign keys order by
 the related record's label rather than its opaque primary key, and nulls sort
 last in both directions so a nullable column does not lead on `desc`:
 
@@ -505,7 +914,7 @@ last in both directions so a nullable column does not lead on `desc`:
 {
     "sort": [
         {
-            "type": "resource_field",
+            "type": "RESOURCE_FIELD",
             "field": "resource_instance_lifecycle_state",
             "direction": "asc"
         }
@@ -513,23 +922,59 @@ last in both directions so a nullable column does not lead on `desc`:
 }
 ```
 
+_Reads as:_ order by lifecycle state, alphabetically by the state's **label** —
+"Draft" before "Submitted" — not by its UUID, which would be an arbitrary order
+that changes whenever the data is reloaded.
+
 `aggregations` accepts a `RESOURCE_FIELD` group-by for any field the registry
-reports as groupable — foreign keys and booleans:
+reports as groupable — foreign keys and booleans, the ones with bounded
+cardinality. Grouping on something unbounded like `createdtime` is rejected:
 
 ```json
 {
     "aggregations": [
         {
-            "type": "RESOURCE_FIELD",
-            "field": "resource_instance_lifecycle_state"
+            "name": "by_state",
+            "group_by": [
+                {
+                    "type": "RESOURCE_FIELD",
+                    "field": "resource_instance_lifecycle_state",
+                    "alias": "state"
+                }
+            ],
+            "metrics": [
+                {
+                    "type": "RESOURCE_FIELD",
+                    "alias": "total",
+                    "fn": "Count",
+                    "field": "resourceinstanceid"
+                }
+            ]
         }
     ]
 }
 ```
 
+_Reads as:_ "how many results are in each lifecycle state?" — the counts behind a
+status facet.
+
+Results come back keyed by the aggregation's `name`, each row carrying the
+aliases you asked for:
+
+```json
+{ "by_state": [{ "state": "<uuid>", "total": 3 }] }
+```
+
+Three results in that state. The aggregation runs over the whole matching set,
+not just the current page, so a facet count does not change as you page through.
+
+Mind the casing: `sort` spells the discriminant `resource_field`, `aggregations`
+spells it `RESOURCE_FIELD`. They are separate vocabularies that happen to name
+the same idea.
+
 ### Permissions
 
-`resource_field_filters` narrows the candidate set and nothing more.
+A resource field clause narrows the candidate set and nothing more.
 `permission_backend.filter_resource_queryset` runs unconditionally as the final
 step, so no filter value can surface a resource the requester could not
 otherwise see. `IS_CURRENT_USER` resolves server-side from the request user;

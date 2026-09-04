@@ -177,7 +177,12 @@ def seed_resource_field_facets(apps, schema_editor):
 
 def unseed_resource_field_facets(apps, schema_editor):
     ResourceFieldFacet = apps.get_model("arches_search", "ResourceFieldFacet")
-    ResourceFieldFacet.objects.all().delete()
+
+    for field_class, facets in FACETS_BY_FIELD_CLASS.items():
+        ResourceFieldFacet.objects.filter(
+            field_class=field_class,
+            operator__in=[facet["operator"] for facet in facets],
+        ).delete()
 
 
 class Migration(migrations.Migration):
