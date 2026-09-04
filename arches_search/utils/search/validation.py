@@ -92,6 +92,15 @@ def validate_advanced_search_queries(advanced_search_queries):
             )
 
         graph_slug = graph_payload.get("graph_slug")
+        if not isinstance(graph_slug, str) or not graph_slug:
+            raise ValidationError(
+                _(
+                    "advanced_search_queries[%(index)s] requires a non-empty "
+                    "graph_slug naming the resource model it filters."
+                ),
+                params={"index": index},
+            )
+
         if graph_slug in seen_graph_slugs:
             raise ValidationError(
                 _(
