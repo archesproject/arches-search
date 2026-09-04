@@ -7,7 +7,6 @@ through a relation (principaluser__username). Both are annotated before
 pagination, so they arrive with the page rather than costing a query per row.
 """
 
-import hashlib
 from typing import Any, Dict, Iterable, List, Optional
 
 from django.core.exceptions import ValidationError
@@ -20,7 +19,8 @@ from arches_search.utils.resource_field_search.field_registry import (
 )
 from arches_search.utils.resource_field_search.labels import label_expression
 
-# Namespaced so these cannot collide with another annotation or a real column.
+# Positional, and namespaced so they cannot collide with a real column. Callers
+# find a field's names through the dict annotate() returns, never by rebuilding them.
 ANNOTATION_PREFIX = "_arches_search_resource_field_"
 
 
@@ -62,12 +62,6 @@ def resolve(names: Iterable[str], registry=None) -> Dict[str, ResourceInstanceFi
     return resolved
 
 
-def annotation_name_for(field_name: str, part: str) -> str:
-    """Deterministic, so the same field requested twice resolves to one alias."""
-    digest = hashlib.sha1(f"{field_name}\x1f{part}".encode("utf-8")).hexdigest()[:16]
-    return f"{ANNOTATION_PREFIX}{digest}"
-
-
 def annotate(
     queryset: QuerySet, descriptors: Dict[str, ResourceInstanceField]
 ) -> tuple:
@@ -81,14 +75,14 @@ def annotate(
     annotations: Dict[str, Any] = {}
     annotation_names: Dict[str, Dict[str, Optional[str]]] = {}
 
-    for field_name, descriptor in descriptors.items():
-        value_annotation = annotation_name_for(field_name, "value")
+    for index, (field_name, descriptor) in enumerate(descriptors.items()):
+        value_annotation = f"{ANNOTATION_PREFIX}{index}_value"
         annotations[value_annotation] = F(descriptor.orm_path)
 
         label_annotation = None
         expression = label_expression(descriptor)
         if expression is not None:
-            label_annotation = annotation_name_for(field_name, "label")
+            label_annotation = f"{ANNOTATION_PREFIX}{index}_label"
             annotations[label_annotation] = expression
 
         annotation_names[field_name] = {

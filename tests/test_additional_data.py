@@ -27,9 +27,6 @@ from arches_search.utils.search.additional_data import node_values
 from arches_search.utils.search.additional_data.additional_data import (
     validate_additional_data,
 )
-from arches_search.utils.search.additional_data.node_values import (
-    annotation_name_for,
-)
 from arches_search.utils.search.sorting import (
     DIRECTION_ASC,
     DIRECTION_DESC,
@@ -72,15 +69,6 @@ class AdditionalDataValidationTests(SimpleTestCase):
             ]
         )
         self.assertEqual(keys, [("g", "b"), ("g", "a")])
-
-    def test_annotation_name_is_deterministic_and_unambiguous(self):
-        self.assertEqual(
-            annotation_name_for("g", "alias"), annotation_name_for("g", "alias")
-        )
-        # ("a", "b_c") and ("a_b", "c") must not collide.
-        self.assertNotEqual(
-            annotation_name_for("a", "b_c"), annotation_name_for("a_b", "c")
-        )
 
 
 class AdditionalDataDataTests(TestCase):

@@ -17,7 +17,6 @@ are simply absent from the response. "No such node", "not permitted", and "that
 resource is on a different graph" are deliberately indistinguishable.
 """
 
-import hashlib
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
@@ -27,37 +26,20 @@ from arches.app.utils import permission_backend
 from arches_querysets.models import TileTree
 from arches_querysets.utils.models import get_tile_values_for_resource
 
-# Namespaced so these cannot collide with a sort annotation or a real column.
+# Positional, and namespaced so they cannot collide with a real column. Callers
+# find a column's name through the dict annotate() returns, never by rebuilding it.
 ANNOTATION_PREFIX = "_arches_search_node_col_"
 
 NodeColumnKey = Tuple[str, str]
-
-
-def annotation_name_for(graph_slug: str, node_alias: str) -> str:
-    """
-    Deterministic annotation name for a (graph, node) pair.
-
-    Deterministic rather than positional so a column requested both for display
-    and as a sort key resolves to one annotation instead of two. Hashed rather
-    than concatenated so that ("a", "b_c") and ("a_b", "c") cannot collide, and
-    so an alias containing characters that are illegal in a kwarg name is safe.
-    """
-    digest = hashlib.sha1(f"{graph_slug}\x1f{node_alias}".encode("utf-8")).hexdigest()[
-        :16
-    ]
-    return f"{ANNOTATION_PREFIX}{digest}"
 
 
 def keys(entries: Optional[List[Dict[str, Any]]]) -> List[NodeColumnKey]:
     """The (graph_slug, node_alias) pairs named by NODE entries, deduplicated."""
     if not entries:
         return []
-    seen: List[NodeColumnKey] = []
-    for entry in entries:
-        key = (entry["graph_slug"], entry["node_alias"])
-        if key not in seen:
-            seen.append(key)
-    return seen
+    return list(
+        dict.fromkeys((entry["graph_slug"], entry["node_alias"]) for entry in entries)
+    )
 
 
 def resolve(node_keys: Iterable[NodeColumnKey], user) -> Dict[NodeColumnKey, Node]:
@@ -126,12 +108,12 @@ def annotate(
     annotations: Dict[str, Any] = {}
     annotation_names: Dict[NodeColumnKey, str] = {}
 
-    for key, node in nodes_by_key.items():
-        graph_slug, node_alias = key
+    for index, (key, node) in enumerate(nodes_by_key.items()):
+        graph_slug, _node_alias = key
         if graph_slug not in graph_nodes_cache:
             graph_nodes_cache[graph_slug] = _graph_nodes_for(graph_slug)
 
-        annotation_name = annotation_name_for(graph_slug, node_alias)
+        annotation_name = f"{ANNOTATION_PREFIX}{index}"
         annotations[annotation_name] = get_tile_values_for_resource(
             node, graph_nodes_cache[graph_slug]
         )
