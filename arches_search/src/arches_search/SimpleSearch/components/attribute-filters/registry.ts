@@ -1,5 +1,5 @@
 import NumericFilter from "@/arches_search/SimpleSearch/components/attribute-filters/NumericFilter.vue";
-import ReferenceFilter from "@/arches_search/SimpleSearch/components/attribute-filters/ReferenceFilter.vue";
+import ReferenceFilterMultiSelect from "@/arches_search/SimpleSearch/components/attribute-filters/ReferenceFilterMultiSelect.vue";
 
 import {
     ClauseSubjectTypeToken,
@@ -126,7 +126,7 @@ function formatNumericValue(value: unknown): string {
 // datatype by registering one entry here and dropping in its widget component.
 const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry> = {
     reference: {
-        component: ReferenceFilter,
+        component: ReferenceFilterMultiSelect,
         buildQuery: buildReferenceQuery,
         formatValue: formatReferenceValue,
     },
