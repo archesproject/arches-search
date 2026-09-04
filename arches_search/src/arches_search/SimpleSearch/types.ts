@@ -79,12 +79,17 @@ export const RESULTS_SORT_Z_TO_A = "zToA";
 export const RESULTS_SORT_NEWEST = "newest";
 export const RESULTS_SORT_OLDEST = "oldest";
 
+export type SortDirection = "asc" | "desc";
+
+export type NodeSortValue = `${string}:${SortDirection}`;
+
 export type ResultsSortValue =
     | typeof RESULTS_SORT_RELEVANCE
     | typeof RESULTS_SORT_A_TO_Z
     | typeof RESULTS_SORT_Z_TO_A
     | typeof RESULTS_SORT_NEWEST
-    | typeof RESULTS_SORT_OLDEST;
+    | typeof RESULTS_SORT_OLDEST
+    | NodeSortValue;
 
 export interface SortOption {
     label: string;
@@ -109,8 +114,6 @@ export interface NodeFilterConfigNode {
     filterable: boolean;
     sortable: boolean;
 }
-
-export type SortDirection = "asc" | "desc";
 
 export type SortSpec =
     | { type: "primary_name"; direction: SortDirection }
