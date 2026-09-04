@@ -106,6 +106,8 @@ export interface NodeFilterConfigNode {
     datatype: string;
     config: Record<string, unknown> | null;
     sortorder: number;
+    filterable: boolean;
+    sortable: boolean;
 }
 
 export type SortDirection = "asc" | "desc";
