@@ -9,6 +9,9 @@ from django.db import models
 from django.db.models import F, OuterRef, Subquery, Q, QuerySet
 from typing import Optional, Dict, Any, List, Union, Callable
 
+from arches_search.utils.resource_field_search.field_registry import (
+    get_resource_instance_fields,
+)
 from arches_search.utils.resource_field_search.grouping import (
     is_resource_field_spec,
     resolve_group_by_path,
@@ -207,6 +210,21 @@ def build_subquery(
     return subquery
 
 
+def _needs_resource_field_registry(aggregations: List[Dict[str, Any]]) -> bool:
+    """
+    Whether any spec here names a resource field.
+
+    Checked up front because building the registry costs a query, and an
+    aggregation over node values alone never touches it.
+    """
+    return any(
+        is_resource_field_spec(spec)
+        for aggregation in aggregations
+        for spec in (aggregation.get("group_by") or [])
+        + (aggregation.get("metrics") or [])
+    )
+
+
 def build_aggregations(
     queryset: QuerySet,
     aggregations: List[Dict[str, Any]],
@@ -226,6 +244,14 @@ def build_aggregations(
             Each value is either a list of grouped records or a dictionary of aggregate values.
     """
     results: Dict[str, Union[List[Dict[str, Any]], Dict[str, Any]]] = {}
+
+    # One registry for every spec below. Resolving each separately rebuilt it
+    # each time -- a query and an import per facet row, repeated.
+    resource_field_registry = (
+        get_resource_instance_fields()
+        if _needs_resource_field_registry(aggregations)
+        else None
+    )
 
     for agg in aggregations:
         name = agg["name"]
@@ -252,7 +278,9 @@ def build_aggregations(
                     **{
                         field_alias: F(
                             resolve_group_by_path(
-                                group_spec, aggregate_by_tile=aggregate_by_tile
+                                group_spec,
+                                aggregate_by_tile=aggregate_by_tile,
+                                registry=resource_field_registry,
                             )
                         )
                     }
@@ -280,7 +308,9 @@ def build_aggregations(
                 # roll per-tile counts up to the resource.
                 metric_annotations[alias] = get_aggregate_function(fn)(
                     resolve_metric_path(
-                        metric_spec, aggregate_by_tile=aggregate_by_tile
+                        metric_spec,
+                        aggregate_by_tile=aggregate_by_tile,
+                        registry=resource_field_registry,
                     )
                 )
                 continue

@@ -1,5 +1,5 @@
 """
-Projection of specific node (tile) values onto search results.
+Projecting node (tile) values onto search results.
 
 A search result row is a ResourceInstance, so a node's value is not on the row:
 it lives in tile data. Filtering already handles that with existence subqueries,
@@ -20,8 +20,6 @@ resource is on a different graph" are deliberately indistinguishable.
 import hashlib
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from django.core.exceptions import ValidationError
-from django.utils.translation import gettext as _
 
 from arches.app.models.models import Node
 from arches.app.utils import permission_backend
@@ -50,51 +48,31 @@ def annotation_name_for(graph_slug: str, node_alias: str) -> str:
     return f"{ANNOTATION_PREFIX}{digest}"
 
 
-def validate_extra_columns(extra_columns: Any) -> None:
-    if extra_columns is None:
-        return
-    if not isinstance(extra_columns, list):
-        raise ValidationError(_("extra_columns must be a list."))
-
-    for index, entry in enumerate(extra_columns):
-        if not isinstance(entry, dict):
-            raise ValidationError(
-                _("extra_columns[%(i)s] must be an object.") % {"i": index}
-            )
-        for key in ("graph_slug", "node_alias"):
-            if not isinstance(entry.get(key), str) or not entry[key]:
-                raise ValidationError(
-                    _("extra_columns[%(i)s] requires a non-empty %(key)s.")
-                    % {"i": index, "key": key}
-                )
-
-
-def column_keys(extra_columns: Optional[List[Dict[str, Any]]]) -> List[NodeColumnKey]:
-    if not extra_columns:
+def keys(entries: Optional[List[Dict[str, Any]]]) -> List[NodeColumnKey]:
+    """The (graph_slug, node_alias) pairs named by NODE entries, deduplicated."""
+    if not entries:
         return []
     seen: List[NodeColumnKey] = []
-    for entry in extra_columns:
+    for entry in entries:
         key = (entry["graph_slug"], entry["node_alias"])
         if key not in seen:
             seen.append(key)
     return seen
 
 
-def resolve_node_columns(
-    keys: Iterable[NodeColumnKey], user
-) -> Dict[NodeColumnKey, Node]:
+def resolve(node_keys: Iterable[NodeColumnKey], user) -> Dict[NodeColumnKey, Node]:
     """
     Resolve (graph_slug, node_alias) pairs to Node rows the user may read.
 
     Unresolvable and unpermitted keys are dropped rather than reported, so the
     response cannot be used to probe which nodes exist.
     """
-    keys = list(keys)
-    if not keys:
+    node_keys = list(node_keys)
+    if not node_keys:
         return {}
 
-    graph_slugs = {graph_slug for graph_slug, _alias in keys}
-    node_aliases = {node_alias for _slug, node_alias in keys}
+    graph_slugs = {graph_slug for graph_slug, _alias in node_keys}
+    node_aliases = {node_alias for _slug, node_alias in node_keys}
 
     candidate_nodes = (
         Node.objects.filter(
@@ -116,7 +94,7 @@ def resolve_node_columns(
     return {
         (node.graph.slug, node.alias): node
         for node in candidate_nodes
-        if (node.graph.slug, node.alias) in keys
+        if (node.graph.slug, node.alias) in node_keys
     }
 
 
@@ -133,7 +111,7 @@ def _graph_nodes_for(graph_slug: str) -> List[Node]:
     )
 
 
-def annotate_node_columns(
+def annotate(
     queryset, nodes_by_key: Dict[NodeColumnKey, Node]
 ) -> Tuple[Any, Dict[NodeColumnKey, str]]:
     """
@@ -162,7 +140,7 @@ def annotate_node_columns(
     return queryset.annotate(**annotations), annotation_names
 
 
-def format_node_columns(
+def format_values(
     resources,
     nodes_by_key: Dict[NodeColumnKey, Node],
     annotation_names: Dict[NodeColumnKey, str],

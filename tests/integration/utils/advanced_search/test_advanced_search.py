@@ -13,7 +13,7 @@ from arches.app.models.models import (
 )
 
 from arches_search.models.models import BooleanSearch, DateRangeSearch, DateSearch
-from arches_search.utils.advanced_search.graph_query_compiler import (
+from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
 )
 
