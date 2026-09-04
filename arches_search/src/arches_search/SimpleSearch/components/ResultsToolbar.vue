@@ -16,6 +16,7 @@ import {
     RESULTS_SORT_Z_TO_A,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type {
+    NodeFilterConfigNode,
     ResultsSortValue,
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -30,8 +31,9 @@ const resultsLabelText = computed(() =>
     $gettext("%{count} results", { count: String(totalResults.value) }),
 );
 
-defineProps<{
+const props = defineProps<{
     sortValue: ResultsSortValue | null;
+    sortableNodes: NodeFilterConfigNode[];
     showFilters: boolean;
     showMap: boolean;
     hasMapFilter: boolean;
@@ -42,13 +44,30 @@ defineProps<{
     hideTimeButton?: boolean;
 }>();
 
-const sortOptions = computed<SortOption[]>(() => [
-    { label: $gettext("Relevance"), value: RESULTS_SORT_RELEVANCE },
-    { label: $gettext("Name A to Z"), value: RESULTS_SORT_A_TO_Z },
-    { label: $gettext("Name Z to A"), value: RESULTS_SORT_Z_TO_A },
-    { label: $gettext("Newest first"), value: RESULTS_SORT_NEWEST },
-    { label: $gettext("Oldest first"), value: RESULTS_SORT_OLDEST },
-]);
+const sortOptions = computed<SortOption[]>(() => {
+    const options: SortOption[] = [
+        { label: $gettext("Relevance"), value: RESULTS_SORT_RELEVANCE },
+        { label: $gettext("Name A to Z"), value: RESULTS_SORT_A_TO_Z },
+        { label: $gettext("Name Z to A"), value: RESULTS_SORT_Z_TO_A },
+        { label: $gettext("Newest first"), value: RESULTS_SORT_NEWEST },
+        { label: $gettext("Oldest first"), value: RESULTS_SORT_OLDEST },
+    ];
+
+    for (const node of props.sortableNodes) {
+        options.push(
+            {
+                label: $gettext("%{label} (asc)", { label: node.label }),
+                value: `${node.node_alias}:asc`,
+            },
+            {
+                label: $gettext("%{label} (desc)", { label: node.label }),
+                value: `${node.node_alias}:desc`,
+            },
+        );
+    }
+
+    return options;
+});
 
 defineEmits<{
     (event: "update:sortValue", value: ResultsSortValue | null): void;
