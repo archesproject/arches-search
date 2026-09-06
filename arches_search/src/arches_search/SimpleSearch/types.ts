@@ -81,22 +81,19 @@ export interface ActiveFilter {
 }
 
 export const RESULTS_SORT_RELEVANCE = "relevance";
-export const RESULTS_SORT_A_TO_Z = "aToZ";
-export const RESULTS_SORT_Z_TO_A = "zToA";
-export const RESULTS_SORT_NEWEST = "newest";
-export const RESULTS_SORT_OLDEST = "oldest";
+export const RESULTS_SORT_NAME = "name";
+export const RESULTS_SORT_CREATED_TIME = "createdTime";
+export const RESULTS_SORT_NODE_PREFIX = "node:";
 
-export type SortDirection = "asc" | "desc";
+export type ResultsSortDirection = "asc" | "desc";
 
-export type NodeSortValue = `${string}:${SortDirection}`;
+export type NodeSortField = `${string}${string}`;
 
-export type ResultsSortValue =
+export type ResultsSortField =
     | typeof RESULTS_SORT_RELEVANCE
-    | typeof RESULTS_SORT_A_TO_Z
-    | typeof RESULTS_SORT_Z_TO_A
-    | typeof RESULTS_SORT_NEWEST
-    | typeof RESULTS_SORT_OLDEST
-    | NodeSortValue;
+    | typeof RESULTS_SORT_NAME
+    | typeof RESULTS_SORT_CREATED_TIME
+    | NodeSortField;
 
 export interface SortOption {
     label: string;
@@ -123,14 +120,14 @@ export interface NodeFilterConfigNode {
 }
 
 export type SortSpec =
-    | { type: "primary_name"; direction: SortDirection }
-    | { type: "created_time"; direction: SortDirection }
-    | { type: "RESOURCE_FIELD"; field: string; direction: SortDirection }
+    | { type: "primary_name"; direction: ResultsSortDirection }
+    | { type: "created_time"; direction: ResultsSortDirection }
+    | { type: "RESOURCE_FIELD"; field: string; direction: ResultsSortDirection }
     | {
           type: "NODE";
           graph_slug: string;
           node_alias: string;
-          direction: SortDirection;
+          direction: ResultsSortDirection;
       };
 
 export type ResourceFieldKind =
