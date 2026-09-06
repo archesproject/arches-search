@@ -36,11 +36,10 @@ import {
     ACTIVE_FILTER_KIND_MAP,
     ACTIVE_FILTER_KIND_RESOURCE_TYPE,
     ACTIVE_FILTER_KIND_TIME,
-    RESULTS_SORT_A_TO_Z,
-    RESULTS_SORT_NEWEST,
-    RESULTS_SORT_OLDEST,
+    RESULTS_SORT_CREATED_TIME,
+    RESULTS_SORT_NAME,
+    RESULTS_SORT_NODE_PREFIX,
     RESULTS_SORT_RELEVANCE,
-    RESULTS_SORT_Z_TO_A,
     TERM_FILTER_KEY,
 } from "@/arches_search/SimpleSearch/types.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
@@ -58,7 +57,8 @@ import type {
     ActiveFilter,
     NodeFilterConfigNode,
     ResourceType,
-    ResultsSortValue,
+    ResultsSortDirection,
+    ResultsSortField,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -118,7 +118,8 @@ const {
     onSplitterResizeEnd,
 } = useSidePanel();
 
-const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
+const sortField = ref<ResultsSortField | null>(RESULTS_SORT_RELEVANCE);
+const sortDirection = ref<ResultsSortDirection>("asc");
 const graphModels = ref<GraphModel[]>([]);
 const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
@@ -375,24 +376,50 @@ function onRequestPage(page: number): void {
     search(page);
 }
 
-function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
-    sortValue.value = nextSortValue;
-    setSort(sortSpecForValue(nextSortValue));
+function onSortDirectionUpdate(nextDirection: ResultsSortDirection): void {
+    sortDirection.value = nextDirection;
+    setSort(sortSpecForValue(sortField.value, nextDirection));
 }
 
-function sortSpecForValue(value: ResultsSortValue | null): SortSpec[] {
-    switch (value) {
-        case RESULTS_SORT_A_TO_Z:
-            return [{ type: "primary_name", direction: "asc" }];
-        case RESULTS_SORT_Z_TO_A:
-            return [{ type: "primary_name", direction: "desc" }];
-        case RESULTS_SORT_NEWEST:
-            return [{ type: "created_time", direction: "desc" }];
-        case RESULTS_SORT_OLDEST:
-            return [{ type: "created_time", direction: "asc" }];
-        default:
+function onSortFieldUpdate(nextField: ResultsSortField | null): void {
+    sortField.value = nextField;
+    setSort(sortSpecForValue(nextField, sortDirection.value));
+}
+
+function sortSpecForValue(
+    field: ResultsSortField | null,
+    direction: ResultsSortDirection,
+): SortSpec[] {
+    switch (field) {
+        case RESULTS_SORT_NAME:
+            return [{ type: "primary_name", direction }];
+        case RESULTS_SORT_CREATED_TIME:
+            return [{ type: "created_time", direction }];
+        case RESULTS_SORT_RELEVANCE:
+        case null:
             return [];
+        default: {
+            const nodeSort = nodeSortSpecForField(field, direction);
+            return nodeSort ? [nodeSort] : [];
+        }
     }
+}
+
+function nodeSortSpecForField(
+    field: ResultsSortField,
+    direction: ResultsSortDirection,
+): SortSpec | null {
+    const graphSlug = activeGraphSlug.value;
+    if (!graphSlug || !field.startsWith(RESULTS_SORT_NODE_PREFIX)) {
+        return null;
+    }
+
+    return {
+        type: "node",
+        graph_slug: graphSlug,
+        node_alias: field.slice(RESULTS_SORT_NODE_PREFIX.length),
+        direction,
+    };
 }
 
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {
@@ -476,7 +503,8 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>): void {
                     :min-size="RESULTS_PANEL_MIN_SIZE"
                 >
                     <ResultsToolbar
-                        :sort-value="sortValue"
+                        :sort-field="sortField"
+                        :sort-direction="sortDirection"
                         :sortable-nodes="sortableNodeFilterConfigNodes"
                         :show-filters="isAttributeFiltersOpen"
                         :show-map="isMapFilterOpen"
@@ -486,7 +514,8 @@ function onRunSavedQuery(queryDefinition: Record<string, unknown>): void {
                         :show-saved-searches="isSavedSearchesOpen"
                         :hide-filters-button="!isSingleGraphSelected"
                         :hide-time-button="!isSingleGraphSelected"
-                        @update:sort-value="onSortValueUpdate"
+                        @update:sort-field="onSortFieldUpdate"
+                        @update:sort-direction="onSortDirectionUpdate"
                         @toggle-filters="onToggleAttributeFilters"
                         @toggle-map="onToggleMapFilter"
                         @toggle-time="onToggleTimeFilter"
