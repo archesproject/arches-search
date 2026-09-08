@@ -1,5 +1,9 @@
+from django.db import transaction
+
 from arches.app.functions.base import BaseFunction
+from arches.app.models.resource import Resource
 from arches.app.models.tile import Tile
+from arches_search.indexing.index_descriptor import index_resource_descriptors
 from arches_search.indexing.index_from_tile import index_from_tile
 
 
@@ -11,3 +15,11 @@ class SearchIndexingFunction(BaseFunction):
         index_records = index_from_tile(tile, nodegroup_cache=nodegroup_cache)
         for record in index_records:
             record.save()
+
+        transaction.on_commit(
+            lambda: index_resource_descriptors(
+                Resource.objects.select_related("graph").get(
+                    pk=tile.resourceinstance_id
+                )
+            )
+        )
