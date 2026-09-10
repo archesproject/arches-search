@@ -58,6 +58,7 @@ const cssOverrides = {
             "0 0.1rem 0.3rem rgba(0, 0, 0, 0.08)",
         "--arches-search-overlay-shadow":
             "0 0.8rem 2.4rem rgba(0, 0, 0, 0.12), 0 0.2rem 0.6rem rgba(0, 0, 0, 0.07)",
+        "--arches-search-typeahead-overlay-max-width": "48rem",
         "--arches-search-primary-muted-bg": "rgba(13, 148, 136, 0.1)",
 
         "--arches-search-model-card-radius": "0.4rem",

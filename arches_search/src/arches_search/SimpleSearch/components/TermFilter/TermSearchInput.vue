@@ -226,6 +226,10 @@ function emitSubmit(suggestion: TermSuggestion): void {
     font-size: 1.4rem;
 }
 
+:global(.term-filter-overlay.p-autocomplete-overlay) {
+    max-inline-size: var(--arches-search-typeahead-overlay-max-width);
+}
+
 .suggestion-tab-bar {
     display: flex;
     align-items: center;

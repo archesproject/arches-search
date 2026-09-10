@@ -261,7 +261,7 @@ function submitSearch(): void {
     border-width: 0.15rem;
     border-radius: 0.8rem;
     box-shadow: var(--arches-search-overlay-shadow);
-    max-width: 48rem;
+    max-inline-size: var(--arches-search-typeahead-overlay-max-width);
 }
 
 .search-bar :deep(.term-filter-overlay .p-autocomplete-list) {
