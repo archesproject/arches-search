@@ -27,6 +27,10 @@ from arches_search.views.api.relatable_node_tree_for_graph import (
 from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 from arches_search.views.api.saved_search import SavedSearchAPI
 from arches_search.views.api.search_config import NodeFilterConfigAPI
+from arches_search.views.api.search_definition_counts import (
+    SearchDefinitionCountsAPI,
+)
+from arches_search.views.api.resource_type_counts import ResourceTypeCountsAPI
 from arches_search.views.api.term_suggestions import TermSuggestionView
 from arches_search.views.api.search_mvt import (
     EmptySearchTileAPI,
@@ -97,6 +101,16 @@ urlpatterns = [
         "api/resource-descriptors",
         ResourceDescriptorsAPI.as_view(),
         name="api_resource_descriptors",
+    ),
+    path(
+        "api/search-definition-counts",
+        SearchDefinitionCountsAPI.as_view(),
+        name="search_definition_counts",
+    ),
+    path(
+        "api/resource-type-counts",
+        ResourceTypeCountsAPI.as_view(),
+        name="resource_type_counts",
     ),
     path(
         "api/saved-searches",

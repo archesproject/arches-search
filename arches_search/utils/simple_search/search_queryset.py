@@ -16,7 +16,10 @@ from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
 )
 from arches_search.utils.geo_utils import GeoUtils
-from arches_search.utils.simple_search.term_matching import build_term_match_filter
+from arches_search.utils.simple_search.term_matching import (
+    build_term_match_filter,
+    datatype_for_term,
+)
 from arches_search.utils.simple_search.through_resource_search import (
     get_related_resources_by_text,
 )
@@ -74,9 +77,8 @@ def build_search_queryset(body, user):
     results_queryset = None
     if terms:
         if graph_ids:
-            term_texts = [term["text"] for term in terms]
             per_graph_match_ids = [
-                get_related_resources_by_text(term_texts, graph_id).values_list(
+                get_related_resources_by_text(terms, graph_id).values_list(
                     "resourceinstanceid", flat=True
                 )
                 for graph_id in graph_ids
@@ -88,7 +90,9 @@ def build_search_queryset(body, user):
         else:
             initial_match_ids = None
             for term in terms:
-                term_match_filter = build_term_match_filter(term["text"])
+                term_match_filter = build_term_match_filter(
+                    term["text"], datatype=datatype_for_term(term)
+                )
                 if initial_match_ids is None:
                     initial_match_ids = TermSearch.objects.filter(
                         term_match_filter
@@ -147,11 +151,10 @@ def build_resource_type_counts(terms, type_agnostic_queryset):
     )
 
     if terms:
-        term_texts = [term["text"] for term in terms]
         per_graph_matches = [
-            get_related_resources_by_text(
-                term_texts, str(graph["graphid"])
-            ).values_list("graph_id", flat=True)
+            get_related_resources_by_text(terms, str(graph["graphid"])).values_list(
+                "graph_id", flat=True
+            )
             for graph in graphs
         ]
 
