@@ -7,7 +7,7 @@ from arches_search.utils.advanced_search.constants import (
     OPERAND_TYPE_PATH,
     SUBJECT_TYPE_NODE,
 )
-from arches_search.utils.advanced_search.relationship_utils import (
+from arches_search.utils.advanced_search.relationship_paths import (
     has_relationship_path,
     relationship_path_to_pair,
 )

@@ -46,7 +46,7 @@ class SearchDefinitionCountsAPITest(TestCase):
 
     def test_returns_count_for_a_single_item(self):
         response = self._post_counts(
-            [{"id": "card-1", "body": {"graph_ids": [str(self.graph.graphid)]}}]
+            [{"id": "card-1", "body": {"graph_slugs": [self.graph.slug]}}]
         )
 
         self.assertEqual(response.status_code, 200)
@@ -55,15 +55,16 @@ class SearchDefinitionCountsAPITest(TestCase):
     def test_returns_counts_for_multiple_items_independently(self):
         response = self._post_counts(
             [
-                {"id": "card-1", "body": {"graph_ids": [str(self.graph.graphid)]}},
-                {"id": "card-2", "body": {"graph_ids": []}},
+                {"id": "card-1", "body": {"graph_slugs": [self.graph.slug]}},
+                {"id": "card-2", "body": {"graph_slugs": []}},
             ]
         )
 
         self.assertEqual(response.status_code, 200)
         counts = response.json()["counts"]
         self.assertEqual(counts["card-1"], 2)
-        self.assertEqual(counts["card-2"], 2)
+        # Selecting nothing returns nothing.
+        self.assertEqual(counts["card-2"], 0)
 
     def test_empty_items_returns_empty_counts(self):
         response = self._post_counts([])
@@ -74,8 +75,8 @@ class SearchDefinitionCountsAPITest(TestCase):
     def test_malformed_item_falls_back_to_none_and_other_items_still_succeed(self):
         response = self._post_counts(
             [
-                {"id": "malformed", "body": {"graph_ids": "not-a-list"}},
-                {"id": "good", "body": {"graph_ids": [str(self.graph.graphid)]}},
+                {"id": "malformed", "body": {"graph_slugs": "not-a-list"}},
+                {"id": "good", "body": {"graph_slugs": [self.graph.slug]}},
             ]
         )
 

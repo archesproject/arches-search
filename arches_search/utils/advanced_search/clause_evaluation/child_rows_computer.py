@@ -10,7 +10,7 @@ from arches_search.utils.advanced_search.constants import (
     CLAUSE_TYPE_RELATED,
     SUBJECT_TYPE_SEARCH_MODELS,
 )
-from arches_search.utils.advanced_search.relationship_utils import has_relationship_path
+from arches_search.utils.advanced_search.relationship_paths import has_relationship_path
 from arches_search.utils.advanced_search.specs import AggregatePredicateSpec
 
 

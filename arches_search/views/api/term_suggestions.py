@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.views import View
 
-from arches_search.utils.node_agnostic_search.term_suggestions import (
+from arches_search.utils.term_search.suggestions import (
     build_term_suggestions,
 )
 

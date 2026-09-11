@@ -4,7 +4,7 @@ from django.db.models import Q
 
 from arches.app.utils import permission_backend
 from arches_search.models.models import TermSearch
-from arches_search.utils.node_agnostic_search.term_matching import (
+from arches_search.utils.term_search.matching import (
     build_term_match_filter,
 )
 from arches_controlled_lists.models import List

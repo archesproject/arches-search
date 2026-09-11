@@ -1,16 +1,13 @@
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.advanced_search.advanced_search import (
-    SearchCompiler,
-    SearchPayload,
-)
+from arches_search.utils.search import SearchCompiler, SearchPayload
 
 
 class ResourceTypeCountsAPI(APIBase):
     def get(self, request):
         search_payload = SearchPayload(
-            graph_ids=None, node_agnostic_filters=None, advanced_search_query=None
+            graph_slugs=None, term_search=None, advanced_search_queries=None
         )
         search_result = SearchCompiler(search_payload, request.user).compile()
 

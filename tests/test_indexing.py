@@ -26,10 +26,6 @@ from arches_search.indexing.indexers.file_list import FileListIndexing
 from arches_search.indexing.indexers.string import StringIndexing
 from arches_search.models.models import FileListSearch, TermSearch
 
-# ---------------------------------------------------------------------------
-# Shared test fixture
-# ---------------------------------------------------------------------------
-
 
 class IndexingTestCase(TestCase):
     """
@@ -118,11 +114,6 @@ class IndexingTestCase(TestCase):
         return localized_value
 
 
-# ---------------------------------------------------------------------------
-# Long string tests
-# ---------------------------------------------------------------------------
-
-
 class LongStringIndexingTests(IndexingTestCase):
     """
     PostgreSQL TextField has a length limit on indexed text; these tests confirm
@@ -157,11 +148,6 @@ class LongStringIndexingTests(IndexingTestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].language, "en")
         self.assertEqual(result[0].value, "REX")
-
-
-# ---------------------------------------------------------------------------
-# File-list indexing tests
-# ---------------------------------------------------------------------------
 
 
 class FileListIndexingTests(IndexingTestCase):
@@ -225,11 +211,6 @@ class FileListIndexingTests(IndexingTestCase):
                 },
             ],
         )
-
-
-# ---------------------------------------------------------------------------
-# All-datatypes null test
-# ---------------------------------------------------------------------------
 
 
 class AllDatatypesNullIndexingTest(IndexingTestCase):

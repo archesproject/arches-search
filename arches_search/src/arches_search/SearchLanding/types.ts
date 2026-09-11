@@ -3,7 +3,7 @@ import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     DateRangeFilter,
     SearchRequestTerm,
-} from "@/arches_search/SimpleSearch/utils/search-definition.ts";
+} from "@/arches_search/SimpleSearch/types.ts";
 
 export interface LandingTab {
     slug: string;
@@ -32,7 +32,7 @@ export interface SearchDefinitionCountRequest {
         terms: SearchRequestTerm[];
         query: GroupPayload | undefined;
         dateRange: DateRangeFilter | null;
-        graphIds: string[];
+        graphSlugs: string[];
         mapFilter: FeatureCollection | null;
     };
 }

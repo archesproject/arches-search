@@ -9,6 +9,7 @@ from arches.app.models.models import GraphModel, ResourceInstance, TileModel
 from arches.app.utils.permission_backend import assign_perm
 
 from arches_search.models.models import TermSearch
+from arches_search.utils.search import SearchCompiler, SearchPayload
 
 # python manage.py test tests.test_search_permission_filtering --settings="tests.test_settings"
 #
@@ -92,13 +93,13 @@ class SearchPermissionFilteringTest(TestCase):
             resource["resourceinstanceid"] for resource in response.json()["resources"]
         }
 
-    # --- SearchAPI: graph_ids scoping (no advanced_search_query) ---
+    # --- SearchAPI: graph_slugs scoping (no advanced_search_query) ---
 
     def test_search_excludes_ungranted_resource_for_member(self):
         self.client.force_login(self.member)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
+            json.dumps({"graph_slugs": [self.graph.slug]}),
             content_type="application/json",
         )
 
@@ -114,7 +115,7 @@ class SearchPermissionFilteringTest(TestCase):
         self.client.force_login(self.outsider)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
+            json.dumps({"graph_slugs": [self.graph.slug]}),
             content_type="application/json",
         )
 
@@ -130,7 +131,7 @@ class SearchPermissionFilteringTest(TestCase):
         self.client.force_login(self.outsider)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
+            json.dumps({"graph_slugs": [self.graph.slug]}),
             content_type="application/json",
         )
 
@@ -144,7 +145,7 @@ class SearchPermissionFilteringTest(TestCase):
         self.client.force_login(self.admin)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"graph_ids": [str(self.graph.graphid)]}),
+            json.dumps({"graph_slugs": [self.graph.slug]}),
             content_type="application/json",
         )
 
@@ -177,7 +178,12 @@ class SearchPermissionFilteringTest(TestCase):
         self.client.force_login(self.member)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"advanced_search_query": self._advanced_search_body()}),
+            json.dumps(
+                {
+                    "graph_slugs": [self.graph.slug],
+                    "advanced_search_queries": [self._advanced_search_body()],
+                }
+            ),
             content_type="application/json",
         )
 
@@ -188,6 +194,34 @@ class SearchPermissionFilteringTest(TestCase):
             self.assertIn(str(self.granted_resource.resourceinstanceid), ids)
         with self.subTest("restricted resource hidden"):
             self.assertNotIn(str(self.restricted_resource.resourceinstanceid), ids)
+
+    # --- SearchCompiler: pre_filter ---
+
+    def test_pre_filter_cannot_surface_an_ungranted_resource(self):
+        results = (
+            SearchCompiler(
+                SearchPayload(
+                    graph_slugs=[self.graph.slug],
+                    term_search=None,
+                    advanced_search_queries=None,
+                ),
+                self.member,
+                pre_filter=ResourceInstance.objects.filter(
+                    resourceinstanceid__in=[
+                        self.granted_resource.resourceinstanceid,
+                        self.restricted_resource.resourceinstanceid,
+                    ]
+                ),
+            )
+            .compile()
+            .results
+        )
+
+        ids = set(results.values_list("resourceinstanceid", flat=True))
+        with self.subTest("granted resource visible"):
+            self.assertIn(self.granted_resource.resourceinstanceid, ids)
+        with self.subTest("restricted resource hidden"):
+            self.assertNotIn(self.restricted_resource.resourceinstanceid, ids)
 
     # --- TermSuggestionView ---
 

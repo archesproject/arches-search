@@ -1,5 +1,5 @@
 """
-Tests for arches_search.utils.search_sort.SortResolver.
+Tests for arches_search.utils.search.sorting.SortResolver.
 
 Covers:
   - Validation of sort spec payloads (no DB required).
@@ -15,17 +15,13 @@ from django.utils import translation
 
 from arches.app.models.models import GraphModel, ResourceInstance
 
-from arches_search.utils.search_sort import (
+from arches_search.utils.search.sorting import (
     DEFAULT_SORT,
     DIRECTION_ASC,
     DIRECTION_DESC,
     SORT_TYPE_PRIMARY_NAME,
     SortResolver,
 )
-
-# ---------------------------------------------------------------------------
-# Validation
-# ---------------------------------------------------------------------------
 
 
 class SortResolverValidationTests(SimpleTestCase):
@@ -64,11 +60,6 @@ class SortResolverValidationTests(SimpleTestCase):
     def test_omitted_direction_defaults_to_asc(self):
         resolver = SortResolver([{"type": SORT_TYPE_PRIMARY_NAME}])
         self.assertEqual(resolver.sort_specs, [{"type": SORT_TYPE_PRIMARY_NAME}])
-
-
-# ---------------------------------------------------------------------------
-# Apply (integration with a real queryset)
-# ---------------------------------------------------------------------------
 
 
 class SortResolverApplyTests(TestCase):

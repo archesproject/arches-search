@@ -1,7 +1,7 @@
 import Cookies from "js-cookie";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
-import { buildSearchApiRequestBody } from "@/arches_search/SimpleSearch/api.ts";
+import { buildSearchApiRequestBody } from "@/arches_search/SimpleSearch/utils/search-payload-builder.ts";
 
 import type {
     ResourceTypeCount,

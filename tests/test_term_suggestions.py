@@ -267,9 +267,7 @@ class TermSuggestionViewTests(TestCase):
         # Patched well below the 5 incidental string matches, so the
         # non-reference bucket alone would drop some of them -- proving the
         # reference bucket (only 1 candidate) is scanned independently.
-        with mock.patch(
-            "arches_search.utils.node_agnostic_search.term_suggestions.MAX_RESULTS", 3
-        ):
+        with mock.patch("arches_search.utils.term_search.suggestions.MAX_RESULTS", 3):
             response = self.client.get(
                 reverse("term_suggestion_search"), {"q": shared_substring}
             )

@@ -1,4 +1,4 @@
-"""Tests for the generic N-hop traversal engine, in isolation from any
+"""Tests for the anonymous N-hop expansion engine, in isolation from any
 particular search-index table (text/geometry/date matching each have their
 own tests for how they seed it)."""
 
@@ -9,14 +9,14 @@ from django.test import TestCase
 
 from arches.app.models.models import GraphModel, ResourceInstance, ResourceXResource
 
-from arches_search.utils.node_agnostic_search.relationship_traversal import (
+from arches_search.utils.term_search.relationship_expansion import (
     expand_matches_via_relationships,
 )
 
-# python manage.py test tests.test_relationship_traversal --settings="tests.test_settings"
+# python manage.py test tests.test_relationship_expansion --settings="tests.test_settings"
 
 
-class RelationshipTraversalTests(TestCase):
+class RelationshipExpansionTests(TestCase):
     """
     target graph <- 1 hop -> bridge graph <- 1 hop -> seed graph
 
