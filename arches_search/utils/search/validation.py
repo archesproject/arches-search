@@ -9,14 +9,42 @@ them.
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
+from arches.app.models.system_settings import settings
+
 from arches_search.utils.term_search.relationship_expansion import MAX_ALLOWED_HOPS
 
 MAX_PAGE_SIZE = 200
+# Used when SEARCH_ITEMS_PER_PAGE is blank or not a positive number.
+FALLBACK_PAGE_SIZE = 20
 
 
 def _positive_integer(value) -> bool:
     # bool is an int subclass, and True would otherwise pass as page 1.
     return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+
+def default_page_size() -> int:
+    """
+    SEARCH_ITEMS_PER_PAGE, the setting core search pages by and the system
+    settings UI exposes.
+
+    Read on each call rather than at import, because the value saved in the UI
+    is loaded into settings after import and again whenever it is saved. It is
+    a number node, so it can arrive as a float, or as None if left blank.
+    """
+    configured = settings.SEARCH_ITEMS_PER_PAGE
+    if (
+        isinstance(configured, (int, float))
+        and not isinstance(configured, bool)
+        and configured >= 1
+    ):
+        return int(configured)
+    return FALLBACK_PAGE_SIZE
+
+
+def max_page_size() -> int:
+    # Never below the default, or a request naming no page_size would be a 400.
+    return max(MAX_PAGE_SIZE, default_page_size())
 
 
 def validate_paging(page, page_size) -> None:
@@ -28,10 +56,11 @@ def validate_paging(page, page_size) -> None:
     if not _positive_integer(page):
         raise ValidationError(_("page must be a positive integer."))
 
-    if not _positive_integer(page_size) or page_size > MAX_PAGE_SIZE:
+    upper_bound = max_page_size()
+    if not _positive_integer(page_size) or page_size > upper_bound:
         raise ValidationError(
             _("page_size must be an integer between 1 and %(max)s.")
-            % {"max": MAX_PAGE_SIZE}
+            % {"max": upper_bound}
         )
 
 

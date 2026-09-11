@@ -1,9 +1,9 @@
 """
 Compiles a SearchPayload into the resources it matches.
 
-One graph at a time: each is narrowed by the term search, then by the advanced
-search payload addressing it, and the results are unioned. A graph no payload
-addresses is returned whole.
+One graph at a time: each is narrowed to the caller's pre_filter and the term
+search, when given, then by the advanced search payload addressing it, and the
+results are unioned. A graph no payload addresses skips that last step.
 """
 
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple
@@ -67,11 +67,13 @@ def _union_all(querysets: Iterable[QuerySet]) -> QuerySet:
 
 
 def _counts_by_graph_id(matches: QuerySet) -> Dict[str, int]:
+    # A pre_filter's ordering would otherwise join graph_id in the GROUP BY and
+    # split each graph's count across rows.
     return {
         str(row["graph_id"]): row["count"]
-        for row in matches.values("graph_id").annotate(
-            count=Count("resourceinstanceid")
-        )
+        for row in matches.order_by()
+        .values("graph_id")
+        .annotate(count=Count("resourceinstanceid"))
     }
 
 
@@ -91,9 +93,22 @@ def _resource_type_counts(
 
 
 class SearchCompiler:
-    def __init__(self, search_payload: SearchPayload, user) -> None:
+    """
+    pre_filter, when given, is an existing ResourceInstance queryset to search
+    within. Each graph compiles inside it rather than over the whole graph, and
+    the results come back as that queryset, filtered. It can only narrow: the
+    permission filter still applies.
+    """
+
+    def __init__(
+        self,
+        search_payload: SearchPayload,
+        user,
+        pre_filter: Optional[QuerySet] = None,
+    ) -> None:
         self.search_payload = search_payload
         self.user = user
+        self.pre_filter = pre_filter
         self.facet_registry = FacetRegistry()
         self.search_model_registry = SearchModelRegistry()
         # One payload per graph at most; two for the same graph is already a
@@ -159,16 +174,24 @@ class SearchCompiler:
         return graphs_to_search
 
     def _permitted_matches(self, graphs_to_search: List[SearchableGraph]) -> QuerySet:
-        """Each graph's matches, unioned, then narrowed to what the user may see."""
+        """
+        Each graph's matches, unioned, then narrowed to what the user may see.
+
+        Built on pre_filter when there is one, so a caller gets back the queryset
+        it passed in, filtered, rather than a plain ResourceInstance queryset.
+        """
         per_graph_ids = [
             self._compile_graph(graph).values_list("resourceinstanceid", flat=True)
             for graph in graphs_to_search
         ]
+        base = (
+            self.pre_filter
+            if self.pre_filter is not None
+            else ResourceInstance.objects.all()
+        )
         return permission_backend.filter_resource_queryset(
             self.user,
-            ResourceInstance.objects.filter(
-                resourceinstanceid__in=_union_all(per_graph_ids)
-            ),
+            base.filter(resourceinstanceid__in=_union_all(per_graph_ids)),
         )
 
     def _scope_to_requested(
@@ -202,28 +225,49 @@ class SearchCompiler:
         One graph's contribution to the result set.
 
         A graph addressed by an advanced search payload is filtered by it; a
-        graph nothing addresses is returned whole, narrowed only by the term
-        search.
+        graph nothing addresses is returned whole, narrowed only by pre_filter
+        and the term search.
         """
-        term_search_pre_filter = self._term_search_pre_filter(graph.id)
+        graph_resources = self._graph_resources(graph.id)
         advanced_search_payload = self.payloads_by_slug.get(graph.slug)
 
         if advanced_search_payload is None:
-            if term_search_pre_filter is not None:
-                return term_search_pre_filter
-            return ResourceInstance.objects.filter(graph_id=graph.id)
+            return graph_resources
 
         return AdvancedSearchQueryCompiler(
             advanced_search_payload,
             facet_registry=self.facet_registry,
             search_model_registry=self.search_model_registry,
             user=self.user,
-        ).compile(pre_filter=term_search_pre_filter)
+        ).compile(pre_filter=graph_resources)
 
-    def _term_search_pre_filter(self, graph_id: str) -> Optional[QuerySet]:
+    def _graph_resources(self, graph_id: str) -> QuerySet:
         """
-        This graph's resources narrowed by the term search, or None when there
-        is not one.
+        This graph's resources, narrowed by pre_filter and the term search when
+        either is given -- the set its advanced search payload compiles over.
+
+        pre_filter is applied here, per graph, rather than once after the union,
+        so a narrow pre_filter keeps each graph's compile narrow too.
+        """
+        resources = ResourceInstance.objects.filter(graph_id=graph_id)
+
+        if self.pre_filter is not None:
+            resources = resources.filter(
+                resourceinstanceid__in=self.pre_filter.values("resourceinstanceid")
+            )
+
+        term_search_matches = self._term_search_matches(graph_id)
+        if term_search_matches is not None:
+            resources = resources.filter(
+                resourceinstanceid__in=term_search_matches.values("resourceinstanceid")
+            )
+
+        return resources
+
+    def _term_search_matches(self, graph_id: str) -> Optional[QuerySet]:
+        """
+        What the term search matches in this graph, or None when there is not
+        one.
 
         get_related_resources_by_text expands each term independently and then
         intersects, so every term is handled in a single call.
@@ -232,12 +276,8 @@ class SearchCompiler:
         if not term_search or not term_search.get("terms"):
             return None
 
-        matches = get_related_resources_by_text(
+        return get_related_resources_by_text(
             term_search["terms"],
             graph_id,
             max_hops=term_search.get("max_hops") or 0,
-        )
-        return ResourceInstance.objects.filter(
-            graph_id=graph_id,
-            resourceinstanceid__in=matches.values("resourceinstanceid"),
         )

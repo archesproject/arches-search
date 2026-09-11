@@ -18,7 +18,7 @@ from arches_search.utils.advanced_search.clause_evaluation.resource_field_clause
 from arches_search.utils.advanced_search.clause_evaluation.tile_scope_evaluator import (
     TileScopeEvaluator,
 )
-from arches_search.utils.advanced_search.relationship_utils import (
+from arches_search.utils.advanced_search.relationship_paths import (
     has_relationship_path,
 )
 

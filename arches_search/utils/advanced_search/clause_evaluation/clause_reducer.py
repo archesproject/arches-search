@@ -17,7 +17,7 @@ from arches_search.utils.advanced_search.clause_evaluation.tile_scope_evaluator 
 from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
-from arches_search.utils.advanced_search.relationship_utils import (
+from arches_search.utils.advanced_search.relationship_paths import (
     has_relationship_path,
 )
 from arches_search.utils.advanced_search.constants import (

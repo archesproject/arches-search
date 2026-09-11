@@ -9,7 +9,7 @@ from arches_search.utils.advanced_search.constants import (
     SUBJECT_TYPE_RESOURCE_FIELD,
     SUBJECT_TYPE_SEARCH_MODELS,
 )
-from arches_search.utils.advanced_search.relationship_utils import (
+from arches_search.utils.advanced_search.relationship_paths import (
     is_node_relationship_path,
 )
 

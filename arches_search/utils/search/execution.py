@@ -6,9 +6,10 @@ Arches application, a management command, a report -- calls execute_search
 directly rather than posting to the endpoint.
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from django.core.paginator import EmptyPage, Paginator
+from django.db.models import QuerySet
 
 from arches.app.utils.betterJSONSerializer import JSONSerializer
 
@@ -19,6 +20,7 @@ from arches_search.utils.search.additional_data.additional_data import (
 from arches_search.utils.search.compiler import SearchCompiler
 from arches_search.utils.search.types import SearchRequest, SearchResponse
 from arches_search.utils.search.validation import (
+    default_page_size,
     validate_paging,
     validate_search_payload,
 )
@@ -26,21 +28,31 @@ from arches_search.utils.search.aggregation import build_aggregations
 from arches_search.utils.search.sorting import SORT_TYPE_NODE, SortResolver
 
 
-def execute_search(search_request: SearchRequest, user) -> SearchResponse:
+def execute_search(
+    search_request: SearchRequest, user, pre_filter: Optional[QuerySet] = None
+) -> SearchResponse:
     """
     Raises ValidationError for anything the caller got wrong, which the API
     turns into a 400.
+
+    pre_filter is an existing ResourceInstance queryset to search within; see
+    SearchCompiler.
     """
     payload = search_request.payload
+    page_size = (
+        search_request.page_size
+        if search_request.page_size is not None
+        else default_page_size()
+    )
 
     validate_search_payload(payload)
     validate_additional_data(search_request.additional_data)
-    validate_paging(search_request.page, search_request.page_size)
+    validate_paging(search_request.page, page_size)
     sort_resolver = SortResolver(search_request.sort)
 
     # Compiling validates the payload as it goes, so it belongs inside the same
     # guarded stretch: an unknown field is a bad request, not a 500.
-    search_result = SearchCompiler(payload, user).compile()
+    search_result = SearchCompiler(payload, user, pre_filter=pre_filter).compile()
 
     additional_data = AdditionalData(
         search_request.additional_data,
@@ -54,7 +66,7 @@ def execute_search(search_request: SearchRequest, user) -> SearchResponse:
         node_column_annotations=additional_data.node_annotation_names,
     )
 
-    paginator = Paginator(results_queryset, search_request.page_size)
+    paginator = Paginator(results_queryset, page_size)
     # Skips Paginator's own COUNT(*) -- the total is already known.
     paginator.count = search_result.scoped_count
 
@@ -70,7 +82,7 @@ def execute_search(search_request: SearchRequest, user) -> SearchResponse:
         resources=_serialize_resources(page_resources, additional_data),
         pagination={
             "page": search_request.page,
-            "page_size": search_request.page_size,
+            "page_size": page_size,
             "total_results": paginator.count,
             "num_pages": paginator.num_pages,
             "has_next": has_next,

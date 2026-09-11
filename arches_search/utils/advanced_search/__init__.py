@@ -12,4 +12,7 @@ per graph it filters; utils.search is what holds that list.
     registries/             facets, search models, node datatypes
     operand_normalization/  coercing client values, per datatype
     path_navigator.py       traversal along named, directed node paths
+    relationship_paths.py   checks on the shape of a payload's relationship path
+    metadata/               what the query builder's endpoints serve: pickable
+                            nodes, relatable node trees, labels and names
 """

@@ -1,6 +1,6 @@
 # Welcome to Arches Search!
 
-Arches Search is an Arches application that replaces core search. It ships a Simple Search interface with per-graph attribute filters, an Advanced Search query builder, map-based (MVT) search, saved and shareable searches, and the indexes behind them.
+Arches Search is an Arches application that provides a modern, configurable search experience for Arches. It ships a Simple Search interface with per-graph attribute filters, an Advanced Search query builder, map-based (MVT) search, saved and shareable searches, and supporting search indexes.
 
 Please see the [project page](http://archesproject.org/) for more information on the Arches project.
 
@@ -992,6 +992,17 @@ aliases you asked for:
 Three results in that state. The aggregation runs over the whole matching set,
 not just the current page, so a facet count does not change as you page through.
 
+### Paging
+
+`page` counts from 1. `page_size` defaults to `SEARCH_ITEMS_PER_PAGE`, the
+setting core search pages by, so a value saved in the system settings UI applies
+here too. Core ships it as 5, so set it in your project if that is too few.
+Simple Search sends no `page_size`, so it pages by the setting.
+
+A request may name its own `page_size`, up to 200 — or up to
+`SEARCH_ITEMS_PER_PAGE`, if that is configured higher. Anything outside that
+range is a 400 rather than a query large enough to hurt the server.
+
 ### Permissions
 
 A resource field clause narrows the candidate set and nothing more.
@@ -1000,6 +1011,39 @@ step, so no filter value can surface a resource the requester could not
 otherwise see. `IS_CURRENT_USER` resolves server-side from the request user;
 for an unauthenticated request it matches nothing rather than matching every
 resource with no creator.
+
+### Searching within an existing queryset
+
+Code running in the same Django process — another Arches application, a
+management command, a report — can call the search directly rather than posting
+to the endpoint, and can hand it a `ResourceInstance` queryset to search within:
+
+```python
+from arches.app.models.models import ResourceInstance
+from arches_search.utils.search import (
+    SearchCompiler,
+    SearchPayload,
+    SearchRequest,
+    execute_search,
+)
+
+candidates = ResourceInstance.objects.filter(resourceinstanceid__in=resource_ids)
+
+# A page of results, shaped as the endpoint returns them:
+response = execute_search(SearchRequest.from_body(body), user, pre_filter=candidates)
+
+# Or only the matching queryset:
+results = SearchCompiler(
+    SearchPayload.from_body(body), user, pre_filter=candidates
+).compile().results
+```
+
+Each graph is compiled inside `pre_filter` rather than over the whole graph, so
+a narrow queryset keeps the search narrow, and `results` is that queryset,
+filtered. `resource_type_counts` and `all_resource_count` count within it. It
+can only narrow: the permission filter above still runs last, so a resource the
+user may not see stays hidden even if `pre_filter` includes it. Pass it
+unsliced.
 
 ## Other endpoints
 

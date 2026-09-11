@@ -12,7 +12,7 @@ from arches_search.utils.advanced_search.registries.search_model_registry import
 from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
-from arches_search.utils.advanced_search.relationship_utils import (
+from arches_search.utils.advanced_search.relationship_paths import (
     relationship_path_to_pair,
 )
 

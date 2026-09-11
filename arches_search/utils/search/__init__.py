@@ -6,7 +6,8 @@ Search as a callable, independent of any HTTP endpoint.
     response = execute_search(SearchRequest.from_body(body), user)
 
 Callers wanting only the matching queryset -- an export, a map tile -- can use
-SearchCompiler directly and skip the projection and pagination above it.
+SearchCompiler directly and skip the projection and pagination above it. Both
+take pre_filter, an existing ResourceInstance queryset to search within.
 
     types.py       what a search is asked for, and what it returns
     validation.py  the shape of those keys, checked before anything compiles

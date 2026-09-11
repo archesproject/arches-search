@@ -7,6 +7,8 @@ mechanism -- see test_geo_and_date_search_model_clauses.py."""
 
 import json
 import uuid
+from types import SimpleNamespace
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -25,7 +27,14 @@ from arches_search.models.models import DateSearch, GeometrySearch, TermSearch
 from arches_search.utils.search import (
     SearchCompiler,
     SearchPayload,
+    SearchRequest,
+    execute_search,
     validate_advanced_search_queries,
+)
+from arches_search.utils.search.validation import (
+    FALLBACK_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    default_page_size,
 )
 from tests.integration.utils.advanced_search.test_advanced_search import (
     AdvancedSearchSetupMixin,
@@ -43,6 +52,10 @@ from tests.integration.utils.advanced_search.test_advanced_search import (
 
 
 _UNSET = object()
+
+# Where validation reads SEARCH_ITEMS_PER_PAGE. override_settings cannot reach
+# it: system settings are a LazySettings of their own.
+SYSTEM_SETTINGS = "arches_search.utils.search.validation.settings"
 
 
 def _encode_date(date_string):
@@ -151,6 +164,7 @@ class SearchCompilerTests(TestCase):
         graph_slugs=_UNSET,
         term_search=None,
         advanced_search_queries=None,
+        pre_filter=None,
     ):
         # Explicit rather than **kwargs, so a renamed payload key is a
         # TypeError instead of a quietly unfiltered search.
@@ -163,7 +177,7 @@ class SearchCompilerTests(TestCase):
             term_search=term_search,
             advanced_search_queries=advanced_search_queries,
         )
-        return SearchCompiler(payload, self.user).compile()
+        return SearchCompiler(payload, self.user, pre_filter=pre_filter).compile()
 
     def _result_ids(self, result):
         return set(result.results.values_list("resourceinstanceid", flat=True))
@@ -447,6 +461,112 @@ class SearchCompilerTests(TestCase):
         )
         self.assertEqual(result.scoped_count, 1)
 
+    def _post_search(self, body):
+        self.client.force_login(self.user)
+        return self.client.post(
+            reverse("search"), json.dumps(body), content_type="application/json"
+        )
+
+    def test_page_size_defaults_to_search_items_per_page(self):
+        with mock.patch(SYSTEM_SETTINGS, SimpleNamespace(SEARCH_ITEMS_PER_PAGE=1)):
+            response = self._post_search({"graph_slugs": [self.graph_a.slug]})
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["pagination"]["page_size"], 1)
+        self.assertEqual(len(body["resources"]), 1)
+        # graph_a holds two resources, so one per page leaves another page.
+        self.assertTrue(body["pagination"]["has_next"])
+
+    def test_a_configured_page_size_above_the_cap_raises_the_cap(self):
+        configured = MAX_PAGE_SIZE + 50
+        with mock.patch(
+            SYSTEM_SETTINGS, SimpleNamespace(SEARCH_ITEMS_PER_PAGE=configured)
+        ):
+            default_request = self._post_search({"graph_slugs": [self.graph_a.slug]})
+            oversized_request = self._post_search(
+                {"graph_slugs": [self.graph_a.slug], "page_size": configured + 1}
+            )
+
+        with self.subTest("the default is never rejected"):
+            self.assertEqual(default_request.status_code, 200)
+            self.assertEqual(
+                default_request.json()["pagination"]["page_size"], configured
+            )
+        with self.subTest("but a request past it still is"):
+            self.assertEqual(oversized_request.status_code, 400)
+
+    def test_an_unusable_configured_page_size_falls_back(self):
+        for configured, expected in (
+            (25.0, 25),
+            (None, FALLBACK_PAGE_SIZE),
+            (0, FALLBACK_PAGE_SIZE),
+            (True, FALLBACK_PAGE_SIZE),
+        ):
+            with self.subTest(configured=configured):
+                with mock.patch(
+                    SYSTEM_SETTINGS, SimpleNamespace(SEARCH_ITEMS_PER_PAGE=configured)
+                ):
+                    self.assertEqual(default_page_size(), expected)
+
+    def test_pre_filter_narrows_the_results_and_the_counts(self):
+        result = self._search(
+            pre_filter=ResourceInstance.objects.filter(
+                resourceinstanceid__in=[
+                    self.quartz_mineral.resourceinstanceid,
+                    self.amber_site.resourceinstanceid,
+                ]
+            )
+        )
+        counts_by_graph_id = {
+            row["graph_id"]: row["count"] for row in result.resource_type_counts
+        }
+
+        self.assertEqual(
+            self._result_ids(result),
+            {
+                self.quartz_mineral.resourceinstanceid,
+                self.amber_site.resourceinstanceid,
+            },
+        )
+        self.assertEqual(counts_by_graph_id[str(self.graph_a.graphid)], 1)
+        self.assertEqual(counts_by_graph_id[str(self.graph_b.graphid)], 1)
+        self.assertEqual(result.all_resource_count, 2)
+        self.assertEqual(result.scoped_count, 2)
+
+    def test_pre_filter_and_the_term_search_intersect(self):
+        # "amber" matches amber_mineral and amber_site; the pre_filter holds
+        # both minerals. Only amber_mineral is in both.
+        result = self._search(
+            term_search={"terms": ["amber"], "max_hops": 0},
+            pre_filter=ResourceInstance.objects.filter(graph=self.graph_a),
+        )
+
+        self.assertEqual(
+            self._result_ids(result), {self.amber_mineral.resourceinstanceid}
+        )
+
+    def test_an_ordered_pre_filter_does_not_split_the_counts(self):
+        pre_filter = ResourceInstance.objects.filter(graph=self.graph_a)
+        unordered = self._search(pre_filter=pre_filter)
+        ordered = self._search(pre_filter=pre_filter.order_by("resourceinstanceid"))
+
+        self.assertEqual(ordered.resource_type_counts, unordered.resource_type_counts)
+        self.assertEqual(ordered.scoped_count, 2)
+
+    def test_execute_search_searches_within_pre_filter(self):
+        response = execute_search(
+            SearchRequest.from_body({"graph_slugs": [self.graph_a.slug]}),
+            self.user,
+            pre_filter=ResourceInstance.objects.filter(pk=self.quartz_mineral.pk),
+        )
+
+        self.assertEqual(
+            [str(resource["resourceinstanceid"]) for resource in response.resources],
+            [str(self.quartz_mineral.resourceinstanceid)],
+        )
+        self.assertEqual(response.pagination["total_results"], 1)
+
 
 class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
     """
@@ -527,7 +647,7 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
             "relationship": None,
         }
 
-    def _search(self, advanced_search_queries=None, graph_slugs=None):
+    def _search(self, advanced_search_queries=None, graph_slugs=None, pre_filter=None):
         return SearchCompiler(
             SearchPayload(
                 graph_slugs=graph_slugs,
@@ -535,6 +655,7 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
                 advanced_search_queries=advanced_search_queries,
             ),
             self.user,
+            pre_filter=pre_filter,
         ).compile()
 
     @staticmethod
@@ -595,3 +716,21 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
             validate_advanced_search_queries(
                 [self._person_payload("FOO"), self._person_payload("BAR")]
             )
+
+    def test_pre_filter_narrows_addressed_and_unaddressed_graphs_alike(self):
+        # Tails over 100 keep dog_b and dog_d; the pre_filter holds dog_a and
+        # dog_b, so only dog_b survives both. Person has no payload, so it is
+        # narrowed by the pre_filter alone.
+        result = self._search(
+            [self._dog_payload(100)],
+            graph_slugs=["person", "dog"],
+            pre_filter=ResourceInstance.objects.filter(
+                resourceinstanceid__in=[PERSON_A_ID, PERSON_B_ID, DOG_A_ID, DOG_B_ID]
+            ),
+        )
+        ids = self._ids(result)
+
+        with self.subTest("the addressed graph is filtered within it"):
+            self.assertEqual(ids & self.DOG_IDS, {DOG_B_ID})
+        with self.subTest("the unaddressed graph is narrowed to it"):
+            self.assertEqual(ids & self.PERSON_IDS, {PERSON_A_ID, PERSON_B_ID})
