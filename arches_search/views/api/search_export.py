@@ -5,7 +5,8 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.views.api import APIBase
 
 from arches_search.etl_modules.search_results_export import SearchResultsExportModule
-from arches_search.utils.simple_search.search_queryset import build_search_queryset
+from arches_search.utils.advanced_search.advanced_search import SearchCompiler
+from arches_search.views.api.search import build_search_payload
 
 
 class SearchExportAPI(APIBase):
@@ -18,7 +19,8 @@ class SearchExportAPI(APIBase):
             filename = f"{filename}.xlsx"
 
         language = None if all_descriptors else get_language()
-        queryset = build_search_queryset(body, request.user)
+        search_payload = build_search_payload(body)
+        queryset = SearchCompiler(search_payload, request.user).compile().results
 
         exporter = SearchResultsExportModule()
         excel_bytes = exporter.export(queryset, language=language)

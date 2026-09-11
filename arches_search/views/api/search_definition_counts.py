@@ -6,7 +6,11 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.simple_search.search_queryset import build_search_queryset
+from arches_search.utils.advanced_search.advanced_search import (
+    SearchCompiler,
+    validate_node_agnostic_filters,
+)
+from arches_search.views.api.search import build_search_payload
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +24,12 @@ class SearchDefinitionCountsAPI(APIBase):
         for item in items:
             item_id = item["id"]
             try:
-                counts[item_id] = build_search_queryset(
-                    item["body"], request.user
-                ).count()
+                item_body = item["body"]
+                validate_node_agnostic_filters(item_body.get("node_agnostic_filters"))
+                search_result = SearchCompiler(
+                    build_search_payload(item_body), request.user
+                ).compile()
+                counts[item_id] = search_result.scoped_count
             except Exception:
                 logger.exception(
                     _("Failed to compute search definition count for item %(item_id)s")

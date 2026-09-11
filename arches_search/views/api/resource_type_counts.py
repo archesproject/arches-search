@@ -1,16 +1,18 @@
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.simple_search.search_queryset import (
-    SimpleSearchQuerysetBuilder,
-    build_resource_type_counts,
+from arches_search.utils.advanced_search.advanced_search import (
+    SearchCompiler,
+    SearchPayload,
 )
 
 
 class ResourceTypeCountsAPI(APIBase):
     def get(self, request):
-        queryset = SimpleSearchQuerysetBuilder({}, request.user).type_agnostic_queryset
-        resource_type_counts, _ = build_resource_type_counts([], queryset)
+        search_payload = SearchPayload(
+            graph_ids=None, node_agnostic_filters=None, advanced_search_query=None
+        )
+        search_result = SearchCompiler(search_payload, request.user).compile()
 
         return JSONResponse(
             {
@@ -19,7 +21,7 @@ class ResourceTypeCountsAPI(APIBase):
                         "graphId": entry["graph_id"],
                         "count": entry["count"],
                     }
-                    for entry in resource_type_counts
+                    for entry in search_result.resource_type_counts
                 ],
             }
         )

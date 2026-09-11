@@ -1,6 +1,7 @@
 import Cookies from "js-cookie";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
+import { buildSearchApiRequestBody } from "@/arches_search/SimpleSearch/api.ts";
 
 import type {
     ResourceTypeCount,
@@ -31,7 +32,12 @@ export async function fetchSearchDefinitionCounts(
                 "Content-Type": "application/json",
                 "X-CSRFToken": Cookies.get("csrftoken") || "",
             },
-            body: JSON.stringify({ items }),
+            body: JSON.stringify({
+                items: items.map((item) => ({
+                    id: item.id,
+                    body: buildSearchApiRequestBody(item.body),
+                })),
+            }),
         },
     );
     if (!response.ok) {

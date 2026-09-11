@@ -7,6 +7,7 @@ import {
     fetchSearchResults,
 } from "@/arches_search/SimpleSearch/api.ts";
 import {
+    buildRequestDateRange,
     buildRequestQuery,
     buildRequestTerms,
 } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
@@ -28,13 +29,17 @@ import type {
     SortSpec,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
-import type { SearchRequestTerm } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
+import type {
+    DateRangeFilter,
+    SearchRequestTerm,
+} from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import type { FeatureCollection } from "geojson";
 
 interface ExportPayload {
     terms: SearchRequestTerm[];
     query: GroupPayload | undefined;
     graphIds: string[];
+    dateRange: DateRangeFilter | null;
 }
 
 interface SearchFilters {
@@ -252,9 +257,11 @@ function createSearchFilters(): SearchFilters {
 
             try {
                 const requestGraphs = activeGraphs.value;
+                const requestQueries = [...queries.value.values()];
                 const searchParams = {
                     terms: toRequestTerms([...terms.value.values()]),
-                    query: buildRequestQuery([...queries.value.values()]),
+                    query: buildRequestQuery(requestQueries),
+                    dateRange: buildRequestDateRange(requestQueries),
                     page,
                     graphIds: requestGraphs.map((graph) => graph.id as string),
                     mapFilter: mapFilter.value,
@@ -360,10 +367,12 @@ function createSearchFilters(): SearchFilters {
     }
 
     function getExportPayload(): ExportPayload {
+        const requestQueries = [...queries.value.values()];
         return {
             terms: toRequestTerms([...terms.value.values()]),
-            query: buildRequestQuery([...queries.value.values()]),
+            query: buildRequestQuery(requestQueries),
             graphIds: activeGraphs.value.map((graph) => graph.id as string),
+            dateRange: buildRequestDateRange(requestQueries),
         };
     }
 

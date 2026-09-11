@@ -1,4 +1,7 @@
-import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    ClauseSubjectTypeToken,
+    LogicToken,
+} from "@/arches_search/AdvancedSearch/types.ts";
 import {
     TERM_KIND_CONTROLLED_TERM,
     TERM_KIND_RECORD,
@@ -18,6 +21,11 @@ export interface SearchRequestTerm {
     inverted: boolean;
 }
 
+export interface DateRangeFilter {
+    from: string;
+    to: string;
+}
+
 export function isTermKind(value: unknown): value is TermKind {
     return value === TERM_KIND_CONTROLLED_TERM || value === TERM_KIND_RECORD;
 }
@@ -34,21 +42,50 @@ export function buildRequestTerms(
     });
 }
 
+// The "all date nodes" time filter is stored as a single SEARCH_MODELS clause,
+// but is sent as a DATE_RANGE node_agnostic_filters entry rather than as part
+// of the query — see buildRequestDateRange.
+function isNodeAgnosticDateQuery(payload: GroupPayload): boolean {
+    return (
+        payload.clauses.length === 1 &&
+        payload.clauses[0].subject.type === ClauseSubjectTypeToken.SEARCH_MODELS
+    );
+}
+
+export function buildRequestDateRange(
+    queries: GroupPayload[],
+): DateRangeFilter | null {
+    const dateQuery = queries.find(isNodeAgnosticDateQuery);
+    if (!dateQuery) {
+        return null;
+    }
+    const [fromOperand, toOperand] = dateQuery.clauses[0].operands;
+    return {
+        from: fromOperand.value as string,
+        to:
+            (toOperand?.value as string | undefined) ??
+            (fromOperand.value as string),
+    };
+}
+
 export function buildRequestQuery(
     queries: GroupPayload[],
 ): GroupPayload | undefined {
-    if (queries.length === 0) {
+    const advancedQueries = queries.filter(
+        (payload) => !isNodeAgnosticDateQuery(payload),
+    );
+    if (advancedQueries.length === 0) {
         return undefined;
     }
-    if (queries.length === 1) {
-        return queries[0];
+    if (advancedQueries.length === 1) {
+        return advancedQueries[0];
     }
     return {
-        graph_slug: queries[0].graph_slug,
-        scope: queries[0].scope,
+        graph_slug: advancedQueries[0].graph_slug,
+        scope: advancedQueries[0].scope,
         logic: LogicToken.AND,
         clauses: [],
-        groups: queries,
+        groups: advancedQueries,
         aggregations: [],
         relationship: null,
     };
