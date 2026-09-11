@@ -1,18 +1,26 @@
 from typing import Any, Dict, List, Optional
 
 from django.core.exceptions import ValidationError
-from django.db.models import F, QuerySet
+from django.db.models import F, OuterRef, QuerySet, Subquery
 from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Lower
 from django.utils.translation import get_language, gettext as _
 
+from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
+    NodeAliasDatatypeRegistry,
+)
+from arches_search.utils.advanced_search.registries.search_model_registry import (
+    SearchModelRegistry,
+)
+
 SORT_TYPE_PRIMARY_NAME = "primary_name"
 SORT_TYPE_CREATED_TIME = "created_time"
+SORT_TYPE_NODE = "node"
 DIRECTION_ASC = "asc"
 DIRECTION_DESC = "desc"
 
 ALLOWED_DIRECTIONS = {DIRECTION_ASC, DIRECTION_DESC}
-ALLOWED_SORT_TYPES = {SORT_TYPE_PRIMARY_NAME, SORT_TYPE_CREATED_TIME}
+ALLOWED_SORT_TYPES = {SORT_TYPE_PRIMARY_NAME, SORT_TYPE_CREATED_TIME, SORT_TYPE_NODE}
 
 # Applied when no sort is supplied in the payload. Empty = no user-visible
 # ordering (the id tie-break still runs for stable pagination). Populate with
@@ -26,7 +34,7 @@ class SortResolver:
     Applies a list of sort specs to a ResourceInstance queryset.
 
     Each spec is a dict: {"type": "<sort_type>", "direction": "asc"|"desc", ...}.
-    Extra keys may be used by specific sort types (e.g. node sorts in the future).
+    Extra keys may be used by specific sort types (e.g. "node" sorts need "graph_slug" and "node_alias").
 
     Registered sort types:
       - "primary_name": sort by descriptors[active-language].name
@@ -35,6 +43,8 @@ class SortResolver:
       - "created_time": sort by ResourceInstance.createdtime (the resource's
         actual creation timestamp — there is no "last modified" field to
         sort by instead).
+      - "node": sort by a single sortable node's value, given "graph_slug"
+        and "node_alias".
 
     The resolver always appends a stable tie-break on resourceinstanceid so
     paginated results are deterministic.
@@ -45,6 +55,8 @@ class SortResolver:
             sort_specs = DEFAULT_SORT
         self._validate(sort_specs)
         self.sort_specs = sort_specs
+        self._node_alias_datatype_registry = NodeAliasDatatypeRegistry()
+        self._search_model_registry = SearchModelRegistry()
 
     def apply(self, queryset: QuerySet) -> QuerySet:
         order_expressions: List[Any] = []
@@ -55,6 +67,9 @@ class SortResolver:
                 order_expressions.append(ordering)
             elif spec["type"] == SORT_TYPE_CREATED_TIME:
                 order_expressions.append(self._apply_created_time(spec))
+            elif spec["type"] == SORT_TYPE_NODE:
+                queryset, ordering = self._apply_node(queryset, spec, index)
+                order_expressions.append(ordering)
 
         order_expressions.append(F("resourceinstanceid").asc())
         return queryset.order_by(*order_expressions)
@@ -86,6 +101,39 @@ class SortResolver:
             if direction == DIRECTION_ASC
             else created_time_field.desc()
         )
+
+    def _apply_node(self, queryset: QuerySet, spec: Dict[str, Any], index: int):
+        graph_slug = spec["graph_slug"]
+        node_alias = spec["node_alias"]
+
+        datatype_name = self._node_alias_datatype_registry.get_datatype_for_alias(
+            graph_slug, node_alias
+        )
+        value_model = self._search_model_registry.get_value_model_for_datatype(
+            datatype_name
+        )
+
+        node_annotation = f"_sort_node_{index}"
+        queryset = queryset.annotate(
+            **{
+                node_annotation: Subquery(
+                    value_model.objects.filter(
+                        graph_slug=graph_slug,
+                        node_alias=node_alias,
+                        resourceinstanceid=OuterRef("resourceinstanceid"),
+                    ).values("value")[:1]
+                )
+            }
+        )
+
+        direction = spec.get("direction", DIRECTION_ASC)
+        node_field = F(node_annotation)
+        ordering = (
+            node_field.asc(nulls_last=True)
+            if direction == DIRECTION_ASC
+            else node_field.desc(nulls_last=True)
+        )
+        return queryset, ordering
 
     @staticmethod
     def _validate(sort_specs: Any) -> None:
