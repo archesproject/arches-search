@@ -70,6 +70,8 @@ class SearchCompilerTests(TestCase):
         cls._add_term(cls.amber_mineral, cls.graph_a, "amber specimen")
         cls._add_term(cls.quartz_mineral, cls.graph_a, "quartz specimen")
         cls._add_term(cls.amber_site, cls.graph_b, "amber excavation site")
+        cls._add_term(cls.quartz_mineral, cls.graph_a, "silicate", datatype="reference")
+        cls._add_term(cls.amber_site, cls.graph_b, "silicate deposit")
 
         # amber_mineral -> amber_site: a 1-hop relationship so amber_site is only
         # reachable into graph_a's results via hop traversal, not a direct match.
@@ -88,7 +90,7 @@ class SearchCompilerTests(TestCase):
         cls._add_date(cls.quartz_mineral, cls.graph_a, "2000-01-01")
 
     @classmethod
-    def _add_term(cls, resource, graph, text):
+    def _add_term(cls, resource, graph, text, datatype="string"):
         tile = TileModel.objects.create(resourceinstance=resource)
         TermSearch.objects.create(
             tileid=tile,
@@ -96,7 +98,7 @@ class SearchCompilerTests(TestCase):
             graph_slug=graph.slug,
             node_alias="name",
             language="en",
-            datatype="string",
+            datatype=datatype,
             value=text,
         )
 
@@ -156,6 +158,37 @@ class SearchCompilerTests(TestCase):
         )
         self.assertNotIn(
             self.quartz_mineral.resourceinstanceid, self._result_ids(result)
+        )
+
+    def test_text_match_datatype_restricts_matches_to_that_datatype(self):
+        result = self._search(
+            node_agnostic_filters=[
+                {
+                    "type": "TEXT_MATCH",
+                    "value": ["silicate"],
+                    "datatype": "reference",
+                    "max_hops": 0,
+                }
+            ]
+        )
+        # amber_site's "silicate deposit" is a string-datatype row, so only
+        # quartz_mineral's reference-datatype row qualifies.
+        self.assertEqual(
+            self._result_ids(result), {self.quartz_mineral.resourceinstanceid}
+        )
+
+    def test_text_match_without_datatype_matches_every_datatype(self):
+        result = self._search(
+            node_agnostic_filters=[
+                {"type": "TEXT_MATCH", "value": ["silicate"], "max_hops": 0}
+            ]
+        )
+        self.assertEqual(
+            self._result_ids(result),
+            {
+                self.quartz_mineral.resourceinstanceid,
+                self.amber_site.resourceinstanceid,
+            },
         )
 
     # --- GEO_INTERSECTS ---

@@ -122,6 +122,11 @@ def validate_node_agnostic_filters(node_agnostic_filters):
                 raise ValidationError(
                     _("TEXT_MATCH value must be a list of non-empty strings.")
                 )
+            datatype = filter_entry.get("datatype")
+            if datatype is not None and not (isinstance(datatype, str) and datatype):
+                raise ValidationError(
+                    _("TEXT_MATCH datatype must be a non-empty string.")
+                )
         elif filter_type == "GEO_INTERSECTS":
             if not isinstance(value, dict) or value.get("type") != "FeatureCollection":
                 raise ValidationError(
@@ -150,7 +155,10 @@ def _resolve_filter_entry(filter_entry, graph_id, max_hops):
     filter_type = filter_entry["type"]
     if filter_type == "TEXT_MATCH":
         return get_related_resources_by_text(
-            filter_entry["value"], graph_id, max_hops=max_hops
+            filter_entry["value"],
+            graph_id,
+            max_hops=max_hops,
+            datatype=filter_entry.get("datatype"),
         )
     if filter_type == "GEO_INTERSECTS":
         return get_related_resources_by_geometry(

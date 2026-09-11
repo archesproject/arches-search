@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from "vue";
+import { computed, onMounted, ref, watch, watchEffect } from "vue";
 import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
-import Toast from "primevue/toast";
 
 import Splitter from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
+import Toast from "primevue/toast";
 
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
@@ -41,8 +41,12 @@ import {
     RESULTS_SORT_OLDEST,
     RESULTS_SORT_RELEVANCE,
     RESULTS_SORT_Z_TO_A,
+    TERM_FILTER_KEY,
 } from "@/arches_search/SimpleSearch/types.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
+import { applyPendingSearch } from "@/arches_search/SimpleSearch/utils/apply-pending-search.ts";
+import { parseSearchDefinition } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
+import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
 import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 
 import type { FeatureCollection } from "geojson";
@@ -55,11 +59,9 @@ import type {
     NodeFilterConfigNode,
     ResourceType,
     ResultsSortValue,
-    SearchDefinition,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-const TERM_FILTER_KEY = "termfilter";
 const TIME_FILTER_QUERY_KEY = "timeFilter";
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
@@ -72,14 +74,17 @@ const {
     applySearchDefinition,
     clearMapFilter,
     clearQuery,
+    clearTermFilter,
     isSearching,
     mapFilter,
     queries,
     search,
     searchResults,
+    setGraphs,
     setMapFilter,
     setQuery,
     setSort,
+    setTermFilter,
     toggleGraph,
 } = provideSearchFilters();
 
@@ -117,6 +122,7 @@ const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
 const graphModels = ref<GraphModel[]>([]);
 const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
+const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
 
 const isSingleGraphSelected = computed<boolean>(
     () => activeGraphs.value.length === 1,
@@ -133,70 +139,6 @@ const activeGraphId = computed<string | null>(
 const activeGraphLabel = computed<string | null>(
     () => singleActiveGraph.value?.label ?? null,
 );
-
-const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
-
-watch(
-    () => activeGraphs.value,
-    (graphs) => {
-        // Drop any attribute-filter queries from the previously active graph.
-        for (const node of nodeFilterConfigNodes.value) {
-            clearQuery(node.node_alias);
-        }
-        filterValues.value = {};
-
-        if (graphs.length !== 1) {
-            nodeFilterConfigNodes.value = [];
-            // Attribute/time filters are single-graph features and are
-            // unreachable outside the exactly-one-selected state; clear the
-            // time-filter query explicitly rather than relying on
-            // TimeFilter.vue's own prop watcher, since closeSidePanel()
-            // below unmounts it synchronously (and it may already be
-            // unmounted), so that watcher isn't guaranteed to run.
-            clearQuery(TIME_FILTER_QUERY_KEY);
-
-            if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
-                closeSidePanel();
-            }
-
-            return;
-        }
-
-        void loadNodeFilterConfig(graphs[0].id as string);
-    },
-);
-
-async function loadNodeFilterConfig(graphId: string): Promise<void> {
-    try {
-        const config = await fetchNodeFilterConfig(graphId);
-        nodeFilterConfigNodes.value = config.nodes;
-    } catch (err) {
-        console.error("[SimpleSearch] error loading filter config:", err);
-        nodeFilterConfigNodes.value = [];
-    }
-}
-
-// Each attribute-filter widget emits a datatype-specific value; the registry
-// turns it into a query (or null to clear). Query-shape logic lives in the
-// per-datatype builders, so this handler stays datatype-agnostic.
-function onAttributeFilterChange(nodeAlias: string, value: unknown): void {
-    filterValues.value = { ...filterValues.value, [nodeAlias]: value };
-
-    const node = nodeFilterConfigNodes.value.find(
-        (candidate) => candidate.node_alias === nodeAlias,
-    );
-    const graphSlug = activeGraphSlug.value;
-    if (!node || !graphSlug) {
-        return;
-    }
-
-    const query = buildAttributeFilterQuery(node, value, graphSlug);
-    if (query) {
-        setQuery(nodeAlias, query);
-    } else {
-        clearQuery(nodeAlias);
-    }
-}
 
 const activeGraphSlug = computed<string | null>(() => {
     if (!activeGraphId.value) {
@@ -221,101 +163,6 @@ const hasTimeFilter = computed<boolean>(
 const selectedTimeFilterClause = computed<LiteralClause | null>(
     () => timeFilterQuery.value?.clauses[0] ?? null,
 );
-
-watchEffect(() => {
-    void initializeSearch();
-});
-
-async function initializeSearch(): Promise<void> {
-    await loadGraphModels();
-    search(INITIAL_RESULTS_PAGE);
-}
-
-async function loadGraphModels(): Promise<void> {
-    try {
-        graphModels.value = await getGraphs();
-    } catch {
-        graphModels.value = [];
-    }
-}
-
-function onRequestPage(page: number): void {
-    search(page);
-}
-
-function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
-    sortValue.value = nextSortValue;
-    setSort(sortSpecForValue(nextSortValue));
-}
-
-function sortSpecForValue(value: ResultsSortValue | null): SortSpec[] {
-    switch (value) {
-        case RESULTS_SORT_A_TO_Z:
-            return [{ type: "primary_name", direction: "asc" }];
-        case RESULTS_SORT_Z_TO_A:
-            return [{ type: "primary_name", direction: "desc" }];
-        case RESULTS_SORT_NEWEST:
-            return [{ type: "created_time", direction: "desc" }];
-        case RESULTS_SORT_OLDEST:
-            return [{ type: "created_time", direction: "asc" }];
-        default:
-            return [];
-    }
-}
-
-function onTimeFilterUpdate(clauses: LiteralClause[]): void {
-    const graphSlug = activeGraphSlug.value;
-    if (!graphSlug || clauses.length === 0) {
-        clearQuery(TIME_FILTER_QUERY_KEY);
-        return;
-    }
-
-    setQuery(TIME_FILTER_QUERY_KEY, {
-        graph_slug: graphSlug,
-        scope: GraphScopeToken.RESOURCE,
-        logic: LogicToken.OR,
-        clauses,
-        groups: [],
-        aggregations: [],
-        relationship: null,
-    });
-}
-
-function onRemoveTimeFilter(): void {
-    closeSidePanel();
-    clearQuery(TIME_FILTER_QUERY_KEY);
-}
-
-function onMapFilterUpdate(featureCollection: FeatureCollection): void {
-    setMapFilter(featureCollection);
-}
-
-function onRemoveMapFilter(): void {
-    clearMapFilter();
-}
-
-function formatTimeFilterLabel(clause: LiteralClause): string {
-    const from = parseStoredDate(clause.operands[0]?.value);
-    const to = parseStoredDate(clause.operands[1]?.value);
-
-    if (!from || !to) {
-        return $gettext("Custom range");
-    }
-
-    const fromText = dayjs(from).format("MMM D, YYYY");
-    if (dayjs(from).isSame(to, "day")) {
-        return fromText;
-    }
-
-    return `${fromText} – ${dayjs(to).format("MMM D, YYYY")}`;
-}
-
-function clearAttributeFilter(nodeAlias: string): void {
-    clearQuery(nodeAlias);
-    const { [nodeAlias]: _removedValue, ...remainingFilterValues } =
-        filterValues.value;
-    filterValues.value = remainingFilterValues;
-}
 
 // The chip row surfaces every active filter, but only term/resource-type
 // filters live in the always-visible top bar — time/map/attribute filters
@@ -415,41 +262,184 @@ const allActiveFilters = computed<ActiveFilter[]>(() => [
     ...attributeActiveFilters.value,
 ]);
 
-function onRunSavedQuery(queryDefinition: Record<string, unknown>) {
-    applySearchDefinition(parseSearchDefinition(queryDefinition));
-    filterValues.value = {};
+watch(
+    () => activeGraphs.value,
+    (graphs) => {
+        // Drop any attribute-filter queries from the previously active graph.
+        for (const node of nodeFilterConfigNodes.value) {
+            clearQuery(node.node_alias);
+        }
+        filterValues.value = {};
+
+        if (graphs.length !== 1) {
+            nodeFilterConfigNodes.value = [];
+            // Attribute/time filters are single-graph features and are
+            // unreachable outside the exactly-one-selected state; clear the
+            // time-filter query explicitly rather than relying on
+            // TimeFilter.vue's own prop watcher, since closeSidePanel()
+            // below unmounts it synchronously (and it may already be
+            // unmounted), so that watcher isn't guaranteed to run.
+            clearQuery(TIME_FILTER_QUERY_KEY);
+
+            if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
+                closeSidePanel();
+            }
+
+            return;
+        }
+
+        void loadNodeFilterConfig(graphs[0].id as string);
+    },
+);
+
+watchEffect(() => {
+    void initializeSearch();
+});
+
+onMounted(() => {
+    const pendingSearch = usePendingSearchStore().consume();
+    if (pendingSearch) {
+        applyPendingSearch(pendingSearch, {
+            applySearchDefinition,
+            clearTermFilter,
+            openMapFilter,
+            setGraphs,
+            setMapFilter,
+            setTermFilter,
+        });
+    }
+});
+
+async function loadNodeFilterConfig(graphId: string): Promise<void> {
+    try {
+        const config = await fetchNodeFilterConfig(graphId);
+        nodeFilterConfigNodes.value = config.nodes;
+    } catch (err) {
+        console.error("[SimpleSearch] error loading filter config:", err);
+        nodeFilterConfigNodes.value = [];
+    }
 }
 
-function parseSearchDefinition(raw: Record<string, unknown>): SearchDefinition {
-    const rawTerms = Array.isArray(raw.terms) ? raw.terms : [];
-    const terms = rawTerms.flatMap((t) => {
-        if (!t || typeof t !== "object") return [];
-        const term = t as Record<string, unknown>;
-        const id = typeof term.id === "string" ? term.id : null;
-        const text = typeof term.text === "string" ? term.text : null;
-        if (!id || text === null) return [];
-        return [
-            {
-                id,
-                text,
-                inverted: term.inverted === true,
-                ...(term.options && typeof term.options === "object"
-                    ? { options: term.options as Record<string, unknown> }
-                    : {}),
-            },
-        ];
+// Each attribute-filter widget emits a datatype-specific value; the registry
+// turns it into a query (or null to clear). Query-shape logic lives in the
+// per-datatype builders, so this handler stays datatype-agnostic.
+function onAttributeFilterChange(nodeAlias: string, value: unknown): void {
+    filterValues.value = { ...filterValues.value, [nodeAlias]: value };
+
+    const node = nodeFilterConfigNodes.value.find(
+        (candidate) => candidate.node_alias === nodeAlias,
+    );
+    const graphSlug = activeGraphSlug.value;
+    if (!node || !graphSlug) {
+        return;
+    }
+
+    const query = buildAttributeFilterQuery(node, value, graphSlug);
+    if (query) {
+        setQuery(nodeAlias, query);
+    } else {
+        clearQuery(nodeAlias);
+    }
+}
+
+async function initializeSearch(): Promise<void> {
+    try {
+        await loadGraphModels();
+        search(INITIAL_RESULTS_PAGE);
+    } catch (err) {
+        console.error("[SimpleSearch] error initializing search:", err);
+    }
+}
+
+async function loadGraphModels(): Promise<void> {
+    try {
+        graphModels.value = await getGraphs();
+    } catch {
+        graphModels.value = [];
+    }
+}
+
+function onRequestPage(page: number): void {
+    search(page);
+}
+
+function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
+    sortValue.value = nextSortValue;
+    setSort(sortSpecForValue(nextSortValue));
+}
+
+function sortSpecForValue(value: ResultsSortValue | null): SortSpec[] {
+    switch (value) {
+        case RESULTS_SORT_A_TO_Z:
+            return [{ type: "primary_name", direction: "asc" }];
+        case RESULTS_SORT_Z_TO_A:
+            return [{ type: "primary_name", direction: "desc" }];
+        case RESULTS_SORT_NEWEST:
+            return [{ type: "created_time", direction: "desc" }];
+        case RESULTS_SORT_OLDEST:
+            return [{ type: "created_time", direction: "asc" }];
+        default:
+            return [];
+    }
+}
+
+function onTimeFilterUpdate(clauses: LiteralClause[]): void {
+    const graphSlug = activeGraphSlug.value;
+    if (!graphSlug || clauses.length === 0) {
+        clearQuery(TIME_FILTER_QUERY_KEY);
+        return;
+    }
+
+    setQuery(TIME_FILTER_QUERY_KEY, {
+        graph_slug: graphSlug,
+        scope: GraphScopeToken.RESOURCE,
+        logic: LogicToken.OR,
+        clauses,
+        groups: [],
+        aggregations: [],
+        relationship: null,
     });
+}
 
-    const queriesIn =
-        raw.queries && typeof raw.queries === "object"
-            ? (raw.queries as SearchDefinition["queries"])
-            : {};
+function onRemoveTimeFilter(): void {
+    closeSidePanel();
+    clearQuery(TIME_FILTER_QUERY_KEY);
+}
 
-    const graphIds = Array.isArray(raw.graphIds)
-        ? raw.graphIds.filter((id): id is string => typeof id === "string")
-        : [];
+function onMapFilterUpdate(featureCollection: FeatureCollection): void {
+    setMapFilter(featureCollection);
+}
 
-    return { terms, queries: queriesIn, graphIds };
+function onRemoveMapFilter(): void {
+    clearMapFilter();
+}
+
+function formatTimeFilterLabel(clause: LiteralClause): string {
+    const from = parseStoredDate(clause.operands[0]?.value);
+    const to = parseStoredDate(clause.operands[1]?.value);
+
+    if (!from || !to) {
+        return $gettext("Custom range");
+    }
+
+    const fromText = dayjs(from).format("MMM D, YYYY");
+    if (dayjs(from).isSame(to, "day")) {
+        return fromText;
+    }
+
+    return `${fromText} – ${dayjs(to).format("MMM D, YYYY")}`;
+}
+
+function clearAttributeFilter(nodeAlias: string): void {
+    clearQuery(nodeAlias);
+    const { [nodeAlias]: _removedValue, ...remainingFilterValues } =
+        filterValues.value;
+    filterValues.value = remainingFilterValues;
+}
+
+function onRunSavedQuery(queryDefinition: Record<string, unknown>): void {
+    applySearchDefinition(parseSearchDefinition(queryDefinition));
+    filterValues.value = {};
 }
 </script>
 

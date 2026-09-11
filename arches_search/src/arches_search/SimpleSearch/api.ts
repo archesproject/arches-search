@@ -2,6 +2,8 @@ import Cookies from "js-cookie";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
 import { getItemLabel } from "@/arches_controlled_lists/utils.ts";
+import { SUGGESTION_DATATYPE_REFERENCE } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
+import { TERM_KIND_CONTROLLED_TERM } from "@/arches_search/SimpleSearch/types.ts";
 
 import type { ControlledListItem } from "@/arches_controlled_lists/types.ts";
 import type {
@@ -14,23 +16,17 @@ import type {
     SortSpec,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    DateRangeFilter,
+    SearchRequestTerm,
+} from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import type { FeatureCollection } from "geojson";
-
-interface SearchRequestTerm {
-    type: string;
-    text: string;
-    inverted: boolean;
-}
-
-interface DateRangeFilter {
-    from: string;
-    to: string;
-}
 
 interface NodeAgnosticFilter {
     type: "TEXT_MATCH" | "GEO_INTERSECTS" | "DATE_RANGE";
     value: string[] | FeatureCollection | DateRangeFilter;
     max_hops: number;
+    datatype?: string;
 }
 
 function buildNodeAgnosticFilters(
@@ -40,10 +36,27 @@ function buildNodeAgnosticFilters(
 ): NodeAgnosticFilter[] | null {
     const filters: NodeAgnosticFilter[] = [];
 
-    if (terms.length > 0) {
+    const plainTermTexts = terms
+        .filter((term) => term.type !== TERM_KIND_CONTROLLED_TERM)
+        .map((term) => term.text);
+    if (plainTermTexts.length > 0) {
         filters.push({
             type: "TEXT_MATCH",
-            value: terms.map((term) => term.text),
+            value: plainTermTexts,
+            max_hops: 2,
+        });
+    }
+
+    // Controlled terms only match reference-datatype values, so they get their
+    // own TEXT_MATCH entry — entries AND together, same as terms within one.
+    const controlledTermTexts = terms
+        .filter((term) => term.type === TERM_KIND_CONTROLLED_TERM)
+        .map((term) => term.text);
+    if (controlledTermTexts.length > 0) {
+        filters.push({
+            type: "TEXT_MATCH",
+            value: controlledTermTexts,
+            datatype: SUGGESTION_DATATYPE_REFERENCE,
             max_hops: 2,
         });
     }
@@ -59,7 +72,7 @@ function buildNodeAgnosticFilters(
     return filters.length > 0 ? filters : null;
 }
 
-function buildSearchApiRequestBody({
+export function buildSearchApiRequestBody({
     terms,
     query,
     graphIds,

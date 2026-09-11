@@ -15,13 +15,13 @@ const RESOURCE_TYPE_FALLBACK_KEY = "__all__";
 const { $gettext, current } = useGettext();
 const { toggleGraph, activeGraphs, searchResults } = useSearchFilters();
 
+const resourceTypes = ref<ResourceType[]>([]);
+const hasResourceTypeLoadError = ref(false);
+
 const compactCountFormatter = computed(
     () => new Intl.NumberFormat(current, { notation: "compact" }),
 );
 const fullCountFormatter = computed(() => new Intl.NumberFormat(current));
-
-const resourceTypes = ref<ResourceType[]>([]);
-const hasResourceTypeLoadError = ref(false);
 
 const resourceTypeLoadErrorMessage = computed(() =>
     $gettext("Resource type filters are unavailable."),
@@ -59,13 +59,12 @@ async function loadResourceTypes(): Promise<void> {
         hasResourceTypeLoadError.value = false;
 
         const graphs: GraphModel[] = await getGraphs();
-        resourceTypes.value = graphs
-            .filter((graph) => graph.isresource && graph.is_active)
-            .map((graph) => ({
-                id: graph.graphid,
-                label: graph.name,
-                icon: graph.iconclass,
-            }));
+
+        resourceTypes.value = graphs.map((graph) => ({
+            id: graph.graphid,
+            label: graph.name,
+            icon: graph.iconclass,
+        }));
     } catch (error) {
         console.error(error);
         resourceTypes.value = [];
@@ -172,14 +171,14 @@ function getResourceTypeTooltip(resourceType: ResourceType): string {
 .resource-type-filter .type-btn {
     display: inline-flex;
     align-items: center;
-    justify-content: center !important;
+    justify-content: center;
     flex-shrink: 0;
     gap: 0.5rem;
     padding: 0.7rem 1.2rem;
     border: 0.15rem solid var(--arches-search-chip-border);
     border-radius: var(--arches-search-radius-pill);
     background: var(--p-content-background);
-    color: var(--arches-search-sec-btn-text) !important;
+    color: var(--arches-search-sec-btn-text);
     font-size: 1.2rem;
     font-weight: 600;
     white-space: nowrap;
@@ -192,24 +191,21 @@ function getResourceTypeTooltip(resourceType: ResourceType): string {
 }
 
 .resource-type-filter .type-btn:hover {
-    background: var(--p-content-hover-background) !important;
-    border: 0.15rem solid var(--p-text-muted-color) !important;
-    color: var(--arches-search-sec-btn-text) !important;
+    background: var(--p-content-hover-background);
+    border: 0.15rem solid var(--p-text-muted-color);
+    color: var(--arches-search-sec-btn-text);
 }
 
-/* color needs !important here too, purely to beat the resting rule above
-   now that it's !important — this selector already outranks PrimeVue's own
-   2-class outlined/secondary rule on plain specificity (3 classes vs 2). */
 .resource-type-filter .type-btn.active {
     background: var(--p-primary-color);
     border-color: var(--p-primary-color);
-    color: var(--p-primary-contrast-color) !important;
+    color: var(--p-primary-contrast-color);
 }
 
 .resource-type-filter .type-btn.active:hover {
-    background: var(--p-primary-color) !important;
-    border: 0.15rem solid var(--p-primary-color) !important;
-    color: var(--p-primary-contrast-color) !important;
+    background: var(--p-primary-color);
+    border: 0.15rem solid var(--p-primary-color);
+    color: var(--p-primary-contrast-color);
 }
 
 .resource-type-filter .type-btn .type-icon {
