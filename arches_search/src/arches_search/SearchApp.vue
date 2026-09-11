@@ -6,17 +6,33 @@ import Button from "primevue/button";
 import Card from "primevue/card";
 
 import { routeNames } from "@/arches_search/routes.ts";
+import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
 
 const router = useRouter();
 const route = useRoute();
 
+router.afterEach((to, _from, failure) => {
+    if (to.name !== routeNames.simpleSearch || failure) {
+        usePendingSearchStore().clear();
+    }
+});
+
+const isSearchLanding = computed(() => route.name === routeNames.searchLanding);
 const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
 </script>
 
 <template>
-    <Card class="search-card">
+    <Card
+        :class="{
+            'search-card': !isSearchLanding,
+            'search-landing-card': isSearchLanding,
+        }"
+    >
         <template #header>
-            <header class="simple-search-header">
+            <header
+                v-if="!isSearchLanding"
+                class="simple-search-header"
+            >
                 <h1 class="search-title">
                     <i class="pi pi-search" />
                     {{ $gettext("Search the Collection") }}
@@ -26,11 +42,11 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
                     class="header-nav"
                 >
                     <Button
-                        :label="$gettext('Advanced Search')"
                         icon="pi pi-sliders-h"
                         icon-pos="left"
-                        :text="true"
                         class="header-link"
+                        :label="$gettext('Advanced Search')"
+                        :text="true"
                         @click="
                             router.push({ name: routeNames.advancedSearch })
                         "
@@ -41,11 +57,11 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
                     class="header-nav"
                 >
                     <Button
-                        :label="$gettext('Simple Search')"
                         icon="pi pi-sliders-h"
                         icon-pos="left"
-                        :text="true"
                         class="header-link"
+                        :label="$gettext('Simple Search')"
+                        :text="true"
                         @click="router.push({ name: routeNames.simpleSearch })"
                     />
                 </nav>
@@ -66,9 +82,16 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     border: 0.1rem solid var(--p-content-border-color);
     border-radius: 0;
     background-color: var(--arches-search-card-bg);
-    box-shadow:
-        0 0.1rem 0.3rem rgba(0, 0, 0, 0.06),
-        0 0.1rem 0.2rem rgba(0, 0, 0, 0.04);
+    box-shadow: var(--arches-search-card-shadow);
+}
+
+.search-landing-card {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    overflow-y: auto;
+    border-radius: 0;
+    background-color: var(--arches-search-page-bg);
 }
 
 .simple-search-header {
@@ -98,18 +121,26 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     color: var(--p-primary-color);
 }
 
-:deep(.p-card-body) {
+.search-card :deep(.p-card-body),
+.search-landing-card :deep(.p-card-body) {
     display: flex;
     flex-direction: column;
     flex: 1;
-    min-block-size: 0;
     padding: 0;
+}
+
+.search-card :deep(.p-card-content),
+.search-landing-card :deep(.p-card-content) {
+    flex: 1;
+}
+
+.search-card :deep(.p-card-body) {
+    min-block-size: 0;
     overflow-x: hidden;
     overflow-y: hidden;
 }
 
-:deep(.p-card-content) {
-    flex: 1;
+.search-card :deep(.p-card-content) {
     min-block-size: 0;
 }
 

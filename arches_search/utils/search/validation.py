@@ -37,6 +37,20 @@ def validate_paging(page, page_size) -> None:
         )
 
 
+def _is_valid_term(term) -> bool:
+    # A string matches any datatype; an object restricts its text to one
+    # TermSearch datatype, which is how a controlled term stays a reference.
+    if isinstance(term, str):
+        return bool(term)
+    return (
+        isinstance(term, dict)
+        and isinstance(term.get("text"), str)
+        and bool(term["text"])
+        and isinstance(term.get("datatype"), str)
+        and bool(term["datatype"])
+    )
+
+
 def validate_term_search(term_search):
     """
     One object, not a list of typed entries.
@@ -51,11 +65,12 @@ def validate_term_search(term_search):
         raise ValidationError(_("term_search must be an object."))
 
     terms = term_search.get("terms")
-    if not isinstance(terms, list) or not all(
-        isinstance(term, str) and term for term in terms
-    ):
+    if not isinstance(terms, list) or not all(_is_valid_term(term) for term in terms):
         raise ValidationError(
-            _("term_search terms must be a list of non-empty strings.")
+            _(
+                "term_search terms must be a list of non-empty strings, or of "
+                "objects with a non-empty text and datatype."
+            )
         )
 
     max_hops = term_search.get("max_hops", 0)
@@ -114,6 +129,23 @@ def validate_advanced_search_queries(advanced_search_queries):
         seen_graph_slugs.add(graph_slug)
 
 
+def validate_graph_slugs(graph_slugs):
+    """
+    The selector itself: which resource models are searched.
+
+    A bare string would otherwise be iterated a character at a time, selecting
+    no resource model and returning nothing -- a search that looks like it ran
+    and found no matches.
+    """
+    if graph_slugs is None:
+        return
+
+    if not isinstance(graph_slugs, list) or not all(
+        isinstance(graph_slug, str) and graph_slug for graph_slug in graph_slugs
+    ):
+        raise ValidationError(_("graph_slugs must be a list of non-empty strings."))
+
+
 def validate_search_payload(search_payload) -> None:
     """
     Every check that applies to the filtering half of a request.
@@ -122,5 +154,6 @@ def validate_search_payload(search_payload) -> None:
     search -- the export, the map tiles -- cannot drift out of step with the
     search endpoint on what they accept.
     """
+    validate_graph_slugs(search_payload.graph_slugs)
     validate_term_search(search_payload.term_search)
     validate_advanced_search_queries(search_payload.advanced_search_queries)

@@ -1,10 +1,12 @@
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
+import type { FeatureCollection } from "geojson";
 
 export interface ResourceType {
     id: string | null; // graph id; null = "all types"
     slug: string;
     label: string;
     icon: string;
+    description?: string;
 }
 
 // Serializable snapshot of every piece of state that defines a search.
@@ -14,6 +16,7 @@ export interface SearchDefinition {
     terms: SerializedTerm[];
     queries: Record<string, GroupPayload>;
     graphSlugs: string[];
+    mapFilter: FeatureCollection | null;
 }
 
 export const TERM_KIND_CONTROLLED_TERM = "controlled-term";
@@ -33,7 +36,7 @@ export interface SerializedTerm {
 }
 
 export interface SearchRequestTerm {
-    type: string;
+    type: "string" | typeof TERM_KIND_CONTROLLED_TERM;
     text: string;
     inverted: boolean;
 }
@@ -47,6 +50,8 @@ export interface TermSuggestion {
     graph_icon?: string;
     graph_name?: string;
 }
+
+export const TERM_FILTER_KEY = "termfilter";
 
 export const ACTIVE_FILTER_KIND_TERM = "term";
 export const ACTIVE_FILTER_KIND_RESOURCE_TYPE = "resource-type";

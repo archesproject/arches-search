@@ -31,8 +31,8 @@ const { modelValue, graphSlug } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: typeof UPDATE_EVENT, clause: LiteralClause): void;
-    (event: typeof REMOVE_EVENT): void;
+    (event: "update:modelValue", clause: LiteralClause): void;
+    (event: "remove"): void;
 }>();
 
 const datatypesToAdvancedSearchFacets = inject<

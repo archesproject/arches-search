@@ -1,3 +1,6 @@
+import { SUGGESTION_DATATYPE_REFERENCE } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
+import { TERM_KIND_CONTROLLED_TERM } from "@/arches_search/SimpleSearch/types.ts";
+
 import type { FeatureCollection } from "geojson";
 
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
@@ -10,8 +13,11 @@ import type {
 
 const TERM_SEARCH_MAX_HOPS = 2;
 
+// A string matches any datatype; an object only matches its own.
+type TermSearchTerm = string | { text: string; datatype: string };
+
 interface TermSearch {
-    terms: string[];
+    terms: TermSearchTerm[];
     max_hops: number;
 }
 
@@ -35,12 +41,20 @@ interface SearchClause {
     operands: ClauseOperand[];
 }
 
+function buildTermSearchTerm(term: SearchRequestTerm): TermSearchTerm {
+    // A controlled term names a reference value, so it only matches those.
+    if (term.type === TERM_KIND_CONTROLLED_TERM) {
+        return { text: term.text, datatype: SUGGESTION_DATATYPE_REFERENCE };
+    }
+    return term.text;
+}
+
 function buildTermSearch(terms: SearchRequestTerm[]): TermSearch | null {
     if (terms.length === 0) {
         return null;
     }
     return {
-        terms: terms.map((term) => term.text),
+        terms: terms.map(buildTermSearchTerm),
         max_hops: TERM_SEARCH_MAX_HOPS,
     };
 }

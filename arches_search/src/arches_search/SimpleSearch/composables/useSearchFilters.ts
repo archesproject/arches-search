@@ -7,12 +7,13 @@ import {
     createSearchMVTContext,
     fetchSearchResults,
 } from "@/arches_search/SimpleSearch/api.ts";
+import {
+    buildRequestDateRange,
+    buildRequestQuery,
+    buildRequestTerms,
+} from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
-import {
-    ClauseSubjectTypeToken,
-    LogicToken,
-} from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     GraphModel,
     GroupPayload,
@@ -64,6 +65,7 @@ interface SearchFilters {
     getExportPayload(): ExportPayload;
     getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
+    setGraphsBySlug(graphSlugs: string[]): Promise<void>;
     setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
     setResourceFieldFilter(
@@ -150,6 +152,24 @@ function createSearchFilters(): SearchFilters {
             return "pi pi-database";
         }
         return "pi pi-search";
+    }
+
+    function toRequestTerms(
+        activeFilterTerms: ActiveFilter[],
+    ): SearchRequestTerm[] {
+        return buildRequestTerms(
+            activeFilterTerms.map((term) => {
+                let termKind: TermKind | undefined;
+                if (term.kind === TERM_KIND_CONTROLLED_TERM) {
+                    termKind = term.kind;
+                }
+                return {
+                    text: term.text,
+                    inverted: term.inverted,
+                    termKind,
+                };
+            }),
+        );
     }
 
     function setTermFilter(
@@ -247,6 +267,19 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function findAvailableGraphs(graphSlugs: string[]): ResourceType[] {
+        return graphSlugs
+            .map((slug) =>
+                availableGraphs.value.find((graph) => graph.slug === slug),
+            )
+            .filter((graph): graph is ResourceType => graph !== undefined);
+    }
+
+    async function setGraphsBySlug(graphSlugs: string[]): Promise<void> {
+        await loadAvailableGraphs();
+        setGraphs(findAvailableGraphs(graphSlugs));
+    }
+
     function toggleGraph(resourceType: ResourceType): void {
         if (resourceType.id === null) {
             setGraphs([]);
@@ -256,13 +289,17 @@ function createSearchFilters(): SearchFilters {
         const isActive = activeGraphs.value.some(
             (graph) => graph.id === resourceType.id,
         );
-        setGraphs(
-            isActive
-                ? activeGraphs.value.filter(
-                      (graph) => graph.id !== resourceType.id,
-                  )
-                : [...activeGraphs.value, resourceType],
-        );
+
+        let nextGraphs: ResourceType[];
+        if (isActive) {
+            nextGraphs = activeGraphs.value.filter(
+                (graph) => graph.id !== resourceType.id,
+            );
+        } else {
+            nextGraphs = [...activeGraphs.value, resourceType];
+        }
+
+        setGraphs(nextGraphs);
     }
 
     function setSort(next: SortSpec[]): void {
@@ -283,10 +320,11 @@ function createSearchFilters(): SearchFilters {
             try {
                 await loadAvailableGraphs();
                 const requestGraphs = getRequestGraphs();
+                const requestQueries = [...queries.value.values()];
                 const searchParams = {
-                    terms: getRequestTerms(),
-                    query: getRequestQuery(),
-                    dateRange: getTimeFilterRange(),
+                    terms: toRequestTerms([...terms.value.values()]),
+                    query: buildRequestQuery(requestQueries),
+                    dateRange: buildRequestDateRange(requestQueries),
                     page,
                     graphSlugs: requestGraphs.map((graph) => graph.slug),
                     mapFilter: mapFilter.value,
@@ -318,42 +356,12 @@ function createSearchFilters(): SearchFilters {
 
                 resultsGraphs.value = requestGraphs;
                 mvtContextId.value = context?.context_id ?? null;
+            } catch (error) {
+                console.error(error);
             } finally {
                 isSearching.value = false;
             }
         }, SEARCH_DEBOUNCE_MS);
-    }
-
-    function getRequestTerms(): SearchRequestTerm[] {
-        return [...terms.value.values()].map((term) => ({
-            type: "string",
-            text: term.text,
-            inverted: term.inverted,
-        }));
-    }
-
-    function isTimeFilterQuery(payload: GroupPayload): boolean {
-        return (
-            payload.clauses.length === 1 &&
-            payload.clauses[0].subject.type ===
-                ClauseSubjectTypeToken.SEARCH_MODELS
-        );
-    }
-
-    function getTimeFilterRange(): DateRangeFilter | null {
-        for (const payload of queries.value.values()) {
-            if (!isTimeFilterQuery(payload)) {
-                continue;
-            }
-            const [fromOperand, toOperand] = payload.clauses[0].operands;
-            return {
-                from: fromOperand.value as string,
-                to:
-                    (toOperand?.value as string | undefined) ??
-                    (fromOperand.value as string),
-            };
-        }
-        return null;
     }
 
     function setResourceFieldFilter(
@@ -382,43 +390,34 @@ function createSearchFilters(): SearchFilters {
         return filters.length > 0 ? filters : null;
     }
 
-    function getRequestQuery(): GroupPayload | undefined {
-        const queryList = [...queries.value.values()].filter(
-            (payload) => !isTimeFilterQuery(payload),
-        );
-        if (queryList.length === 0) return undefined;
-        if (queryList.length === 1) return queryList[0];
-        return {
-            graph_slug: queryList[0].graph_slug,
-            scope: queryList[0].scope,
-            logic: LogicToken.AND,
-            clauses: [],
-            groups: queryList,
-            aggregations: [],
-            relationship: null,
-        };
-    }
-
     function getSearchDefinition(): SearchDefinition {
         // Strip the `clear` closure off each ActiveFilter — closures aren't
         // serializable, and the restore path rebuilds them from `id`.
         const serializedTerms = [...terms.value.values()].map(
-            ({ id, text, inverted, kind, icon, options }) => ({
-                id,
-                text,
-                inverted,
-                ...(kind === TERM_KIND_CONTROLLED_TERM ||
-                kind === TERM_KIND_RECORD
-                    ? { termKind: kind }
-                    : {}),
-                ...(kind === TERM_KIND_RECORD ? { icon } : {}),
-                ...(options !== undefined ? { options } : {}),
-            }),
+            ({ id, text, inverted, kind, icon, options }) => {
+                let termKindFields: { termKind?: TermKind } = {};
+                if (
+                    kind === TERM_KIND_CONTROLLED_TERM ||
+                    kind === TERM_KIND_RECORD
+                ) {
+                    termKindFields = { termKind: kind };
+                }
+
+                return {
+                    id,
+                    text,
+                    inverted,
+                    ...termKindFields,
+                    ...(kind === TERM_KIND_RECORD ? { icon } : {}),
+                    ...(options !== undefined ? { options } : {}),
+                };
+            },
         );
         return {
             terms: serializedTerms,
             queries: Object.fromEntries(queries.value),
             graphSlugs: getRequestGraphs().map((graph) => graph.slug),
+            mapFilter: mapFilter.value,
         };
     }
 
@@ -436,13 +435,13 @@ function createSearchFilters(): SearchFilters {
             clearQuery(filterKey);
         }
 
-        setGraphs(
-            definition.graphSlugs
-                .map((slug) =>
-                    availableGraphs.value.find((graph) => graph.slug === slug),
-                )
-                .filter((graph): graph is ResourceType => graph !== undefined),
-        );
+        setGraphs(findAvailableGraphs(definition.graphSlugs));
+
+        if (definition.mapFilter) {
+            setMapFilter(definition.mapFilter);
+        } else {
+            clearMapFilter();
+        }
 
         for (const term of definition.terms) {
             setTermFilter(
@@ -460,11 +459,12 @@ function createSearchFilters(): SearchFilters {
     }
 
     function getExportPayload(): ExportPayload {
+        const requestQueries = [...queries.value.values()];
         return {
-            terms: getRequestTerms(),
-            query: getRequestQuery(),
+            terms: toRequestTerms([...terms.value.values()]),
+            query: buildRequestQuery(requestQueries),
             graphSlugs: getRequestGraphs().map((graph) => graph.slug),
-            dateRange: getTimeFilterRange(),
+            dateRange: buildRequestDateRange(requestQueries),
             resourceFieldFilters: getRequestResourceFieldFilters(),
         };
     }
@@ -491,6 +491,7 @@ function createSearchFilters(): SearchFilters {
         setResourceFieldFilter,
         clearResourceFieldFilters,
         searchResults,
+        setGraphsBySlug,
         setMapFilter,
         setQuery,
         setSort,

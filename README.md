@@ -602,6 +602,10 @@ Shape is checked up front, without touching the database. Whether a field,
 operator or node actually exists is settled as the query compiles, where the
 registries are available. Either way you get a `400`, not a `500`.
 
+`graph_slugs` must be a list of non-empty strings. A bare string would otherwise
+be read a character at a time, selecting no resource model at all and coming back
+empty — a search that looks like it ran and matched nothing.
+
 Three rules govern an entry's `graph_slug`. Each one guards a way a search can
 look like it worked when it didn't:
 
@@ -627,6 +631,17 @@ name a node), then walked back across relationships, so a Site can be found
 because its related Person is named Amber. All terms must match; each is
 expanded independently and the results intersected, so a resource cannot qualify
 by reaching two different terms down two unrelated paths.
+
+A term can instead be an object naming the one indexed datatype it may match.
+That is how a controlled term picked from the term suggestions matches only
+reference values, rather than any text that happens to contain its label:
+
+```json
+"term_search": {
+    "terms": ["amber", { "text": "Adobe", "datatype": "reference" }],
+    "max_hops": 2
+}
+```
 
 `max_hops` is capped at 2, and `0` means "match directly, do not traverse".
 

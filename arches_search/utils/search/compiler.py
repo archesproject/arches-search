@@ -92,6 +92,20 @@ def _resource_type_counts(
     ]
 
 
+def _term_texts_by_datatype(terms: List[Any]) -> Dict[Optional[str], List[str]]:
+    """
+    A string term matches any datatype, so it is grouped under None; an object
+    term only matches its own datatype.
+    """
+    term_texts_by_datatype: Dict[Optional[str], List[str]] = {}
+    for term in terms:
+        if isinstance(term, str):
+            term_texts_by_datatype.setdefault(None, []).append(term)
+        else:
+            term_texts_by_datatype.setdefault(term["datatype"], []).append(term["text"])
+    return term_texts_by_datatype
+
+
 class SearchCompiler:
     """
     pre_filter, when given, is an existing ResourceInstance queryset to search
@@ -270,14 +284,26 @@ class SearchCompiler:
         one.
 
         get_related_resources_by_text expands each term independently and then
-        intersects, so every term is handled in a single call.
+        intersects, but restricts every term in a call to one datatype. So the
+        terms are grouped by datatype, one call per group, and those intersected.
         """
         term_search = self.search_payload.term_search
         if not term_search or not term_search.get("terms"):
             return None
 
-        return get_related_resources_by_text(
-            term_search["terms"],
-            graph_id,
-            max_hops=term_search.get("max_hops") or 0,
-        )
+        max_hops = term_search.get("max_hops") or 0
+        matches = None
+        for datatype, term_texts in _term_texts_by_datatype(
+            term_search["terms"]
+        ).items():
+            datatype_matches = get_related_resources_by_text(
+                term_texts, graph_id, max_hops=max_hops, datatype=datatype
+            )
+            matches = (
+                datatype_matches
+                if matches is None
+                else matches.filter(
+                    resourceinstanceid__in=datatype_matches.values("resourceinstanceid")
+                )
+            )
+        return matches
