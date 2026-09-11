@@ -79,7 +79,7 @@ defineEmits<{
         <div class="toolbar-right">
             <Button
                 v-if="!hideFiltersButton"
-                :label="$gettext('Facets')"
+                :label="$gettext('Filters')"
                 icon="pi pi-filter"
                 icon-pos="left"
                 size="small"
