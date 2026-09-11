@@ -7,13 +7,11 @@ mechanism -- see test_geo_and_date_search_model_clauses.py."""
 
 import json
 import uuid
-from types import SimpleNamespace
-from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.contrib.gis.geos import GEOSGeometry
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from arches.app.models.models import (
@@ -31,11 +29,6 @@ from arches_search.utils.search import (
     execute_search,
     validate_advanced_search_queries,
 )
-from arches_search.utils.search.validation import (
-    FALLBACK_PAGE_SIZE,
-    MAX_PAGE_SIZE,
-    default_page_size,
-)
 from tests.integration.utils.advanced_search.test_advanced_search import (
     AdvancedSearchSetupMixin,
     DOG_A_ID,
@@ -52,10 +45,6 @@ from tests.integration.utils.advanced_search.test_advanced_search import (
 
 
 _UNSET = object()
-
-# Where validation reads SEARCH_ITEMS_PER_PAGE. override_settings cannot reach
-# it: system settings are a LazySettings of their own.
-SYSTEM_SETTINGS = "arches_search.utils.search.validation.settings"
 
 
 def _encode_date(date_string):
@@ -467,47 +456,17 @@ class SearchCompilerTests(TestCase):
             reverse("search"), json.dumps(body), content_type="application/json"
         )
 
-    def test_page_size_defaults_to_search_items_per_page(self):
-        with mock.patch(SYSTEM_SETTINGS, SimpleNamespace(SEARCH_ITEMS_PER_PAGE=1)):
-            response = self._post_search({"graph_slugs": [self.graph_a.slug]})
+    @override_settings(API_MAX_PAGE_SIZE=2)
+    def test_page_size_is_capped_at_api_max_page_size(self):
+        at_the_cap = self._post_search(
+            {"graph_slugs": [self.graph_a.slug], "page_size": 2}
+        )
+        past_the_cap = self._post_search(
+            {"graph_slugs": [self.graph_a.slug], "page_size": 3}
+        )
 
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["pagination"]["page_size"], 1)
-        self.assertEqual(len(body["resources"]), 1)
-        # graph_a holds two resources, so one per page leaves another page.
-        self.assertTrue(body["pagination"]["has_next"])
-
-    def test_a_configured_page_size_above_the_cap_raises_the_cap(self):
-        configured = MAX_PAGE_SIZE + 50
-        with mock.patch(
-            SYSTEM_SETTINGS, SimpleNamespace(SEARCH_ITEMS_PER_PAGE=configured)
-        ):
-            default_request = self._post_search({"graph_slugs": [self.graph_a.slug]})
-            oversized_request = self._post_search(
-                {"graph_slugs": [self.graph_a.slug], "page_size": configured + 1}
-            )
-
-        with self.subTest("the default is never rejected"):
-            self.assertEqual(default_request.status_code, 200)
-            self.assertEqual(
-                default_request.json()["pagination"]["page_size"], configured
-            )
-        with self.subTest("but a request past it still is"):
-            self.assertEqual(oversized_request.status_code, 400)
-
-    def test_an_unusable_configured_page_size_falls_back(self):
-        for configured, expected in (
-            (25.0, 25),
-            (None, FALLBACK_PAGE_SIZE),
-            (0, FALLBACK_PAGE_SIZE),
-            (True, FALLBACK_PAGE_SIZE),
-        ):
-            with self.subTest(configured=configured):
-                with mock.patch(
-                    SYSTEM_SETTINGS, SimpleNamespace(SEARCH_ITEMS_PER_PAGE=configured)
-                ):
-                    self.assertEqual(default_page_size(), expected)
+        self.assertEqual(at_the_cap.status_code, 200)
+        self.assertEqual(past_the_cap.status_code, 400)
 
     def test_pre_filter_narrows_the_results_and_the_counts(self):
         result = self._search(

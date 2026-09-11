@@ -994,14 +994,10 @@ not just the current page, so a facet count does not change as you page through.
 
 ### Paging
 
-`page` counts from 1. `page_size` defaults to `SEARCH_ITEMS_PER_PAGE`, the
-setting core search pages by, so a value saved in the system settings UI applies
-here too. Core ships it as 5, so set it in your project if that is too few.
-Simple Search sends no `page_size`, so it pages by the setting.
-
-A request may name its own `page_size`, up to 200 — or up to
-`SEARCH_ITEMS_PER_PAGE`, if that is configured higher. Anything outside that
-range is a 400 rather than a query large enough to hurt the server.
+`page` counts from 1 and `page_size` defaults to 20. A request may ask for a
+larger page, up to core's `API_MAX_PAGE_SIZE` setting (500 unless your project
+sets it); anything above that is a 400 rather than a query large enough to hurt
+the server.
 
 ### Permissions
 

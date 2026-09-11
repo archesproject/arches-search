@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from django.db.models import QuerySet
 
 DEFAULT_PAGE = 1
+DEFAULT_PAGE_SIZE = 20
 
 
 @dataclass(frozen=True)
@@ -63,8 +64,7 @@ class SearchRequest:
     sort: Optional[List[Dict[str, Any]]] = None
     aggregations: Optional[List[Dict[str, Any]]] = None
     page: int = DEFAULT_PAGE
-    # None pages by SEARCH_ITEMS_PER_PAGE, read when the search runs.
-    page_size: Optional[int] = None
+    page_size: int = DEFAULT_PAGE_SIZE
 
     @classmethod
     def from_body(cls, body: Dict[str, Any]) -> "SearchRequest":
@@ -74,7 +74,7 @@ class SearchRequest:
             sort=body.get("sort"),
             aggregations=body.get("aggregations"),
             page=body.get("page", DEFAULT_PAGE),
-            page_size=body.get("page_size"),
+            page_size=body.get("page_size", DEFAULT_PAGE_SIZE),
         )
 
 

@@ -20,7 +20,6 @@ from arches_search.utils.search.additional_data.additional_data import (
 from arches_search.utils.search.compiler import SearchCompiler
 from arches_search.utils.search.types import SearchRequest, SearchResponse
 from arches_search.utils.search.validation import (
-    default_page_size,
     validate_paging,
     validate_search_payload,
 )
@@ -39,15 +38,10 @@ def execute_search(
     SearchCompiler.
     """
     payload = search_request.payload
-    page_size = (
-        search_request.page_size
-        if search_request.page_size is not None
-        else default_page_size()
-    )
 
     validate_search_payload(payload)
     validate_additional_data(search_request.additional_data)
-    validate_paging(search_request.page, page_size)
+    validate_paging(search_request.page, search_request.page_size)
     sort_resolver = SortResolver(search_request.sort)
 
     # Compiling validates the payload as it goes, so it belongs inside the same
@@ -66,7 +60,7 @@ def execute_search(
         node_column_annotations=additional_data.node_annotation_names,
     )
 
-    paginator = Paginator(results_queryset, page_size)
+    paginator = Paginator(results_queryset, search_request.page_size)
     # Skips Paginator's own COUNT(*) -- the total is already known.
     paginator.count = search_result.scoped_count
 
@@ -82,7 +76,7 @@ def execute_search(
         resources=_serialize_resources(page_resources, additional_data),
         pagination={
             "page": search_request.page,
-            "page_size": page_size,
+            "page_size": search_request.page_size,
             "total_results": paginator.count,
             "num_pages": paginator.num_pages,
             "has_next": has_next,
