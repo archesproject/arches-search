@@ -55,8 +55,20 @@ class SortResolver:
             sort_specs = DEFAULT_SORT
         self._validate(sort_specs)
         self.sort_specs = sort_specs
-        self._node_alias_datatype_registry = NodeAliasDatatypeRegistry()
-        self._search_model_registry = SearchModelRegistry()
+        self.__node_alias_datatype_registry: Optional[NodeAliasDatatypeRegistry] = None
+        self.__search_model_registry: Optional[SearchModelRegistry] = None
+
+    @property
+    def _node_alias_datatype_registry(self) -> NodeAliasDatatypeRegistry:
+        if self.__node_alias_datatype_registry is None:
+            self.__node_alias_datatype_registry = NodeAliasDatatypeRegistry()
+        return self.__node_alias_datatype_registry
+
+    @property
+    def _search_model_registry(self) -> SearchModelRegistry:
+        if self.__search_model_registry is None:
+            self.__search_model_registry = SearchModelRegistry()
+        return self.__search_model_registry
 
     def apply(self, queryset: QuerySet) -> QuerySet:
         order_expressions: List[Any] = []
