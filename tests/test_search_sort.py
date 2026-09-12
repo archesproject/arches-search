@@ -10,15 +10,23 @@ Covers:
 import uuid
 
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from django.utils import translation
 
-from arches.app.models.models import GraphModel, ResourceInstance
+from arches.app.models.models import (
+    GraphModel,
+    Node,
+    NodeGroup,
+    ResourceInstance,
+    TileModel,
+)
 
 from arches_search.utils.search_sort import (
     DEFAULT_SORT,
     DIRECTION_ASC,
     DIRECTION_DESC,
+    SORT_TYPE_NODE,
     SORT_TYPE_PRIMARY_NAME,
     SortResolver,
 )
@@ -204,3 +212,95 @@ class SortResolverApplyTests(TestCase):
 
         dup_positions = [i for i in ordered_ids if i in (id_dup_a, id_dup_b)]
         self.assertEqual(dup_positions, [id_dup_a, id_dup_b])
+
+
+class SortResolverNodeSortTests(TestCase):
+    """
+    Tests SortResolver.apply() with a "node" sort spec: ordering by a
+    number node's indexed value, ascending and descending, and that rows
+    with no indexed value always sort last regardless of direction.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.graph = GraphModel.objects.create(
+            graphid=uuid.uuid4(),
+            slug="test-search-node-sort",
+            isresource=True,
+        )
+        cls.nodegroup = NodeGroup.objects.create(
+            nodegroupid=uuid.uuid4(),
+            cardinality="1",
+        )
+        cls.node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="score",
+            alias="score",
+            datatype="number",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=True,
+        )
+
+        cls.id_low = uuid.UUID("00000000-0000-0000-0000-000000000010")
+        cls.id_high = uuid.UUID("00000000-0000-0000-0000-000000000020")
+        cls.id_no_value = uuid.UUID("00000000-0000-0000-0000-000000000030")
+
+        cls.low = ResourceInstance.objects.create(
+            resourceinstanceid=cls.id_low, graph=cls.graph
+        )
+        cls.high = ResourceInstance.objects.create(
+            resourceinstanceid=cls.id_high, graph=cls.graph
+        )
+        cls.no_value = ResourceInstance.objects.create(
+            resourceinstanceid=cls.id_no_value, graph=cls.graph
+        )
+
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            nodegroup=cls.nodegroup,
+            resourceinstance=cls.low,
+            data={str(cls.node.nodeid): 10},
+            provisionaledits=None,
+        )
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            nodegroup=cls.nodegroup,
+            resourceinstance=cls.high,
+            data={str(cls.node.nodeid): 20},
+            provisionaledits=None,
+        )
+        # No tile at all for cls.no_value: exercises the nulls-last path.
+
+        call_command("arches_search", "reindex_database")
+
+    def _ordered_ids(self, sort_specs):
+        queryset = ResourceInstance.objects.filter(graph=self.graph)
+        ordered = SortResolver(sort_specs).apply(queryset)
+        return [row.resourceinstanceid for row in ordered]
+
+    def test_node_sort_asc_orders_by_value_and_puts_missing_last(self):
+        ordered_ids = self._ordered_ids(
+            [
+                {
+                    "type": SORT_TYPE_NODE,
+                    "graph_slug": self.graph.slug,
+                    "node_alias": "score",
+                    "direction": DIRECTION_ASC,
+                }
+            ]
+        )
+        self.assertEqual(ordered_ids, [self.id_low, self.id_high, self.id_no_value])
+
+    def test_node_sort_desc_reverses_valued_rows_and_still_puts_missing_last(self):
+        ordered_ids = self._ordered_ids(
+            [
+                {
+                    "type": SORT_TYPE_NODE,
+                    "graph_slug": self.graph.slug,
+                    "node_alias": "score",
+                    "direction": DIRECTION_DESC,
+                }
+            ]
+        )
+        self.assertEqual(ordered_ids, [self.id_high, self.id_low, self.id_no_value])
