@@ -33,9 +33,27 @@ from arches_search.utils.advanced_search.clause_evaluation.group_compiler import
     GroupCompiler,
 )
 from arches_search.utils.advanced_search.payload_validator import PayloadValidator
+from arches_search.utils.readable_nodes import ReadableNodes
 
 
 class AdvancedSearchQueryCompiler:
+    """
+    Compiles one graph's advanced search payload into a ResourceInstance queryset.
+
+    Args:
+        payload_query (dict): The advanced search payload for one graph.
+        facet_registry (FacetRegistry, optional): The registry of facets. Created if
+            not given.
+        search_model_registry (SearchModelRegistry, optional): The registry of search
+            index models. Created if not given.
+        resource_field_registry (ResourceInstanceFieldRegistry, optional): The registry
+            of queryable resource fields. Created if not given.
+        user (User, optional): The user the search runs as. Used by IS_CURRENT_USER and
+            to work out which nodes they can read.
+        readable_nodes (ReadableNodes, optional): The nodes the user can read. Created
+            from user if not given.
+    """
+
     def __init__(
         self,
         payload_query: Dict[str, Any],
@@ -43,6 +61,7 @@ class AdvancedSearchQueryCompiler:
         search_model_registry: Optional[SearchModelRegistry] = None,
         resource_field_registry=None,
         user=None,
+        readable_nodes: Optional[ReadableNodes] = None,
     ) -> None:
         PayloadValidator().validate(payload_query)
 
@@ -56,7 +75,12 @@ class AdvancedSearchQueryCompiler:
             if search_model_registry is not None
             else SearchModelRegistry()
         )
-        self.node_alias_registry = NodeAliasDatatypeRegistry(payload_query)
+        self.node_alias_registry = NodeAliasDatatypeRegistry(
+            payload_query,
+            readable_nodes=(
+                readable_nodes if readable_nodes is not None else ReadableNodes(user)
+            ),
+        )
         self.path_navigator = PathNavigator(
             self.search_model_registry, self.node_alias_registry
         )

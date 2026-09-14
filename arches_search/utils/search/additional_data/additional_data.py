@@ -22,6 +22,7 @@ from arches_search.utils.advanced_search.constants import (
     SUBJECT_TYPE_NODE,
     SUBJECT_TYPE_RESOURCE_FIELD,
 )
+from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.search.additional_data import node_values, resource_fields
 from arches_search.utils.search.additional_data.node_values import (
     NodeColumnKey as NodeKey,
@@ -78,7 +79,7 @@ class AdditionalData:
     def __init__(
         self,
         additional_data: Optional[List[Dict[str, Any]]],
-        user,
+        readable_nodes: ReadableNodes,
         also_project_nodes: Iterable[NodeKey] = (),
     ):
         entries = additional_data or []
@@ -89,7 +90,7 @@ class AdditionalData:
             if node_key not in node_keys:
                 node_keys.append(node_key)
 
-        self.nodes_by_key = node_values.resolve(node_keys, user)
+        self.nodes_by_key = node_values.resolve(node_keys, readable_nodes)
         self.fields_by_name = resource_fields.resolve(
             resource_fields.field_names(
                 [

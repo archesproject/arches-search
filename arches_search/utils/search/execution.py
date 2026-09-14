@@ -13,6 +13,7 @@ from django.db.models import QuerySet
 
 from arches.app.utils.betterJSONSerializer import JSONSerializer
 
+from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.search.additional_data.additional_data import (
     AdditionalData,
     validate_additional_data,
@@ -20,6 +21,7 @@ from arches_search.utils.search.additional_data.additional_data import (
 from arches_search.utils.search.compiler import SearchCompiler
 from arches_search.utils.search.types import SearchRequest, SearchResponse
 from arches_search.utils.search.validation import (
+    validate_aggregations,
     validate_paging,
     validate_search_payload,
 )
@@ -41,16 +43,23 @@ def execute_search(
 
     validate_search_payload(payload)
     validate_additional_data(search_request.additional_data)
+    validate_aggregations(search_request.aggregations)
     validate_paging(search_request.page, search_request.page_size)
     sort_resolver = SortResolver(search_request.sort)
 
+    # Shared, so filtering, projection and aggregation agree on what the user
+    # can read.
+    readable_nodes = ReadableNodes(user)
+
     # Compiling validates the payload as it goes, so it belongs inside the same
     # guarded stretch: an unknown field is a bad request, not a 500.
-    search_result = SearchCompiler(payload, user, pre_filter=pre_filter).compile()
+    search_result = SearchCompiler(
+        payload, user, pre_filter=pre_filter, readable_nodes=readable_nodes
+    ).compile()
 
     additional_data = AdditionalData(
         search_request.additional_data,
-        user,
+        readable_nodes,
         # Ordering by a node value needs it annotated too.
         also_project_nodes=_node_keys_an_ordering_needs(sort_resolver),
     )
@@ -83,12 +92,13 @@ def execute_search(
             "has_previous": has_previous,
         },
         aggregations=(
-            build_aggregations(results_queryset, search_request.aggregations)
+            build_aggregations(
+                results_queryset, search_request.aggregations, readable_nodes
+            )
             if search_request.aggregations
             else {}
         ),
         resource_type_counts=search_result.resource_type_counts,
-        all_resource_count=search_result.all_resource_count,
     )
 
 

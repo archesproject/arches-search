@@ -514,7 +514,6 @@ function createEmptySearchResults(): SearchResults {
             has_previous: false,
         },
         resource_type_counts: [],
-        all_resource_count: 0,
     };
 }
 

@@ -5,12 +5,15 @@ from arches.app.views.api import APIBase
 from arches_search.utils.advanced_search.metadata.node_alias_metadata import (
     build_node_alias_metadata_for_payload_query,
 )
+from arches_search.utils.readable_nodes import ReadableNodes
 
 
 class NodeMetadataForPayloadAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
 
-        node_metadata = build_node_alias_metadata_for_payload_query(body)
+        node_metadata = build_node_alias_metadata_for_payload_query(
+            body, ReadableNodes(request.user)
+        )
 
         return JSONResponse(node_metadata)

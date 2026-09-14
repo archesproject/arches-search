@@ -42,6 +42,7 @@ class LiteralClauseEvaluator:
             facet_registry=facet_registry,
             predicate_builder=predicate_builder,
             literal_clause_evaluator=self,
+            node_alias_datatype_registry=path_navigator.node_alias_datatype_registry,
         )
         self._child_rows_computer = ChildRowsComputer(literal_clause_evaluator=self)
 
@@ -51,9 +52,8 @@ class LiteralClauseEvaluator:
         subject_graph_slug: str,
         subject_node_alias: str,
     ) -> QuerySet:
-        return model_class.objects.filter(
-            graph_slug=subject_graph_slug,
-            node_alias=subject_node_alias,
+        return self.path_navigator.node_alias_datatype_registry.node_rows(
+            model_class, subject_graph_slug, subject_node_alias
         )
 
     def build_presence_subject_row_sets(

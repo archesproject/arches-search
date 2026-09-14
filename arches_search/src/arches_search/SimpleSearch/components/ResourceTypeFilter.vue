@@ -84,32 +84,39 @@ function selectGraph(resourceType: ResourceType): void {
     toggleGraph(resourceType);
 }
 
-function getResourceTypeCount(resourceType: ResourceType): number {
+function getResourceTypeCount(resourceType: ResourceType): number | null {
+    // Only what the search returned is counted: "All" while it is selected, and
+    // each resource type the search included.
     if (resourceType.id === null) {
-        return searchResults.value.all_resource_count ?? 0;
+        return isResourceTypeSelected(resourceType)
+            ? searchResults.value.pagination.total_results
+            : null;
     }
 
-    return resourceTypeCountsByGraphId.value.get(resourceType.id) ?? 0;
+    return resourceTypeCountsByGraphId.value.get(resourceType.id) ?? null;
 }
 
-function getResourceTypeCountLabel(resourceType: ResourceType): string {
-    return compactCountFormatter.value.format(
-        getResourceTypeCount(resourceType),
-    );
+function hasResourceTypeCount(resourceType: ResourceType): boolean {
+    return getResourceTypeCount(resourceType) !== null;
 }
 
 function getResourceTypeCountDisplay(resourceType: ResourceType): string {
     return $gettext("(%{count})", {
-        count: getResourceTypeCountLabel(resourceType),
+        count: compactCountFormatter.value.format(
+            getResourceTypeCount(resourceType) ?? 0,
+        ),
     });
 }
 
 function getResourceTypeTooltip(resourceType: ResourceType): string {
+    const count = getResourceTypeCount(resourceType);
+    if (count === null) {
+        return resourceType.label;
+    }
+
     return $gettext("%{label} — %{count} records", {
         label: resourceType.label,
-        count: fullCountFormatter.value.format(
-            getResourceTypeCount(resourceType),
-        ),
+        count: fullCountFormatter.value.format(count),
     });
 }
 </script>
@@ -134,9 +141,12 @@ function getResourceTypeTooltip(resourceType: ResourceType): string {
                 :class="resourceType.icon"
             />
             <span class="type-label">{{ resourceType.label }}</span>
-            <span class="type-count">{{
-                getResourceTypeCountDisplay(resourceType)
-            }}</span>
+            <span
+                v-if="hasResourceTypeCount(resourceType)"
+                class="type-count"
+            >
+                {{ getResourceTypeCountDisplay(resourceType) }}
+            </span>
         </Button>
 
         <span

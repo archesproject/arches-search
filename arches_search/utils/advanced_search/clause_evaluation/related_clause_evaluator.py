@@ -101,11 +101,13 @@ class RelatedClauseEvaluator:
         facet = self.facet_registry.get_facet(datatype_name, operator_token)
         if not operand_items:
             correlated_subject_row_sets = [
-                model_class.objects.filter(
-                    graph_slug=subject_graph_slug,
-                    node_alias=subject_node_alias,
-                    resourceinstanceid=OuterRef(traversal_context["child_id_field"]),
-                ).annotate(
+                self.path_navigator.node_alias_datatype_registry.node_rows(
+                    model_class, subject_graph_slug, subject_node_alias
+                )
+                .filter(
+                    resourceinstanceid=OuterRef(traversal_context["child_id_field"])
+                )
+                .annotate(
                     _anchor_resource_id=OuterRef(traversal_context["anchor_id_field"])
                 )
                 for model_class in self.search_model_registry.get_all_models_for_datatype(
@@ -121,8 +123,8 @@ class RelatedClauseEvaluator:
             return any_value_exists if presence_implies_match else ~any_value_exists
 
         model_class = facet.target_model_class
-        subject_rows = model_class.objects.filter(
-            graph_slug=subject_graph_slug, node_alias=subject_node_alias
+        subject_rows = self.path_navigator.node_alias_datatype_registry.node_rows(
+            model_class, subject_graph_slug, subject_node_alias
         )
 
         correlated_subject_rows = subject_rows.filter(

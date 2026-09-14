@@ -9,15 +9,20 @@ MAX_ALLOWED_HOPS = 2
 
 
 def expand_matches_via_relationships(
-    direct_match_resource_ids, target_graphid, max_hops
+    direct_match_resource_ids, target_graphid, max_hops, readable_nodes
 ):
     """
     Returns target_graphid resources that are themselves in direct_match_resource_ids
     (any graph), or reachable from one within max_hops via resource_x_resource.
+
+    Links made through a node the user cannot read are not followed.
     """
     if not 0 <= max_hops <= MAX_ALLOWED_HOPS:
         raise ValueError(f"max_hops must be between 0 and {MAX_ALLOWED_HOPS}")
 
+    relations = readable_nodes.exclude_unreadable_relations(
+        ResourceXResource.objects.all()
+    )
     target_graph_match_sets = [
         ResourceInstance.objects.filter(
             resourceinstanceid__in=direct_match_resource_ids, graph_id=target_graphid
@@ -33,25 +38,25 @@ def expand_matches_via_relationships(
 
     for hop_number in range(max_hops):
         target_graph_match_sets.append(
-            ResourceXResource.objects.filter(
+            relations.filter(
                 to_resource__in=traversal_frontier,
                 from_resource_graph_id=target_graphid,
             ).values("from_resource_id")
         )
         target_graph_match_sets.append(
-            ResourceXResource.objects.filter(
+            relations.filter(
                 from_resource__in=traversal_frontier,
                 to_resource_graph_id=target_graphid,
             ).values("to_resource_id")
         )
         if hop_number < max_hops - 1:
             next_frontier_from = (
-                ResourceXResource.objects.filter(to_resource__in=traversal_frontier)
+                relations.filter(to_resource__in=traversal_frontier)
                 .exclude(from_resource_graph_id=target_graphid)
                 .values("from_resource_id")
             )
             next_frontier_to = (
-                ResourceXResource.objects.filter(from_resource__in=traversal_frontier)
+                relations.filter(from_resource__in=traversal_frontier)
                 .exclude(to_resource_graph_id=target_graphid)
                 .values("to_resource_id")
             )

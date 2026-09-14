@@ -23,6 +23,7 @@ from arches.app.models.models import (
     TileModel,
 )
 
+from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.search.additional_data import node_values
 from arches_search.utils.search.additional_data.additional_data import (
     validate_additional_data,
@@ -124,7 +125,7 @@ class AdditionalDataDataTests(TestCase):
 
     def _annotated(self):
         keys = [(self.graph.slug, "title")]
-        nodes_by_key = node_values.resolve(keys, self.admin)
+        nodes_by_key = node_values.resolve(keys, ReadableNodes(self.admin))
         queryset, annotation_names = node_values.annotate(
             ResourceInstance.objects.filter(graph=self.graph), nodes_by_key
         )
@@ -159,7 +160,7 @@ class AdditionalDataDataTests(TestCase):
 
     def test_unresolvable_node_is_silently_absent(self):
         nodes_by_key = node_values.resolve(
-            [(self.graph.slug, "no_such_alias")], self.admin
+            [(self.graph.slug, "no_such_alias")], ReadableNodes(self.admin)
         )
         self.assertEqual(nodes_by_key, {})
 

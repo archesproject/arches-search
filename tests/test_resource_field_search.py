@@ -30,6 +30,7 @@ from arches.app.models.models import (
     ResourceInstanceLifecycleState,
 )
 
+from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.resource_field_search.field_registry import (
     get_resource_instance_fields,
 )
@@ -284,6 +285,7 @@ class ResourceFieldSortingAndGroupingTests(ResourceFieldFixtureMixin, TestCase):
                     ],
                 }
             ],
+            ReadableNodes(self.owner),
         )
         counts = {str(row["state"]): row["total"] for row in results["by_state"]}
         self.assertEqual(counts[str(self.state_draft.pk)], 3)

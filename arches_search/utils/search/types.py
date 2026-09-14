@@ -35,18 +35,15 @@ class SearchPayload:
 @dataclass(frozen=True)
 class SearchResult:
     """
-    What the compiler found, before any projection or paging.
-
-    The two counts differ on purpose. all_resource_count spans every active
-    graph, so a client can show what selecting another resource model would
-    get; scoped_count covers only the graphs named in graph_slugs, which is
-    what `results` contains and what pagination is measured against.
+    What the compiler found in the graphs graph_slugs names, before any
+    projection or paging. scoped_count is how many resources `results` holds,
+    and what pagination is measured against; resource_type_counts splits it by
+    graph.
     """
 
     results: QuerySet
-    resource_type_counts: List[Dict[str, Any]]
-    all_resource_count: int
     scoped_count: int
+    resource_type_counts: List[Dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -80,12 +77,11 @@ class SearchRequest:
 
 @dataclass(frozen=True)
 class SearchResponse:
-    """One page of results, with the counts a facet panel needs."""
+    """One page of results, and how many matches each searched graph holds."""
 
     resources: List[Dict[str, Any]]
     pagination: Dict[str, Any]
     resource_type_counts: List[Dict[str, Any]]
-    all_resource_count: int
     aggregations: Dict[str, Any] = field(default_factory=dict)
 
     def serialize(self) -> Dict[str, Any]:
@@ -94,5 +90,4 @@ class SearchResponse:
             "pagination": self.pagination,
             "aggregations": self.aggregations,
             "resource_type_counts": self.resource_type_counts,
-            "all_resource_count": self.all_resource_count,
         }

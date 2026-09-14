@@ -1,14 +1,29 @@
 """
-Utility functions for building nested subqueries and aggregations
-used in advanced search queries within the Arches search system.
+Grouped counts and metrics over the whole result set.
+
+Group-bys and metrics name a NODE by graph_slug and node_alias, or a
+RESOURCE_FIELD by field, and resolve through the same registries clauses use.
+Functions come from AGGREGATE_FUNCTIONS. Nothing in a request reaches the ORM
+as a lookup, a table name or a function name.
 """
 
-from arches.app.models.models import TileModel
-from django.apps import apps
-from django.db import models
-from django.db.models import F, OuterRef, Subquery, Q, QuerySet
-from typing import Optional, Dict, Any, List, Union, Callable
+from functools import cached_property
+from typing import Any, Callable, Dict, List, Optional, Union
 
+from django.core.exceptions import ValidationError
+from django.db import models
+from django.db.models import F, OuterRef, QuerySet, Subquery
+from django.utils.translation import gettext as _
+
+from arches.app.models.models import TileModel
+
+from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
+    NodeAliasDatatypeRegistry,
+)
+from arches_search.utils.advanced_search.registries.search_model_registry import (
+    SearchModelRegistry,
+)
+from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.resource_field_search.field_registry import (
     get_resource_instance_fields,
 )
@@ -18,53 +33,69 @@ from arches_search.utils.resource_field_search.grouping import (
     resolve_metric_path,
 )
 
-
-def get_search_model(search_table: str) -> models.Model:
-    """
-    Retrieve the Django model associated with a given search table name.
-
-    Args:
-        search_table (str): The key identifying a search table.
-
-    Returns:
-        models.Model: The model class associated with the given search table.
-
-    Raises:
-        ValueError: If the search table name is not found in SEARCH_TABLE_TO_MODEL.
-    """
-    arches_search_config = apps.get_app_config("arches_search")
-
-    for model_class in arches_search_config.get_models():
-        if model_class._meta.db_table == search_table:
-            return model_class
-
-    raise ValueError(f"Unknown search table '{search_table}'")
+AGGREGATE_FUNCTIONS: Dict[str, Callable[..., Any]] = {
+    "Count": models.Count,
+    "Sum": models.Sum,
+    "Avg": models.Avg,
+    "Min": models.Min,
+    "Max": models.Max,
+}
 
 
 def get_aggregate_function(fn_name: str) -> Callable[..., Any]:
     """
-    Return a Django aggregate function by its name (e.g., "Sum", "Avg").
-
-    Args:
-        fn_name (str): The name of the aggregate function.
-
-    Returns:
-        Callable[..., Any]: The corresponding Django aggregate function class.
-
-    Raises:
-        ValueError: If no aggregate function matches the provided name.
+    Looked up in AGGREGATE_FUNCTIONS rather than on django.db.models, where a
+    name could reach any expression class.
     """
     try:
-        return getattr(models, fn_name)
-    except AttributeError:
-        raise ValueError(f"Unknown aggregate function: {fn_name}")
+        return AGGREGATE_FUNCTIONS[fn_name]
+    except KeyError:
+        raise ValidationError(
+            _("Unknown aggregate function: %(fn)s."), params={"fn": fn_name}
+        )
+
+
+class NodeRowResolver:
+    """
+    Resolves a NODE spec to its rows in the search index table for its datatype.
+
+    Resolution goes through NodeAliasDatatypeRegistry, so a node the user cannot
+    read is refused exactly as a clause naming it would be.
+    """
+
+    def __init__(self, readable_nodes: ReadableNodes) -> None:
+        self._node_registry = NodeAliasDatatypeRegistry(readable_nodes=readable_nodes)
+
+    @cached_property
+    def _search_model_registry(self) -> SearchModelRegistry:
+        # Built on first use: it costs a query, and an aggregation over resource
+        # fields alone never needs it.
+        return SearchModelRegistry()
+
+    def rows_for(self, node_spec: Dict[str, Any]) -> QuerySet:
+        graph_slug = node_spec["graph_slug"]
+        node_alias = node_spec["node_alias"]
+        datatype_name = self._node_registry.get_datatype_for_alias(
+            graph_slug, node_alias
+        )
+
+        try:
+            model_class = self._search_model_registry.get_value_model_for_datatype(
+                datatype_name
+            )
+        except ValueError:
+            raise ValidationError(
+                _("%(graph_slug)s node %(node_alias)s has no value to aggregate."),
+                params={"graph_slug": graph_slug, "node_alias": node_alias},
+            )
+
+        return self._node_registry.node_rows(model_class, graph_slug, node_alias)
 
 
 def build_value_subquery(
-    search_table_name: str,
+    node_rows: QuerySet,
     node_alias: str,
     parent_ref_field: str = "resourceinstanceid",
-    where: Optional[Dict[str, Any]] = None,
     fn: Optional[str] = None,
     aggregate_by_tile: Optional[bool] = False,
     value_field: str = "value",
@@ -72,16 +103,15 @@ def build_value_subquery(
     outer_aggregate_by_tile: Optional[bool] = False,
 ) -> Subquery:
     """
-    Build a base Subquery returning a single value from a search table.
+    Build a base Subquery returning a single value from a node's search index rows.
 
     Typically used as a building block for group-by or metric aggregations.
 
     Args:
-        search_table_name (str): The search table used to look up the model.
-        node_alias (str): The node alias used to filter the queryset.
+        node_rows (QuerySet): The node's rows, from NodeRowResolver.
+        node_alias (str): The node's alias, used to name an aggregated value.
         parent_ref_field (str, optional): The column name to join outer and subqueries on.
             Defaults to "resourceinstanceid".
-        where (dict, optional): Additional filter conditions to apply.
         fn (str, optional): An aggregate function name to apply (e.g., "Sum", "Avg").
             If provided, the subquery will return the aggregated value.
         aggregate_by_tile (bool, optional): Whether to apply the aggregate function
@@ -95,9 +125,7 @@ def build_value_subquery(
     Returns:
         Subquery: A Django ORM Subquery returning the specified field value.
     """
-    search_model = get_search_model(search_table_name)
-
-    filters = {"node_alias": node_alias}
+    filters = {}
     if aggregate_by_tile:
         filters["tileid"] = OuterRef(parent_ref_field)
     else:
@@ -107,13 +135,10 @@ def build_value_subquery(
             filters["resourceinstanceid"] = OuterRef("resourceinstance_id")
         else:
             filters["resourceinstanceid"] = OuterRef(parent_ref_field)
-    qs = search_model.objects.filter(**filters)
+    qs = node_rows.filter(**filters)
 
     if annotations:
         qs = qs.annotate(**annotations)
-
-    if where:
-        qs = qs.filter(**where)
 
     if fn:
         if aggregate_by_tile == False and fn != "Count":
@@ -131,6 +156,7 @@ def build_value_subquery(
 
 def build_subquery(
     query_def: Dict[str, Any],
+    node_row_resolver: NodeRowResolver,
     parent_ref_field: str = "resourceinstanceid",
     aggregate_by_tile: bool = False,
 ) -> Subquery:
@@ -141,13 +167,14 @@ def build_subquery(
 
 
     Args:
-        query_def (Dict[str, Any]): A dictionary defining the subquery structure with keys:
-            - search_table (str): The name of the search table to query
+        query_def (Dict[str, Any]): A NODE spec defining the subquery structure with keys:
+            - graph_slug (str): The graph the node belongs to
             - node_alias (str): The alias for the node being queried
-            - where (optional): Filter conditions for the subquery
             - fn (optional): Aggregation function to apply
             - aggregate_by_tile (bool, optional): Whether to aggregate at tile level
             - aggregations (list, optional): List of nested aggregation specifications
+
+        node_row_resolver (NodeRowResolver): Resolves each node to its rows.
 
         parent_ref_field (str, optional): The column name used to join the outer query
             with this subquery. Defaults to "resourceinstanceid".
@@ -163,8 +190,8 @@ def build_subquery(
             queries or further nested in other subqueries.
 
     Raises:
-        Exception: If attempting to build a tile-aggregated subquery when the parent
-            query is not aggregating by tile.
+        ValidationError: If the node does not resolve, or if attempting to build a
+            tile-aggregated subquery when the parent query is not aggregating by tile.
 
     Notes:
         - The function validates that tile-level aggregation is consistent between
@@ -175,15 +202,17 @@ def build_subquery(
     """
 
     if aggregate_by_tile == False and query_def.get("aggregate_by_tile", None) == True:
-        raise Exception(
-            "Cannot build subquery that aggregates by tile when parent query is not aggregating by tile."
+        raise ValidationError(
+            _(
+                "Cannot build subquery that aggregates by tile when parent query is not aggregating by tile."
+            )
         )
 
+    node_rows = node_row_resolver.rows_for(query_def)
     subquery = build_value_subquery(
-        search_table_name=query_def["search_table"],
-        node_alias=query_def["node_alias"],
+        node_rows,
+        query_def["node_alias"],
         parent_ref_field=parent_ref_field,
-        where=query_def.get("where"),
         fn=query_def.get("fn"),
         aggregate_by_tile=query_def.get("aggregate_by_tile", aggregate_by_tile),
         outer_aggregate_by_tile=aggregate_by_tile,
@@ -194,14 +223,14 @@ def build_subquery(
         for nested_group in agg.get("group_by", []):
             nested_subquery = build_subquery(
                 nested_group,
+                node_row_resolver,
                 parent_ref_field="value",
                 aggregate_by_tile=aggregate_by_tile,
             )
             subquery = build_value_subquery(
-                search_table_name=query_def["search_table"],
-                node_alias=query_def["node_alias"],
+                node_rows,
+                query_def["node_alias"],
                 parent_ref_field=parent_ref_field,
-                where=query_def.get("where"),
                 value_field=nested_group["alias"],
                 annotations={nested_group["alias"]: nested_subquery},
                 aggregate_by_tile=aggregate_by_tile,
@@ -228,16 +257,19 @@ def _needs_resource_field_registry(aggregations: List[Dict[str, Any]]) -> bool:
 def build_aggregations(
     queryset: QuerySet,
     aggregations: List[Dict[str, Any]],
+    readable_nodes: ReadableNodes,
 ) -> Dict[str, Union[List[Dict[str, Any]], Dict[str, Any]]]:
     """
     Build and evaluate aggregations on a queryset.
 
     Supports both grouped metric aggregations and simple global aggregates.
+    Expects aggregations that have passed validate_aggregations.
 
     Args:
         queryset (QuerySet): The base queryset to aggregate.
         aggregations (list[dict]): Aggregation specifications that define grouping,
             metrics, and/or direct aggregate operations.
+        readable_nodes (ReadableNodes): Which nodes the aggregations may read.
 
     Returns:
         dict: A dictionary mapping aggregation names to their computed results.
@@ -251,13 +283,13 @@ def build_aggregations(
         if _needs_resource_field_registry(aggregations)
         else None
     )
+    node_row_resolver = NodeRowResolver(readable_nodes)
 
     for agg in aggregations:
         name = agg["name"]
 
         group_bys = agg.get("group_by", [])
         metrics = agg.get("metrics", [])
-        where_clause = agg.get("where", None)
 
         aggregate_by_tile = agg.get("aggregate_by_tile", False)
         if aggregate_by_tile:
@@ -289,6 +321,7 @@ def build_aggregations(
                 **{
                     field_alias: build_subquery(
                         group_spec,
+                        node_row_resolver,
                         parent_ref_field=parent_ref_field,
                         aggregate_by_tile=aggregate_by_tile,
                     )
@@ -321,39 +354,30 @@ def build_aggregations(
             aggregate_fn = get_aggregate_function(fn)
             subquery = build_subquery(
                 metric_spec,
+                node_row_resolver,
                 parent_ref_field=parent_ref_field,
                 aggregate_by_tile=aggregate_by_tile,
             )
             metric_annotations[alias] = aggregate_fn(subquery)
 
-        # Apply metric annotations and group-by fields
+        # Only the requested columns come back, never whole rows.
+        group_fields = [g["alias"] for g in group_bys]
+        local_queryset = local_queryset.order_by().values(*group_fields)
         if metric_annotations:
-            group_fields = [g["alias"] for g in group_bys]
-            local_queryset = (
-                local_queryset.order_by()
-                .values(*group_fields)
-                .annotate(**metric_annotations)
-            )
-
-        if where_clause:
-            local_queryset = local_queryset.filter(**where_clause)
+            local_queryset = local_queryset.annotate(**metric_annotations)
 
         results[name] = list(local_queryset)
 
-        # Handle "simple" aggregates on the current queryset level
-        if "aggregate" in agg:
-            for aggregate in agg["aggregate"]:
-                field = aggregate.get("field", "value")
-                aggregate_fn = get_aggregate_function(aggregate["fn"])
-                kwargs = dict(aggregate.get("kwargs") or {})
-
-                if aggregate.get("where"):
-                    kwargs["filter"] = Q(**aggregate.get("where"))
-                if aggregate.get("distinct"):
-                    kwargs["distinct"] = True
-
-                results[aggregate.get("alias")] = local_queryset.aggregate(
-                    **{aggregate.get("alias"): aggregate_fn(field, **kwargs)}
-                )[aggregate.get("alias")]
+        # Handle "simple" aggregates over the columns requested above
+        for aggregate in agg.get("aggregate", []):
+            aggregate_fn = get_aggregate_function(aggregate["fn"])
+            alias = aggregate["alias"]
+            results[alias] = local_queryset.aggregate(
+                **{
+                    alias: aggregate_fn(
+                        aggregate["field"], distinct=bool(aggregate.get("distinct"))
+                    )
+                }
+            )[alias]
 
     return results

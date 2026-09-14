@@ -426,7 +426,8 @@ Person contains X":
 ```
 
 _Reads as:_ People with "CHARLIE" in **any** of their string fields — first name,
-nickname, whichever. You do not have to know which node it landed in.
+nickname, whichever. You do not have to know which node it landed in. Only fields
+the requester may read are searched.
 
 Name more than one class to span them — `["DateSearch", "DateRangeSearch"]`
 covers every time-ish node in one clause.
@@ -592,15 +593,14 @@ shorthand for "everything" — a caller has to name the resource models it wants
 }
 ```
 
-comes back with no resources. `resource_type_counts` and `all_resource_count`
-still cover every active graph, though, so a client can show what naming one
-would get. The resource type facet is built on exactly that.
+comes back with no resources and no counts.
 
 ### Validation
 
 Shape is checked up front, without touching the database. Whether a field,
 operator or node actually exists is settled as the query compiles, where the
-registries are available. Either way you get a `400`, not a `500`.
+registries are available. Either way you get a `400`, not a `500`. A node the
+requester may not read is refused exactly as one that does not exist.
 
 `graph_slugs` must be a list of non-empty strings. A bare string would otherwise
 be read a character at a time, selecting no resource model at all and coming back
@@ -628,9 +628,10 @@ outside the graph being searched:
 
 Terms are matched against every indexed text value on a resource (you never
 name a node), then walked back across relationships, so a Site can be found
-because its related Person is named Amber. All terms must match; each is
-expanded independently and the results intersected, so a resource cannot qualify
-by reaching two different terms down two unrelated paths.
+because its related Person is named Amber. Values and relationships the
+requester cannot read are skipped. All terms must match; each is expanded
+independently and the results intersected, so a resource cannot qualify by
+reaching two different terms down two unrelated paths.
 
 A term can instead be an object naming the one indexed datatype it may match.
 That is how a controlled term picked from the term suggestions matches only
@@ -645,11 +646,12 @@ reference values, rather than any text that happens to contain its label:
 
 `max_hops` is capped at 2, and `0` means "match directly, do not traverse".
 
-**This is the only anonymous traversal in the API.** It follows any relationship,
-in either direction, ignoring ontology properties — which is why it is not a
-clause. A clause's `relationship` block is the opposite: a named node path, an
-explicit `is_inverse`, and a quantifier. Do not read the two as variations of one
-another, and do not call a clause's `relationship.path` segments "hops".
+**This is the only anonymous traversal in the API.** It follows any relationship
+the requester can read, in either direction, ignoring ontology properties —
+which is why it is not a clause. A clause's `relationship` block is the
+opposite: a named node path, an explicit `is_inverse`, and a quantifier. Do not
+read the two as variations of one another, and do not call a clause's
+`relationship.path` segments "hops".
 
 Everything else that filters a graph's own data is a clause. Geometry and date
 filters used to sit beside `term_search` and are now ordinary `SEARCH_MODELS`
@@ -771,6 +773,11 @@ unqueryable resource field is a **400**: the registry is public (the metadata
 endpoint serves it), so silence would hide a client's mistake while protecting
 nothing.
 
+Clauses and aggregations are stricter. Naming a node that does not resolve, or
+that the requester cannot read, is a **400** with the same message in both
+cases. Skipping it instead would quietly change which resources match — a
+`HAS_NO_VALUE` clause on an unreadable node would match all of them.
+
 ### Example payload
 
 `POST /api/search`
@@ -879,8 +886,10 @@ and `sort` orders on one of them.
 ```
 
 **What comes back:** the matching resources, each carrying the requested
-columns, ordered by height descending — plus `pagination`, `resource_type_counts`
-and `all_resource_count` alongside them.
+columns, ordered by height descending — plus `pagination` and
+`resource_type_counts`. The counts have one entry per graph in `graph_slugs`, as
+`{"graph_id", "name", "icon", "count"}`, and add up to
+`pagination.total_results`.
 
 Values are always a list, so a client never has to branch on cardinality:
 
@@ -1007,6 +1016,109 @@ aliases you asked for:
 Three results in that state. The aggregation runs over the whole matching set,
 not just the current page, so a facet count does not change as you page through.
 
+A `NODE` groups or measures by a node's value, named the same way as a clause
+subject:
+
+```json
+{
+    "aggregations": [
+        {
+            "name": "by_site_type",
+            "group_by": [
+                {
+                    "type": "NODE",
+                    "graph_slug": "site",
+                    "node_alias": "site_type",
+                    "alias": "site_type"
+                }
+            ],
+            "metrics": [
+                {
+                    "type": "RESOURCE_FIELD",
+                    "alias": "total",
+                    "fn": "Count",
+                    "field": "resourceinstanceid"
+                }
+            ]
+        }
+    ]
+}
+```
+
+There is no search table to name; it follows from the node's datatype. A node
+the requester cannot read is a `400`, the same as a node that does not exist.
+
+`aggregate` computes single values over an aggregation's grouped rows. Each
+entry's `field` must be one of that aggregation's `group_by` aliases, and its
+result comes back under its own `alias`, next to the aggregation's `name`:
+
+```json
+{
+    "aggregations": [
+        {
+            "name": "by_state",
+            "group_by": [
+                {
+                    "type": "RESOURCE_FIELD",
+                    "field": "resource_instance_lifecycle_state",
+                    "alias": "state"
+                }
+            ],
+            "metrics": [
+                {
+                    "type": "RESOURCE_FIELD",
+                    "alias": "total",
+                    "fn": "Count",
+                    "field": "resourceinstanceid"
+                }
+            ],
+            "aggregate": [
+                {
+                    "alias": "states_in_use",
+                    "fn": "Count",
+                    "field": "state",
+                    "distinct": true
+                }
+            ]
+        }
+    ]
+}
+```
+
+```json
+{
+    "by_state": [
+        { "state": "<uuid>", "total": 3 },
+        { "state": "<uuid>", "total": 1 }
+    ],
+    "states_in_use": 2
+}
+```
+
+These are the only keys accepted. Anything else, including the `where`,
+`kwargs` and `search_table` keys of earlier versions, is a `400`.
+
+| Key                        | On                       | Meaning                                                                                  |
+| -------------------------- | ------------------------ | ---------------------------------------------------------------------------------------- |
+| `name`                     | aggregation              | Required. The key its rows come back under.                                              |
+| `group_by`                 | aggregation              | Required, not empty. `NODE` or `RESOURCE_FIELD` specs.                                   |
+| `metrics`                  | aggregation              | Specs, each with an `fn`.                                                                |
+| `aggregate`                | aggregation              | Single values over the grouped rows: `alias`, `fn`, `field`, and optionally `distinct`.  |
+| `aggregate_by_tile`        | aggregation, `NODE` spec | Group per tile instead of per resource. A spec may set it only if its aggregation does.  |
+| `type`                     | spec                     | `NODE` or `RESOURCE_FIELD`.                                                              |
+| `alias`                    | spec                     | The column's name in the results.                                                        |
+| `graph_slug`, `node_alias` | `NODE` spec              | The node.                                                                                |
+| `field`                    | `RESOURCE_FIELD` spec    | A field from the resource field registry.                                                |
+| `fn`                       | spec                     | An aggregate function applied to the value. Required on metrics.                         |
+| `aggregations`             | `NODE` spec              | A nested `group_by` of `NODE` specs, read from the resource the node links to.           |
+
+`fn` is one of `Count`, `Sum`, `Avg`, `Min` or `Max`, and `distinct` works with
+the first three. An `alias` starts with a letter, uses only letters, digits and
+single underscores, and can't be the name of a resource column such as `graph`.
+Aggregation names and `aggregate` aliases share the response, so they must all
+be different. To filter what is aggregated, put the filter in the search
+payload.
+
 ### Paging
 
 `page` counts from 1 and `page_size` defaults to 20. A request may ask for a
@@ -1022,6 +1134,35 @@ step, so no filter value can surface a resource the requester could not
 otherwise see. `IS_CURRENT_USER` resolves server-side from the request user;
 for an unauthenticated request it matches nothing rather than matching every
 resource with no creator.
+
+Node values follow the requester's nodegroup permissions. A node in a nodegroup
+they may not read behaves as though it does not exist, everywhere a search
+touches it:
+
+-   A clause or aggregation naming it is a `400`, with the same message an
+    unknown node gets.
+-   A term search or `SEARCH_MODELS` subject never matches its values, and term
+    search does not hop through relationships it made.
+-   Term suggestions, date bounds and node metadata leave it out.
+-   `additional_data` omits it and a sort on it is skipped.
+
+`arches_search.utils.readable_nodes.ReadableNodes` makes that decision for all
+of them. Working it out reads every nodegroup's permissions, so in-process code
+should build one per request and pass the same instance everywhere, as
+`execute_search` does:
+
+```python
+from arches_search.utils.readable_nodes import ReadableNodes
+from arches_search.utils.search import SearchCompiler
+from arches_search.utils.search.additional_data import node_values
+
+readable_nodes = ReadableNodes(request.user)
+result = SearchCompiler(payload, request.user, readable_nodes=readable_nodes).compile()
+nodes_by_key = node_values.resolve([("site", "site_type")], readable_nodes)
+```
+
+`AdvancedSearchQueryCompiler` builds its own from `user`. Given no user it treats
+every node as readable, just as it leaves resource permissions to the caller.
 
 ### Searching within an existing queryset
 
@@ -1051,10 +1192,13 @@ results = SearchCompiler(
 
 Each graph is compiled inside `pre_filter` rather than over the whole graph, so
 a narrow queryset keeps the search narrow, and `results` is that queryset,
-filtered. `resource_type_counts` and `all_resource_count` count within it. It
-can only narrow: the permission filter above still runs last, so a resource the
-user may not see stays hidden even if `pre_filter` includes it. Pass it
-unsliced.
+filtered. It can only narrow: the permission filter above still runs last, so a
+resource the user may not see stays hidden even if `pre_filter` includes it.
+Pass it unsliced.
+
+`compile()` builds only the graphs `graph_slugs` names. It returns `results`,
+`scoped_count`, and `resource_type_counts` splitting that count by graph, all
+within `pre_filter`.
 
 ## Other endpoints
 
@@ -1082,10 +1226,11 @@ POST /api/arches-search/mvt-context                          -> { "context_id": 
 GET  /api/arches-search/mvt/{context_id}/{zoom}/{x}/{y}.pbf
 ```
 
-The context call validates the payload and caches it under a fresh id. Every
-tile after that reads the cached payload, so a malformed search fails once, as a
-`400` with a readable body, instead of as blank tiles. Tiles are cached per
-context, user and coordinate.
+The context call validates and compiles the payload, then caches it under a
+fresh id. Every tile after that reads the cached payload, so a malformed search
+fails once, as a `400` with a readable body, instead of as blank tiles. Tiles are
+cached per context, user and coordinate. A tile drawn for a user who cannot read
+a node the context names comes back empty.
 
 ### Saved searches
 

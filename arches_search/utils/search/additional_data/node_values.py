@@ -21,10 +21,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
 from arches.app.models.models import Node
-from arches.app.utils import permission_backend
 
 from arches_querysets.models import TileTree
 from arches_querysets.utils.models import get_tile_values_for_resource
+
+from arches_search.utils.readable_nodes import ReadableNodes
 
 # Positional, and namespaced so they cannot collide with a real column. Callers
 # find a column's name through the dict annotate() returns, never by rebuilding it.
@@ -42,7 +43,9 @@ def keys(entries: Optional[List[Dict[str, Any]]]) -> List[NodeColumnKey]:
     )
 
 
-def resolve(node_keys: Iterable[NodeColumnKey], user) -> Dict[NodeColumnKey, Node]:
+def resolve(
+    node_keys: Iterable[NodeColumnKey], readable_nodes: ReadableNodes
+) -> Dict[NodeColumnKey, Node]:
     """
     Resolve (graph_slug, node_alias) pairs to Node rows the user may read.
 
@@ -67,11 +70,7 @@ def resolve(node_keys: Iterable[NodeColumnKey], user) -> Dict[NodeColumnKey, Nod
         .select_related("nodegroup", "graph")
     )
 
-    candidate_nodes = candidate_nodes.filter(
-        nodegroup__in=permission_backend.get_nodegroups_by_perm(
-            user, "models.read_nodegroup"
-        )
-    )
+    candidate_nodes = readable_nodes.filter_nodes(candidate_nodes)
 
     return {
         (node.graph.slug, node.alias): node

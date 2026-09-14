@@ -1,6 +1,6 @@
 """End-to-end tests for SearchCompiler: term_search (including hop expansion),
-advanced_search_queries scope across graphs, and resource_type_counts /
-all_resource_count behavior.
+advanced_search_queries scope across graphs, and resource_type_counts
+behavior.
 
 Geometry and date filtering are advanced search clauses rather than a separate
 mechanism -- see test_geo_and_date_search_model_clauses.py."""
@@ -11,7 +11,9 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.contrib.gis.geos import GEOSGeometry
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from arches.app.models.models import (
@@ -468,37 +470,47 @@ class SearchCompilerTests(TestCase):
             [str(self.graph_a.graphid), str(self.graph_b.graphid)],
         )
 
-    def test_selecting_no_graphs_returns_nothing_but_still_counts(self):
+    def test_selecting_no_graphs_returns_nothing_and_counts_nothing(self):
         result = self._search(graph_slugs=None)
 
         self.assertEqual(self._result_ids(result), set())
         self.assertEqual(result.scoped_count, 0)
+        self.assertEqual(result.resource_type_counts, [])
 
-        # Nothing returned, but the counts still say what is out there.
-        counts_by_graph_id = {
-            row["graph_id"]: row["count"] for row in result.resource_type_counts
-        }
-        self.assertEqual(counts_by_graph_id[str(self.graph_a.graphid)], 2)
-        self.assertEqual(counts_by_graph_id[str(self.graph_b.graphid)], 1)
-
-    def test_resource_type_counts_cover_every_active_graph_regardless_of_graph_slugs(
-        self,
-    ):
+    def test_resource_type_counts_cover_only_the_requested_graphs(self):
         result = self._search(
             graph_slugs=[self.graph_a.slug],
             term_search={"terms": ["amber"], "max_hops": 0},
         )
-        counts_by_graph_id = {
-            row["graph_id"]: row["count"] for row in result.resource_type_counts
-        }
-        self.assertEqual(counts_by_graph_id[str(self.graph_a.graphid)], 1)
-        self.assertEqual(counts_by_graph_id[str(self.graph_b.graphid)], 1)
-        self.assertEqual(result.all_resource_count, 2)
-        # scoped to graph_a only:
+
+        # amber_site matches "amber" too, but its graph was not asked for.
+        self.assertEqual(
+            [(row["graph_id"], row["count"]) for row in result.resource_type_counts],
+            [(str(self.graph_a.graphid), 1)],
+        )
         self.assertEqual(
             self._result_ids(result), {self.amber_mineral.resourceinstanceid}
         )
         self.assertEqual(result.scoped_count, 1)
+
+    def test_compile_never_queries_a_graph_it_was_not_asked_for(self):
+        """
+        Compiling used to build and count every active graph whatever
+        graph_slugs named, so searching one small graph paid for all of them.
+        """
+
+        def mentions(sql, graph):
+            return str(graph.graphid) in sql or graph.graphid.hex in sql
+
+        with CaptureQueriesContext(connection) as queries:
+            result = self._search(graph_slugs=[self.graph_a.slug])
+            list(result.results)
+        executed_sql = "\n".join(query["sql"] for query in queries.captured_queries)
+
+        with self.subTest("the requested graph is queried"):
+            self.assertTrue(mentions(executed_sql, self.graph_a))
+        with self.subTest("no other graph is"):
+            self.assertFalse(mentions(executed_sql, self.graph_b))
 
     def _post_search(self, body):
         self.client.force_login(self.user)
@@ -517,6 +529,32 @@ class SearchCompilerTests(TestCase):
 
         self.assertEqual(at_the_cap.status_code, 200)
         self.assertEqual(past_the_cap.status_code, 400)
+
+    def test_the_search_response_counts_only_the_requested_graphs(self):
+        body = self._post_search({"graph_slugs": [self.graph_a.slug]}).json()
+
+        self.assertEqual(
+            [row["graph_id"] for row in body["resource_type_counts"]],
+            [str(self.graph_a.graphid)],
+        )
+        self.assertEqual(
+            sum(row["count"] for row in body["resource_type_counts"]),
+            body["pagination"]["total_results"],
+        )
+        self.assertNotIn("all_resource_count", body)
+
+    def test_the_resource_type_counts_endpoint_counts_every_active_graph(self):
+        # The landing page shows how much of each resource model there is, so
+        # unlike a search it asks for all of them.
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("resource_type_counts"))
+
+        counts_by_graph_id = {
+            entry["graphId"]: entry["count"]
+            for entry in response.json()["resourceTypes"]
+        }
+        self.assertEqual(counts_by_graph_id[str(self.graph_a.graphid)], 2)
+        self.assertEqual(counts_by_graph_id[str(self.graph_b.graphid)], 1)
 
     def test_pre_filter_narrows_the_results_and_the_counts(self):
         result = self._search(
@@ -540,7 +578,6 @@ class SearchCompilerTests(TestCase):
         )
         self.assertEqual(counts_by_graph_id[str(self.graph_a.graphid)], 1)
         self.assertEqual(counts_by_graph_id[str(self.graph_b.graphid)], 1)
-        self.assertEqual(result.all_resource_count, 2)
         self.assertEqual(result.scoped_count, 2)
 
     def test_pre_filter_and_the_term_search_intersect(self):
@@ -671,7 +708,8 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
     def _ids(result):
         return set(result.results.values_list("resourceinstanceid", flat=True))
 
-    def _count_for(self, result, graph_id):
+    @staticmethod
+    def _count_for(result, graph_id):
         return next(
             entry["count"]
             for entry in result.resource_type_counts
@@ -725,6 +763,15 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
             validate_advanced_search_queries(
                 [self._person_payload("FOO"), self._person_payload("BAR")]
             )
+
+    def test_an_operator_the_nodes_datatype_lacks_is_a_validation_error(self):
+        # first_name is a string, and strings have no GREATER_THAN. This used to
+        # surface as a 500.
+        payload = self._person_payload("FOO")
+        payload["clauses"][0]["operator"] = "GREATER_THAN"
+
+        with self.assertRaises(ValidationError):
+            self._search([payload], graph_slugs=["person"])
 
     def test_pre_filter_narrows_addressed_and_unaddressed_graphs_alike(self):
         # Tails over 100 keep dog_b and dog_d; the pre_filter holds dog_a and

@@ -23,11 +23,13 @@ class SearchModelClauseEvaluator:
         facet_registry,
         predicate_builder,
         literal_clause_evaluator,
+        node_alias_datatype_registry,
     ) -> None:
         self.search_model_registry = search_model_registry
         self.facet_registry = facet_registry
         self.predicate_builder = predicate_builder
         self.literal_clause_evaluator = literal_clause_evaluator
+        self.node_alias_datatype_registry = node_alias_datatype_registry
 
     def build_exists(
         self,
@@ -174,10 +176,9 @@ class SearchModelClauseEvaluator:
         model_class, _ = (
             self.search_model_registry.get_model_and_datatype_for_class_name(class_name)
         )
-        return model_class.objects.filter(
-            graph_slug=graph_slug,
-            resourceinstanceid=OuterRef(correlate_field_name),
-        )
+        return self.node_alias_datatype_registry.graph_rows(
+            model_class, graph_slug
+        ).filter(resourceinstanceid=OuterRef(correlate_field_name))
 
     def _build_search_model_operand_context(
         self,
@@ -200,10 +201,9 @@ class SearchModelClauseEvaluator:
         except AdvancedSearchFacet.DoesNotExist:
             return None
 
-        correlated_rows = model_class.objects.filter(
-            graph_slug=graph_slug,
-            resourceinstanceid=OuterRef(correlate_field_name),
-        )
+        correlated_rows = self.node_alias_datatype_registry.graph_rows(
+            model_class, graph_slug
+        ).filter(resourceinstanceid=OuterRef(correlate_field_name))
         normalized_operand_items, filter_value = (
             model_class.normalize_operands(operand_items, datatype_name=datatype_name)
             if hasattr(model_class, "normalize_operands")

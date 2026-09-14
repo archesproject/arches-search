@@ -58,8 +58,11 @@ class SearchMVTContextAPI(APIBase):
         body = JSONDeserializer().deserialize(request.body)
 
         # Checked here, not at tile time, where there is no way to report it.
+        # Compiling catches what a shape check cannot, like an unknown node.
         try:
-            validate_search_payload(SearchPayload.from_body(body))
+            search_payload = SearchPayload.from_body(body)
+            validate_search_payload(search_payload)
+            SearchCompiler(search_payload, request.user).compile()
         except ValidationError as error:
             return JSONResponse({"error": str(error)}, status=400)
 
@@ -82,9 +85,14 @@ class SearchMVTAPI(APIBase):
         if cached_tile is not None:
             return HttpResponse(cached_tile, content_type="application/x-protobuf")
 
-        search_result = SearchCompiler(
-            SearchPayload.from_body(body), request.user
-        ).compile()
+        try:
+            search_result = SearchCompiler(
+                SearchPayload.from_body(body), request.user
+            ).compile()
+        except ValidationError:
+            # The context was checked as the user who created it. Another user
+            # may not be able to read a node it names, and gets nothing drawn.
+            return HttpResponse(b"", content_type="application/x-protobuf")
 
         search_results_queryset = search_result.results.values("resourceinstanceid")
         mvt_tile = self._generate_tile(search_results_queryset, zoom, x, y)

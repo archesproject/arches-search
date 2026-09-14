@@ -6,7 +6,8 @@ search, when given, then by the advanced search payload addressing it, and the
 results are unioned. A graph no payload addresses skips that last step.
 """
 
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple
+from functools import cached_property
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional
 
 from django.core.exceptions import ValidationError
 from django.db.models import Count, QuerySet
@@ -22,6 +23,7 @@ from arches_search.utils.advanced_search.registries.facet_registry import FacetR
 from arches_search.utils.advanced_search.registries.search_model_registry import (
     SearchModelRegistry,
 )
+from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.search.types import SearchPayload, SearchResult
 from arches_search.utils.term_search.matching import get_related_resources_by_text
 
@@ -54,6 +56,11 @@ def _resolve_graphs(**filter_kwargs) -> List[SearchableGraph]:
     ]
 
 
+def active_resource_graph_slugs() -> List[str]:
+    """Every active resource model, in slug order."""
+    return [graph.slug for graph in _resolve_graphs(isresource=True, is_active=True)]
+
+
 def _union_all(querysets: Iterable[QuerySet]) -> QuerySet:
     querysets = list(querysets)
     if not querysets:
@@ -78,7 +85,7 @@ def _counts_by_graph_id(matches: QuerySet) -> Dict[str, int]:
 
 
 def _resource_type_counts(
-    active_graphs: List[SearchableGraph], counts_by_graph_id: Dict[str, int]
+    graphs: List[SearchableGraph], counts_by_graph_id: Dict[str, int]
 ) -> List[Dict[str, Any]]:
     # Ordered, so a facet panel built from this does not reshuffle.
     return [
@@ -88,7 +95,7 @@ def _resource_type_counts(
             "icon": graph.icon,
             "count": counts_by_graph_id.get(graph.id, 0),
         }
-        for graph in active_graphs
+        for graph in graphs
     ]
 
 
@@ -108,10 +115,20 @@ def _term_texts_by_datatype(terms: List[Any]) -> Dict[Optional[str], List[str]]:
 
 class SearchCompiler:
     """
-    pre_filter, when given, is an existing ResourceInstance queryset to search
-    within. Each graph compiles inside it rather than over the whole graph, and
-    the results come back as that queryset, filtered. It can only narrow: the
-    permission filter still applies.
+    Compiles a whole search payload into the resources it matches.
+
+    Args:
+        search_payload (SearchPayload): The resource models to search, the term
+            search, and the advanced search payload for each graph.
+        user (User): The user the search runs as. Their resource permissions are
+            applied to the results.
+        pre_filter (QuerySet, optional): A ResourceInstance queryset to search
+            within. Each graph compiles inside it rather than over the whole
+            graph, and the results come back as that queryset, filtered. It can
+            only narrow: the permission filter still applies.
+        readable_nodes (ReadableNodes, optional): The nodes the user can read.
+            Created from user if not given. Pass the one used for projection and
+            aggregation so they agree.
     """
 
     def __init__(
@@ -119,10 +136,14 @@ class SearchCompiler:
         search_payload: SearchPayload,
         user,
         pre_filter: Optional[QuerySet] = None,
+        readable_nodes: Optional[ReadableNodes] = None,
     ) -> None:
         self.search_payload = search_payload
         self.user = user
         self.pre_filter = pre_filter
+        self.readable_nodes = (
+            readable_nodes if readable_nodes is not None else ReadableNodes(user)
+        )
         self.facet_registry = FacetRegistry()
         self.search_model_registry = SearchModelRegistry()
         # One payload per graph at most; two for the same graph is already a
@@ -133,49 +154,53 @@ class SearchCompiler:
         }
 
     def compile(self) -> SearchResult:
-        active_graphs = _resolve_graphs(isresource=True, is_active=True)
-        graphs_to_search = self._graphs_to_search(active_graphs)
-
-        matches = self._permitted_matches(graphs_to_search)
-        counts_by_graph_id = _counts_by_graph_id(matches)
-        scoped_results, scoped_count = self._scope_to_requested(
-            matches, graphs_to_search, counts_by_graph_id
-        )
-
-        return SearchResult(
-            results=scoped_results,
-            resource_type_counts=_resource_type_counts(
-                active_graphs, counts_by_graph_id
-            ),
-            all_resource_count=sum(counts_by_graph_id.values()),
-            scoped_count=scoped_count,
-        )
-
-    def _graphs_to_search(
-        self, active_graphs: List[SearchableGraph]
-    ) -> List[SearchableGraph]:
         """
-        Every active resource model, plus any inactive one named explicitly.
+        The matches in the graphs graph_slugs names, how many there are, and how
+        many of them each of those graphs holds.
+        """
+        requested_slugs = set(self.search_payload.graph_slugs or [])
+        requested_graphs = [
+            graph for graph in self._named_graphs if graph.slug in requested_slugs
+        ]
+        if not requested_graphs:
+            return SearchResult(
+                results=self._base_resources().none(),
+                scoped_count=0,
+                resource_type_counts=[],
+            )
 
-        A named graph may be inactive and must still be searchable; only
-        resource_type_counts is restricted to active graphs.
+        matches = self._permitted_matches(requested_graphs)
+        # One grouped count gives both the per-graph counts and the total, so a
+        # paginator can skip its own COUNT(*).
+        counts_by_graph_id = _counts_by_graph_id(matches)
+        return SearchResult(
+            results=matches,
+            scoped_count=sum(counts_by_graph_id.values()),
+            resource_type_counts=_resource_type_counts(
+                requested_graphs, counts_by_graph_id
+            ),
+        )
+
+    @cached_property
+    def _named_graphs(self) -> List[SearchableGraph]:
+        """
+        The resource models graph_slugs or an advanced search payload names.
+
+        A named graph may be inactive and must still be searchable. A payload
+        naming anything else is refused, because a typo in its graph_slug would
+        otherwise drop the payload and return the graph it meant to filter whole.
         """
         queried_slugs = set(self.payloads_by_slug)
         named_slugs = queried_slugs | set(self.search_payload.graph_slugs or [])
-
-        active_slugs = {graph.slug for graph in active_graphs}
-        missing_slugs = sorted(slug for slug in named_slugs if slug not in active_slugs)
-        graphs_to_search = active_graphs + (
-            # isresource: a branch graph holds no resources, so searching one
-            # could only return nothing.
-            _resolve_graphs(slug__in=missing_slugs, isresource=True)
-            if missing_slugs
+        # isresource: a branch graph holds no resources, so searching one could
+        # only return nothing.
+        named_graphs = (
+            _resolve_graphs(slug__in=named_slugs, isresource=True)
+            if named_slugs
             else []
         )
 
-        unmatched_slugs = sorted(
-            queried_slugs - {graph.slug for graph in graphs_to_search}
-        )
+        unmatched_slugs = sorted(queried_slugs - {graph.slug for graph in named_graphs})
         if unmatched_slugs:
             raise ValidationError(
                 _(
@@ -185,54 +210,29 @@ class SearchCompiler:
                 params={"slugs": ", ".join(unmatched_slugs)},
             )
 
-        return graphs_to_search
+        return named_graphs
 
-    def _permitted_matches(self, graphs_to_search: List[SearchableGraph]) -> QuerySet:
+    def _base_resources(self) -> QuerySet:
         """
-        Each graph's matches, unioned, then narrowed to what the user may see.
+        pre_filter when there is one, so a caller gets back the queryset it
+        passed in, filtered, rather than a plain ResourceInstance queryset.
+        """
+        if self.pre_filter is not None:
+            return self.pre_filter
+        return ResourceInstance.objects.all()
 
-        Built on pre_filter when there is one, so a caller gets back the queryset
-        it passed in, filtered, rather than a plain ResourceInstance queryset.
-        """
+    def _permitted_matches(self, graphs: List[SearchableGraph]) -> QuerySet:
+        """Each graph's matches, unioned, then narrowed to what the user may see."""
         per_graph_ids = [
             self._compile_graph(graph).values_list("resourceinstanceid", flat=True)
-            for graph in graphs_to_search
+            for graph in graphs
         ]
-        base = (
-            self.pre_filter
-            if self.pre_filter is not None
-            else ResourceInstance.objects.all()
-        )
         return permission_backend.filter_resource_queryset(
             self.user,
-            base.filter(resourceinstanceid__in=_union_all(per_graph_ids)),
+            self._base_resources().filter(
+                resourceinstanceid__in=_union_all(per_graph_ids)
+            ),
         )
-
-    def _scope_to_requested(
-        self,
-        matches: QuerySet,
-        graphs_to_search: List[SearchableGraph],
-        counts_by_graph_id: Dict[str, int],
-    ) -> Tuple[QuerySet, int]:
-        """
-        The requested graphs' resources, and how many there are.
-
-        Summed from counts already gathered rather than counted again, which is
-        what lets the paginator skip its own COUNT(*).
-        """
-        requested_slugs = set(self.search_payload.graph_slugs or [])
-        if not requested_slugs:
-            # The counts still cover every graph, so a caller can see what
-            # selecting one would return.
-            return matches.none(), 0
-
-        slug_by_graph_id = {graph.id: graph.slug for graph in graphs_to_search}
-        scoped_count = sum(
-            count
-            for graph_id, count in counts_by_graph_id.items()
-            if slug_by_graph_id.get(graph_id) in requested_slugs
-        )
-        return matches.filter(graph__slug__in=requested_slugs), scoped_count
 
     def _compile_graph(self, graph: SearchableGraph) -> QuerySet:
         """
@@ -253,6 +253,7 @@ class SearchCompiler:
             facet_registry=self.facet_registry,
             search_model_registry=self.search_model_registry,
             user=self.user,
+            readable_nodes=self.readable_nodes,
         ).compile(pre_filter=graph_resources)
 
     def _graph_resources(self, graph_id: str) -> QuerySet:
@@ -297,7 +298,11 @@ class SearchCompiler:
             term_search["terms"]
         ).items():
             datatype_matches = get_related_resources_by_text(
-                term_texts, graph_id, max_hops=max_hops, datatype=datatype
+                term_texts,
+                graph_id,
+                self.readable_nodes,
+                max_hops=max_hops,
+                datatype=datatype,
             )
             matches = (
                 datatype_matches
