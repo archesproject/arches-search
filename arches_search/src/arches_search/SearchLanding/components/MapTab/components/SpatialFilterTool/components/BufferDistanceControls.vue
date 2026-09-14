@@ -3,8 +3,8 @@ import { ref, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import InputNumber from "primevue/inputnumber";
-import Select from "primevue/select";
+import InputNumber from "openvue/inputnumber";
+import Select from "openvue/select";
 
 import {
     FEET,

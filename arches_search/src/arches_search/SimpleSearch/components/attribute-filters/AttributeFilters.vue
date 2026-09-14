@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { useGettext } from "vue3-gettext";
 
-import Accordion from "primevue/accordion";
-import AccordionPanel from "primevue/accordionpanel";
-import AccordionHeader from "primevue/accordionheader";
-import AccordionContent from "primevue/accordioncontent";
-import Button from "primevue/button";
+import Accordion from "openvue/accordion";
+import AccordionPanel from "openvue/accordionpanel";
+import AccordionHeader from "openvue/accordionheader";
+import AccordionContent from "openvue/accordioncontent";
+import Button from "openvue/button";
 
 import { getAttributeFilterEntry } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 

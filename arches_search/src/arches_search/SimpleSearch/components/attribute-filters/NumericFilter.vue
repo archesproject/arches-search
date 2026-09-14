@@ -2,8 +2,8 @@
 import { ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import InputText from "primevue/inputtext";
-import Message from "primevue/message";
+import InputText from "openvue/inputtext";
+import Message from "openvue/message";
 
 import { parseNumericFilter } from "@/arches_search/SimpleSearch/components/attribute-filters/numeric-parser.ts";
 
