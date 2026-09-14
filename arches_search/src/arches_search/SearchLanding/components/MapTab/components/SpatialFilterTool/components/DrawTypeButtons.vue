@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
+import Button from "openvue/button";
 
 import {
     DRAW_CREATE_EVENT,

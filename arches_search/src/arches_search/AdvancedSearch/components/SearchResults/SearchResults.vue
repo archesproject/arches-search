@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Skeleton from "primevue/skeleton";
+import Skeleton from "openvue/skeleton";
 
 import InfiniteVirtualScroller from "@/arches_search/AdvancedSearch/components/SearchResults/components/InfiniteVirtualScroller.vue";
 import SearchResultItem from "@/arches_search/AdvancedSearch/components/SearchResults/components/SearchResultItem.vue";

@@ -2,7 +2,7 @@
 import dayjs from "dayjs";
 import { computed } from "vue";
 
-import Slider from "primevue/slider";
+import Slider from "openvue/slider";
 
 import { HISTORICAL_CUTOFF_YEAR } from "@/arches_search/SimpleSearch/components/TimeFilter/constants.ts";
 

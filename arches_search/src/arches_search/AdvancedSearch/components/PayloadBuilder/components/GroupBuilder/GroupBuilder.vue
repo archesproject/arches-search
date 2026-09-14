@@ -2,8 +2,8 @@
 import { ref, computed, watchEffect, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Card from "primevue/card";
-import Drawer from "primevue/drawer";
+import Card from "openvue/card";
+import Drawer from "openvue/drawer";
 
 import TimeFilter from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/TimeFilter.vue";
 import GroupBracket from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/GroupBracket.vue";

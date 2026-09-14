@@ -1,13 +1,13 @@
 import { computed, onMounted, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import AutoComplete from "primevue/autocomplete";
+import AutoComplete from "openvue/autocomplete";
 
 import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts";
 import { SUGGESTION_DATATYPE_STRING } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
 import { isConceptSuggestion } from "@/arches_search/SimpleSearch/components/TermFilter/suggestion-utils.ts";
 
-import type { AutoCompleteCompleteEvent } from "primevue/autocomplete";
+import type { AutoCompleteCompleteEvent } from "openvue/autocomplete";
 import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
 
 const TYPEAHEAD_PANEL_RECORDS = "records";

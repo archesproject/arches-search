@@ -2,8 +2,8 @@
 import { computed, inject, ref, watch, useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Select from "primevue/select";
-import Button from "primevue/button";
+import Select from "openvue/select";
+import Button from "openvue/button";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/PathBuilder.vue";
 import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";

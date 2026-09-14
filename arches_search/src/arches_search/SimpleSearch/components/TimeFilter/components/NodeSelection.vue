@@ -2,8 +2,8 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Chip from "primevue/chip";
-import TreeSelect from "primevue/treeselect";
+import Chip from "openvue/chip";
+import TreeSelect from "openvue/treeselect";
 
 import type {
     TimeFilterNodeSummary,

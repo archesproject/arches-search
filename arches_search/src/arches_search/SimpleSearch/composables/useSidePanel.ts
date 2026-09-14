@@ -4,16 +4,16 @@ import type { CSSProperties } from "vue";
 const SIDE_PANEL_SIZE = 40;
 const IDLE_PANEL_SIZE = 27;
 const SIDE_PANEL_MIN_SIZE = 15;
-// PrimeVue's Splitter (default gutterSize=4, unless overridden via a
+// OpenVue's Splitter (default gutterSize=4, unless overridden via a
 // gutter-size prop on <Splitter> — this app doesn't set one) always writes
 // flex-basis as `calc(X% - gutterCount * gutterSize px)`, never a bare
 // percentage, both on init and on every drag frame. Splitter re-renders
 // itself on every mousemove regardless of whether we listen to its "resize"
 // event (its own internal prevSize is reactive), which re-evaluates this
-// slot and reasserts sidePanelStyle's own flex-basis right after PrimeVue's
+// slot and reasserts sidePanelStyle's own flex-basis right after OpenVue's
 // write. A bare percentage here loses that fight on every single frame,
 // snapping the panel edge a few px back and reading as stutter on a slow
-// drag — matching PrimeVue's own compensated value exactly makes the
+// drag — matching OpenVue's own compensated value exactly makes the
 // reassertion a no-op instead. Two panels means exactly one gutter.
 const SPLITTER_GUTTER_SIZE_PX = 4;
 const FLEX_TRANSITION = "240ms ease" as const;

@@ -2,12 +2,12 @@
 import { ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Dialog from "primevue/dialog";
-import Tabs from "primevue/tabs";
-import TabList from "primevue/tablist";
-import Tab from "primevue/tab";
-import TabPanels from "primevue/tabpanels";
-import TabPanel from "primevue/tabpanel";
+import Dialog from "openvue/dialog";
+import Tabs from "openvue/tabs";
+import TabList from "openvue/tablist";
+import Tab from "openvue/tab";
+import TabPanels from "openvue/tabpanels";
+import TabPanel from "openvue/tabpanel";
 
 import PayloadAnalyzerNarrationPanel from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/NarrationPanel/NarrationPanel.vue";
 import PayloadAnalyzerPayloadPanel from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/PayloadPanel.vue";

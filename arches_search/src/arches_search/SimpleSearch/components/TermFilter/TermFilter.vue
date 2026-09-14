@@ -2,11 +2,11 @@
 import { ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import AutoComplete from "primevue/autocomplete";
-import Button from "primevue/button";
-import Tab from "primevue/tab";
-import TabList from "primevue/tablist";
-import Tabs from "primevue/tabs";
+import AutoComplete from "openvue/autocomplete";
+import Button from "openvue/button";
+import Tab from "openvue/tab";
+import TabList from "openvue/tablist";
+import Tabs from "openvue/tabs";
 
 import SuggestionOption from "@/arches_search/SimpleSearch/components/TermFilter/components/SuggestionOption.vue";
 

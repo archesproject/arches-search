@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
-import { useToast } from "primevue/usetoast";
+import { useToast } from "openvue/usetoast";
 
-import Button from "primevue/button";
-import InputText from "primevue/inputtext";
-import Select from "primevue/select";
-import Textarea from "primevue/textarea";
+import Button from "openvue/button";
+import InputText from "openvue/inputtext";
+import Select from "openvue/select";
+import Textarea from "openvue/textarea";
 
 import {
     createSavedSearch,

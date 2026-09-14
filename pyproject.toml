@@ -24,11 +24,11 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "arches<8.3.0,>=8.2.0a9",
-    "arches-controlled-lists>=1.3.0a2",
-    "arches-modular-reports>=2.1.0a1",
+    "arches @ git+https://github.com/archesproject/arches.git@cbyrd/12934-migrate-to-openvue",
+    "arches-controlled-lists @ git+https://github.com/archesproject/arches-controlled-lists.git@cbyrd/migrate-to-openvue",
+    "arches-modular-reports @ git+https://github.com/archesproject/arches-modular-reports.git@cbyrd/migrate-to-openvue",
     "arches-resource-sets>=0.1.0a0",
-    "arches-vue-components>=2.1.0a1",
+    "arches-vue-components @ git+https://github.com/archesproject/arches-vue-components.git@cbyrd/migrate-to-openvue",
 ]
 dynamic = []
 

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
-import Select from "primevue/select";
-import Tag from "primevue/tag";
+import Select from "openvue/select";
+import Tag from "openvue/tag";
 import type {
     GraphModel,
     GroupPayload,

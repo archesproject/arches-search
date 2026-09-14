@@ -2,8 +2,8 @@
 import { computed, inject, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Message from "primevue/message";
-import TreeSelect from "primevue/treeselect";
+import Message from "openvue/message";
+import TreeSelect from "openvue/treeselect";
 
 import type {
     GraphModel,

@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
+import Button from "openvue/button";
 
 import type { ActiveFilter } from "@/arches_search/SimpleSearch/types.ts";
 
