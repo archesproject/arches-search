@@ -3,8 +3,8 @@ import { provide, ref, watchEffect } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import Message from "primevue/message";
-import Skeleton from "primevue/skeleton";
+import Message from "openvue/message";
+import Skeleton from "openvue/skeleton";
 
 import AdvancedSearchFooter from "@/arches_search/AdvancedSearch/components/AdvancedSearchFooter.vue";
 import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/PayloadAnalyzer.vue";

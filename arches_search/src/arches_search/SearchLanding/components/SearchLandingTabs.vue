@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import Tab from "primevue/tab";
-import TabList from "primevue/tablist";
-import Tabs from "primevue/tabs";
+import Tab from "openvue/tab";
+import TabList from "openvue/tablist";
+import Tabs from "openvue/tabs";
 
 import type { LandingTab } from "@/arches_search/SearchLanding/types.ts";
 

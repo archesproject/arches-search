@@ -2,8 +2,8 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import Button from "primevue/button";
-import Card from "primevue/card";
+import Button from "openvue/button";
+import Card from "openvue/card";
 
 import { routeNames } from "@/arches_search/routes.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";

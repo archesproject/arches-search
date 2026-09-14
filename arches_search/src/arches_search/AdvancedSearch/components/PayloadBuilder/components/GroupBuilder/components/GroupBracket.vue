@@ -3,7 +3,7 @@ import { computed } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
+import Button from "openvue/button";
 
 import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 
