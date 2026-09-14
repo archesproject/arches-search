@@ -3,8 +3,6 @@ Grouped counts and metrics over the whole result set.
 
 Group-bys and metrics name a NODE by graph_slug and node_alias, or a
 RESOURCE_FIELD by field, and resolve through the same registries clauses use.
-Functions come from AGGREGATE_FUNCTIONS. Nothing in a request reaches the ORM
-as a lookup, a table name or a function name.
 """
 
 from functools import cached_property
@@ -33,26 +31,24 @@ from arches_search.utils.resource_field_search.grouping import (
     resolve_metric_path,
 )
 
-AGGREGATE_FUNCTIONS: Dict[str, Callable[..., Any]] = {
-    "Count": models.Count,
-    "Sum": models.Sum,
-    "Avg": models.Avg,
-    "Min": models.Min,
-    "Max": models.Max,
-}
-
 
 def get_aggregate_function(fn_name: str) -> Callable[..., Any]:
     """
-    Looked up in AGGREGATE_FUNCTIONS rather than on django.db.models, where a
-    name could reach any expression class.
+    Return a Django aggregate function by its name (e.g., "Sum", "Avg").
+
+    Args:
+        fn_name (str): The name of the aggregate function.
+
+    Returns:
+        Callable[..., Any]: The corresponding Django aggregate function class.
+
+    Raises:
+        ValueError: If no aggregate function matches the provided name.
     """
     try:
-        return AGGREGATE_FUNCTIONS[fn_name]
-    except KeyError:
-        raise ValidationError(
-            _("Unknown aggregate function: %(fn)s."), params={"fn": fn_name}
-        )
+        return getattr(models, fn_name)
+    except AttributeError:
+        raise ValueError(f"Unknown aggregate function: {fn_name}")
 
 
 class NodeRowResolver:
