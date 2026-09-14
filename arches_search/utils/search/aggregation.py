@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import F, OuterRef, QuerySet, Subquery
+from django.db.models import F, OuterRef, Q, QuerySet, Subquery
 from django.utils.translation import gettext as _
 
 from arches.app.models.models import TileModel
@@ -92,6 +92,7 @@ def build_value_subquery(
     node_rows: QuerySet,
     node_alias: str,
     parent_ref_field: str = "resourceinstanceid",
+    where: Optional[Dict[str, Any]] = None,
     fn: Optional[str] = None,
     aggregate_by_tile: Optional[bool] = False,
     value_field: str = "value",
@@ -108,6 +109,7 @@ def build_value_subquery(
         node_alias (str): The node's alias, used to name an aggregated value.
         parent_ref_field (str, optional): The column name to join outer and subqueries on.
             Defaults to "resourceinstanceid".
+        where (dict, optional): Additional filter conditions to apply.
         fn (str, optional): An aggregate function name to apply (e.g., "Sum", "Avg").
             If provided, the subquery will return the aggregated value.
         aggregate_by_tile (bool, optional): Whether to apply the aggregate function
@@ -135,6 +137,9 @@ def build_value_subquery(
 
     if annotations:
         qs = qs.annotate(**annotations)
+
+    if where:
+        qs = qs.filter(**where)
 
     if fn:
         if aggregate_by_tile == False and fn != "Count":
@@ -166,6 +171,7 @@ def build_subquery(
         query_def (Dict[str, Any]): A NODE spec defining the subquery structure with keys:
             - graph_slug (str): The graph the node belongs to
             - node_alias (str): The alias for the node being queried
+            - where (optional): Filter conditions for the subquery
             - fn (optional): Aggregation function to apply
             - aggregate_by_tile (bool, optional): Whether to aggregate at tile level
             - aggregations (list, optional): List of nested aggregation specifications
@@ -209,6 +215,7 @@ def build_subquery(
         node_rows,
         query_def["node_alias"],
         parent_ref_field=parent_ref_field,
+        where=query_def.get("where"),
         fn=query_def.get("fn"),
         aggregate_by_tile=query_def.get("aggregate_by_tile", aggregate_by_tile),
         outer_aggregate_by_tile=aggregate_by_tile,
@@ -227,6 +234,7 @@ def build_subquery(
                 node_rows,
                 query_def["node_alias"],
                 parent_ref_field=parent_ref_field,
+                where=query_def.get("where"),
                 value_field=nested_group["alias"],
                 annotations={nested_group["alias"]: nested_subquery},
                 aggregate_by_tile=aggregate_by_tile,
@@ -285,6 +293,7 @@ def build_aggregations(
 
         group_bys = agg.get("group_by", [])
         metrics = agg.get("metrics", [])
+        where_clause = agg.get("where", None)
 
         aggregate_by_tile = agg.get("aggregate_by_tile", False)
         if aggregate_by_tile:
@@ -355,24 +364,34 @@ def build_aggregations(
             )
             metric_annotations[alias] = aggregate_fn(subquery)
 
-        # Only the requested columns come back, never whole rows.
-        group_fields = [g["alias"] for g in group_bys]
-        local_queryset = local_queryset.order_by().values(*group_fields)
+        # Apply metric annotations and group-by fields
         if metric_annotations:
-            local_queryset = local_queryset.annotate(**metric_annotations)
+            group_fields = [g["alias"] for g in group_bys]
+            local_queryset = (
+                local_queryset.order_by()
+                .values(*group_fields)
+                .annotate(**metric_annotations)
+            )
+
+        if where_clause:
+            local_queryset = local_queryset.filter(**where_clause)
 
         results[name] = list(local_queryset)
 
-        # Handle "simple" aggregates over the columns requested above
-        for aggregate in agg.get("aggregate", []):
-            aggregate_fn = get_aggregate_function(aggregate["fn"])
-            alias = aggregate["alias"]
-            results[alias] = local_queryset.aggregate(
-                **{
-                    alias: aggregate_fn(
-                        aggregate["field"], distinct=bool(aggregate.get("distinct"))
-                    )
-                }
-            )[alias]
+        # Handle "simple" aggregates on the current queryset level
+        if "aggregate" in agg:
+            for aggregate in agg["aggregate"]:
+                field = aggregate.get("field", "value")
+                aggregate_fn = get_aggregate_function(aggregate["fn"])
+                kwargs = dict(aggregate.get("kwargs") or {})
+
+                if aggregate.get("where"):
+                    kwargs["filter"] = Q(**aggregate.get("where"))
+                if aggregate.get("distinct"):
+                    kwargs["distinct"] = True
+
+                results[aggregate.get("alias")] = local_queryset.aggregate(
+                    **{aggregate.get("alias"): aggregate_fn(field, **kwargs)}
+                )[aggregate.get("alias")]
 
     return results
