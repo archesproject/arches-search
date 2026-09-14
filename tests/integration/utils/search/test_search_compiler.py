@@ -431,16 +431,22 @@ class SearchCompilerTests(TestCase):
 
     def test_bad_paging_is_a_400_not_a_500(self):
         self.client.force_login(self.user)
-        for paging in (
+        for pagination in (
             {"page_size": 0},
             {"page": "abc"},
             {"page": 0},
             {"page_size": 10**6},
+            [],
         ):
-            with self.subTest(paging=paging):
+            with self.subTest(pagination=pagination):
                 response = self.client.post(
                     reverse("search"),
-                    json.dumps({"graph_slugs": [self.graph_a.slug], **paging}),
+                    json.dumps(
+                        {
+                            "graph_slugs": [self.graph_a.slug],
+                            "pagination": pagination,
+                        }
+                    ),
                     content_type="application/json",
                 )
                 self.assertEqual(response.status_code, 400)
@@ -449,7 +455,9 @@ class SearchCompilerTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse("search"),
-            json.dumps({"graph_slugs": [self.graph_a.slug], "page": 9999}),
+            json.dumps(
+                {"graph_slugs": [self.graph_a.slug], "pagination": {"page": 9999}}
+            ),
             content_type="application/json",
         )
 
@@ -521,10 +529,10 @@ class SearchCompilerTests(TestCase):
     @override_settings(API_MAX_PAGE_SIZE=2)
     def test_page_size_is_capped_at_api_max_page_size(self):
         at_the_cap = self._post_search(
-            {"graph_slugs": [self.graph_a.slug], "page_size": 2}
+            {"graph_slugs": [self.graph_a.slug], "pagination": {"page_size": 2}}
         )
         past_the_cap = self._post_search(
-            {"graph_slugs": [self.graph_a.slug], "page_size": 3}
+            {"graph_slugs": [self.graph_a.slug], "pagination": {"page_size": 3}}
         )
 
         self.assertEqual(at_the_cap.status_code, 200)

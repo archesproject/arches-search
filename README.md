@@ -880,8 +880,10 @@ and `sort` orders on one of them.
             "direction": "desc"
         }
     ],
-    "page": 1,
-    "page_size": 20
+    "pagination": {
+        "page": 1,
+        "page_size": 20
+    }
 }
 ```
 
@@ -1118,6 +1120,12 @@ filter in the search payload.
 
 ### Paging
 
+Paging is asked for the way it comes back, under `pagination`:
+
+```json
+{ "pagination": { "page": 2, "page_size": 50 } }
+```
+
 `page` counts from 1 and `page_size` defaults to 20. A request may ask for a
 larger page, up to core's `API_MAX_PAGE_SIZE` setting (500 unless your project
 sets it); anything above that is a 400 rather than a query large enough to hurt
@@ -1211,7 +1219,7 @@ every language rather than the active one.
 
 It runs the same `validate_search_payload` the search does, so an export cannot
 quietly cover a different set than the search it came from. `additional_data`,
-`sort` and `page` are ignored: an export is the whole matching set.
+`sort` and `pagination` are ignored: an export is the whole matching set.
 
 ### Map tiles
 

@@ -9,7 +9,9 @@ half: the columns, ordering, aggregations and page a caller wants back.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
+from django.utils.translation import gettext as _
 
 DEFAULT_PAGE = 1
 DEFAULT_PAGE_SIZE = 20
@@ -65,13 +67,17 @@ class SearchRequest:
 
     @classmethod
     def from_body(cls, body: Dict[str, Any]) -> "SearchRequest":
+        pagination = body.get("pagination", {})
+        if not isinstance(pagination, dict):
+            raise ValidationError(_("pagination must be an object."))
+
         return cls(
             payload=SearchPayload.from_body(body),
             additional_data=body.get("additional_data"),
             sort=body.get("sort"),
             aggregations=body.get("aggregations"),
-            page=body.get("page", DEFAULT_PAGE),
-            page_size=body.get("page_size", DEFAULT_PAGE_SIZE),
+            page=pagination.get("page", DEFAULT_PAGE),
+            page_size=pagination.get("page_size", DEFAULT_PAGE_SIZE),
         )
 
 

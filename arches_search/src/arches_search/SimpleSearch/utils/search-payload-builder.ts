@@ -198,7 +198,7 @@ export function buildSearchApiRequestBody({
     };
 
     if (page !== undefined) {
-        requestPayload.page = page;
+        requestPayload.pagination = { page };
     }
     if (sort !== undefined) {
         requestPayload.sort = sort;
