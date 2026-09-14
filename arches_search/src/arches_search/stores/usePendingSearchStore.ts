@@ -9,7 +9,7 @@ export interface PendingSearch {
     term?: string;
     termKind?: TermKind;
     termIcon?: string;
-    graphIds?: string[];
+    graphSlugs?: string[];
     mapFilter?: FeatureCollection;
 }
 

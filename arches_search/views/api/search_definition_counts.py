@@ -6,11 +6,11 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.advanced_search.advanced_search import (
+from arches_search.utils.search import (
     SearchCompiler,
-    validate_node_agnostic_filters,
+    SearchPayload,
+    validate_search_payload,
 )
-from arches_search.views.api.search import build_search_payload
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +24,9 @@ class SearchDefinitionCountsAPI(APIBase):
         for item in items:
             item_id = item["id"]
             try:
-                item_body = item["body"]
-                validate_node_agnostic_filters(item_body.get("node_agnostic_filters"))
-                search_result = SearchCompiler(
-                    build_search_payload(item_body), request.user
-                ).compile()
+                search_payload = SearchPayload.from_body(item["body"])
+                validate_search_payload(search_payload)
+                search_result = SearchCompiler(search_payload, request.user).compile()
                 counts[item_id] = search_result.scoped_count
             except Exception:
                 logger.exception(

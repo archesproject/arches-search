@@ -1,5 +1,7 @@
 from typing import Any, Dict, Optional, Set
 
+from django.core.exceptions import ValidationError
+from django.db.models import QuerySet
 from django.utils.translation import gettext as _
 from arches.app.models import models as arches_models
 
@@ -7,14 +9,30 @@ from arches_search.utils.advanced_search.constants import (
     OPERAND_TYPE_PATH,
     SUBJECT_TYPE_NODE,
 )
-from arches_search.utils.advanced_search.relationship_utils import (
+from arches_search.utils.advanced_search.relationship_paths import (
     has_relationship_path,
     relationship_path_to_pair,
 )
+from arches_search.utils.readable_nodes import ReadableNodes
 
 
 class NodeAliasDatatypeRegistry:
-    def __init__(self, payload_query: Optional[Dict[str, Any]] = None) -> None:
+    """
+    Resolves the nodes a payload names, and hands out their search index rows.
+
+    Only nodes the user may read resolve, and a node that does not resolve is a
+    ValidationError, so an unreadable node and a nonexistent one look the same.
+    Evaluators get rows only from node_rows() and graph_rows().
+    """
+
+    def __init__(
+        self,
+        payload_query: Optional[Dict[str, Any]] = None,
+        readable_nodes: Optional[ReadableNodes] = None,
+    ) -> None:
+        self.readable_nodes = (
+            readable_nodes if readable_nodes is not None else ReadableNodes(user=None)
+        )
         self._graph_slug_node_alias_to_datatype: Dict[str, Dict[str, str]] = {}
 
         if payload_query is not None:
@@ -34,13 +52,37 @@ class NodeAliasDatatypeRegistry:
             return cached_datatype
 
         datatype_name = (
-            arches_models.Node.objects.filter(graph__slug=graph_slug, alias=node_alias)
+            self.readable_nodes.filter_nodes(
+                arches_models.Node.objects.filter(
+                    graph__slug=graph_slug, alias=node_alias
+                )
+            )
             .values_list("datatype", flat=True)
             .first()
         )
+        if not datatype_name:
+            raise ValidationError(
+                _("%(graph_slug)s has no node %(node_alias)s."),
+                params={"graph_slug": graph_slug, "node_alias": node_alias},
+            )
 
         cache_for_graph[node_alias] = datatype_name
         return datatype_name
+
+    def node_rows(self, model_class, graph_slug: str, node_alias: str) -> QuerySet:
+        """One node's rows in a search index table."""
+        # Raises for a node that is unknown or unreadable.
+        self.get_datatype_for_alias(graph_slug, node_alias)
+        return model_class.objects.filter(graph_slug=graph_slug, node_alias=node_alias)
+
+    def graph_rows(self, model_class, graph_slug: str) -> QuerySet:
+        """
+        Rows for every readable node of a graph, for a subject that names no
+        single node.
+        """
+        return self.readable_nodes.exclude_unreadable_rows(
+            model_class.objects.filter(graph_slug=graph_slug)
+        )
 
     def _preload_required_datatypes(
         self, required_aliases_by_graph: Dict[str, Set[str]]
@@ -56,9 +98,11 @@ class NodeAliasDatatypeRegistry:
             return
 
         node_rows = (
-            arches_models.Node.objects.filter(
-                graph__slug__in=graph_slugs,
-                alias__in=all_required_aliases,
+            self.readable_nodes.filter_nodes(
+                arches_models.Node.objects.filter(
+                    graph__slug__in=graph_slugs,
+                    alias__in=all_required_aliases,
+                )
             )
             .exclude(datatype__isnull=True)
             .exclude(datatype="")

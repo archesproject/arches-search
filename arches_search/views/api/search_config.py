@@ -1,9 +1,9 @@
 from arches.app.models import models as arches_models
-from arches.app.utils.permission_backend import get_nodegroups_by_perm
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
 from arches_search.models.models import NodeFilterConfig
+from arches_search.utils.readable_nodes import ReadableNodes
 
 
 class NodeFilterConfigAPI(APIBase):
@@ -23,15 +23,13 @@ class NodeFilterConfigAPI(APIBase):
 
         node_aliases = [entry["node_alias"] for entry in config_nodes]
 
-        nodes = arches_models.Node.objects.filter(
-            graph_id=graph_id,
-            alias__in=node_aliases,
-        ).select_related("nodegroup")
-
-        permitted_nodegroups = get_nodegroups_by_perm(
-            request.user, "models.read_nodegroup"
+        nodes = ReadableNodes(request.user).filter_nodes(
+            arches_models.Node.objects.filter(
+                graph_id=graph_id,
+                alias__in=node_aliases,
+                nodegroup__isnull=False,
+            ).select_related("nodegroup")
         )
-        nodes = nodes.filter(nodegroup__in=permitted_nodegroups)
 
         node_by_alias = {}
         for node in nodes:

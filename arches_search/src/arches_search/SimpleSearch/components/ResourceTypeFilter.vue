@@ -4,18 +4,21 @@ import { useGettext } from "vue3-gettext";
 
 import Button from "primevue/button";
 
-import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
-import type { GraphModel } from "@/arches_search/AdvancedSearch/types.ts";
 import type { ResourceType } from "@/arches_search/SimpleSearch/types.ts";
 
 const RESOURCE_TYPE_FALLBACK_KEY = "__all__";
 
 const { $gettext, current } = useGettext();
-const { toggleGraph, activeGraphs, searchResults } = useSearchFilters();
+const {
+    toggleGraph,
+    activeGraphs,
+    availableGraphs,
+    loadAvailableGraphs,
+    searchResults,
+} = useSearchFilters();
 
-const resourceTypes = ref<ResourceType[]>([]);
 const hasResourceTypeLoadError = ref(false);
 
 const compactCountFormatter = computed(
@@ -29,13 +32,14 @@ const resourceTypeLoadErrorMessage = computed(() =>
 
 const allResourceType = computed<ResourceType>(() => ({
     id: null,
+    slug: "",
     label: $gettext("All"),
     icon: "",
 }));
 
 const displayedResourceTypes = computed<ResourceType[]>(() => [
     allResourceType.value,
-    ...resourceTypes.value,
+    ...availableGraphs.value,
 ]);
 
 const resourceTypeCountsByGraphId = computed<Map<string, number>>(() => {
@@ -57,17 +61,9 @@ watchEffect(async () => {
 async function loadResourceTypes(): Promise<void> {
     try {
         hasResourceTypeLoadError.value = false;
-
-        const graphs: GraphModel[] = await getGraphs();
-
-        resourceTypes.value = graphs.map((graph) => ({
-            id: graph.graphid,
-            label: graph.name,
-            icon: graph.iconclass,
-        }));
+        await loadAvailableGraphs();
     } catch (error) {
         console.error(error);
-        resourceTypes.value = [];
         hasResourceTypeLoadError.value = true;
     }
 }
@@ -88,32 +84,39 @@ function selectGraph(resourceType: ResourceType): void {
     toggleGraph(resourceType);
 }
 
-function getResourceTypeCount(resourceType: ResourceType): number {
+function getResourceTypeCount(resourceType: ResourceType): number | null {
+    // Only what the search returned is counted: "All" while it is selected, and
+    // each resource type the search included.
     if (resourceType.id === null) {
-        return searchResults.value.all_resource_count ?? 0;
+        return isResourceTypeSelected(resourceType)
+            ? searchResults.value.pagination.total_results
+            : null;
     }
 
-    return resourceTypeCountsByGraphId.value.get(resourceType.id) ?? 0;
+    return resourceTypeCountsByGraphId.value.get(resourceType.id) ?? null;
 }
 
-function getResourceTypeCountLabel(resourceType: ResourceType): string {
-    return compactCountFormatter.value.format(
-        getResourceTypeCount(resourceType),
-    );
+function hasResourceTypeCount(resourceType: ResourceType): boolean {
+    return getResourceTypeCount(resourceType) !== null;
 }
 
 function getResourceTypeCountDisplay(resourceType: ResourceType): string {
     return $gettext("(%{count})", {
-        count: getResourceTypeCountLabel(resourceType),
+        count: compactCountFormatter.value.format(
+            getResourceTypeCount(resourceType) ?? 0,
+        ),
     });
 }
 
 function getResourceTypeTooltip(resourceType: ResourceType): string {
+    const count = getResourceTypeCount(resourceType);
+    if (count === null) {
+        return resourceType.label;
+    }
+
     return $gettext("%{label} — %{count} records", {
         label: resourceType.label,
-        count: fullCountFormatter.value.format(
-            getResourceTypeCount(resourceType),
-        ),
+        count: fullCountFormatter.value.format(count),
     });
 }
 </script>
@@ -138,9 +141,12 @@ function getResourceTypeTooltip(resourceType: ResourceType): string {
                 :class="resourceType.icon"
             />
             <span class="type-label">{{ resourceType.label }}</span>
-            <span class="type-count">{{
-                getResourceTypeCountDisplay(resourceType)
-            }}</span>
+            <span
+                v-if="hasResourceTypeCount(resourceType)"
+                class="type-count"
+            >
+                {{ getResourceTypeCountDisplay(resourceType) }}
+            </span>
         </Button>
 
         <span

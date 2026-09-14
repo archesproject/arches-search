@@ -10,21 +10,12 @@ import {
 import type { FeatureCollection } from "geojson";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
+    DateRangeFilter,
     SearchDefinition,
+    SearchRequestTerm,
     SerializedTerm,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
-
-export interface SearchRequestTerm {
-    type: "string" | typeof TERM_KIND_CONTROLLED_TERM;
-    text: string;
-    inverted: boolean;
-}
-
-export interface DateRangeFilter {
-    from: string;
-    to: string;
-}
 
 export function isTermKind(value: unknown): value is TermKind {
     return value === TERM_KIND_CONTROLLED_TERM || value === TERM_KIND_RECORD;
@@ -42,9 +33,9 @@ export function buildRequestTerms(
     });
 }
 
-// The "all date nodes" time filter is stored as a single SEARCH_MODELS clause,
-// but is sent as a DATE_RANGE node_agnostic_filters entry rather than as part
-// of the query — see buildRequestDateRange.
+// The "all date nodes" time filter is stored as a single SEARCH_MODELS clause
+// on one graph, but is sent as a date range that filters every searched graph
+// rather than as part of the query — see buildRequestDateRange.
 function isNodeAgnosticDateQuery(payload: GroupPayload): boolean {
     return (
         payload.clauses.length === 1 &&
@@ -129,10 +120,10 @@ export function parseSearchDefinition(
         queriesIn = raw.queries as SearchDefinition["queries"];
     }
 
-    let graphIds: string[] = [];
-    if (Array.isArray(raw.graphIds)) {
-        graphIds = raw.graphIds.filter(
-            (id): id is string => typeof id === "string",
+    let graphSlugs: string[] = [];
+    if (Array.isArray(raw.graphSlugs)) {
+        graphSlugs = raw.graphSlugs.filter(
+            (slug): slug is string => typeof slug === "string",
         );
     }
 
@@ -141,5 +132,5 @@ export function parseSearchDefinition(
         mapFilter = raw.mapFilter as FeatureCollection;
     }
 
-    return { terms, queries: queriesIn, graphIds, mapFilter };
+    return { terms, queries: queriesIn, graphSlugs, mapFilter };
 }

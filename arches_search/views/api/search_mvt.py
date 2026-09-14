@@ -3,6 +3,7 @@ import uuid
 
 from django.core.cache import caches
 from django.core.cache.backends.dummy import DummyCache
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.http import Http404, HttpResponse
 
@@ -11,8 +12,11 @@ from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
-from arches_search.utils.advanced_search.advanced_search import SearchCompiler
-from arches_search.views.api.search import build_search_payload
+from arches_search.utils.search import (
+    SearchCompiler,
+    SearchPayload,
+    validate_search_payload,
+)
 
 MVT_LAYER_NAME = "search-results"
 CONTEXT_CACHE_TIMEOUT = 3600
@@ -52,6 +56,16 @@ class EmptySearchTileAPI(APIBase):
 class SearchMVTContextAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
+
+        # Checked here, not at tile time, where there is no way to report it.
+        # Compiling catches what a shape check cannot, like an unknown node.
+        try:
+            search_payload = SearchPayload.from_body(body)
+            validate_search_payload(search_payload)
+            SearchCompiler(search_payload, request.user).compile()
+        except ValidationError as error:
+            return JSONResponse({"error": str(error)}, status=400)
+
         context_id = str(uuid.uuid4())
         _get_mvt_cache().set(
             _context_cache_key(context_id), body, CONTEXT_CACHE_TIMEOUT
@@ -71,8 +85,15 @@ class SearchMVTAPI(APIBase):
         if cached_tile is not None:
             return HttpResponse(cached_tile, content_type="application/x-protobuf")
 
-        search_payload = build_search_payload(body)
-        search_result = SearchCompiler(search_payload, request.user).compile()
+        try:
+            search_result = SearchCompiler(
+                SearchPayload.from_body(body), request.user
+            ).compile()
+        except ValidationError:
+            # The context was checked as the user who created it. Another user
+            # may not be able to read a node it names, and gets nothing drawn.
+            return HttpResponse(b"", content_type="application/x-protobuf")
+
         search_results_queryset = search_result.results.values("resourceinstanceid")
         mvt_tile = self._generate_tile(search_results_queryset, zoom, x, y)
 

@@ -1,35 +1,35 @@
 """
-Utility functions for building nested subqueries and aggregations
-used in advanced search queries within the Arches search system.
+Grouped counts and metrics over the whole result set.
+
+Group-bys and metrics name a NODE by graph_slug and node_alias, or a
+RESOURCE_FIELD by field, and resolve through the same registries clauses use.
 """
 
-from arches.app.models.models import TileModel
-from django.apps import apps
+from functools import cached_property
+from typing import Any, Callable, Dict, List, Optional, Union
+
+from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import OuterRef, Subquery, Q, QuerySet
-from typing import Optional, Dict, Any, List, Union, Callable
+from django.db.models import F, OuterRef, Q, QuerySet, Subquery
+from django.utils.translation import gettext as _
 
+from arches.app.models.models import TileModel
 
-def get_search_model(search_table: str) -> models.Model:
-    """
-    Retrieve the Django model associated with a given search table name.
-
-    Args:
-        search_table (str): The key identifying a search table.
-
-    Returns:
-        models.Model: The model class associated with the given search table.
-
-    Raises:
-        ValueError: If the search table name is not found in SEARCH_TABLE_TO_MODEL.
-    """
-    arches_search_config = apps.get_app_config("arches_search")
-
-    for model_class in arches_search_config.get_models():
-        if model_class._meta.db_table == search_table:
-            return model_class
-
-    raise ValueError(f"Unknown search table '{search_table}'")
+from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
+    NodeAliasDatatypeRegistry,
+)
+from arches_search.utils.advanced_search.registries.search_model_registry import (
+    SearchModelRegistry,
+)
+from arches_search.utils.readable_nodes import ReadableNodes
+from arches_search.utils.resource_field_search.field_registry import (
+    get_resource_instance_fields,
+)
+from arches_search.utils.resource_field_search.grouping import (
+    is_resource_field_spec,
+    resolve_group_by_path,
+    resolve_metric_path,
+)
 
 
 def get_aggregate_function(fn_name: str) -> Callable[..., Any]:
@@ -51,8 +51,45 @@ def get_aggregate_function(fn_name: str) -> Callable[..., Any]:
         raise ValueError(f"Unknown aggregate function: {fn_name}")
 
 
+class NodeRowResolver:
+    """
+    Resolves a NODE spec to its rows in the search index table for its datatype.
+
+    Resolution goes through NodeAliasDatatypeRegistry, so a node the user cannot
+    read is refused exactly as a clause naming it would be.
+    """
+
+    def __init__(self, readable_nodes: ReadableNodes) -> None:
+        self._node_registry = NodeAliasDatatypeRegistry(readable_nodes=readable_nodes)
+
+    @cached_property
+    def _search_model_registry(self) -> SearchModelRegistry:
+        # Built on first use: it costs a query, and an aggregation over resource
+        # fields alone never needs it.
+        return SearchModelRegistry()
+
+    def rows_for(self, node_spec: Dict[str, Any]) -> QuerySet:
+        graph_slug = node_spec["graph_slug"]
+        node_alias = node_spec["node_alias"]
+        datatype_name = self._node_registry.get_datatype_for_alias(
+            graph_slug, node_alias
+        )
+
+        try:
+            model_class = self._search_model_registry.get_value_model_for_datatype(
+                datatype_name
+            )
+        except ValueError:
+            raise ValidationError(
+                _("%(graph_slug)s node %(node_alias)s has no value to aggregate."),
+                params={"graph_slug": graph_slug, "node_alias": node_alias},
+            )
+
+        return self._node_registry.node_rows(model_class, graph_slug, node_alias)
+
+
 def build_value_subquery(
-    search_table_name: str,
+    node_rows: QuerySet,
     node_alias: str,
     parent_ref_field: str = "resourceinstanceid",
     where: Optional[Dict[str, Any]] = None,
@@ -63,13 +100,13 @@ def build_value_subquery(
     outer_aggregate_by_tile: Optional[bool] = False,
 ) -> Subquery:
     """
-    Build a base Subquery returning a single value from a search table.
+    Build a base Subquery returning a single value from a node's search index rows.
 
     Typically used as a building block for group-by or metric aggregations.
 
     Args:
-        search_table_name (str): The search table used to look up the model.
-        node_alias (str): The node alias used to filter the queryset.
+        node_rows (QuerySet): The node's rows, from NodeRowResolver.
+        node_alias (str): The node's alias, used to name an aggregated value.
         parent_ref_field (str, optional): The column name to join outer and subqueries on.
             Defaults to "resourceinstanceid".
         where (dict, optional): Additional filter conditions to apply.
@@ -86,9 +123,7 @@ def build_value_subquery(
     Returns:
         Subquery: A Django ORM Subquery returning the specified field value.
     """
-    search_model = get_search_model(search_table_name)
-
-    filters = {"node_alias": node_alias}
+    filters = {}
     if aggregate_by_tile:
         filters["tileid"] = OuterRef(parent_ref_field)
     else:
@@ -98,7 +133,7 @@ def build_value_subquery(
             filters["resourceinstanceid"] = OuterRef("resourceinstance_id")
         else:
             filters["resourceinstanceid"] = OuterRef(parent_ref_field)
-    qs = search_model.objects.filter(**filters)
+    qs = node_rows.filter(**filters)
 
     if annotations:
         qs = qs.annotate(**annotations)
@@ -122,6 +157,7 @@ def build_value_subquery(
 
 def build_subquery(
     query_def: Dict[str, Any],
+    node_row_resolver: NodeRowResolver,
     parent_ref_field: str = "resourceinstanceid",
     aggregate_by_tile: bool = False,
 ) -> Subquery:
@@ -132,13 +168,15 @@ def build_subquery(
 
 
     Args:
-        query_def (Dict[str, Any]): A dictionary defining the subquery structure with keys:
-            - search_table (str): The name of the search table to query
+        query_def (Dict[str, Any]): A NODE spec defining the subquery structure with keys:
+            - graph_slug (str): The graph the node belongs to
             - node_alias (str): The alias for the node being queried
             - where (optional): Filter conditions for the subquery
             - fn (optional): Aggregation function to apply
             - aggregate_by_tile (bool, optional): Whether to aggregate at tile level
             - aggregations (list, optional): List of nested aggregation specifications
+
+        node_row_resolver (NodeRowResolver): Resolves each node to its rows.
 
         parent_ref_field (str, optional): The column name used to join the outer query
             with this subquery. Defaults to "resourceinstanceid".
@@ -154,8 +192,8 @@ def build_subquery(
             queries or further nested in other subqueries.
 
     Raises:
-        Exception: If attempting to build a tile-aggregated subquery when the parent
-            query is not aggregating by tile.
+        ValidationError: If the node does not resolve, or if attempting to build a
+            tile-aggregated subquery when the parent query is not aggregating by tile.
 
     Notes:
         - The function validates that tile-level aggregation is consistent between
@@ -166,13 +204,16 @@ def build_subquery(
     """
 
     if aggregate_by_tile == False and query_def.get("aggregate_by_tile", None) == True:
-        raise Exception(
-            "Cannot build subquery that aggregates by tile when parent query is not aggregating by tile."
+        raise ValidationError(
+            _(
+                "Cannot build subquery that aggregates by tile when parent query is not aggregating by tile."
+            )
         )
 
+    node_rows = node_row_resolver.rows_for(query_def)
     subquery = build_value_subquery(
-        search_table_name=query_def["search_table"],
-        node_alias=query_def["node_alias"],
+        node_rows,
+        query_def["node_alias"],
         parent_ref_field=parent_ref_field,
         where=query_def.get("where"),
         fn=query_def.get("fn"),
@@ -185,12 +226,13 @@ def build_subquery(
         for nested_group in agg.get("group_by", []):
             nested_subquery = build_subquery(
                 nested_group,
+                node_row_resolver,
                 parent_ref_field="value",
                 aggregate_by_tile=aggregate_by_tile,
             )
             subquery = build_value_subquery(
-                search_table_name=query_def["search_table"],
-                node_alias=query_def["node_alias"],
+                node_rows,
+                query_def["node_alias"],
                 parent_ref_field=parent_ref_field,
                 where=query_def.get("where"),
                 value_field=nested_group["alias"],
@@ -201,9 +243,25 @@ def build_subquery(
     return subquery
 
 
+def _needs_resource_field_registry(aggregations: List[Dict[str, Any]]) -> bool:
+    """
+    Whether any spec here names a resource field.
+
+    Checked up front because building the registry costs a query, and an
+    aggregation over node values alone never touches it.
+    """
+    return any(
+        is_resource_field_spec(spec)
+        for aggregation in aggregations
+        for spec in (aggregation.get("group_by") or [])
+        + (aggregation.get("metrics") or [])
+    )
+
+
 def build_aggregations(
     queryset: QuerySet,
     aggregations: List[Dict[str, Any]],
+    readable_nodes: ReadableNodes,
 ) -> Dict[str, Union[List[Dict[str, Any]], Dict[str, Any]]]:
     """
     Build and evaluate aggregations on a queryset.
@@ -214,12 +272,21 @@ def build_aggregations(
         queryset (QuerySet): The base queryset to aggregate.
         aggregations (list[dict]): Aggregation specifications that define grouping,
             metrics, and/or direct aggregate operations.
+        readable_nodes (ReadableNodes): Which nodes the aggregations may read.
 
     Returns:
         dict: A dictionary mapping aggregation names to their computed results.
             Each value is either a list of grouped records or a dictionary of aggregate values.
     """
     results: Dict[str, Union[List[Dict[str, Any]], Dict[str, Any]]] = {}
+
+    # Built once: resolving each spec separately rebuilt it every time.
+    resource_field_registry = (
+        get_resource_instance_fields()
+        if _needs_resource_field_registry(aggregations)
+        else None
+    )
+    node_row_resolver = NodeRowResolver(readable_nodes)
 
     for agg in aggregations:
         name = agg["name"]
@@ -239,10 +306,26 @@ def build_aggregations(
         # Apply group-by subqueries
         for group_spec in group_bys:
             field_alias = group_spec["alias"]
+            if is_resource_field_spec(group_spec):
+                # A resource field is already a column on the row being grouped,
+                # so it needs a plain reference rather than a correlated subquery.
+                local_queryset = local_queryset.annotate(
+                    **{
+                        field_alias: F(
+                            resolve_group_by_path(
+                                group_spec,
+                                aggregate_by_tile=aggregate_by_tile,
+                                registry=resource_field_registry,
+                            )
+                        )
+                    }
+                )
+                continue
             local_queryset = local_queryset.annotate(
                 **{
                     field_alias: build_subquery(
                         group_spec,
+                        node_row_resolver,
                         parent_ref_field=parent_ref_field,
                         aggregate_by_tile=aggregate_by_tile,
                     )
@@ -254,6 +337,19 @@ def build_aggregations(
         for metric_spec in metrics:
             alias = metric_spec["alias"]
             fn = metric_spec["fn"]
+            if is_resource_field_spec(metric_spec):
+                # Aggregating a column of the row itself (e.g. counting rows per
+                # group) needs a plain aggregate, not a correlated subquery, and
+                # must skip the Count->Sum rewrite below, which exists only to
+                # roll per-tile counts up to the resource.
+                metric_annotations[alias] = get_aggregate_function(fn)(
+                    resolve_metric_path(
+                        metric_spec,
+                        aggregate_by_tile=aggregate_by_tile,
+                        registry=resource_field_registry,
+                    )
+                )
+                continue
             # we need to handle Count differently because when we do counts per resource
             # we want to sum the counts of each tile, not count the counts from each tile
             # which would always be 1 per resource
@@ -262,6 +358,7 @@ def build_aggregations(
             aggregate_fn = get_aggregate_function(fn)
             subquery = build_subquery(
                 metric_spec,
+                node_row_resolver,
                 parent_ref_field=parent_ref_field,
                 aggregate_by_tile=aggregate_by_tile,
             )

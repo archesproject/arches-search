@@ -16,6 +16,8 @@ class SearchModelRegistry:
 
         facets_by_datatype: Dict[str, Dict[str, Any]] = {}
 
+        # Datatype facets only; resource-field facets carry no datatype and no
+        # search model, since they read a column on the resource row.
         for facet in AdvancedSearchFacet.objects.select_related(
             "datatype", "target_search_model"
         ):

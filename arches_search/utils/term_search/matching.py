@@ -3,7 +3,7 @@ from django.db.models import Q
 
 from arches.app.models.models import ResourceInstance
 from arches_search.models.models import TermSearch
-from arches_search.utils.node_agnostic_search.relationship_traversal import (
+from arches_search.utils.term_search.relationship_expansion import (
     expand_matches_via_relationships,
 )
 
@@ -23,7 +23,7 @@ def build_term_match_filter(term_text, datatype=None):
 
 
 def get_related_resources_by_text(
-    search_terms, target_graphid, max_hops=2, datatype=None
+    search_terms, target_graphid, readable_nodes, max_hops=2, datatype=None
 ):
     """
     Matches ALL of the given terms. Each term is independently expanded via
@@ -31,14 +31,16 @@ def get_related_resources_by_text(
     one shared seed set before expanding would let different terms qualify a resource
     via different, unrelated hop paths. Pass datatype to restrict every term's direct
     matches to that TermSearch.datatype.
+
+    Values of nodes the user cannot read never match.
     """
     result = None
     for term in search_terms:
-        direct_match_ids = TermSearch.objects.filter(
-            build_term_match_filter(term, datatype=datatype)
+        direct_match_ids = readable_nodes.exclude_unreadable_rows(
+            TermSearch.objects.filter(build_term_match_filter(term, datatype=datatype))
         ).values("resourceinstanceid")
         term_matches = expand_matches_via_relationships(
-            direct_match_ids, target_graphid, max_hops
+            direct_match_ids, target_graphid, max_hops, readable_nodes
         )
         result = (
             term_matches

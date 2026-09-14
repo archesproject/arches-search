@@ -9,6 +9,7 @@ from arches.app.utils.response import JSONErrorResponse, JSONResponse
 from arches.app.views.api import APIBase
 
 from arches_search.models.models import DateRangeSearch, DateSearch
+from arches_search.utils.readable_nodes import ReadableNodes
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +25,17 @@ class NodeDateBoundsForGraphAPI(APIBase):
                 message=_("Graph not found."), status=HTTPStatus.NOT_FOUND
             )
 
+        # Date nodes the user cannot read don't count toward the bounds.
         all_date_node_aliases = set(
-            arches_models.Node.objects.filter(
-                graph_id=graph_id,
-                datatype__in=["date", "edtf"],
-                issearchable=True,
-            ).values_list("alias", flat=True)
+            ReadableNodes(request.user)
+            .filter_nodes(
+                arches_models.Node.objects.filter(
+                    graph_id=graph_id,
+                    datatype__in=["date", "edtf"],
+                    issearchable=True,
+                )
+            )
+            .values_list("alias", flat=True)
         )
 
         requested_aliases = request.GET.getlist("node_alias")

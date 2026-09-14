@@ -7,19 +7,26 @@ export async function getSearchResults(
     options?: { page?: number; pageSize?: number },
 ) {
     const requestPayload: {
-        advanced_search_query: GroupPayload;
-        page?: number;
-        page_size?: number;
+        graph_slugs: string[];
+        advanced_search_queries: GroupPayload[];
+        pagination?: { page?: number; page_size?: number };
     } = {
-        advanced_search_query: searchQuery,
+        graph_slugs: [searchQuery.graph_slug],
+        advanced_search_queries: [searchQuery],
     };
 
+    const pagination: { page?: number; page_size?: number } = {};
+
     if (options && options.page !== undefined) {
-        requestPayload.page = options.page;
+        pagination.page = options.page;
     }
 
     if (options && options.pageSize !== undefined) {
-        requestPayload.page_size = options.pageSize;
+        pagination.page_size = options.pageSize;
+    }
+
+    if (Object.keys(pagination).length > 0) {
+        requestPayload.pagination = pagination;
     }
 
     const url = generateArchesURL("arches_search:search");

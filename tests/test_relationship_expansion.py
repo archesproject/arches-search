@@ -1,4 +1,4 @@
-"""Tests for the generic N-hop traversal engine, in isolation from any
+"""Tests for the anonymous N-hop expansion engine, in isolation from any
 particular search-index table (text/geometry/date matching each have their
 own tests for how they seed it)."""
 
@@ -7,16 +7,24 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from arches.app.models.models import GraphModel, ResourceInstance, ResourceXResource
+from arches.app.models.models import (
+    GraphModel,
+    Node,
+    NodeGroup,
+    ResourceInstance,
+    ResourceXResource,
+)
+from arches.app.utils.permission_backend import assign_perm
 
-from arches_search.utils.node_agnostic_search.relationship_traversal import (
+from arches_search.utils.readable_nodes import ReadableNodes
+from arches_search.utils.term_search.relationship_expansion import (
     expand_matches_via_relationships,
 )
 
-# python manage.py test tests.test_relationship_traversal --settings="tests.test_settings"
+# python manage.py test tests.test_relationship_expansion --settings="tests.test_settings"
 
 
-class RelationshipTraversalTests(TestCase):
+class RelationshipExpansionTests(TestCase):
     """
     target graph <- 1 hop -> bridge graph <- 1 hop -> seed graph
 
@@ -98,7 +106,10 @@ class RelationshipTraversalTests(TestCase):
     def _matched_ids(self, max_hops):
         return set(
             expand_matches_via_relationships(
-                self._seed_ids(), self.target_graph.graphid, max_hops
+                self._seed_ids(),
+                self.target_graph.graphid,
+                max_hops,
+                ReadableNodes(self.user),
             ).values_list("resourceinstanceid", flat=True)
         )
 
@@ -131,12 +142,47 @@ class RelationshipTraversalTests(TestCase):
         matches = self._matched_ids(2)
         self.assertNotIn(self.target_unconnected.resourceinstanceid, matches)
 
+    def test_a_link_made_through_an_unreadable_node_is_not_followed(self):
+        link_nodegroup = NodeGroup.objects.create(nodegroupid=uuid.uuid4())
+        link_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="restricted_link",
+            alias="restricted_link",
+            datatype="resource-instance",
+            graph=self.seed_graph,
+            nodegroup=link_nodegroup,
+            istopnode=False,
+        )
+        ResourceXResource.objects.filter(
+            from_resource=self.seed_resource, to_resource=self.target_one_hop
+        ).update(node=link_node)
+        restricted_user = get_user_model().objects.create_user(
+            username="relationship-traversal-restricted", password="unused"
+        )
+        assign_perm("no_access_to_nodegroup", restricted_user, link_nodegroup)
+
+        restricted_matches = set(
+            expand_matches_via_relationships(
+                self._seed_ids(),
+                self.target_graph.graphid,
+                1,
+                ReadableNodes(restricted_user),
+            ).values_list("resourceinstanceid", flat=True)
+        )
+
+        with self.subTest("the restricted user does not follow it"):
+            self.assertNotIn(self.target_one_hop.resourceinstanceid, restricted_matches)
+        with self.subTest("their direct match is unaffected"):
+            self.assertIn(self.target_direct.resourceinstanceid, restricted_matches)
+        with self.subTest("a user who can read the node still follows it"):
+            self.assertIn(self.target_one_hop.resourceinstanceid, self._matched_ids(1))
+
     def test_max_hops_out_of_range_raises(self):
-        with self.assertRaises(ValueError):
-            expand_matches_via_relationships(
-                self._seed_ids(), self.target_graph.graphid, -1
-            )
-        with self.assertRaises(ValueError):
-            expand_matches_via_relationships(
-                self._seed_ids(), self.target_graph.graphid, 3
-            )
+        for max_hops in (-1, 3):
+            with self.subTest(max_hops=max_hops), self.assertRaises(ValueError):
+                expand_matches_via_relationships(
+                    self._seed_ids(),
+                    self.target_graph.graphid,
+                    max_hops,
+                    ReadableNodes(self.user),
+                )
