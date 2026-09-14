@@ -12,7 +12,7 @@ from arches_search.utils.advanced_search.registries.search_model_registry import
 from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
-from arches_search.utils.advanced_search.relationship_utils import (
+from arches_search.utils.advanced_search.relationship_paths import (
     relationship_path_to_pair,
 )
 
@@ -51,9 +51,8 @@ class PathNavigator:
                     terminal_datatype_name
                 )
             )
-        terminal_queryset = terminal_search_model.objects.filter(
-            graph_slug=terminal_graph_slug,
-            node_alias=terminal_node_alias,
+        terminal_queryset = self.node_alias_datatype_registry.node_rows(
+            terminal_search_model, terminal_graph_slug, terminal_node_alias
         ).order_by()
         return terminal_datatype_name, terminal_graph_slug, terminal_queryset
 

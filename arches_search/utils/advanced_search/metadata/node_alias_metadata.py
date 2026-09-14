@@ -7,15 +7,23 @@ from arches.app.models import models as arches_models
 from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
 )
+from arches_search.utils.readable_nodes import ReadableNodes
 
 
 def build_node_alias_metadata_for_payload_query(
     group_payload: Dict[str, Any],
+    readable_nodes: ReadableNodes,
 ) -> Dict[Tuple[str, str], Dict[str, str]]:
+    """
+    Nodes the user cannot read are left out, as though the payload never named
+    them.
+    """
     language_code = get_language() or settings.LANGUAGE_CODE
     default_language_code = settings.LANGUAGE_CODE
 
-    node_alias_datatype_registry = NodeAliasDatatypeRegistry(group_payload)
+    node_alias_datatype_registry = NodeAliasDatatypeRegistry(
+        group_payload, readable_nodes=readable_nodes
+    )
     datatype_cache_by_graph = node_alias_datatype_registry.datatype_cache_by_graph
 
     required_aliases_by_graph: Dict[str, Set[str]] = {

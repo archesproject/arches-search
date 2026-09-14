@@ -1,5 +1,6 @@
 from typing import Dict, Optional, Tuple
 
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
 from arches_search.models.models import AdvancedSearchFacet
@@ -39,11 +40,13 @@ class FacetRegistry:
         )
 
         if facet is None:
-            raise AdvancedSearchFacet.DoesNotExist(
+            # A client's mistake -- an operator the node's datatype does not
+            # have -- so a 400 rather than a 500.
+            raise ValidationError(
                 _(
                     "No facet found for datatype '%(datatype)s' with operator '%(operator)s'"
-                )
-                % {"datatype": subject_datatype_name, "operator": operator_token}
+                ),
+                params={"datatype": subject_datatype_name, "operator": operator_token},
             )
         return facet
 

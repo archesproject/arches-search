@@ -4,7 +4,6 @@ import { TERM_FILTER_KEY } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
 import type { PendingSearch } from "@/arches_search/stores/usePendingSearchStore.ts";
 import type {
-    ResourceType,
     SearchDefinition,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -13,7 +12,7 @@ export interface PendingSearchActions {
     applySearchDefinition(definition: SearchDefinition): void;
     clearTermFilter(key: string): void;
     openMapFilter(): void;
-    setGraphs(graphs: ResourceType[]): void;
+    setGraphsBySlug(graphSlugs: string[]): void;
     setMapFilter(featureCollection: FeatureCollection): void;
     setTermFilter(
         key: string,
@@ -48,10 +47,8 @@ export function applyPendingSearch(
         );
     }
 
-    if (pendingSearch.graphIds !== undefined) {
-        actions.setGraphs(
-            pendingSearch.graphIds.map((id) => ({ id, label: "", icon: "" })),
-        );
+    if (pendingSearch.graphSlugs !== undefined) {
+        actions.setGraphsBySlug(pendingSearch.graphSlugs);
     }
 
     if (pendingSearch.mapFilter !== undefined) {

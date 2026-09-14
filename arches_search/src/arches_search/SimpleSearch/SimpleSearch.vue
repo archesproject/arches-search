@@ -80,7 +80,7 @@ const {
     queries,
     search,
     searchResults,
-    setGraphs,
+    setGraphsBySlug,
     setMapFilter,
     setQuery,
     setSort,
@@ -303,7 +303,7 @@ onMounted(() => {
             applySearchDefinition,
             clearTermFilter,
             openMapFilter,
-            setGraphs,
+            setGraphsBySlug,
             setMapFilter,
             setTermFilter,
         });
@@ -437,8 +437,10 @@ function clearAttributeFilter(nodeAlias: string): void {
     filterValues.value = remainingFilterValues;
 }
 
-function onRunSavedQuery(queryDefinition: Record<string, unknown>): void {
-    applySearchDefinition(parseSearchDefinition(queryDefinition));
+async function onRunSavedQuery(
+    queryDefinition: Record<string, unknown>,
+): Promise<void> {
+    await applySearchDefinition(parseSearchDefinition(queryDefinition));
     filterValues.value = {};
 }
 </script>

@@ -1,0 +1,99 @@
+"""
+What a search is asked for, and what it returns.
+
+SearchPayload is the filtering half -- which resource models, the term search,
+and the per-graph advanced search payloads. SearchRequest adds the presentation
+half: the columns, ordering, aggregations and page a caller wants back.
+"""
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
+from django.core.exceptions import ValidationError
+from django.db.models import QuerySet
+from django.utils.translation import gettext as _
+
+DEFAULT_PAGE = 1
+DEFAULT_PAGE_SIZE = 20
+
+
+@dataclass(frozen=True)
+class SearchPayload:
+    # A graph named here with no matching payload is returned unfiltered.
+    graph_slugs: Optional[List[str]]
+    # The only filter that reaches outside the graph being searched.
+    term_search: Optional[Dict[str, Any]]
+    advanced_search_queries: Optional[List[Dict[str, Any]]]
+
+    @classmethod
+    def from_body(cls, body: Dict[str, Any]) -> "SearchPayload":
+        return cls(
+            graph_slugs=body.get("graph_slugs") or None,
+            term_search=body.get("term_search"),
+            advanced_search_queries=body.get("advanced_search_queries"),
+        )
+
+
+@dataclass(frozen=True)
+class SearchResult:
+    """
+    What the compiler found in the graphs graph_slugs names, before any
+    projection or paging. scoped_count is how many resources `results` holds,
+    and what pagination is measured against; resource_type_counts splits it by
+    graph.
+    """
+
+    results: QuerySet
+    scoped_count: int
+    resource_type_counts: List[Dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class SearchRequest:
+    """
+    A whole search, filtering and presentation together.
+
+    Built straight from a request body by the API, or constructed directly by
+    anything running in-process that wants the same results without a round trip
+    through HTTP.
+    """
+
+    payload: SearchPayload
+    additional_data: Optional[List[Dict[str, str]]] = None
+    sort: Optional[List[Dict[str, Any]]] = None
+    aggregations: Optional[List[Dict[str, Any]]] = None
+    page: int = DEFAULT_PAGE
+    page_size: int = DEFAULT_PAGE_SIZE
+
+    @classmethod
+    def from_body(cls, body: Dict[str, Any]) -> "SearchRequest":
+        pagination = body.get("pagination", {})
+        if not isinstance(pagination, dict):
+            raise ValidationError(_("pagination must be an object."))
+
+        return cls(
+            payload=SearchPayload.from_body(body),
+            additional_data=body.get("additional_data"),
+            sort=body.get("sort"),
+            aggregations=body.get("aggregations"),
+            page=pagination.get("page", DEFAULT_PAGE),
+            page_size=pagination.get("page_size", DEFAULT_PAGE_SIZE),
+        )
+
+
+@dataclass(frozen=True)
+class SearchResponse:
+    """One page of results, and how many matches each searched graph holds."""
+
+    resources: List[Dict[str, Any]]
+    pagination: Dict[str, Any]
+    resource_type_counts: List[Dict[str, Any]]
+    aggregations: Dict[str, Any] = field(default_factory=dict)
+
+    def serialize(self) -> Dict[str, Any]:
+        return {
+            "resources": self.resources,
+            "pagination": self.pagination,
+            "aggregations": self.aggregations,
+            "resource_type_counts": self.resource_type_counts,
+        }

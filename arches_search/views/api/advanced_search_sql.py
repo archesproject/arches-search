@@ -1,4 +1,5 @@
 import sqlparse
+from django.core.exceptions import ValidationError
 
 from arches.app.utils import permission_backend
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
@@ -14,7 +15,10 @@ class AdvancedSearchSQLAPI(APIBase):
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
 
-        queryset = AdvancedSearchQueryCompiler(body).compile()
+        try:
+            queryset = AdvancedSearchQueryCompiler(body, user=request.user).compile()
+        except ValidationError as error:
+            return JSONResponse({"error": str(error)}, status=400)
         queryset = permission_backend.filter_resource_queryset(request.user, queryset)
         raw_sql = str(queryset.query)
 

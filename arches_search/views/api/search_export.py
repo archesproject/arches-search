@@ -1,11 +1,17 @@
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.utils.translation import get_language
 
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
+from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
 from arches_search.etl_modules.search_results_export import SearchResultsExportModule
-from arches_search.utils.simple_search.search_queryset import build_search_queryset
+from arches_search.utils.search import (
+    SearchCompiler,
+    SearchPayload,
+    validate_search_payload,
+)
 
 
 class SearchExportAPI(APIBase):
@@ -18,7 +24,15 @@ class SearchExportAPI(APIBase):
             filename = f"{filename}.xlsx"
 
         language = None if all_descriptors else get_language()
-        queryset = build_search_queryset(body, request.user)
+
+        # Only the queryset is needed, but the same payload checks must run or
+        # an export could cover a different set than the search it came from.
+        search_payload = SearchPayload.from_body(body)
+        try:
+            validate_search_payload(search_payload)
+            queryset = SearchCompiler(search_payload, request.user).compile().results
+        except ValidationError as error:
+            return JSONResponse({"error": str(error)}, status=400)
 
         exporter = SearchResultsExportModule()
         excel_bytes = exporter.export(queryset, language=language)

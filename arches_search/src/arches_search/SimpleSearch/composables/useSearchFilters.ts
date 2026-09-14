@@ -2,17 +2,20 @@ import { computed, inject, provide, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
+import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
     createSearchMVTContext,
     fetchSearchResults,
 } from "@/arches_search/SimpleSearch/api.ts";
 import {
+    buildRequestDateRange,
     buildRequestQuery,
     buildRequestTerms,
 } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
 import type {
+    GraphModel,
     GroupPayload,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
@@ -23,41 +26,53 @@ import {
 } from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ActiveFilter,
+    DateRangeFilter,
+    ResourceFieldFilter,
     ResourceType,
     SearchDefinition,
+    SearchRequestTerm,
     SortSpec,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
-import type { SearchRequestTerm } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import type { FeatureCollection } from "geojson";
 
 interface ExportPayload {
     terms: SearchRequestTerm[];
     query: GroupPayload | undefined;
-    graphIds: string[];
+    graphSlugs: string[];
+    dateRange: DateRangeFilter | null;
+    resourceFieldFilters: ResourceFieldFilter[] | null;
 }
 
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
     activeGraphs: Ref<ResourceType[]>;
+    availableGraphs: Ref<ResourceType[]>;
+    loadAvailableGraphs(): Promise<void>;
     currentPage: Ref<number>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
+    resourceFieldFilters: Ref<Map<string, ResourceFieldFilter>>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
     resultsGraphs: Ref<ResourceType[]>;
     searchResults: Ref<SearchResults>;
     sort: Ref<SortSpec[]>;
-    applySearchDefinition(definition: SearchDefinition): void;
+    applySearchDefinition(definition: SearchDefinition): Promise<void>;
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
     getExportPayload(): ExportPayload;
     getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
-    setGraphs(graphs: ResourceType[]): void;
+    setGraphsBySlug(graphSlugs: string[]): Promise<void>;
     setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
+    setResourceFieldFilter(
+        field: string,
+        filter: ResourceFieldFilter | null,
+    ): void;
+    clearResourceFieldFilters(): void;
     setSort(next: SortSpec[]): void;
     setTermFilter(
         key: string,
@@ -83,7 +98,15 @@ function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const mapFilter = ref<FeatureCollection | null>(null);
+    // Keyed by field name so re-selecting a field replaces its filter rather
+    // than stacking a second, contradictory one.
+    const resourceFieldFilters = ref<Map<string, ResourceFieldFilter>>(
+        new Map(),
+    );
     const activeGraphs = ref<ResourceType[]>([]);
+    // Every searchable resource model.
+    const availableGraphs = ref<ResourceType[]>([]);
+    let availableGraphsRequest: Promise<void> | null = null;
     const resultsGraphs = ref<ResourceType[]>([]);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
     const isSearching = ref(false);
@@ -207,10 +230,54 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function loadAvailableGraphs(): Promise<void> {
+        if (!availableGraphsRequest) {
+            availableGraphsRequest = getGraphs()
+                .then((graphs: GraphModel[]) => {
+                    availableGraphs.value = graphs
+                        .filter((graph) => graph.isresource && graph.is_active)
+                        .map((graph) => ({
+                            id: graph.graphid,
+                            slug: graph.slug,
+                            label: graph.name,
+                            icon: graph.iconclass,
+                        }));
+                })
+                .catch((error) => {
+                    // Unset, so a later search can retry.
+                    availableGraphsRequest = null;
+                    throw error;
+                });
+        }
+        return availableGraphsRequest;
+    }
+
+    function getRequestGraphs(): ResourceType[] {
+        // "All" is an empty activeGraphs; the API will not accept that as a
+        // selection, so it has to be spelled out.
+        if (activeGraphs.value.length > 0) {
+            return activeGraphs.value;
+        }
+        return availableGraphs.value;
+    }
+
     function setGraphs(graphs: ResourceType[]): void {
         activeGraphs.value = graphs;
         currentPage.value = FIRST_SEARCH_PAGE;
         search();
+    }
+
+    function findAvailableGraphs(graphSlugs: string[]): ResourceType[] {
+        return graphSlugs
+            .map((slug) =>
+                availableGraphs.value.find((graph) => graph.slug === slug),
+            )
+            .filter((graph): graph is ResourceType => graph !== undefined);
+    }
+
+    async function setGraphsBySlug(graphSlugs: string[]): Promise<void> {
+        await loadAvailableGraphs();
+        setGraphs(findAvailableGraphs(graphSlugs));
     }
 
     function toggleGraph(resourceType: ResourceType): void {
@@ -251,13 +318,17 @@ function createSearchFilters(): SearchFilters {
             isSearching.value = true;
 
             try {
-                const requestGraphs = activeGraphs.value;
+                await loadAvailableGraphs();
+                const requestGraphs = getRequestGraphs();
+                const requestQueries = [...queries.value.values()];
                 const searchParams = {
                     terms: toRequestTerms([...terms.value.values()]),
-                    query: buildRequestQuery([...queries.value.values()]),
+                    query: buildRequestQuery(requestQueries),
+                    dateRange: buildRequestDateRange(requestQueries),
                     page,
-                    graphIds: requestGraphs.map((graph) => graph.id as string),
+                    graphSlugs: requestGraphs.map((graph) => graph.slug),
                     mapFilter: mapFilter.value,
+                    resourceFieldFilters: getRequestResourceFieldFilters(),
                     sort: sort.value,
                 };
 
@@ -293,6 +364,32 @@ function createSearchFilters(): SearchFilters {
         }, SEARCH_DEBOUNCE_MS);
     }
 
+    function setResourceFieldFilter(
+        field: string,
+        filter: ResourceFieldFilter | null,
+    ) {
+        const next = new Map(resourceFieldFilters.value);
+        if (filter === null) {
+            next.delete(field);
+        } else {
+            next.set(field, filter);
+        }
+        resourceFieldFilters.value = next;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function clearResourceFieldFilters(): void {
+        resourceFieldFilters.value = new Map();
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function getRequestResourceFieldFilters(): ResourceFieldFilter[] | null {
+        const filters = [...resourceFieldFilters.value.values()];
+        return filters.length > 0 ? filters : null;
+    }
+
     function getSearchDefinition(): SearchDefinition {
         // Strip the `clear` closure off each ActiveFilter — closures aren't
         // serializable, and the restore path rebuilds them from `id`.
@@ -319,12 +416,16 @@ function createSearchFilters(): SearchFilters {
         return {
             terms: serializedTerms,
             queries: Object.fromEntries(queries.value),
-            graphIds: activeGraphs.value.map((graph) => graph.id as string),
+            graphSlugs: getRequestGraphs().map((graph) => graph.slug),
             mapFilter: mapFilter.value,
         };
     }
 
-    function applySearchDefinition(definition: SearchDefinition): void {
+    async function applySearchDefinition(
+        definition: SearchDefinition,
+    ): Promise<void> {
+        await loadAvailableGraphs();
+
         // Clear current state first. Each setter triggers a debounced search,
         // so the cascade collapses to a single fetch on the trailing edge.
         for (const id of [...terms.value.keys()]) {
@@ -334,9 +435,7 @@ function createSearchFilters(): SearchFilters {
             clearQuery(filterKey);
         }
 
-        setGraphs(
-            definition.graphIds.map((id) => ({ id, label: "", icon: "" })),
-        );
+        setGraphs(findAvailableGraphs(definition.graphSlugs));
 
         if (definition.mapFilter) {
             setMapFilter(definition.mapFilter);
@@ -360,16 +459,21 @@ function createSearchFilters(): SearchFilters {
     }
 
     function getExportPayload(): ExportPayload {
+        const requestQueries = [...queries.value.values()];
         return {
             terms: toRequestTerms([...terms.value.values()]),
-            query: buildRequestQuery([...queries.value.values()]),
-            graphIds: activeGraphs.value.map((graph) => graph.id as string),
+            query: buildRequestQuery(requestQueries),
+            graphSlugs: getRequestGraphs().map((graph) => graph.slug),
+            dateRange: buildRequestDateRange(requestQueries),
+            resourceFieldFilters: getRequestResourceFieldFilters(),
         };
     }
 
     return {
         activeFilters,
         activeGraphs,
+        availableGraphs,
+        loadAvailableGraphs,
         applySearchDefinition,
         clearMapFilter,
         clearQuery,
@@ -380,11 +484,14 @@ function createSearchFilters(): SearchFilters {
         isSearching,
         mapFilter,
         queries: queriesView,
+        resourceFieldFilters,
         resultsTileUrl,
         resultsGraphs,
         search,
+        setResourceFieldFilter,
+        clearResourceFieldFilters,
         searchResults,
-        setGraphs,
+        setGraphsBySlug,
         setMapFilter,
         setQuery,
         setSort,
@@ -407,7 +514,6 @@ function createEmptySearchResults(): SearchResults {
             has_previous: false,
         },
         resource_type_counts: [],
-        all_resource_count: 0,
     };
 }
 

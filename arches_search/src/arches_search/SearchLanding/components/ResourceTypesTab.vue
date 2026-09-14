@@ -64,7 +64,7 @@ async function loadResourceTypeCounts(): Promise<void> {
 }
 
 function onSelectResourceType(resourceType: GraphModel): void {
-    usePendingSearchStore().set({ graphIds: [resourceType.graphid] });
+    usePendingSearchStore().set({ graphSlugs: [resourceType.slug] });
     router.push({ name: routeNames.simpleSearch });
 }
 

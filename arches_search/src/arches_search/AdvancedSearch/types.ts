@@ -192,7 +192,6 @@ export type SearchResults = {
         has_previous: boolean;
     };
     resource_type_counts?: ResourceTypeCount[];
-    all_resource_count?: number;
 };
 
 export interface ResourceData {

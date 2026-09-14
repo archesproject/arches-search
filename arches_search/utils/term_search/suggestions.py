@@ -4,7 +4,10 @@ from django.db.models import Q
 
 from arches.app.utils import permission_backend
 from arches_search.models.models import TermSearch
-from arches_search.utils.simple_search.term_matching import build_term_match_filter
+from arches_search.utils.readable_nodes import ReadableNodes
+from arches_search.utils.term_search.matching import (
+    build_term_match_filter,
+)
 from arches_controlled_lists.models import List
 from arches_controlled_lists.views import ListView
 
@@ -53,17 +56,22 @@ def _get_item_path(list_data, value_id, language_code="en"):
     return [list_data["name"]] + path
 
 
-def _find_distinct_matches(term_filter, user):
+def _find_distinct_matches(term_filter, user, readable_nodes):
     """Up to MAX_RESULTS distinct (value, datatype) rows matching term_filter.
     Widens the raw-row cap and retries if a fixed cap under-represents
     distinct values (e.g. one term applied to thousands of resources) —
     capped at MAX_RAW_MATCH_LIMIT, a real trade-off, not just a safety net.
+
+    Unreadable values are dropped before the cap, so they are never suggested
+    and never crowd out readable ones.
     """
     raw_match_limit = INITIAL_RAW_MATCH_LIMIT
 
     while True:
         bounded_ids = list(
-            TermSearch.objects.filter(term_filter)
+            readable_nodes.exclude_unreadable_rows(
+                TermSearch.objects.filter(term_filter)
+            )
             .order_by("pk")  # deterministic scan order across parallel workers
             .values_list("pk", flat=True)[:raw_match_limit]
         )
@@ -97,9 +105,12 @@ def _find_distinct_matches(term_filter, user):
 
 def build_term_suggestions(query, request):
     term_filter = build_term_match_filter(query)
+    readable_nodes = ReadableNodes(request.user)
     results = _find_distinct_matches(
-        term_filter & Q(datatype="reference"), request.user
-    ) + _find_distinct_matches(term_filter & ~Q(datatype="reference"), request.user)
+        term_filter & Q(datatype="reference"), request.user, readable_nodes
+    ) + _find_distinct_matches(
+        term_filter & ~Q(datatype="reference"), request.user, readable_nodes
+    )
 
     graph_slugs = {result["graph_slug"] for result in results if result["graph_slug"]}
     graph_info_by_slug = {

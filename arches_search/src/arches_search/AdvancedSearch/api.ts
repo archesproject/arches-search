@@ -6,22 +6,30 @@ export async function getSearchResults(
     searchQuery: GroupPayload,
     options?: { page?: number; pageSize?: number },
 ) {
-    const requestPayload: GroupPayload & {
-        page?: number;
-        page_size?: number;
+    const requestPayload: {
+        graph_slugs: string[];
+        advanced_search_queries: GroupPayload[];
+        pagination?: { page?: number; page_size?: number };
     } = {
-        ...searchQuery,
+        graph_slugs: [searchQuery.graph_slug],
+        advanced_search_queries: [searchQuery],
     };
 
+    const pagination: { page?: number; page_size?: number } = {};
+
     if (options && options.page !== undefined) {
-        requestPayload.page = options.page;
+        pagination.page = options.page;
     }
 
     if (options && options.pageSize !== undefined) {
-        requestPayload.page_size = options.pageSize;
+        pagination.page_size = options.pageSize;
     }
 
-    const url = generateArchesURL("arches_search:advanced_search");
+    if (Object.keys(pagination).length > 0) {
+        requestPayload.pagination = pagination;
+    }
+
+    const url = generateArchesURL("arches_search:search");
 
     const response = await fetch(url, {
         method: "POST",
