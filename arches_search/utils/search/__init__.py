@@ -29,7 +29,6 @@ from arches_search.utils.search.types import (
 )
 from arches_search.utils.search.validation import (
     validate_advanced_search_queries,
-    validate_aggregations,
     validate_graph_slugs,
     validate_paging,
     validate_search_payload,
@@ -44,7 +43,6 @@ __all__ = [
     "SearchResult",
     "execute_search",
     "validate_advanced_search_queries",
-    "validate_aggregations",
     "validate_graph_slugs",
     "validate_paging",
     "validate_search_payload",

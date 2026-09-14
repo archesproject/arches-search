@@ -21,7 +21,6 @@ from arches_search.utils.search.additional_data.additional_data import (
 from arches_search.utils.search.compiler import SearchCompiler
 from arches_search.utils.search.types import SearchRequest, SearchResponse
 from arches_search.utils.search.validation import (
-    validate_aggregations,
     validate_paging,
     validate_search_payload,
 )
@@ -43,7 +42,6 @@ def execute_search(
 
     validate_search_payload(payload)
     validate_additional_data(search_request.additional_data)
-    validate_aggregations(search_request.aggregations)
     validate_paging(search_request.page, search_request.page_size)
     sort_resolver = SortResolver(search_request.sort)
 

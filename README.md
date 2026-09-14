@@ -1095,8 +1095,7 @@ result comes back under its own `alias`, next to the aggregation's `name`:
 }
 ```
 
-These are the only keys accepted. Anything else, including the `where`,
-`kwargs` and `search_table` keys of earlier versions, is a `400`.
+The keys an aggregation understands:
 
 | Key                        | On                       | Meaning                                                                                  |
 | -------------------------- | ------------------------ | ---------------------------------------------------------------------------------------- |
@@ -1113,11 +1112,9 @@ These are the only keys accepted. Anything else, including the `where`,
 | `aggregations`             | `NODE` spec              | A nested `group_by` of `NODE` specs, read from the resource the node links to.           |
 
 `fn` is one of `Count`, `Sum`, `Avg`, `Min` or `Max`, and `distinct` works with
-the first three. An `alias` starts with a letter, uses only letters, digits and
-single underscores, and can't be the name of a resource column such as `graph`.
-Aggregation names and `aggregate` aliases share the response, so they must all
-be different. To filter what is aggregated, put the filter in the search
-payload.
+the first three. An `alias` becomes a column name in the results, so it has to
+be one Django accepts as an annotation. To filter what is aggregated, put the
+filter in the search payload.
 
 ### Paging
 

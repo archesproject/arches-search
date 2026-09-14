@@ -263,7 +263,6 @@ def build_aggregations(
     Build and evaluate aggregations on a queryset.
 
     Supports both grouped metric aggregations and simple global aggregates.
-    Expects aggregations that have passed validate_aggregations.
 
     Args:
         queryset (QuerySet): The base queryset to aggregate.
