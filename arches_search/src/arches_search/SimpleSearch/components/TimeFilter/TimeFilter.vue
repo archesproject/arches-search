@@ -3,11 +3,11 @@ import dayjs from "dayjs";
 import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
-import DatePicker from "primevue/datepicker";
-import InputNumber from "primevue/inputnumber";
-import Message from "primevue/message";
-import Skeleton from "primevue/skeleton";
+import Button from "openvue/button";
+import DatePicker from "openvue/datepicker";
+import InputNumber from "openvue/inputnumber";
+import Message from "openvue/message";
+import Skeleton from "openvue/skeleton";
 
 import NodeSelection from "@/arches_search/SimpleSearch/components/TimeFilter/components/NodeSelection.vue";
 import TimeSlider from "@/arches_search/SimpleSearch/components/TimeFilter/components/TimeSlider.vue";

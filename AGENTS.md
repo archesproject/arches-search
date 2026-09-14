@@ -119,7 +119,7 @@ Use `@/…` aliases for all local imports — never raw relative paths (`../../`
 - Units: `rem` for spacing/typography/gaps/borders. `vh`/`vw` only for viewport-spanning elements. `%` for fluid layouts. **No `px`.**
 - Logical properties only (`margin-inline-start`, `margin-block-start`), never physical (`margin-left`). **No negative margins.**
 - No `calc()` where flex/grid already solves the layout; don't mix `calc()` with hardcoded values.
-- Design tokens only — no raw color values. Centralize tokens in one theme file; build semantic layers on top (`--color-success`). Define light/dark variants. PrimeVue tokens are available as `--p-` prefixed CSS custom properties.
+- Design tokens only — no raw color values. Centralize tokens in one theme file; build semantic layers on top (`--color-success`). Define light/dark variants. OpenVue tokens are available as `--p-` prefixed CSS custom properties.
 - Selector naming: prefix with the component root class, then chain descendants:
 
 ```css

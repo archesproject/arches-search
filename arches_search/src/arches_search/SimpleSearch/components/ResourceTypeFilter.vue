@@ -2,7 +2,7 @@
 import { computed, ref, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
+import Button from "openvue/button";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 

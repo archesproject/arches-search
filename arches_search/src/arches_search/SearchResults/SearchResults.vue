@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Skeleton from "primevue/skeleton";
+import Skeleton from "openvue/skeleton";
 
 import arches from "arches";
 

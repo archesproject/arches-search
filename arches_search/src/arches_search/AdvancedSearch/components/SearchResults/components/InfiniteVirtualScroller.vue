@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, watchEffect } from "vue";
 
-import VirtualScroller from "primevue/virtualscroller";
+import VirtualScroller from "openvue/virtualscroller";
 
 const SCROLL_THRESHOLD_ITEMS = 2;
 

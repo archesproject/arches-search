@@ -19,10 +19,10 @@
         "vitest": "vitest --run --coverage"
     },
     "dependencies": {
-        "arches": "archesproject/arches#alpha/8.2.0a8",
-        "arches-vue-components": "archesproject/arches-vue-components#dev/2.1.x",
-        "arches-controlled-lists": "archesproject/arches-controlled-lists#semver:^v1.3.0-alpha.2",
-        "arches-modular-reports": "archesproject/arches-modular-reports#dev/2.1.x",
+        "arches": "archesproject/arches#cbyrd/12934-migrate-to-openvue",
+        "arches-vue-components": "archesproject/arches-vue-components#cbyrd/migrate-to-openvue",
+        "arches-controlled-lists": "archesproject/arches-controlled-lists#cbyrd/migrate-to-openvue",
+        "arches-modular-reports": "archesproject/arches-modular-reports#cbyrd/migrate-to-openvue",
         "vue-router": "4.4.3"
     },
     "devDependencies": {

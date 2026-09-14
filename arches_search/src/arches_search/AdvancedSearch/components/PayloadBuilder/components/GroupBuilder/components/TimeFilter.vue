@@ -3,9 +3,9 @@ import { computed, inject, ref, watch } from "vue";
 import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
-import DatePicker from "primevue/datepicker";
-import Select from "primevue/select";
+import Button from "openvue/button";
+import DatePicker from "openvue/datepicker";
+import Select from "openvue/select";
 
 import {
     buildDateSearchClause,

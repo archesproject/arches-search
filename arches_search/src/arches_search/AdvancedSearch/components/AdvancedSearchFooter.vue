@@ -3,7 +3,7 @@ import { computed } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import InputText from "primevue/inputtext";
+import InputText from "openvue/inputtext";
 
 import type { SearchResults as SearchResultsPayload } from "@/arches_search/AdvancedSearch/types.ts";
 

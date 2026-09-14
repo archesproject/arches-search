@@ -2,9 +2,9 @@
 import { ref, computed, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Message from "primevue/message";
-import Skeleton from "primevue/skeleton";
-import Textarea from "primevue/textarea";
+import Message from "openvue/message";
+import Skeleton from "openvue/skeleton";
+import Textarea from "openvue/textarea";
 
 import { describeAdvancedSearchQuery } from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/NarrationPanel/query-narrator.ts";
 import {
