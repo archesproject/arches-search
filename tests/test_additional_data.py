@@ -103,23 +103,49 @@ class AdditionalDataDataTests(TestCase):
             nodegroup=cls.nodegroup,
             istopnode=False,
         )
+        cls.reference_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="Reference",
+            alias="reference",
+            datatype="reference",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+        )
 
         cls.resource_beta = cls._make_resource("beta")
-        cls.resource_alpha = cls._make_resource("alpha")
+        cls.resource_alpha = cls._make_resource("alpha", include_reference=True)
         cls.resource_without_value = ResourceInstance(
             resourceinstanceid=uuid.uuid4(), graph=cls.graph
         )
         cls.resource_without_value.save()
 
     @classmethod
-    def _make_resource(cls, title):
+    def _make_resource(cls, title, include_reference=False):
         resource = ResourceInstance(resourceinstanceid=uuid.uuid4(), graph=cls.graph)
         resource.save()
+        data = {str(cls.title_node.pk): title}
+        if include_reference:
+            data[str(cls.reference_node.pk)] = [
+                {
+                    "uri": "ResourceTypeID: 3",
+                    "labels": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "value": "Site",
+                            "language_id": "en",
+                            "list_item_id": str(uuid.uuid4()),
+                            "valuetype_id": "prefLabel",
+                        }
+                    ],
+                    "list_id": str(uuid.uuid4()),
+                }
+            ]
         TileModel.objects.create(
             tileid=uuid.uuid4(),
             resourceinstance=resource,
             nodegroup=cls.nodegroup,
-            data={str(cls.title_node.pk): title},
+            data=data,
         )
         return resource
 
@@ -157,6 +183,23 @@ class AdditionalDataDataTests(TestCase):
 
         # A resource with no tile still gets the key, with no values.
         self.assertEqual(formatted[str(self.resource_without_value.pk)]["title"], [])
+
+    def test_formats_cardinality_one_reference_value(self):
+        key = (self.graph.slug, self.reference_node.alias)
+        nodes_by_key = node_values.resolve([key], ReadableNodes(self.admin))
+        queryset, annotation_names = node_values.annotate(
+            ResourceInstance.objects.filter(pk=self.resource_alpha.pk),
+            nodes_by_key,
+        )
+
+        formatted = node_values.format_values(
+            list(queryset), nodes_by_key, annotation_names
+        )
+
+        reference = formatted[str(self.resource_alpha.pk)]["reference"]
+        self.assertEqual(len(reference), 1)
+        self.assertEqual(reference[0]["node_value"][0]["uri"], "ResourceTypeID: 3")
+        self.assertEqual(reference[0]["display_value"], "Site")
 
     def test_unresolvable_node_is_silently_absent(self):
         nodes_by_key = node_values.resolve(

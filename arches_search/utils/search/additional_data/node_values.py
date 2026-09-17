@@ -23,7 +23,10 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from arches.app.models.models import Node
 
 from arches_querysets.models import TileTree
-from arches_querysets.utils.models import get_tile_values_for_resource
+from arches_querysets.utils.models import (
+    any_nodegroup_in_hierarchy_is_cardinality_n,
+    get_tile_values_for_resource,
+)
 
 from arches_search.utils.readable_nodes import ReadableNodes
 
@@ -137,6 +140,7 @@ def format_values(
         return {}
 
     columns_by_resource: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+    graph_nodes_cache: Dict[str, List[Node]] = {}
 
     for resource in resources:
         resource_id = str(resource.pk)
@@ -149,7 +153,12 @@ def format_values(
                 continue
 
             raw_value = getattr(resource, annotation_names[key])
-            values = raw_value if isinstance(raw_value, list) else [raw_value]
+            if graph_slug not in graph_nodes_cache:
+                graph_nodes_cache[graph_slug] = _graph_nodes_for(graph_slug)
+            many = any_nodegroup_in_hierarchy_is_cardinality_n(
+                node.nodegroup, graph_nodes_cache[graph_slug]
+            )
+            values = raw_value if many else [raw_value]
 
             formatted = []
             for value in values:
