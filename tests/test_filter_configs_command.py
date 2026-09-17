@@ -64,6 +64,26 @@ class FilterConfigsCommandTest(TestCase):
             istopnode=False,
             issearchable=True,
         )
+        cls.non_localized_string_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="Non-localized String Node",
+            alias="non_localized_string_node",
+            datatype="non-localized-string",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+            issearchable=True,
+        )
+        cls.unfilterable_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="Unfilterable Node",
+            alias="unfilterable_node",
+            datatype="boolean",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+            issearchable=True,
+        )
         cls.unsearchable_node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name="Unsearchable Node",
@@ -81,10 +101,17 @@ class FilterConfigsCommandTest(TestCase):
         config = NodeFilterConfig.objects.get(graph=self.graph, slug="filtering")
         nodes = config.config["nodes"]
         self.assertEqual(
-            [n["node_alias"] for n in nodes], ["number_node", "reference_node"]
+            [n["node_alias"] for n in nodes],
+            [
+                "non_localized_string_node",
+                "number_node",
+                "reference_node",
+                "string_node",
+            ],
         )
-        self.assertEqual([n["label"] for n in nodes], ["Number Node", "Reference Node"])
-        self.assertEqual([n["sortorder"] for n in nodes], [0, 1])
+        for node in nodes:
+            self.assertEqual(node["filterable"], False)
+            self.assertEqual(node["sortable"], False)
 
         other_config = NodeFilterConfig.objects.get(
             graph=self.other_graph, slug="filtering"
@@ -128,4 +155,12 @@ class FilterConfigsCommandTest(TestCase):
         mock_input.assert_called_once()
         config.refresh_from_db()
         aliases = [node["node_alias"] for node in config.config["nodes"]]
-        self.assertEqual(sorted(aliases), ["number_node", "reference_node"])
+        self.assertEqual(
+            sorted(aliases),
+            [
+                "non_localized_string_node",
+                "number_node",
+                "reference_node",
+                "string_node",
+            ],
+        )
