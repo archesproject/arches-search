@@ -5,7 +5,7 @@ from arches.app.models.system_settings import settings
 
 from arches_search.models.models import NodeFilterConfig
 
-FILTERABLE_DATATYPES = ("reference", "number")
+CONFIGURABLE_DATATYPES = ("number", "non-localized-string", "reference", "string")
 
 
 class Command(BaseCommand):
@@ -80,7 +80,7 @@ class Command(BaseCommand):
         for graph in eligible_graphs:
             filterable_nodes = models.Node.objects.filter(
                 graph=graph,
-                datatype__in=FILTERABLE_DATATYPES,
+                datatype__in=CONFIGURABLE_DATATYPES,
                 issearchable=True,
             ).order_by("name")
 
