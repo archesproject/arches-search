@@ -63,31 +63,27 @@ function nodeRadius(node: GraphNode): number {
     );
 }
 
+type D3Selection = ReturnType<typeof d3.select>;
+type D3Simulation = ReturnType<typeof d3.forceSimulation>;
+
+interface D3DragEvent {
+    active: number;
+    x: number;
+    y: number;
+}
+
+interface D3ZoomEvent {
+    transform: { toString(): string };
+}
+
 // ------- D3 mutable state (not Vue reactive) --------
-let simulation: d3.Simulation<SimNode, SimLink> | null = null;
-let svgSel: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null;
-let zoomGroup: d3.Selection<SVGGElement, unknown, null, undefined> | null =
-    null;
-let linkSel: d3.Selection<
-    SVGLineElement,
-    SimLink,
-    SVGGElement,
-    unknown
-> | null = null;
-let nodeSel: d3.Selection<SVGGElement, SimNode, SVGGElement, unknown> | null =
-    null;
-let labelSel: d3.Selection<
-    SVGTextElement,
-    SimNode,
-    SVGGElement,
-    unknown
-> | null = null;
-let subtitleSel: d3.Selection<
-    SVGTextElement,
-    SimNode,
-    SVGGElement,
-    unknown
-> | null = null;
+let simulation: D3Simulation | null = null;
+let svgSel: D3Selection | null = null;
+let zoomGroup: D3Selection | null = null;
+let linkSel: D3Selection | null = null;
+let nodeSel: D3Selection | null = null;
+let labelSel: D3Selection | null = null;
+let subtitleSel: D3Selection | null = null;
 let simNodes: SimNode[] = [];
 let simLinks: SimLink[] = [];
 
@@ -239,9 +235,9 @@ function initD3() {
 
     // Set up zoom
     const zoom = d3
-        .zoom<SVGSVGElement, unknown>()
+        .zoom()
         .scaleExtent([0.1, 8])
-        .on("zoom", (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        .on("zoom", (event: D3ZoomEvent) => {
             zoomGroup!.attr("transform", event.transform.toString());
         });
     svgSel.call(zoom);
@@ -255,19 +251,19 @@ function initD3() {
 
     const { width, height } = svgEl.value.getBoundingClientRect();
     simulation = d3
-        .forceSimulation<SimNode>(simNodes)
+        .forceSimulation(simNodes)
         .force(
             "link",
             d3
-                .forceLink<SimNode, SimLink>(simLinks)
-                .id((d) => d.id)
+                .forceLink(simLinks)
+                .id((d: SimNode) => d.id)
                 .distance(120),
         )
         .force("charge", d3.forceManyBody().strength(-300))
         .force("center", d3.forceCenter(width / 2, height / 2))
         .force(
             "collide",
-            d3.forceCollide<SimNode>().radius((d) => nodeRadius(d) + 8),
+            d3.forceCollide().radius((d: SimNode) => nodeRadius(d) + 8),
         )
         .on("tick", ticked);
 }
@@ -279,17 +275,17 @@ function firstAttrSubtitle(node: SimNode): string {
 }
 
 function rebindData(
-    linkGroup: d3.Selection<SVGGElement, unknown, null, unknown>,
-    nodeGroup: d3.Selection<SVGGElement, unknown, null, unknown>,
-    labelGroup: d3.Selection<SVGGElement, unknown, null, unknown>,
-    subtitleGroup: d3.Selection<SVGGElement, unknown, null, unknown>,
+    linkGroup: D3Selection,
+    nodeGroup: D3Selection,
+    labelGroup: D3Selection,
+    subtitleGroup: D3Selection,
 ) {
     linkSel = linkGroup
-        .selectAll<SVGLineElement, SimLink>("line")
-        .data(simLinks, (d) => d.id)
+        .selectAll("line")
+        .data(simLinks, (d: SimLink) => d.id)
         .join("line")
-        .attr("class", (d) => linkClass(d))
-        .attr("marker-end", (d) => {
+        .attr("class", (d: SimLink) => linkClass(d))
+        .attr("marker-end", (d: SimLink) => {
             const sourceId =
                 typeof d.source === "string" ? d.source : d.source.id;
             const targetId =
@@ -304,34 +300,34 @@ function rebindData(
         });
 
     nodeSel = nodeGroup
-        .selectAll<SVGGElement, SimNode>("g.graph-node")
-        .data(simNodes, (d) => d.id)
+        .selectAll("g.graph-node")
+        .data(simNodes, (d: SimNode) => d.id)
         .join("g")
-        .attr("class", (d) => nodeClass(d))
+        .attr("class", (d: SimNode) => nodeClass(d))
         .call(
             d3
-                .drag<SVGGElement, SimNode>()
-                .on("start", (event, d) => {
+                .drag()
+                .on("start", (event: D3DragEvent, d: SimNode) => {
                     if (!event.active) simulation?.alphaTarget(0.3).restart();
                     d.fx = d.x;
                     d.fy = d.y;
                 })
-                .on("drag", (event, d) => {
+                .on("drag", (event: D3DragEvent, d: SimNode) => {
                     d.fx = event.x;
                     d.fy = event.y;
                 })
-                .on("end", (event) => {
+                .on("end", (event: D3DragEvent) => {
                     if (!event.active) simulation?.alphaTarget(0);
                     // Leave fx/fy set — node stays pinned until double-clicked
                 }),
         );
 
     nodeSel
-        .selectAll<SVGCircleElement, SimNode>("circle")
-        .data((d) => [d])
+        .selectAll("circle")
+        .data((d: SimNode) => [d])
         .join("circle")
-        .attr("r", (d) => nodeRadius(d))
-        .attr("fill", (d) => graphColor(d))
+        .attr("r", (d: SimNode) => nodeRadius(d))
+        .attr("fill", (d: SimNode) => graphColor(d))
         .attr("stroke", "#fff")
         .attr("stroke-width", 2);
 
@@ -360,57 +356,59 @@ function rebindData(
     });
 
     labelSel = labelGroup
-        .selectAll<SVGTextElement, SimNode>("text")
-        .data(simNodes, (d) => d.id)
+        .selectAll("text")
+        .data(simNodes, (d: SimNode) => d.id)
         .join("text")
-        .attr("class", (d) =>
+        .attr("class", (d: SimNode) =>
             ["node-label", typeClass(d), hiddenClass(d)]
                 .filter(Boolean)
                 .join(" "),
         )
         .attr("text-anchor", "middle")
-        .attr("dy", (d) => nodeRadius(d) + 13)
-        .text((d) => (d.name.length > 28 ? d.name.slice(0, 26) + "…" : d.name));
+        .attr("dy", (d: SimNode) => nodeRadius(d) + 13)
+        .text((d: SimNode) =>
+            d.name.length > 28 ? d.name.slice(0, 26) + "…" : d.name,
+        );
 
     subtitleSel = subtitleGroup
-        .selectAll<SVGTextElement, SimNode>("text")
-        .data(simNodes, (d) => d.id)
+        .selectAll("text")
+        .data(simNodes, (d: SimNode) => d.id)
         .join("text")
-        .attr("class", (d) =>
+        .attr("class", (d: SimNode) =>
             ["node-subtitle", typeClass(d), hiddenClass(d)]
                 .filter(Boolean)
                 .join(" "),
         )
         .attr("text-anchor", "middle")
-        .attr("dy", (d) => nodeRadius(d) + 25)
-        .text((d) => firstAttrSubtitle(d));
+        .attr("dy", (d: SimNode) => nodeRadius(d) + 25)
+        .text((d: SimNode) => firstAttrSubtitle(d));
 }
 
 function ticked() {
     linkSel
-        ?.attr("x1", (d) => (d.source as SimNode).x)
-        .attr("y1", (d) => (d.source as SimNode).y)
-        .attr("x2", (d) => (d.target as SimNode).x)
-        .attr("y2", (d) => (d.target as SimNode).y);
+        ?.attr("x1", (d: SimLink) => (d.source as SimNode).x)
+        .attr("y1", (d: SimLink) => (d.source as SimNode).y)
+        .attr("x2", (d: SimLink) => (d.target as SimNode).x)
+        .attr("y2", (d: SimLink) => (d.target as SimNode).y);
 
-    nodeSel?.attr("transform", (d) => `translate(${d.x},${d.y})`);
-    labelSel?.attr("transform", (d) => `translate(${d.x},${d.y})`);
-    subtitleSel?.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    nodeSel?.attr("transform", (d: SimNode) => `translate(${d.x},${d.y})`);
+    labelSel?.attr("transform", (d: SimNode) => `translate(${d.x},${d.y})`);
+    subtitleSel?.attr("transform", (d: SimNode) => `translate(${d.x},${d.y})`);
 }
 
 function refreshNodeClasses() {
-    nodeSel?.attr("class", (d) => nodeClass(d));
-    labelSel?.attr("class", (d) =>
+    nodeSel?.attr("class", (d: SimNode) => nodeClass(d));
+    labelSel?.attr("class", (d: SimNode) =>
         ["node-label", typeClass(d), hiddenClass(d)].filter(Boolean).join(" "),
     );
-    subtitleSel?.attr("class", (d) =>
+    subtitleSel?.attr("class", (d: SimNode) =>
         ["node-subtitle", typeClass(d), hiddenClass(d)]
             .filter(Boolean)
             .join(" "),
     );
     linkSel
-        ?.attr("class", (d) => linkClass(d))
-        .attr("marker-end", (d) => {
+        ?.attr("class", (d: SimLink) => linkClass(d))
+        .attr("marker-end", (d: SimLink) => {
             const sourceId =
                 typeof d.source === "string" ? d.source : d.source.id;
             const targetId =
@@ -428,17 +426,15 @@ function refreshNodeClasses() {
 function restartSimulation() {
     if (!zoomGroup) return;
     buildSimData();
-    const linkGroup = zoomGroup.select<SVGGElement>("g.links");
-    const nodeGroup = zoomGroup.select<SVGGElement>("g.nodes");
-    const labelGroup = zoomGroup.select<SVGGElement>("g.labels");
-    const subtitleGroup = zoomGroup.select<SVGGElement>("g.subtitles");
+    const linkGroup = zoomGroup.select("g.links");
+    const nodeGroup = zoomGroup.select("g.nodes");
+    const labelGroup = zoomGroup.select("g.labels");
+    const subtitleGroup = zoomGroup.select("g.subtitles");
 
     rebindData(linkGroup, nodeGroup, labelGroup, subtitleGroup);
 
     simulation?.nodes(simNodes);
-    (
-        simulation?.force("link") as d3.ForceLink<SimNode, SimLink> | undefined
-    )?.links(simLinks);
+    simulation?.force("link")?.links(simLinks);
     simulation?.alpha(0.5).restart();
 }
 
@@ -450,7 +446,7 @@ function recenter() {
         .transition()
         .duration(500)
         .call(
-            d3.zoom<SVGSVGElement, unknown>().transform as never,
+            d3.zoom().transform,
             d3.zoomIdentity
                 .translate(width / 2, height / 2)
                 .scale(0.8)

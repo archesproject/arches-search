@@ -1,5 +1,3 @@
-import type * as d3 from "d3";
-
 export interface GraphNodeAttribute {
     alias: string;
     values: string[];
@@ -39,15 +37,19 @@ export interface GraphData {
     relationship_types: RelationshipType[];
 }
 
-// D3 simulation extensions — D3 mutates these onto the node/link objects
-export interface SimNode extends d3.SimulationNodeDatum, GraphNode {
+// D3 simulation extensions — D3 mutates these onto the node/link objects.
+export interface SimNode extends GraphNode {
+    index?: number;
     x: number;
     y: number;
+    vx?: number;
+    vy?: number;
     fx: number | null;
     fy: number | null;
 }
 
-export interface SimLink extends d3.SimulationLinkDatum<SimNode> {
+export interface SimLink {
+    index?: number;
     id: string;
     source: SimNode | string;
     target: SimNode | string;
