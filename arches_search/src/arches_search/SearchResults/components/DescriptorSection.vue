@@ -39,6 +39,11 @@ const viewRelatedResource = inject<
     ((resource: RelatedResource) => void) | null
 >("viewRelatedResource", null);
 
+const openRelationshipViewer = inject<((id: string) => void) | null>(
+    "openRelationshipViewer",
+    null,
+);
+
 function toggleExpanded(): void {
     isExpanded.value = !isExpanded.value;
 }
@@ -153,6 +158,13 @@ const lifecycleSeverity = computed<
                     variant="link"
                     :label="$gettext('Related')"
                     @click="onViewRelated"
+                />
+                <Button
+                    v-if="openRelationshipViewer"
+                    icon="pi pi-share-alt"
+                    variant="link"
+                    :label="$gettext('Relationships')"
+                    @click="openRelationshipViewer(resourceInstanceId)"
                 />
             </div>
         </div>
