@@ -9,9 +9,11 @@ from arches.app.models.models import (
     ResourceXResource,
     Value,
 )
+from arches.app.utils import permission_backend
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 from arches_search.models.models import TermSearch
+from arches_search.utils.readable_nodes import ReadableNodes
 
 logger = logging.getLogger(__name__)
 
@@ -24,49 +26,43 @@ class RelationshipViewerAPI(APIBase):
         resource_ids_param = request.GET.get("resource_ids", "")
         depth = min(int(request.GET.get("depth", 1)), 2)
         rel_type_filter = request.GET.getlist("relationship_types")
+        user = request.user
 
         seed_ids = [rid.strip() for rid in resource_ids_param.split(",") if rid.strip()]
         if not seed_ids:
             return JSONResponse({"nodes": [], "edges": [], "relationship_types": []})
 
+        readable_nodes = ReadableNodes(user)
+        readable_relations = readable_nodes.exclude_unreadable_relations(
+            ResourceXResource.objects.all()
+        )
+
         seed_ids = seed_ids[:MAX_SEED_RESOURCES]
-        seed_ids_set = set(seed_ids)
-        all_ids = set(seed_ids)
+        seed_ids_set = _readable_resource_ids(user, seed_ids)
+        all_ids = set(seed_ids_set)
 
         # Expand neighbors up to `depth` hops, skipping non-resource graphs
-        frontier = set(seed_ids)
+        frontier = set(seed_ids_set)
         for _ in range(depth):
             if len(all_ids) >= MAX_GRAPH_NODES:
                 break
             neighbor_ids = set()
-            from_qs = ResourceXResource.objects.filter(
+            from_qs = readable_relations.filter(
                 from_resource_id__in=frontier
             ).values_list("to_resource_id", flat=True)
-            to_qs = ResourceXResource.objects.filter(
-                to_resource_id__in=frontier
-            ).values_list("from_resource_id", flat=True)
-            for rid in list(from_qs) + list(to_qs):
-                if rid and str(rid) not in all_ids:
-                    neighbor_ids.add(str(rid))
-                    all_ids.add(str(rid))
-                    if len(all_ids) >= MAX_GRAPH_NODES:
-                        break
+            to_qs = readable_relations.filter(to_resource_id__in=frontier).values_list(
+                "from_resource_id", flat=True
+            )
+            candidate_ids = {str(rid) for rid in list(from_qs) + list(to_qs) if rid}
+            for rid in _readable_resource_ids(user, candidate_ids - all_ids):
+                neighbor_ids.add(rid)
+                all_ids.add(rid)
+                if len(all_ids) >= MAX_GRAPH_NODES:
+                    break
             frontier = neighbor_ids
 
-        # Remove non-resource instances (e.g. Arches System Settings) from the
-        # working set before building edges and nodes.
-        valid_ids = set(
-            str(rid)
-            for rid in ResourceInstance.objects.filter(
-                pk__in=all_ids,
-                graph__isresource=True,
-            ).values_list("resourceinstanceid", flat=True)
-        )
-        all_ids = valid_ids
-        seed_ids_set = seed_ids_set & all_ids
-
         # Fetch all edges where both endpoints are in the known node set
-        edge_qs = ResourceXResource.objects.filter(
+        edge_qs = readable_relations.filter(
             from_resource_id__in=all_ids,
             to_resource_id__in=all_ids,
         ).values(
@@ -120,14 +116,18 @@ class RelationshipViewerAPI(APIBase):
         # Related-resource counts per node (directional: outgoing edges)
         related_counts: dict[str, int] = defaultdict(int)
         for row in (
-            ResourceXResource.objects.filter(from_resource_id__in=all_ids)
+            permission_backend.filter_resource_queryset(
+                user,
+                readable_relations.filter(from_resource_id__in=all_ids),
+                resourceinstance_field="to_resource_id",
+            )
             .values("from_resource_id")
             .annotate(cnt=Count("resourcexid"))
         ):
             related_counts[str(row["from_resource_id"])] = row["cnt"]
 
         # Node attributes from arches_search TermSearch (text values only)
-        attrs_by_resource = _fetch_term_attributes(all_ids)
+        attrs_by_resource = _fetch_term_attributes(all_ids, readable_nodes)
 
         # Build node list from ResourceInstance
         lang = get_language() or "en"
@@ -187,14 +187,30 @@ def _resolve_value_labels(value_ids: set[str]) -> dict[str, str]:
     return labels
 
 
-def _fetch_term_attributes(resource_ids: set[str]) -> dict[str, list]:
+def _readable_resource_ids(user, resource_ids) -> set[str]:
+    """Narrow resource IDs to resource instances (not e.g. system settings) the
+    user may read."""
+    queryset = ResourceInstance.objects.filter(
+        pk__in=resource_ids, graph__isresource=True
+    )
+    return {
+        str(rid)
+        for rid in permission_backend.filter_resource_queryset(
+            user, queryset
+        ).values_list("resourceinstanceid", flat=True)
+    }
+
+
+def _fetch_term_attributes(
+    resource_ids: set[str], readable_nodes: ReadableNodes
+) -> dict[str, list]:
     """Return a resourceinstanceid → list of {alias, values} dicts from TermSearch."""
     lang = get_language() or "en"
     short_lang = lang.split("-")[0]
 
     # Prefer matching language; fall back to any language
-    rows = TermSearch.objects.filter(
-        resourceinstanceid__in=resource_ids,
+    rows = readable_nodes.exclude_unreadable_rows(
+        TermSearch.objects.filter(resourceinstanceid__in=resource_ids)
     ).values("resourceinstanceid", "node_alias", "value", "language")
 
     # Group by resource → node_alias, picking language-preferred values
