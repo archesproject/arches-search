@@ -8,8 +8,8 @@ from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.term_search.matching import (
     build_term_match_filter,
 )
-from arches_controlled_lists.models import List
-from arches_controlled_lists.views import ListView
+from arches.extensions.controlled_lists.models import List
+from arches.extensions.controlled_lists.views import ListView
 
 from arches.app.models.models import TileModel, Node, GraphModel
 
