@@ -1,14 +1,28 @@
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.core.exceptions import ValidationError
-from django.db.models import F, QuerySet
+from django.db.models import (
+    F,
+    FilteredRelation,
+    OuterRef,
+    Q,
+    QuerySet,
+    Subquery,
+    TextField,
+)
 from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Lower
 from django.utils.translation import get_language, gettext as _
 
+from arches.app.models.models import Node
+
+from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.utils.advanced_search.constants import (
     SUBJECT_TYPE_NODE,
     SUBJECT_TYPE_RESOURCE_FIELD,
+)
+from arches_search.utils.advanced_search.registries.search_model_registry import (
+    SearchModelRegistry,
 )
 from arches_search.utils.resource_field_search.labels import label_expression
 from arches_search.utils.resource_field_search.field_registry import (
@@ -46,16 +60,48 @@ def _ordering(field: F, spec: Dict[str, Any], nulls_last: Optional[bool] = None)
     return field.desc(nulls_last=nulls_last)
 
 
+def _node_indexes_several_rows(node: Node) -> bool:
+    """Whether one resource can hold several indexed rows for this node."""
+    if (node.config or {}).get("multiValue"):
+        return True
+
+    nodegroup = node.nodegroup
+    while nodegroup is not None:
+        if nodegroup.cardinality == "n":
+            return True
+        nodegroup = nodegroup.parentnodegroup
+
+    return False
+
+
+def _sort_key(search_model: Any, value_path: str) -> Any:
+    """Fold text, so "Zebra" does not lead "apple". Anything else sorts as stored."""
+    if isinstance(search_model._meta.get_field("value"), TextField):
+        return Lower(value_path)
+    return F(value_path)
+
+
+def _indexed_row_filters(search_model: Any, node: Node) -> Dict[str, Any]:
+    """Which of a node's indexed rows an ordering reads."""
+    filters = {"graph_slug": node.graph.slug, "node_alias": node.alias}
+    model_fields = {field.name for field in search_model._meta.get_fields()}
+
+    if "language" in model_fields:
+        # A value carrying no language of its own indexes an empty one.
+        filters["language__in"] = (get_language(), "")
+
+    filters.update(
+        IndexingFactory().get_indexing_class(node.datatype).sort_row_filters()
+    )
+    return filters
+
+
 class SortResolver:
     """
     Applies sort specs to a ResourceInstance queryset.
 
     A spec is {"type": ..., "direction": "asc"|"desc"} plus whatever the type
     needs: "field" for RESOURCE_FIELD, "graph_slug"/"node_alias" for NODE.
-
-    A NODE sort reads an annotation the caller must already have applied (see
-    search.additional_data) and passed as node_column_annotations. A node the
-    requester cannot read is skipped rather than reported.
 
     A tie-break on resourceinstanceid is always appended, so paging is stable.
     """
@@ -64,8 +110,16 @@ class SortResolver:
         if sort_specs is None:
             sort_specs = DEFAULT_SORT
         self._resource_field_registry: Optional[ResourceInstanceFieldRegistry] = None
+        self._search_model_registry: Optional[SearchModelRegistry] = None
         self._validate(sort_specs)
         self.sort_specs = sort_specs
+
+    @property
+    def search_model_registry(self) -> SearchModelRegistry:
+        """Built on first use, like the resource field registry: it costs a query."""
+        if self._search_model_registry is None:
+            self._search_model_registry = SearchModelRegistry()
+        return self._search_model_registry
 
     @property
     def resource_field_registry(self) -> ResourceInstanceFieldRegistry:
@@ -77,9 +131,9 @@ class SortResolver:
     def apply(
         self,
         queryset: QuerySet,
-        node_column_annotations: Optional[Dict[Any, str]] = None,
+        sort_nodes: Optional[Dict[Any, Node]] = None,
     ) -> QuerySet:
-        node_column_annotations = node_column_annotations or {}
+        sort_nodes = sort_nodes or {}
         order_expressions: List[Ordering] = []
 
         for index, spec in enumerate(self.sort_specs):
@@ -91,9 +145,7 @@ class SortResolver:
             elif sort_type == SORT_TYPE_RESOURCE_FIELD:
                 queryset, ordering = self._resource_field(queryset, spec, index)
             else:
-                queryset, ordering = self._node_value(
-                    queryset, spec, node_column_annotations
-                )
+                queryset, ordering = self._node_value(queryset, spec, index, sort_nodes)
 
             if ordering is not None:
                 order_expressions.append(ordering)
@@ -144,16 +196,56 @@ class SortResolver:
         self,
         queryset: QuerySet,
         spec: Dict[str, Any],
-        node_column_annotations: Dict[Any, str],
+        index: int,
+        sort_nodes: Dict[Any, Node],
     ) -> Tuple[QuerySet, Ordering]:
-        annotation = node_column_annotations.get(
-            (spec["graph_slug"], spec["node_alias"])
-        )
-        if annotation is None:
-            # Unresolved or unreadable, kept indistinguishable from "no such
-            # node" the way additional_data omits such columns.
+        """
+        Order by the node's indexed value; joined rather than recomputed per resource.
+        """
+        node = sort_nodes.get((spec["graph_slug"], spec["node_alias"]))
+        if node is None:
             return queryset, None
-        return queryset, _ordering(F(annotation), spec, nulls_last=True)
+
+        search_model = self.search_model_registry.get_sort_model_for_datatype(
+            node.datatype
+        )
+        if search_model is None:
+            return queryset, None
+
+        row_filters = _indexed_row_filters(search_model, node)
+        annotation = f"_sort_node_{index}"
+
+        if _node_indexes_several_rows(node):
+            first_tile_value = (
+                search_model.objects.filter(
+                    resourceinstanceid=OuterRef("resourceinstanceid"), **row_filters
+                )
+                .annotate(sort_key=_sort_key(search_model, "value"))
+                # tileid breaks the tie: sortorder is not unique in practice,
+                # and without it the row picked varies between queries.
+                .order_by("tileid__parenttile", "tileid__sortorder", "tileid")
+                .values("sort_key")[:1]
+            )
+            queryset = queryset.annotate(**{annotation: Subquery(first_tile_value)})
+            return queryset, _ordering(F(annotation), spec, nulls_last=True)
+
+        relation = search_model._meta.model_name
+        queryset = queryset.annotate(
+            **{
+                annotation: FilteredRelation(
+                    relation,
+                    condition=Q(
+                        **{
+                            f"{relation}__{field}": value
+                            for field, value in row_filters.items()
+                        }
+                    ),
+                )
+            }
+        )
+        return queryset, _ordering(
+            _sort_key(search_model, f"{annotation}__value"), spec, nulls_last=True
+        )
 
     def _validate(self, sort_specs: Any) -> None:
         if not isinstance(sort_specs, list):
