@@ -275,6 +275,8 @@ A custom datatype needs four things to work with Advanced Search:
 3.  An indexer, so tile values get written into that table.
 4.  Optionally, an operand normalizer, so values submitted from the UI are shaped correctly before comparison.
 
+A custom datatype gets sorting for free once it has an indexer: an ordering reads whichever table that indexer writes to. See [Sorting a node value](#sorting-a-node-value).
+
 ### Indexers
 
 Subclass `arches_search.indexing.base.BaseIndexing`, point `self.datatype` at your datatype, and return the rows to write from `index(self, tile, node)`:
@@ -954,6 +956,27 @@ Values are always a list, so a client never has to branch on cardinality:
 Ordering by a node value annotates it for you; it does not have to appear in
 `additional_data` as well. A node the requester may not read is skipped rather
 than reported, matching how projection omits it.
+
+#### Sorting a node value
+
+A `NODE` sort joins the search table that already holds the node's indexed
+value -- the same table filtering reads, chosen through the same registry --
+and orders by it. Nothing is computed per row: no JSON is parsed and no label
+is looked up while the query runs.
+
+Which table that is follows the datatype. A number orders numerically off
+`NumericSearch`, a date off `DateSearch`, and text off `TermSearch`, folded so
+that "Zebra" does not lead "apple". A `reference` orders by the `prefLabel` in
+the active language, since the indexer records each label under the language
+and valuetype it declares.
+
+A node whose nodegroup repeats, or that holds several values at once, has more
+than one indexed row per resource, so the first tile a resource shows is picked
+before ordering.
+
+Ordering therefore depends on the search index being current: a node with no
+indexed rows sorts last, so **a reindex is required** after upgrading, and a
+value edited outside the indexing pipeline orders by what was last indexed.
 
 Every sort is followed by a tie-break on `resourceinstanceid`, so paging stays
 stable when the sort key ties. Foreign keys order by the related record's label
