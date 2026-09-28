@@ -103,12 +103,6 @@ class SortResolver:
     A spec is {"type": ..., "direction": "asc"|"desc"} plus whatever the type
     needs: "field" for RESOURCE_FIELD, "graph_slug"/"node_alias" for NODE.
 
-    A NODE sort joins the search table already holding that node's indexed
-    value -- the same table filtering reads -- and orders by it, so the
-    database does no per-row work. Callers pass the nodes it may sort by as
-    sort_nodes; a node the requester cannot read is simply absent from that
-    map, and is skipped rather than reported.
-
     A tie-break on resourceinstanceid is always appended, so paging is stable.
     """
 
