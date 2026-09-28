@@ -146,7 +146,7 @@ INSTALLED_APPS = (
     "django_celery_results",
     "django_migrate_sql",
     "pgtrigger",
-    "arches_search", 
+    "arches_search",
     "arches_resource_sets",
     "arches_modular_reports",
     "arches.extensions.querysets",
