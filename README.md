@@ -947,36 +947,32 @@ Values are always a list, so a client never has to branch on cardinality:
 | ---------------- | ------------------------------------------------------------------------- | --------------------------- |
 | `primary_name`   | the resource's descriptor name in the active language, case-insensitively | —                           |
 | `created_time`   | `createdtime`, the resource's creation timestamp                          | —                           |
-| `NODE`           | a projected node (tile) value                                             | `graph_slug`, `node_alias`  |
+| `NODE`           | a node's indexed value                                                    | `graph_slug`, `node_alias`  |
 | `RESOURCE_FIELD` | one of the resource's own columns                                         | `field`                     |
 
 `NODE` and `RESOURCE_FIELD` are the same tokens a clause subject uses.
 `primary_name` and `created_time` name no subject, so they stay lowercase.
 
-Ordering by a node value annotates it for you; it does not have to appear in
-`additional_data` as well. A node the requester may not read is skipped rather
-than reported, matching how projection omits it.
+A node does not have to appear in `additional_data` to be sorted on. A node
+the requester may not read is skipped rather than reported, matching how
+projection omits it.
 
 #### Sorting a node value
 
-A `NODE` sort joins the search table that already holds the node's indexed
-value -- the same table filtering reads, chosen through the same registry --
-and orders by it. Nothing is computed per row: no JSON is parsed and no label
-is looked up while the query runs.
+A `NODE` sort reads the search table the node is indexed into, the same table
+filtering uses, and orders by the indexed value. The query itself does no
+per-row work.
 
-Which table that is follows the datatype. A number orders numerically off
-`NumericSearch`, a date off `DateSearch`, and text off `TermSearch`, folded so
-that "Zebra" does not lead "apple". A `reference` orders by the `prefLabel` in
-the active language, since the indexer records each label under the language
-and valuetype it declares.
+The table depends on the datatype. Numbers sort off `NumericSearch` and dates
+off `DateSearch`, each in its own type, so 9 comes before 10. Text sorts off
+`TermSearch`, lowercased first. Reference and concept nodes sort by the
+preferred label in the active language: their indexers record the language and
+valuetype of every label, and the sort asks for the preferred one.
 
-A node whose nodegroup repeats, or that holds several values at once, has more
-than one indexed row per resource, so the first tile a resource shows is picked
-before ordering.
-
-Ordering therefore depends on the search index being current: a node with no
-indexed rows sorts last, so **a reindex is required** after upgrading, and a
-value edited outside the indexing pipeline orders by what was last indexed.
+A node under a cardinality-n nodegroup  has more than one indexed row per resource. 
+Those sort by the first tile, ordered by `parenttile`, `sortorder`, then `tileid`. 
+The last key matters because tiles do share a `sortorder` in real data, and without 
+it the row chosen varies between queries. A node with no indexed rows sorts last.
 
 Every sort is followed by a tie-break on `resourceinstanceid`, so paging stays
 stable when the sort key ties. Foreign keys order by the related record's label
