@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arches-search"
-version = "0.1.0a18"
+version = "0.1.0a19"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "AGPL-3.0-or-later"
@@ -23,11 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
-dependencies = [
-    "arches<9.0.0,>=8.2.0a11",
-    "arches-modular-reports>=2.1.0a3",
-    "arches-resource-sets>=0.1.0a0",
-]
+dependencies = [ "arches<9.0.0,>=8.2.0a11", "arches-modular-reports>=2.1.0a3", "arches-resource-sets>=0.1.0a0",]
 dynamic = []
 
 [tool.setuptools]
