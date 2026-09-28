@@ -24,8 +24,8 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "arches<8.3.0,>=8.2.0a11",
-    "arches-modular-reports>=2.1.0a1",
+    "arches<9.0.0,>=8.2.0a11",
+    "arches-modular-reports>=2.1.0a3",
     "arches-resource-sets>=0.1.0a0",
 ]
 dynamic = []

@@ -19,8 +19,8 @@
         "vitest": "vitest --run --coverage"
     },
     "dependencies": {
-        "arches": "archesproject/arches#dev/8.2.x",
-        "arches-modular-reports": "archesproject/arches-modular-reports#cnh/arches_82_compat",
+        "arches": "archesproject/arches#semver:^v8.2.0-alpha.11",
+        "arches-modular-reports": "archesproject/arches-modular-reports#semver:^v2.1.0-alpha.3",
         "vue-router": "4.4.3"
     },
     "devDependencies": {
