@@ -3,9 +3,9 @@ import { computed, onMounted, ref, watch, watchEffect } from "vue";
 import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
 
-import Splitter from "primevue/splitter";
-import SplitterPanel from "primevue/splitterpanel";
-import Toast from "primevue/toast";
+import Splitter from "openvue/splitter";
+import SplitterPanel from "openvue/splitterpanel";
+import Toast from "openvue/toast";
 
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";

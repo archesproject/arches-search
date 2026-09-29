@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import Textarea from "primevue/textarea";
+import Textarea from "openvue/textarea";
 
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 

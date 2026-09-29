@@ -2,9 +2,9 @@
 import { computed, inject, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Card from "primevue/card";
-import Message from "primevue/message";
-import Select from "primevue/select";
+import Card from "openvue/card";
+import Message from "openvue/message";
+import Select from "openvue/select";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/PathBuilder.vue";
 

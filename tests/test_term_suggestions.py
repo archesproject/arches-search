@@ -17,7 +17,7 @@ from arches.app.models.models import (
     TileModel,
 )
 
-from arches_controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 
 # python manage.py test tests.test_term_suggestions --settings="tests.test_settings"
 
@@ -85,8 +85,8 @@ class TermSuggestionViewTests(TestCase):
 
         # List.save() unconditionally calls delete_index() (an ES call) even
         # when searchable=False (the default here). arches_search's settings
-        # don't define REFERENCES_INDEX_NAME (that's an arches_controlled_lists
-        # concern this project doesn't need), so that ES sync side effect is
+        # don't define REFERENCES_INDEX_NAME (a controlled_lists concern this
+        # project doesn't need), so that ES sync side effect is
         # muted here -- irrelevant to what TermSuggestionView reads (which
         # comes entirely from Postgres via ListView's serialize()).
         with mock.patch.object(List, "delete_index"):

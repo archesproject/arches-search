@@ -2,8 +2,8 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Select from "primevue/select";
-import InputText from "primevue/inputtext";
+import Select from "openvue/select";
+import InputText from "openvue/inputtext";
 
 import type {
     AdvancedSearchFacet,
