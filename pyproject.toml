@@ -23,11 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
-dependencies = [
-    "arches @ git+https://github.com/archesproject/arches.git@cbyrd/12934-migrate-to-openvue",
-    "arches-modular-reports @ git+https://github.com/archesproject/arches-modular-reports.git@cbyrd/migrate-to-openvue",
-    "arches-resource-sets>=0.1.0a0",
-]
+dependencies = [ "arches<9.0.0,>=8.2.0a12", "arches-modular-reports>=2.1.0a4", "arches-resource-sets>=0.1.0a0",]
 dynamic = []
 
 [tool.setuptools]
