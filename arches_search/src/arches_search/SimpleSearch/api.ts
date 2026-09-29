@@ -126,7 +126,7 @@ export async function fetchControlledListItems(
 > {
     const response = await fetch(
         generateArchesURL(
-            "arches_controlled_lists:controlled_list",
+            "arches:controlled_list",
             { list_id: listId },
             { flat: "true" },
         ),
