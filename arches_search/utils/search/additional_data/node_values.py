@@ -3,7 +3,7 @@ Projecting node (tile) values onto search results.
 
 A search result row is a ResourceInstance, so a node's value is not on the row:
 it lives in tile data. Filtering already handles that with existence subqueries,
-but an Exists() answers only "does a matching value exist" -- it cannot be
+but an Exists() answers only "does a matching value exist" it cannot be
 selected. This module annotates the *value itself* onto the result queryset
 using arches_querysets' node-value expression. Ordering does not read these
 columns: it joins the indexed rows instead, see search.sorting.
@@ -21,8 +21,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from arches.app.models.models import Node
 
-from arches_querysets.models import TileTree
-from arches_querysets.utils.models import (
+from arches.extensions.querysets.models import TileTree
+from arches.extensions.querysets.utils.models import (
     any_nodegroup_in_hierarchy_is_cardinality_n,
     get_tile_values_for_resource,
 )

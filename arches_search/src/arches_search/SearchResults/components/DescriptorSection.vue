@@ -2,8 +2,8 @@
 import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
-import Tag from "primevue/tag";
+import Button from "openvue/button";
+import Tag from "openvue/tag";
 
 import arches from "arches";
 

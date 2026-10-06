@@ -146,13 +146,12 @@ INSTALLED_APPS = (
     "django_celery_results",
     "django_migrate_sql",
     "pgtrigger",
-    # "silk",
-    "arches_search",  # Ensure the project is listed before any other arches applications
+    "arches_search",
     "arches_resource_sets",
     "arches_modular_reports",
-    "arches_vue_components",
-    "arches_controlled_lists",
-    "arches_querysets",
+    "arches.extensions.querysets",
+    "arches.extensions.vue_components",
+    "arches.extensions.controlled_lists",
 )
 
 # Placing this last ensures any templates provided by Arches Applications
@@ -283,6 +282,18 @@ CACHES = {
     "user_permission": {
         "BACKEND": "django.core.cache.backends.db.DatabaseCache",
         "LOCATION": "user_permission_cache",
+    },
+    "querysets_concepts": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "querysets_concepts_cache",
+        "TIMEOUT": 86400,  # one day in seconds
+        "OPTIONS": {"MAX_ENTRIES": 1000},
+    },
+    "querysets_resource_instances": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "querysets_resource_instances_cache",
+        "TIMEOUT": 86400,  # one day in seconds
+        "OPTIONS": {"MAX_ENTRIES": 1000},
     },
 }
 

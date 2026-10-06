@@ -3,7 +3,7 @@ import { nextTick, useTemplateRef, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
+import Button from "openvue/button";
 
 import MapComponent from "@/arches_vue_components/components/MapComponent/MapComponent.vue";
 

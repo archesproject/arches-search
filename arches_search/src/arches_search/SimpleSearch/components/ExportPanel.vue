@@ -2,11 +2,11 @@
 import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
-import Dialog from "primevue/dialog";
-import InputText from "primevue/inputtext";
-import RadioButton from "primevue/radiobutton";
-import ToggleSwitch from "primevue/toggleswitch";
+import Button from "openvue/button";
+import Dialog from "openvue/dialog";
+import InputText from "openvue/inputtext";
+import RadioButton from "openvue/radiobutton";
+import ToggleSwitch from "openvue/toggleswitch";
 
 import { exportSearchResults } from "@/arches_search/SimpleSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";

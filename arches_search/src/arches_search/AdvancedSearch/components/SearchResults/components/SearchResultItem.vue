@@ -2,8 +2,8 @@
 import { ref, computed, watchEffect, nextTick } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
-import Card from "primevue/card";
+import Button from "openvue/button";
+import Card from "openvue/card";
 
 import arches from "arches";
 

@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
+import Button from "openvue/button";
 
 import {
     DRAW_CREATE_EVENT,
@@ -77,12 +77,16 @@ const showAddButton = computed(
     () => drawnFeatures.value.length > 0 && !isPickerExpanded.value,
 );
 
+// "draw.*" are custom events fired by @mapbox/mapbox-gl-draw, not part of
+// maplibre-gl's typed MapEventType union.
 onMounted(() => {
-    map.value?.on(DRAW_CREATE_EVENT, collapsePicker);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    map.value?.on(DRAW_CREATE_EVENT as any, collapsePicker);
 });
 
 onUnmounted(() => {
-    map.value?.off(DRAW_CREATE_EVENT, collapsePicker);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    map.value?.off(DRAW_CREATE_EVENT as any, collapsePicker);
 });
 
 function collapsePicker(): void {

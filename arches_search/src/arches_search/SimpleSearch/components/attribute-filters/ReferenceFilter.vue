@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import arches from "arches";
-import Checkbox from "primevue/checkbox";
+import Checkbox from "openvue/checkbox";
 
 import { fetchControlledListItems } from "@/arches_search/SimpleSearch/api.ts";
 

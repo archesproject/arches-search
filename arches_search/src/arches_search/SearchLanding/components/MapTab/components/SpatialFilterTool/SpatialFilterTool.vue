@@ -3,7 +3,7 @@ import { computed, ref } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
+import Button from "openvue/button";
 
 import AppliedFiltersList from "@/arches_search/SearchLanding/components/MapTab/components/SpatialFilterTool/components/AppliedFiltersList.vue";
 import BufferDistanceControls from "@/arches_search/SearchLanding/components/MapTab/components/SpatialFilterTool/components/BufferDistanceControls.vue";

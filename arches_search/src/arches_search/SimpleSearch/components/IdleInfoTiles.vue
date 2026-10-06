@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
+import Button from "openvue/button";
 
 const { $gettext } = useGettext();
 
