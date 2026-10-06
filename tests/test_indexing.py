@@ -14,11 +14,13 @@ import uuid
 from django.test import TestCase
 
 from arches.app.models.models import (
+    Concept,
     GraphModel,
     Node,
     NodeGroup,
     ResourceInstance,
     TileModel,
+    Value,
 )
 
 from arches_search.indexing.index_from_tile import index_from_tile
@@ -112,6 +114,141 @@ class IndexingTestCase(TestCase):
                 "direction": "ltr",
             }
         return localized_value
+
+
+class ReferenceIndexingTests(IndexingTestCase):
+    """
+    A reference indexes a row per label, each claiming the language and kind
+    that label declares -- what an ordering asks for when it wants the
+    prefLabel a user reads in their own language.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.reference_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="test_reference_node",
+            alias="test_reference_node",
+            datatype="reference",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+        )
+
+    def test_a_row_per_label_carries_its_language_and_kind(self):
+        list_item_id = str(uuid.uuid4())
+        tile = self._make_tile(
+            self.reference_node,
+            [
+                {
+                    "uri": "https://archesproject.org/item",
+                    "labels": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "value": "Site",
+                            "language_id": "en",
+                            "valuetype_id": "prefLabel",
+                            "list_item_id": list_item_id,
+                        },
+                        {
+                            "id": str(uuid.uuid4()),
+                            "value": "Archaeological Site",
+                            "language_id": "en",
+                            "valuetype_id": "altLabel",
+                            "list_item_id": list_item_id,
+                        },
+                        {
+                            "id": str(uuid.uuid4()),
+                            "value": "Site archéologique",
+                            "language_id": "fr",
+                            "valuetype_id": "prefLabel",
+                            "list_item_id": list_item_id,
+                        },
+                    ],
+                    "list_id": str(uuid.uuid4()),
+                }
+            ],
+        )
+
+        for record in index_from_tile(tile):
+            record.save()
+
+        indexed = {
+            (row.language, row.valuetype, row.value)
+            for row in TermSearch.objects.filter(tileid=tile.tileid)
+        }
+        self.assertEqual(
+            indexed,
+            {
+                ("en", "prefLabel", "Site"),
+                ("en", "altLabel", "Archaeological Site"),
+                ("fr", "prefLabel", "Site archéologique"),
+            },
+        )
+
+
+class ConceptIndexingTests(IndexingTestCase):
+    """
+    A concept value carries a language and a valuetype in the same vocabulary a
+    reference label uses, and both reach the index.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.concept_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="test_concept_node",
+            alias="test_concept_node",
+            datatype="concept",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+        )
+        cls.concept = Concept.objects.create(
+            conceptid=uuid.uuid4(),
+            nodetype_id="Concept",
+            legacyoid=str(uuid.uuid4()),
+        )
+        cls.preferred_value = Value.objects.create(
+            valueid=uuid.uuid4(),
+            concept=cls.concept,
+            valuetype_id="prefLabel",
+            language_id="en",
+            value="Ceramic",
+        )
+        cls.alternate_value = Value.objects.create(
+            valueid=uuid.uuid4(),
+            concept=cls.concept,
+            valuetype_id="altLabel",
+            language_id="en",
+            value="Pottery",
+        )
+
+    def test_a_concept_row_keeps_its_language_and_valuetype(self):
+        tile = self._make_tile(self.concept_node, str(self.preferred_value.pk))
+
+        for record in index_from_tile(tile):
+            record.save()
+
+        indexed = [
+            (row.language, row.valuetype, row.value)
+            for row in TermSearch.objects.filter(tileid=tile.tileid)
+        ]
+        self.assertEqual(indexed, [("en", "prefLabel", "Ceramic")])
+
+    def test_an_alternate_label_is_indexed_as_one(self):
+        tile = self._make_tile(self.concept_node, str(self.alternate_value.pk))
+
+        for record in index_from_tile(tile):
+            record.save()
+
+        indexed = [
+            (row.language, row.valuetype, row.value)
+            for row in TermSearch.objects.filter(tileid=tile.tileid)
+        ]
+        self.assertEqual(indexed, [("en", "altLabel", "Pottery")])
 
 
 class LongStringIndexingTests(IndexingTestCase):

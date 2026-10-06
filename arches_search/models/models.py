@@ -163,6 +163,7 @@ class TermSearch(models.Model):
     node_alias = models.TextField()
     language = models.TextField()
     datatype = models.TextField()
+    valuetype = models.TextField(default="")
     value = models.TextField()
     search_vector = models.GeneratedField(
         null=True,

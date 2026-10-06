@@ -273,6 +273,8 @@ A custom datatype needs four things to work with Advanced Search:
 3.  An indexer, so tile values get written into that table.
 4.  Optionally, an operand normalizer, so values submitted from the UI are shaped correctly before comparison.
 
+A custom datatype gets sorting for free once it has an indexer: an ordering reads whichever table that indexer writes to. See [Sorting a node value](#sorting-a-node-value).
+
 ### Indexers
 
 Subclass `arches_search.indexing.base.BaseIndexing`, point `self.datatype` at your datatype, and return the rows to write from `index(self, tile, node)`:
@@ -943,15 +945,32 @@ Values are always a list, so a client never has to branch on cardinality:
 | ---------------- | ------------------------------------------------------------------------- | --------------------------- |
 | `primary_name`   | the resource's descriptor name in the active language, case-insensitively | —                           |
 | `created_time`   | `createdtime`, the resource's creation timestamp                          | —                           |
-| `NODE`           | a projected node (tile) value                                             | `graph_slug`, `node_alias`  |
+| `NODE`           | a node's indexed value                                                    | `graph_slug`, `node_alias`  |
 | `RESOURCE_FIELD` | one of the resource's own columns                                         | `field`                     |
 
 `NODE` and `RESOURCE_FIELD` are the same tokens a clause subject uses.
 `primary_name` and `created_time` name no subject, so they stay lowercase.
 
-Ordering by a node value annotates it for you; it does not have to appear in
-`additional_data` as well. A node the requester may not read is skipped rather
-than reported, matching how projection omits it.
+A node does not have to appear in `additional_data` to be sorted on. A node
+the requester may not read is skipped rather than reported, matching how
+projection omits it.
+
+#### Sorting a node value
+
+A `NODE` sort reads the search table the node is indexed into, the same table
+filtering uses, and orders by the indexed value. The query itself does no
+per-row work.
+
+The table depends on the datatype. Numbers sort off `NumericSearch` and dates
+off `DateSearch`, each in its own type, so 9 comes before 10. Text sorts off
+`TermSearch`, lowercased first. Reference and concept nodes sort by the
+preferred label in the active language: their indexers record the language and
+valuetype of every label, and the sort asks for the preferred one.
+
+A node under a cardinality-n nodegroup  has more than one indexed row per resource. 
+Those sort by the first tile, ordered by `parenttile`, `sortorder`, then `tileid`. 
+The last key matters because tiles do share a `sortorder` in real data, and without 
+it the row chosen varies between queries. A node with no indexed rows sorts last.
 
 Every sort is followed by a tie-break on `resourceinstanceid`, so paging stays
 stable when the sort key ties. Foreign keys order by the related record's label

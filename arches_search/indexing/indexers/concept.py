@@ -1,6 +1,4 @@
-from django.contrib.postgres.search import SearchVector
 from arches.app.datatypes.datatypes import DataTypeFactory, BaseDataType
-from arches.app.models.models import Language
 from arches_search.models.models import DateRangeSearch, TermSearch, UUIDSearch
 
 from arches_search.indexing.base import BaseIndexing
@@ -10,29 +8,30 @@ class ConceptIndexing(BaseIndexing):
     def __init__(self):
         super().__init__()
         self.datatype: BaseDataType = DataTypeFactory().get_instance("concept")
-        self.languages: dict[str, Language] = {}
 
-    def _set_languages(self):
-        if not self.languages:
-            for l_obj in Language.objects.all():
-                self.languages[l_obj.code] = l_obj
+    def sort_row_filters(self) -> dict:
+        """Sort by the preferred label, not by an alternate one."""
+        return {"valuetype": "prefLabel"}
 
     def index(self, tile, node):
         nodeid = str(node.nodeid)
         document = {"domains": [], "strings": [], "date_ranges": []}
         self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
         search_items = []
-        for string in document["strings"]:
-            if string["string"] is not None:
-                string_search = TermSearch(
-                    node_alias=node.alias,
-                    tileid_id=tile.tileid,
-                    resourceinstanceid_id=tile.resourceinstance_id,
-                    datatype=self.datatype.datatype_name,
-                    graph_slug=node.graph.slug,
-                    value=string["string"],
-                )
-                search_items.append(string_search)
+
+        for valueid in self.datatype.get_nodevalues(tile.data[nodeid]):
+            concept_value = self.datatype.get_value(valueid)
+            string_search = TermSearch(
+                node_alias=node.alias,
+                tileid_id=tile.tileid,
+                resourceinstanceid_id=tile.resourceinstance_id,
+                datatype=self.datatype.datatype_name,
+                graph_slug=node.graph.slug,
+                language=concept_value.language_id or "",
+                valuetype=concept_value.valuetype_id,
+                value=concept_value.value,
+            )
+            search_items.append(string_search)
 
         for concept in document["domains"]:
             for id in [concept["conceptid"], concept["valueid"]]:
