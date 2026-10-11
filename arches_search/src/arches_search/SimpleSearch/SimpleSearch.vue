@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, watchEffect } from "vue";
+import { computed, onMounted, provide, ref, watch, watchEffect } from "vue";
 import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
 
@@ -19,6 +19,7 @@ import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearc
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter/TermFilter.vue";
 import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
+import RelationshipViewer from "@/arches_search/RelationshipViewer/RelationshipViewer.vue";
 
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
@@ -100,6 +101,8 @@ const {
     isTimeFilterOpen,
     isRelatedResourcesOpen,
     relatedResource,
+    isRelationshipViewerActive,
+    isRelationshipViewerOpen,
     resultsPanelSize,
     visibleSidePanelSize,
     sidePanelMinSize,
@@ -108,6 +111,7 @@ const {
     closeSidePanel,
     onToggleAttributeFilters,
     onToggleMapFilter,
+    onToggleRelationshipViewer,
     onToggleSavedSearches,
     onToggleTimeFilter,
     openAttributeFilters,
@@ -119,6 +123,27 @@ const {
 } = useSidePanel();
 
 const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
+
+const seedResourceIds = ref<string[]>([]);
+const graphResourceIds = computed<string[]>(() => {
+    if (seedResourceIds.value.length) return seedResourceIds.value;
+    return searchResults.value.resources.map((r) => r.resourceinstanceid);
+});
+
+function openRelationshipViewer(resourceId: string): void {
+    seedResourceIds.value = [resourceId];
+    if (!isRelationshipViewerOpen.value) {
+        onToggleRelationshipViewer();
+    }
+}
+
+// Reset seed when the viewer is closed
+watch(isRelationshipViewerOpen, (open) => {
+    if (!open) seedResourceIds.value = [];
+});
+
+provide("openRelationshipViewer", openRelationshipViewer);
+
 const graphModels = ref<GraphModel[]>([]);
 const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
@@ -473,6 +498,7 @@ async function onRunSavedQuery(
                         :show-time="isTimeFilterOpen"
                         :has-time-filter="hasTimeFilter"
                         :show-saved-searches="isSavedSearchesOpen"
+                        :show-graph="isRelationshipViewerOpen"
                         :hide-filters-button="!isSingleGraphSelected"
                         :hide-time-button="!isSingleGraphSelected"
                         @update:sort-value="onSortValueUpdate"
@@ -480,6 +506,7 @@ async function onRunSavedQuery(
                         @toggle-map="onToggleMapFilter"
                         @toggle-time="onToggleTimeFilter"
                         @toggle-saved-searches="onToggleSavedSearches"
+                        @toggle-graph="onToggleRelationshipViewer"
                     />
                     <SearchResults
                         :results="searchResults"
@@ -534,6 +561,10 @@ async function onRunSavedQuery(
                             @run-query="onRunSavedQuery"
                             @open-export="showExportModal = true"
                             @close="closeSidePanel()"
+                        />
+                        <RelationshipViewer
+                            v-else-if="isRelationshipViewerActive"
+                            :resource-ids="graphResourceIds"
                         />
                         <IdleInfoTiles
                             v-else-if="isIdle"

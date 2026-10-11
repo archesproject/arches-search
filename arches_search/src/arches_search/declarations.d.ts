@@ -3,3 +3,5 @@
 
 import("@/arches/declarations.d.ts");
 import("@/arches_vue_components/declarations.d.ts");
+
+declare module "d3";
