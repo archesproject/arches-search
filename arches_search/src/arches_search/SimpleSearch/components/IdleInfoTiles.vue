@@ -32,7 +32,7 @@ defineEmits<{
             >
                 <i class="pi pi-filter idle-info-tile-icon" />
                 <span class="idle-info-tile-title">
-                    {{ $gettext("Facets") }}
+                    {{ $gettext("Filters") }}
                 </span>
                 <span class="idle-info-tile-desc">
                     {{
