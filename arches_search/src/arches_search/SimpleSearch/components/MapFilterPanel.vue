@@ -1,23 +1,28 @@
 <script setup lang="ts">
-import { nextTick, useTemplateRef, watch } from "vue";
+import { useTemplateRef, watch } from "vue";
 
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 
 import MapComponent from "@/arches_vue_components/components/MapComponent/MapComponent.vue";
+import MapToolsPanel from "@/arches_vue_components/components/MapComponent/components/MapToolsPanel/MapToolsPanel.vue";
 
+import { resolveDefaultOverlayLayers } from "@/arches_vue_components/components/MapComponent/composables/useMapContext.ts";
+import { useDefaultMapInteractionTools } from "@/arches_vue_components/components/MapComponent/composables/useDefaultMapInteractionTools.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import type { FeatureCollection } from "geojson";
+import type { VectorTileSource } from "maplibre-gl";
+
+import type { MapLayer } from "@/arches_vue_components/components/MapComponent/types.ts";
 
 const SEARCH_RESULTS_SOURCE = "arches-search-results";
 const REMOVE_EVENT = "remove" as const;
 const CLOSE_EVENT = "close" as const;
 
-const { modelValue, visible } = defineProps<{
+const { modelValue } = defineProps<{
     modelValue: FeatureCollection | null;
-    visible?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -32,18 +37,11 @@ const { $gettext } = useGettext();
 const mapComponentRef =
     useTemplateRef<InstanceType<typeof MapComponent>>("mapComponent");
 
-watch(resultsTileUrl, (tileUrl) => setSearchTiles(tileUrl));
-
-watch(
-    () => visible,
-    (isVisible) => {
-        if (isVisible) {
-            nextTick(() => {
-                mapComponentRef.value?.map?.resize();
-            });
-        }
-    },
+const mapToolsTool = useDefaultMapInteractionTools().find(
+    (tool) => tool.component === MapToolsPanel,
 );
+
+watch(resultsTileUrl, setSearchTiles);
 
 watch(
     () => modelValue,
@@ -58,24 +56,41 @@ watch(
 );
 
 function onMapReady(): void {
+    if (mapToolsTool) {
+        mapComponentRef.value?.openPanel(mapToolsTool.name);
+    }
     if (modelValue && modelValue.features.length > 0) {
         mapComponentRef.value?.context?.addFeatures(modelValue.features);
     }
 }
 
-function onOverlaysUpdate(): void {
-    requestAnimationFrame(() => {
-        nextTick(() => setSearchTiles(resultsTileUrl.value));
-    });
+function setSearchTiles(): void {
+    const map = mapComponentRef.value?.map;
+    if (!map || !resultsTileUrl.value) {
+        return;
+    }
+    if (!map.areTilesLoaded()) {
+        map.off("idle", setSearchTiles);
+        map.once("idle", setSearchTiles);
+        return;
+    }
+
+    map
+        .getSource<VectorTileSource>(SEARCH_RESULTS_SOURCE)
+        ?.setTiles([resultsTileUrl.value]);
 }
 
-function setSearchTiles(tileUrl: string | null): void {
-    if (!tileUrl) return;
-    const source = mapComponentRef.value?.map?.getSource(SEARCH_RESULTS_SOURCE);
-    if (!source) return;
-    (source as unknown as { setTiles: (tiles: string[]) => void }).setTiles([
-        tileUrl,
-    ]);
+function resolveSearchOverlayLayers(
+    candidateOverlayLayers: MapLayer[],
+): MapLayer[] {
+    const searchOnlyOverlays = candidateOverlayLayers.filter(
+        (layer) =>
+            layer.isoverlay && layer.activated !== false && layer.searchonly,
+    );
+    const hiddenDefaultOverlays = resolveDefaultOverlayLayers(
+        candidateOverlayLayers,
+    ).map((layer) => ({ ...layer, addtomap: false }));
+    return [...searchOnlyOverlays, ...hiddenDefaultOverlays];
 }
 
 function onMapUpdate(updatedValue: FeatureCollection): void {
@@ -106,7 +121,8 @@ function onMapUpdate(updatedValue: FeatureCollection): void {
         <MapComponent
             ref="mapComponent"
             :value="modelValue"
-            @update:overlays="onOverlaysUpdate"
+            :resolve-overlay-layers="resolveSearchOverlayLayers"
+            @update:overlays="setSearchTiles"
             @update:value="onMapUpdate"
             @ready="onMapReady"
         />
