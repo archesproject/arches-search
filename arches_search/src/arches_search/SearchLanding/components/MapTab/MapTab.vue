@@ -1,26 +1,48 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from "vue";
+import { ref, useTemplateRef } from "vue";
 import { useRouter } from "vue-router";
 
-import MapComponent from "@/arches_vue_components/components/MapComponent/MapComponent.vue";
-import SpatialFilterTool from "@/arches_search/SearchLanding/components/MapTab/components/SpatialFilterTool/SpatialFilterTool.vue";
+import { useGettext } from "vue3-gettext";
 
+import MapComponent from "@/arches_vue_components/components/MapComponent/MapComponent.vue";
+import MapToolsPanel from "@/arches_vue_components/components/MapComponent/components/MapToolsPanel/MapToolsPanel.vue";
+import SpatialFilterPanel from "@/arches_search/SearchLanding/components/MapTab/components/SpatialFilterPanel.vue";
+
+import { useDefaultMapInteractionTools } from "@/arches_vue_components/components/MapComponent/composables/useDefaultMapInteractionTools.ts";
 import { routeNames } from "@/arches_search/routes.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
 
 import type { FeatureCollection } from "geojson";
 import type { MapInteractionTool } from "@/arches_vue_components/components/MapComponent/types.ts";
 
-const NO_INTERACTION_TOOLS: MapInteractionTool[] = [];
-
 const router = useRouter();
 
 const mapComponentRef =
     useTemplateRef<InstanceType<typeof MapComponent>>("mapComponent");
 
+const { $gettext } = useGettext();
+
+const spatialFilterTool: MapInteractionTool = {
+    name: $gettext("Spatial filter"),
+    header: $gettext("Spatial filter"),
+    component: SpatialFilterPanel,
+    icon: "pi pi-map-marker",
+    props: { onSearch },
+    badgeCount: (context) => context.drawnFeatures.value.length,
+    wide: true,
+};
+const interactionTools = [
+    spatialFilterTool,
+    ...useDefaultMapInteractionTools().filter(
+        (tool) => tool.component !== MapToolsPanel,
+    ),
+];
+
 const mapFilter = ref<FeatureCollection | null>(null);
 
-const mapContext = computed(() => mapComponentRef.value?.context ?? null);
+function openSpatialFilter(): void {
+    mapComponentRef.value?.openPanel(spatialFilterTool.name);
+}
 
 function onMapUpdate(updatedValue: FeatureCollection): void {
     mapFilter.value = updatedValue.features.length > 0 ? updatedValue : null;
@@ -39,14 +61,9 @@ function onSearch(): void {
     <div class="map-tab-map">
         <MapComponent
             ref="mapComponent"
-            :value="mapFilter"
-            :interaction-tools="NO_INTERACTION_TOOLS"
+            :interaction-tools="interactionTools"
             @update:value="onMapUpdate"
-        />
-        <SpatialFilterTool
-            v-if="mapContext"
-            :context="mapContext"
-            @search="onSearch"
+            @ready="openSpatialFilter"
         />
     </div>
 </template>
