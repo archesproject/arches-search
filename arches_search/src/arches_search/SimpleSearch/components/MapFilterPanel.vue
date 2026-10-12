@@ -64,20 +64,19 @@ function onMapReady(): void {
     }
 }
 
-function setSearchTiles(): void {
+async function setSearchTiles(): Promise<void> {
     const map = mapComponentRef.value?.map;
-    if (!map || !resultsTileUrl.value) {
+    if (!map) {
         return;
     }
     if (!map.areTilesLoaded()) {
-        map.off("idle", setSearchTiles);
-        map.once("idle", setSearchTiles);
-        return;
+        await map.once("idle");
     }
-
-    map
-        .getSource<VectorTileSource>(SEARCH_RESULTS_SOURCE)
-        ?.setTiles([resultsTileUrl.value]);
+    if (resultsTileUrl.value) {
+        map
+            .getSource<VectorTileSource>(SEARCH_RESULTS_SOURCE)
+            ?.setTiles([resultsTileUrl.value]);
+    }
 }
 
 function resolveSearchOverlayLayers(
