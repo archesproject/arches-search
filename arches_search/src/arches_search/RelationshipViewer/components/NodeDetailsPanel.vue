@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Button from "primevue/button";
+import Button from "openvue/button";
 import type { GraphNode } from "@/arches_search/RelationshipViewer/types.ts";
 
 const props = defineProps<{
