@@ -5,11 +5,15 @@ import { useRouter } from "vue-router";
 import MapComponent from "@/arches_vue_components/components/MapComponent/MapComponent.vue";
 import SpatialFilterPanel from "@/arches_search/SearchLanding/components/MapTab/components/SpatialFilterPanel/SpatialFilterPanel.vue";
 
+import { resolveDefaultOverlayLayers } from "@/arches_vue_components/components/MapComponent/composables/useMapContext.ts";
 import { routeNames } from "@/arches_search/routes.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
 
 import type { FeatureCollection } from "geojson";
-import type { MapSettings } from "@/arches_vue_components/components/MapComponent/types.ts";
+import type {
+    MapLayer,
+    MapSettings,
+} from "@/arches_vue_components/components/MapComponent/types.ts";
 
 const LANDING_MAP_SETTINGS: Partial<MapSettings> = {
     geocoderVisible: false,
@@ -22,6 +26,14 @@ const LANDING_MAP_SETTINGS: Partial<MapSettings> = {
 const router = useRouter();
 
 const mapFilter = ref<FeatureCollection | null>(null);
+
+function resolveLandingOverlayLayers(
+    candidateOverlayLayers: MapLayer[],
+): MapLayer[] {
+    return resolveDefaultOverlayLayers(candidateOverlayLayers)
+        .filter((layer) => layer.is_resource_layer)
+        .map((layer) => ({ ...layer, addtomap: true }));
+}
 
 function onMapUpdate(updatedValue: FeatureCollection): void {
     mapFilter.value = updatedValue.features.length > 0 ? updatedValue : null;
@@ -41,6 +53,7 @@ function onSearch(): void {
         <MapComponent
             :interaction-tools="[]"
             :settings="LANDING_MAP_SETTINGS"
+            :resolve-overlay-layers="resolveLandingOverlayLayers"
             @update:value="onMapUpdate"
         >
             <template #overlay="{ context }">
