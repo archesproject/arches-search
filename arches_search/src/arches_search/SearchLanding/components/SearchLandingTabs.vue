@@ -59,7 +59,6 @@ function onTabSelect(value: string | number): void {
     display: flex;
     align-items: center;
     gap: 0.8rem;
-    margin-block-end: 1.6rem;
 }
 
 .search-landing-section-title {

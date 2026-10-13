@@ -40,6 +40,7 @@ export function useLandingContent(): {
                 icon: "pi pi-map",
                 component:
                     "arches_search/SearchLanding/components/MapTab/MapTab",
+                isFullWidth: true,
             },
             {
                 slug: "saved-searches",
