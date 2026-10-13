@@ -132,11 +132,7 @@ function onMapUpdate(updatedValue: FeatureCollection): void {
 .search-map-filter-panel {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    padding: 2rem;
-    padding-inline-end: 0;
-    height: 100%;
-    box-sizing: border-box;
+    block-size: 100%;
     background-color: var(--p-content-background);
     font-size: 1rem;
     line-height: 1.45;
@@ -144,9 +140,11 @@ function onMapUpdate(updatedValue: FeatureCollection): void {
 
 .map-filter-header {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
-    padding-block-end: 0.75rem;
+    padding-block: 2rem 0.75rem;
+    padding-inline: 2rem;
     border-block-end: 0.125rem solid var(--p-content-border-color);
 }
 
