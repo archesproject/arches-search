@@ -10,6 +10,7 @@ export interface LandingTab {
     label: string;
     icon: string;
     component: string;
+    isFullWidth?: boolean;
 }
 
 export interface LandingBranding {

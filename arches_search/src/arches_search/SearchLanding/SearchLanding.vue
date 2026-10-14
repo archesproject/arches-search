@@ -44,6 +44,12 @@ const activeTabComponent = computed<Component | null>(
     () => componentBySlug[activeTabSlug.value] ?? null,
 );
 
+const isActiveTabFullWidth = computed<boolean>(
+    () =>
+        tabs.find((tab) => tab.slug === activeTabSlug.value)?.isFullWidth ===
+        true,
+);
+
 watchEffect(async () => {
     try {
         const counts = await fetchResourceTypeCounts();
@@ -84,8 +90,14 @@ function onSearchBarSubmit(payload: {
             <TermSearchInput @submit="onSearchBarSubmit" />
         </SearchLandingHero>
 
-        <div class="search-landing-content">
+        <div
+            class="search-landing-tab-section"
+            :class="{
+                'search-landing-tab-section-full-width': isActiveTabFullWidth,
+            }"
+        >
             <SearchLandingTabs
+                class="search-landing-tab-header"
                 :tabs="tabs"
                 :model-value="activeTabSlug"
                 @update:model-value="onTabSelect"
@@ -96,14 +108,16 @@ function onSearchBarSubmit(payload: {
                     <component :is="activeTabComponent" />
                 </KeepAlive>
             </div>
+        </div>
 
-            <section
-                v-if="
-                    branding.aboutHeading ||
-                    (branding.aboutBody && branding.aboutBody.length > 0)
-                "
-                class="search-landing-about"
-            >
+        <div
+            v-if="
+                branding.aboutHeading ||
+                (branding.aboutBody && branding.aboutBody.length > 0)
+            "
+            class="search-landing-content"
+        >
+            <section class="search-landing-about">
                 <div class="search-landing-about-header">
                     <i
                         v-if="branding.aboutIcon"
@@ -135,22 +149,54 @@ function onSearchBarSubmit(payload: {
     min-block-size: 100%;
 }
 
-.search-landing-content {
+.search-landing-tab-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2.4rem;
+    inline-size: 100%;
     max-inline-size: 120rem;
     margin-inline: auto;
     padding-block: 3.2rem 4.8rem;
     padding-inline: 2rem;
-    inline-size: 100%;
+}
+
+.search-landing-tab-section-full-width {
+    position: relative;
+    max-inline-size: none;
+    padding-block-start: 0;
+    padding-inline: 0;
+}
+
+.search-landing-tab-section-full-width .search-landing-tab-header {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 2rem;
+    z-index: 1;
+    max-inline-size: 116rem;
+    margin-inline: auto;
+    padding-block: 1rem;
+    padding-inline: 1.4rem;
+    border: 0.1rem solid var(--arches-search-card-border);
+    border-radius: 0.8rem;
+    background: var(--arches-search-card-bg);
+    box-shadow: var(--arches-search-floating-header-shadow);
 }
 
 .search-landing-tab-panel {
     min-block-size: 48rem;
-    padding-block-start: 0.8rem;
+    isolation: isolate;
+}
+
+.search-landing-content {
+    max-inline-size: 120rem;
+    margin-inline: auto;
+    padding-block-end: 4.8rem;
+    padding-inline: 2rem;
+    inline-size: 100%;
 }
 
 .search-landing-about {
     max-inline-size: 70rem;
-    margin-block: 4.8rem 0;
     margin-inline: auto;
     padding-block: 2.2rem;
     padding-inline: 2.4rem;
