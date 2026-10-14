@@ -140,36 +140,36 @@ function toggleAll() {
 .graph-controls {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 12px;
-    font-size: 12px;
+    gap: 1.4rem;
+    padding: 1.2rem;
+    font-size: 1.2rem;
     overflow-y: auto;
     height: 100%;
 }
 .controls-section {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 0.6rem;
 }
 .section-label {
     font-weight: 600;
     color: #25476a;
-    font-size: 11px;
+    font-size: 1.1rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 .depth-buttons {
     display: flex;
-    gap: 4px;
+    gap: 0.4rem;
 }
 .depth-buttons button {
     flex: 1;
-    padding: 4px 8px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
+    padding: 0.4rem 0.8rem;
+    border: 0.1rem solid #ccc;
+    border-radius: 0.3rem;
     background: #fff;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 1.2rem;
 }
 .depth-buttons button.active {
     background: #25476a;
@@ -178,33 +178,33 @@ function toggleAll() {
 }
 .stat-row {
     display: flex;
-    gap: 10px;
+    gap: 1rem;
     color: #666;
 }
 .button-row {
     display: flex;
-    gap: 6px;
+    gap: 0.6rem;
     flex-wrap: wrap;
 }
 .rel-type-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    max-height: 200px;
+    gap: 0.4rem;
+    max-height: 20rem;
     overflow-y: auto;
 }
 .rel-type-item {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.6rem;
     cursor: pointer;
-    padding: 2px 0;
+    padding: 0.2rem 0;
 }
 .rel-type-item.all-toggle {
     font-weight: 600;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 4px;
-    margin-bottom: 2px;
+    border-bottom: 0.1rem solid #eee;
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.2rem;
 }
 .rt-label {
     flex: 1;
@@ -214,11 +214,11 @@ function toggleAll() {
 }
 .rt-count {
     color: #999;
-    font-size: 10px;
+    font-size: 1rem;
 }
 .pathfind-hint {
     color: #666;
-    font-size: 11px;
+    font-size: 1.1rem;
     margin: 0;
     font-style: italic;
 }

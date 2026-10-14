@@ -574,21 +574,21 @@ onBeforeUnmount(() => {
 }
 
 .node-label {
-    font-size: 11px;
+    font-size: 1.1rem;
     fill: #17212b;
     font-weight: 600;
     stroke: rgba(245, 247, 250, 0.96);
-    stroke-width: 3.5px;
+    stroke-width: 0.35rem;
     stroke-linejoin: round;
     paint-order: stroke;
     pointer-events: none;
     user-select: none;
 }
 .node-subtitle {
-    font-size: 9.5px;
+    font-size: 0.95rem;
     fill: #3d4b59;
     stroke: rgba(245, 247, 250, 0.94);
-    stroke-width: 3px;
+    stroke-width: 0.3rem;
     stroke-linejoin: round;
     paint-order: stroke;
     pointer-events: none;

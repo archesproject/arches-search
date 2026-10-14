@@ -451,53 +451,53 @@ function findShortestPath(
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    font-size: var(--p-arches-search-font-size, 13px);
+    font-size: var(--p-arches-search-font-size, 1.3rem);
 }
 
 .rv-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 5px 10px;
-    border-bottom: 1px solid var(--p-content-border-color, #e0e0e0);
+    padding: 0.5rem 1rem;
+    border-bottom: 0.1rem solid var(--p-content-border-color, #e0e0e0);
     flex-shrink: 0;
-    gap: 6px;
+    gap: 0.6rem;
     background: var(--p-content-background, #fff);
 }
 
 .rv-toolbar-left {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.6rem;
 }
 
 .rv-toolbar-right {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 0.2rem;
 }
 
 .rv-title {
     font-weight: 600;
     color: var(--p-primary-color, #25476a);
-    font-size: 12px;
+    font-size: 1.2rem;
     white-space: nowrap;
 }
 
 .rv-stat {
-    font-size: 11px;
+    font-size: 1.1rem;
     color: #888;
     white-space: nowrap;
-    padding-right: 4px;
+    padding-right: 0.4rem;
 }
 
 .depth-btn {
-    padding: 2px 8px;
-    border: 1px solid #ccc;
-    border-radius: 12px;
+    padding: 0.2rem 0.8rem;
+    border: 0.1rem solid #ccc;
+    border-radius: 1.2rem;
     background: #fff;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 1.1rem;
     transition:
         background 0.15s,
         color 0.15s;
@@ -520,32 +520,32 @@ function findShortestPath(
 }
 
 .rel-type-menu {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--p-content-border-color, #e0e0e0);
+    padding: 0.8rem 1.2rem;
+    border-bottom: 0.1rem solid var(--p-content-border-color, #e0e0e0);
     background: var(--p-content-background, #fff);
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    max-height: 200px;
+    gap: 0.4rem;
+    max-height: 20rem;
     overflow-y: auto;
 }
 
 .rel-type-menu-title {
     font-weight: 600;
-    font-size: 11px;
+    font-size: 1.1rem;
     color: #25476a;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 4px;
+    margin-bottom: 0.4rem;
 }
 
 .all-btn {
-    font-size: 10px;
-    border: 1px solid #ccc;
-    border-radius: 10px;
-    padding: 1px 7px;
+    font-size: 1rem;
+    border: 0.1rem solid #ccc;
+    border-radius: 1rem;
+    padding: 0.1rem 0.7rem;
     cursor: pointer;
     background: #f5f5f5;
     color: #555;
@@ -554,9 +554,9 @@ function findShortestPath(
 .rel-type-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.6rem;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 1.2rem;
 }
 
 .rt-label {
@@ -567,7 +567,7 @@ function findShortestPath(
 }
 
 .rt-count {
-    font-size: 10px;
+    font-size: 1rem;
     color: #666;
     font-weight: 600;
 }
@@ -585,9 +585,9 @@ function findShortestPath(
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 1rem;
     color: #999;
-    font-size: 13px;
+    font-size: 1.3rem;
     background: #f5f7fa;
 }
 
@@ -597,31 +597,31 @@ function findShortestPath(
 }
 
 .canvas-state .pi-sitemap {
-    font-size: 2rem;
+    font-size: 3.2rem;
     color: #ccc;
 }
 
 .legend-overlay {
     position: absolute;
-    bottom: 12px;
-    left: 10px;
+    bottom: 1.2rem;
+    left: 1rem;
     z-index: 10;
 }
 
 .path-banner {
     position: absolute;
-    top: 10px;
+    top: 1rem;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(225, 87, 89, 0.92);
     color: #fff;
-    padding: 4px 12px;
-    border-radius: 16px;
-    font-size: 12px;
+    padding: 0.4rem 1.2rem;
+    border-radius: 1.6rem;
+    font-size: 1.2rem;
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.8rem;
     z-index: 10;
 }
 
@@ -630,23 +630,23 @@ function findShortestPath(
     border: none;
     color: #fff;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 1.2rem;
     line-height: 1;
 }
 
 .pathfind-banner {
     position: absolute;
-    top: 10px;
+    top: 1rem;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(37, 71, 106, 0.9);
     color: #fff;
-    padding: 5px 14px;
-    border-radius: 16px;
-    font-size: 12px;
+    padding: 0.5rem 1.4rem;
+    border-radius: 1.6rem;
+    font-size: 1.2rem;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.8rem;
     z-index: 10;
     white-space: nowrap;
 }
@@ -655,6 +655,6 @@ function findShortestPath(
     flex-shrink: 0;
     max-height: 40%;
     overflow-y: auto;
-    border-top: 1px solid var(--p-content-border-color, #e0e0e0);
+    border-top: 0.1rem solid var(--p-content-border-color, #e0e0e0);
 }
 </style>

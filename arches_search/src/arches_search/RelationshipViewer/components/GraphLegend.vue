@@ -60,23 +60,23 @@ const emit = defineEmits<{
 <style scoped>
 .graph-legend {
     background: rgba(255, 255, 255, 0.96);
-    border: 1px solid #aebdcb;
-    border-radius: 6px;
-    padding: 8px 10px;
-    min-width: 190px;
-    font-size: 12px;
-    box-shadow: 0 4px 14px rgba(17, 24, 39, 0.16);
-    backdrop-filter: blur(2px);
+    border: 0.1rem solid #aebdcb;
+    border-radius: 0.6rem;
+    padding: 0.8rem 1rem;
+    min-width: 19rem;
+    font-size: 1.2rem;
+    box-shadow: 0 0.4rem 1.4rem rgba(17, 24, 39, 0.16);
+    backdrop-filter: blur(0.2rem);
 }
 .legend-title {
     font-weight: 700;
     color: #13293d;
-    margin-bottom: 6px;
-    font-size: 11px;
+    margin-bottom: 0.6rem;
+    font-size: 1.1rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    border-bottom: 1px solid #d5dee7;
-    padding-bottom: 5px;
+    border-bottom: 0.1rem solid #d5dee7;
+    padding-bottom: 0.5rem;
 }
 ul {
     list-style: none;
@@ -84,17 +84,17 @@ ul {
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0.2rem;
 }
 li {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 4px;
-    border-radius: 3px;
+    gap: 0.6rem;
+    padding: 0.3rem 0.4rem;
+    border-radius: 0.3rem;
     transition: background 0.15s;
     color: #16202a;
-    border-left: 2px solid transparent;
+    border-left: 0.2rem solid transparent;
 }
 li:hover {
     background: #dde9f5;
@@ -119,37 +119,37 @@ li.highlighted {
     background: rgba(237, 201, 72, 0.08);
 }
 .swatch {
-    width: 13px;
-    height: 13px;
+    width: 1.3rem;
+    height: 1.3rem;
     border-radius: 50%;
     flex-shrink: 0;
-    border: 1.5px solid rgba(0, 0, 0, 0.15);
+    border: 0.15rem solid rgba(0, 0, 0, 0.15);
 }
 .label {
     flex: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100px;
+    max-width: 10rem;
     font-weight: 600;
     color: #2d3f52;
 }
 .count {
     color: #2d3f52;
-    font-size: 11px;
+    font-size: 1.1rem;
     font-weight: 600;
-    min-width: 18px;
+    min-width: 1.8rem;
     text-align: right;
 }
 .action-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 2rem;
+    height: 2rem;
     padding: 0;
     border: none;
-    border-radius: 3px;
+    border-radius: 0.3rem;
     background: transparent;
     color: #8fa3b8;
     cursor: pointer;
@@ -157,7 +157,7 @@ li.highlighted {
     transition:
         color 0.12s,
         background 0.12s;
-    font-size: 10px;
+    font-size: 1rem;
     line-height: 1;
 }
 .action-btn:hover {

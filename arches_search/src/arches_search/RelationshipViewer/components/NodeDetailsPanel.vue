@@ -106,55 +106,55 @@ function openInArches() {
 .node-details-panel {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px;
-    font-size: 13px;
+    gap: 1rem;
+    padding: 1.2rem;
+    font-size: 1.3rem;
     height: 100%;
     overflow-y: auto;
     background: #fff;
-    border-left: 1px solid #ddd;
+    border-left: 0.1rem solid #ddd;
 }
 .panel-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 8px;
+    gap: 0.8rem;
 }
 .node-name {
     font-weight: 600;
-    font-size: 14px;
+    font-size: 1.4rem;
     color: #25476a;
     line-height: 1.3;
 }
 .meta-row {
     display: flex;
-    gap: 6px;
+    gap: 0.6rem;
     flex-wrap: wrap;
     align-items: center;
 }
 .graph-badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: 12px;
+    gap: 0.4rem;
+    padding: 0.2rem 0.8rem;
+    border-radius: 1.2rem;
     color: #fff;
-    font-size: 11px;
+    font-size: 1.1rem;
     font-weight: 600;
 }
 .seed-badge {
     background: #e8f0fa;
     color: #25476a;
-    font-size: 10px;
-    padding: 1px 6px;
-    border-radius: 10px;
+    font-size: 1rem;
+    padding: 0.1rem 0.6rem;
+    border-radius: 1rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 .stat-row {
     color: #666;
-    font-size: 12px;
+    font-size: 1.2rem;
 }
 .attributes-section {
     flex: 1;
@@ -162,36 +162,36 @@ function openInArches() {
 .attr-title {
     font-weight: 600;
     color: #25476a;
-    font-size: 11px;
+    font-size: 1.1rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    margin-bottom: 6px;
+    margin-bottom: 0.6rem;
 }
 dl {
     margin: 0;
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 3px 10px;
+    gap: 0.3rem 1rem;
 }
 dt {
     font-weight: 600;
     color: #555;
-    font-size: 11px;
+    font-size: 1.1rem;
     text-transform: capitalize;
     white-space: nowrap;
-    padding-top: 1px;
+    padding-top: 0.1rem;
 }
 dd {
     margin: 0;
     color: #333;
-    font-size: 12px;
+    font-size: 1.2rem;
     word-break: break-word;
 }
 .panel-actions {
     display: flex;
-    gap: 6px;
+    gap: 0.6rem;
     flex-wrap: wrap;
-    border-top: 1px solid #eee;
-    padding-top: 8px;
+    border-top: 0.1rem solid #eee;
+    padding-top: 0.8rem;
 }
 </style>
