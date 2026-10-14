@@ -25,6 +25,7 @@ const TIME_FILTER_PANEL = "time-filter" as const;
 const MAP_FILTER_PANEL = "map-filter" as const;
 const SAVED_SEARCHES_PANEL = "saved-searches" as const;
 const RELATED_RESOURCES_PANEL = "related-resources" as const;
+const RELATIONSHIP_VIEWER_PANEL = "relationship-viewer" as const;
 
 interface SplitterResizeEvent {
     sizes?: number[];
@@ -41,7 +42,8 @@ type SidePanelType =
     | typeof TIME_FILTER_PANEL
     | typeof MAP_FILTER_PANEL
     | typeof SAVED_SEARCHES_PANEL
-    | typeof RELATED_RESOURCES_PANEL;
+    | typeof RELATED_RESOURCES_PANEL
+    | typeof RELATIONSHIP_VIEWER_PANEL;
 
 const PANEL_SIZES: Record<SidePanelType, number> = {
     [IDLE_PANEL]: IDLE_PANEL_SIZE,
@@ -50,6 +52,7 @@ const PANEL_SIZES: Record<SidePanelType, number> = {
     [MAP_FILTER_PANEL]: 65,
     [SAVED_SEARCHES_PANEL]: 27,
     [RELATED_RESOURCES_PANEL]: SIDE_PANEL_SIZE,
+    [RELATIONSHIP_VIEWER_PANEL]: SIDE_PANEL_SIZE,
 };
 
 export function useSidePanel() {
@@ -88,12 +91,17 @@ export function useSidePanel() {
         () => activeSidePanel.value === RELATED_RESOURCES_PANEL,
     );
 
+    const isRelationshipViewerOpen = computed<boolean>(
+        () => activeSidePanel.value === RELATIONSHIP_VIEWER_PANEL,
+    );
+
     // Kept as separate names for the SimpleSearch.vue v-if chain; identical
     // to the "*Open" computeds now that the panel never fully unmounts.
     const isAttributeFiltersActive = isAttributeFiltersOpen;
     const isTimeFilterActive = isTimeFilterOpen;
     const isMapFilterActive = isMapFilterOpen;
     const isSavedSearchesActive = isSavedSearchesOpen;
+    const isRelationshipViewerActive = isRelationshipViewerOpen;
 
     const resultsPanelSize = computed<number>(() => 100 - sidePanelBasis.value);
 
@@ -205,6 +213,10 @@ export function useSidePanel() {
         toggleSidePanel(SAVED_SEARCHES_PANEL);
     }
 
+    function onToggleRelationshipViewer(): void {
+        toggleSidePanel(RELATIONSHIP_VIEWER_PANEL);
+    }
+
     // Non-toggling opens, distinct from the onToggle* functions above: an
     // active-filter chip's click-to-edit action must always land on its
     // panel, even if that panel is already open — toggling would close it.
@@ -234,6 +246,8 @@ export function useSidePanel() {
         isTimeFilterOpen,
         isRelatedResourcesOpen,
         relatedResource,
+        isRelationshipViewerActive,
+        isRelationshipViewerOpen,
         resultsPanelSize,
         visibleSidePanelSize,
         sidePanelMinSize,
@@ -242,6 +256,7 @@ export function useSidePanel() {
         closeSidePanel,
         onToggleAttributeFilters,
         onToggleMapFilter,
+        onToggleRelationshipViewer,
         onToggleSavedSearches,
         onToggleTimeFilter,
         openAttributeFilters,

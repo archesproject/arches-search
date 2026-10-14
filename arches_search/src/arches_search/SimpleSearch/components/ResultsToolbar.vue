@@ -38,6 +38,7 @@ defineProps<{
     showTime: boolean;
     hasTimeFilter: boolean;
     showSavedSearches: boolean;
+    showGraph: boolean;
     hideFiltersButton?: boolean;
     hideTimeButton?: boolean;
 }>();
@@ -56,6 +57,7 @@ defineEmits<{
     (event: "toggle-map"): void;
     (event: "toggle-time"): void;
     (event: "toggle-saved-searches"): void;
+    (event: "toggle-graph"): void;
 }>();
 </script>
 
@@ -102,6 +104,14 @@ defineEmits<{
                 size="small"
                 :class="['toolbar-btn', { active: showMap || hasMapFilter }]"
                 @click="$emit('toggle-map')"
+            />
+            <Button
+                :label="$gettext('Relationships')"
+                icon="pi pi-share-alt"
+                icon-pos="left"
+                size="small"
+                :class="['toolbar-btn', { active: showGraph }]"
+                @click="$emit('toggle-graph')"
             />
             <Button
                 :label="$gettext('Save/Export Search')"
