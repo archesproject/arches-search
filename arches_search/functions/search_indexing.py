@@ -16,7 +16,6 @@ class SearchIndexingFunction(BaseFunction):
         for record in index_records:
             record.save()
 
-    # occurs after a bulk load, which writes tiles without calling Tile.save
     def post_import(self, transaction_id, *args, **kwargs):
         resourceids = list(
             EditLog.objects.filter(transactionid=transaction_id)
