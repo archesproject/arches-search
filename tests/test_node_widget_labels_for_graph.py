@@ -85,14 +85,7 @@ class NodeWidgetLabelsForGraphTest(TestCase):
         )
         return {node["id"]: node for node in nodes}
 
-    def test_nodes_the_user_cannot_read_are_omitted(self):
-        assign_perm("write_nodegroup", self.user, self.part_nodegroup)
-
-        nodes_by_id = self._nodes_by_id()
-
-        self.assertNotIn(str(self.part_name_content_node.nodeid), nodes_by_id)
-
-    def test_nodes_under_an_unreadable_parent_are_omitted(self):
+    def test_unreadable_nodes_and_their_children_are_omitted(self):
         detail_nodegroup = NodeGroup.objects.create(
             nodegroupid=uuid.uuid4(), parentnodegroup=self.part_nodegroup
         )
@@ -130,6 +123,7 @@ class NodeWidgetLabelsForGraphTest(TestCase):
 
         nodes_by_id = self._nodes_by_id()
 
+        self.assertNotIn(str(self.part_name_content_node.nodeid), nodes_by_id)
         self.assertNotIn(str(detail_content_node.nodeid), nodes_by_id)
         self.assertNotIn(f"card-group:{self.part_nodegroup.nodegroupid}", nodes_by_id)
 
