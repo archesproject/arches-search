@@ -27,9 +27,9 @@ READ_NODEGROUP_PERMISSION = "models.read_nodegroup"
 
 class ReadableNodes:
     """
-    Worked out on first use. That walks every nodegroup, so build one per
-    request and share it. user=None is a trusted in-process caller, for whom
-    every node is readable.
+    The nodes a user can read. Permissions load on first use and query every
+    nodegroup, so make one per request and reuse it. Pass user=None for
+    trusted internal callers, who can read everything.
     """
 
     def __init__(self, user) -> None:
