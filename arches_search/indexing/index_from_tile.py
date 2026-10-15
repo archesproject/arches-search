@@ -9,7 +9,19 @@ from arches_search.models.models import (
     GeometrySearch,
     NumericSearch,
     TermSearch,
+    UUIDSearch,
 )
+
+SEARCH_MODELS = [
+    TermSearch,
+    NumericSearch,
+    DateSearch,
+    UUIDSearch,
+    DateRangeSearch,
+    BooleanSearch,
+    GeometrySearch,
+    FileListSearch,
+]
 
 
 def _get_nodegroup(nodegroup_id):

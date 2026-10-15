@@ -32,29 +32,8 @@ from django.core.management.base import BaseCommand
 from django.db import connection, connections
 from arches.app.models.models import TileModel, Node
 from arches.app.models.system_settings import settings
-from arches_search.indexing.index_from_tile import index_from_tile
+from arches_search.indexing.index_from_tile import SEARCH_MODELS, index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
-from arches_search.models.models import (
-    BooleanSearch,
-    DateRangeSearch,
-    DateSearch,
-    FileListSearch,
-    GeometrySearch,
-    NumericSearch,
-    TermSearch,
-    UUIDSearch,
-)
-
-SEARCH_MODELS = [
-    TermSearch,
-    NumericSearch,
-    DateSearch,
-    UUIDSearch,
-    DateRangeSearch,
-    BooleanSearch,
-    GeometrySearch,
-    FileListSearch,
-]
 
 
 def _build_nodegroup_cache():
