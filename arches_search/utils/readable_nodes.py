@@ -4,7 +4,8 @@ Which nodes a user may read.
 Everything a search does with node data goes through this: clauses, term search
 and suggestions, aggregations, and the values projected onto results. A node in
 a nodegroup the user cannot read then behaves as if it does not exist, and all
-of those agree on which nodes that is.
+of those agree on which nodes that is. A nodegroup under one the user cannot
+read is unreadable too.
 
 Arches treats a nodegroup with no explicit permissions as readable, so for most
 users nothing is unreadable and these filters add no SQL.
@@ -17,7 +18,9 @@ from uuid import UUID
 from django.db.models import Q, QuerySet
 
 from arches.app.models.models import Node, NodeGroup
-from arches.app.utils.permission_backend import get_nodegroups_by_perm
+from arches.extensions.vue_components.utils.nodegroup_permissions import (
+    nodegroup_ids_with_inherited_permission,
+)
 
 READ_NODEGROUP_PERMISSION = "models.read_nodegroup"
 
@@ -62,8 +65,8 @@ class ReadableNodes:
         if self._user is None:
             return frozenset()
 
-        readable_nodegroup_ids = set(
-            get_nodegroups_by_perm(self._user, READ_NODEGROUP_PERMISSION)
+        readable_nodegroup_ids = nodegroup_ids_with_inherited_permission(
+            self._user, READ_NODEGROUP_PERMISSION
         )
         return frozenset(
             nodegroup_id
