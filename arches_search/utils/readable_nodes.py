@@ -4,8 +4,8 @@ Which nodes a user may read.
 Everything a search does with node data goes through this: clauses, term search
 and suggestions, aggregations, and the values projected onto results. A node in
 a nodegroup the user cannot read then behaves as if it does not exist, and all
-of those agree on which nodes that is. A nodegroup under one the user cannot
-read is unreadable too.
+of those agree on which nodes that is. Nodegroups under an unreadable parent
+are unreadable too.
 
 Arches treats a nodegroup with no explicit permissions as readable, so for most
 users nothing is unreadable and these filters add no SQL.
