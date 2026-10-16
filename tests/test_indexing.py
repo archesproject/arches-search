@@ -14,6 +14,7 @@ import uuid
 from django.test import TestCase
 
 from arches.app.models.models import (
+    EditLog,
     GraphModel,
     Node,
     NodeGroup,
@@ -21,10 +22,11 @@ from arches.app.models.models import (
     TileModel,
 )
 
+from arches_search.functions.search_indexing import SearchIndexingFunction
 from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexers.file_list import FileListIndexing
 from arches_search.indexing.indexers.string import StringIndexing
-from arches_search.models.models import FileListSearch, TermSearch
+from arches_search.models.models import FileListSearch, NumericSearch, TermSearch
 
 
 class IndexingTestCase(TestCase):
@@ -282,3 +284,54 @@ class AllDatatypesNullIndexingTest(IndexingTestCase):
                 f"{len(result)} record(s): {result}"
             ),
         )
+
+
+class PostImportIndexingTests(IndexingTestCase):
+    """
+    Bulk loads write tiles without calling Tile.save, so SearchIndexingFunction
+    reindexes every resource touched by the load's transaction in post_import.
+    """
+
+    def test_post_import_indexes_resources_in_transaction(self):
+        tile = self._make_tile(self.number_node, 42)
+        transaction_id = uuid.uuid4()
+        EditLog.objects.create(
+            resourceinstanceid=str(self.resource_instance.pk),
+            transactionid=transaction_id,
+            edittype="create",
+        )
+
+        SearchIndexingFunction().post_import(transaction_id)
+
+        rows = NumericSearch.objects.filter(tileid=tile.pk)
+        self.assertEqual([row.value for row in rows], [42])
+
+    def test_post_import_replaces_stale_rows(self):
+        tile = self._make_tile(self.number_node, 1)
+        for record in index_from_tile(tile):
+            record.save()
+        tile.data = {str(self.number_node.nodeid): 2}
+        tile.save()
+        transaction_id = uuid.uuid4()
+        EditLog.objects.create(
+            resourceinstanceid=str(self.resource_instance.pk),
+            transactionid=transaction_id,
+            edittype="tile edit",
+        )
+
+        SearchIndexingFunction().post_import(transaction_id)
+
+        rows = NumericSearch.objects.filter(tileid=tile.pk)
+        self.assertEqual([row.value for row in rows], [2])
+
+    def test_post_import_ignores_other_transactions(self):
+        tile = self._make_tile(self.number_node, 7)
+        EditLog.objects.create(
+            resourceinstanceid=str(self.resource_instance.pk),
+            transactionid=uuid.uuid4(),
+            edittype="create",
+        )
+
+        SearchIndexingFunction().post_import(uuid.uuid4())
+
+        self.assertFalse(NumericSearch.objects.filter(tileid=tile.pk).exists())
