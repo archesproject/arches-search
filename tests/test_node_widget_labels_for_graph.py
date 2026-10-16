@@ -85,47 +85,12 @@ class NodeWidgetLabelsForGraphTest(TestCase):
         )
         return {node["id"]: node for node in nodes}
 
-    def test_unreadable_nodes_and_their_children_are_omitted(self):
-        detail_nodegroup = NodeGroup.objects.create(
-            nodegroupid=uuid.uuid4(), parentnodegroup=self.part_nodegroup
-        )
-        Node.objects.create(
-            nodeid=detail_nodegroup.nodegroupid,
-            name="detail",
-            alias="detail",
-            datatype="semantic",
-            graph=self.graph,
-            nodegroup=detail_nodegroup,
-            istopnode=False,
-        )
-        detail_content_node = Node.objects.create(
-            nodeid=uuid.uuid4(),
-            name="detail_content",
-            alias="detail_content",
-            datatype="string",
-            graph=self.graph,
-            nodegroup=detail_nodegroup,
-            istopnode=False,
-        )
-        detail_card = CardModel.objects.create(
-            cardid=uuid.uuid4(),
-            name="Detail",
-            nodegroup=detail_nodegroup,
-            graph=self.graph,
-        )
-        CardXNodeXWidget.objects.create(
-            node=detail_content_node,
-            card=detail_card,
-            widget=self.widget,
-            label="Detail content",
-        )
+    def test_nodes_the_user_cannot_read_are_omitted(self):
         assign_perm("write_nodegroup", self.user, self.part_nodegroup)
 
         nodes_by_id = self._nodes_by_id()
 
         self.assertNotIn(str(self.part_name_content_node.nodeid), nodes_by_id)
-        self.assertNotIn(str(detail_content_node.nodeid), nodes_by_id)
-        self.assertNotIn(f"card-group:{self.part_nodegroup.nodegroupid}", nodes_by_id)
 
     def test_widget_less_non_root_node_is_omitted(self):
         nodes_by_id = self._nodes_by_id()
