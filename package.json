@@ -19,7 +19,7 @@
         "vitest": "vitest --run --coverage"
     },
     "dependencies": {
-        "arches": "archesproject/arches#semver:^v8.2.0-alpha.12",
+        "arches": "archesproject/arches#semver:^v2024.09.27",
         "arches-modular-reports": "archesproject/arches-modular-reports#semver:^v2.1.0-alpha.4",
         "vue-router": "4.4.3"
     },
