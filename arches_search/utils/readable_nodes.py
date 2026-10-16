@@ -18,9 +18,7 @@ from uuid import UUID
 from django.db.models import Q, QuerySet
 
 from arches.app.models.models import Node, NodeGroup
-from arches.extensions.vue_components.utils.nodegroup_permissions import (
-    nodegroup_ids_with_inherited_permission,
-)
+from arches.app.utils.permission_backend import nodegroup_ids_with_inherited_permission
 
 READ_NODEGROUP_PERMISSION = "models.read_nodegroup"
 
