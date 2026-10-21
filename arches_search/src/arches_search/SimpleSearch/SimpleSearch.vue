@@ -25,7 +25,10 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import { fetchNodeFilterConfig } from "@/arches_search/SimpleSearch/api.ts";
+import {
+    fetchNodeFilterConfig,
+    startSearchResultsExport,
+} from "@/arches_search/SimpleSearch/api.ts";
 import {
     buildAttributeFilterQuery,
     formatAttributeFilterValue,
@@ -36,6 +39,7 @@ import {
     ACTIVE_FILTER_KIND_MAP,
     ACTIVE_FILTER_KIND_RESOURCE_TYPE,
     ACTIVE_FILTER_KIND_TIME,
+    EXPORT_STATE_FAILED,
     EXPORT_STATE_IDLE,
     EXPORT_STATE_PENDING,
     EXPORT_STATE_STARTED,
@@ -81,6 +85,7 @@ const {
     clearMapFilter,
     clearQuery,
     clearTermFilter,
+    getExportPayload,
     isSearching,
     mapFilter,
     queries,
@@ -128,15 +133,25 @@ const {
 } = useSidePanel();
 
 const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
-// TEMPORARY: mock export handler so ExportResultsPanel can be reviewed in the
-// browser. Replace with the Bulk Data Manager export call.
 const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
 const exportErrorMessage = ref<string | null>(null);
-async function onExportResults(request: ExportRequest): Promise<void> {
-    console.debug("Mock export request", request);
+
+// The export runs in the background; the user hears about its completion
+// through an Arches notification, so this only reports whether it started.
+async function onExportResults(exportRequest: ExportRequest): Promise<void> {
     exportState.value = EXPORT_STATE_PENDING;
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    exportState.value = EXPORT_STATE_STARTED;
+    exportErrorMessage.value = null;
+    try {
+        await startSearchResultsExport({
+            ...getExportPayload(),
+            exportRequest,
+        });
+        exportState.value = EXPORT_STATE_STARTED;
+    } catch (error) {
+        exportErrorMessage.value =
+            error instanceof Error ? error.message : null;
+        exportState.value = EXPORT_STATE_FAILED;
+    }
 }
 
 watch(isExportResultsOpen, (isOpen) => {

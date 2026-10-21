@@ -38,6 +38,9 @@ from arches_search.views.api.search_mvt import (
     SearchMVTContextAPI,
 )
 from arches_search.views.api.search_export import SearchExportAPI
+from arches_search.views.api.search_results_export import (
+    SearchResultsExportAPI,
+)
 from arches_search.views.api.search import SearchAPI
 
 urlpatterns = [
@@ -151,6 +154,11 @@ urlpatterns = [
         "api/search-export",
         SearchExportAPI.as_view(),
         name="search_export",
+    ),
+    path(
+        "api/search-results-export",
+        SearchResultsExportAPI.as_view(),
+        name="search_results_export",
     ),
 ]
 
