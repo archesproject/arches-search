@@ -173,3 +173,35 @@ export interface SavedSearch {
         username: string;
     };
 }
+
+export const EXPORT_FORMAT_BRANCH_EXCEL = "branch-excel";
+export const EXPORT_FORMAT_TILE_EXCEL = "tile-excel";
+
+export type ExportFormat =
+    | typeof EXPORT_FORMAT_BRANCH_EXCEL
+    | typeof EXPORT_FORMAT_TILE_EXCEL;
+
+export const EXPORT_CONCEPTS_AS_LABELS = "labels";
+export const EXPORT_CONCEPTS_AS_UUIDS = "uuids";
+
+export type ExportConceptsAs =
+    | typeof EXPORT_CONCEPTS_AS_LABELS
+    | typeof EXPORT_CONCEPTS_AS_UUIDS;
+
+export interface ExportRequest {
+    format: ExportFormat;
+    filename: string;
+    exportConceptsAs: ExportConceptsAs;
+    email: string;
+}
+
+export const EXPORT_STATE_IDLE = "idle";
+export const EXPORT_STATE_PENDING = "pending";
+export const EXPORT_STATE_STARTED = "started";
+export const EXPORT_STATE_FAILED = "failed";
+
+export type ExportState =
+    | typeof EXPORT_STATE_IDLE
+    | typeof EXPORT_STATE_PENDING
+    | typeof EXPORT_STATE_STARTED
+    | typeof EXPORT_STATE_FAILED;
