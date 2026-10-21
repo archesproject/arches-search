@@ -6,6 +6,7 @@ import { useGettext } from "vue3-gettext";
 import Splitter from "openvue/splitter";
 import SplitterPanel from "openvue/splitterpanel";
 import Toast from "openvue/toast";
+import { useToast } from "openvue/usetoast";
 
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
@@ -39,10 +40,8 @@ import {
     ACTIVE_FILTER_KIND_MAP,
     ACTIVE_FILTER_KIND_RESOURCE_TYPE,
     ACTIVE_FILTER_KIND_TIME,
-    EXPORT_STATE_FAILED,
     EXPORT_STATE_IDLE,
     EXPORT_STATE_PENDING,
-    EXPORT_STATE_STARTED,
     RESULTS_SORT_A_TO_Z,
     RESULTS_SORT_NEWEST,
     RESULTS_SORT_OLDEST,
@@ -76,6 +75,7 @@ const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
 
 const { $gettext } = useGettext();
+const toast = useToast();
 
 const {
     activeFilters,
@@ -134,30 +134,39 @@ const {
 
 const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
 const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
-const exportErrorMessage = ref<string | null>(null);
 
 // The export runs in the background; the user hears about its completion
 // through an Arches notification, so this only reports whether it started.
 async function onExportResults(exportRequest: ExportRequest): Promise<void> {
     exportState.value = EXPORT_STATE_PENDING;
-    exportErrorMessage.value = null;
     try {
         await startSearchResultsExport({
             ...getExportPayload(),
             exportRequest,
         });
-        exportState.value = EXPORT_STATE_STARTED;
+        toast.add({
+            severity: "success",
+            life: 3000,
+            summary: $gettext("Your export has started."),
+            detail: $gettext(
+                "You will be notified when it is ready to download.",
+            ),
+        });
     } catch (error) {
-        exportErrorMessage.value =
-            error instanceof Error ? error.message : null;
-        exportState.value = EXPORT_STATE_FAILED;
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("Export could not be started."),
+            detail: error instanceof Error ? error.message : undefined,
+        });
+    } finally {
+        exportState.value = EXPORT_STATE_IDLE;
     }
 }
 
 watch(isExportResultsOpen, (isOpen) => {
     if (!isOpen) {
         exportState.value = EXPORT_STATE_IDLE;
-        exportErrorMessage.value = null;
     }
 });
 const graphModels = ref<GraphModel[]>([]);
@@ -632,7 +641,6 @@ async function onRunSavedQuery(
                             v-else-if="isExportResultsActive"
                             :has-single-graph="isSingleGraphSelected"
                             :export-state="exportState"
-                            :error-message="exportErrorMessage"
                             @export="onExportResults"
                             @close="closeSidePanel()"
                         />
