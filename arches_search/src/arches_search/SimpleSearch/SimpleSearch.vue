@@ -6,11 +6,12 @@ import { useGettext } from "vue3-gettext";
 import Splitter from "openvue/splitter";
 import SplitterPanel from "openvue/splitterpanel";
 import Toast from "openvue/toast";
+import { useToast } from "openvue/usetoast";
 
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
 import AttributeFilters from "@/arches_search/SimpleSearch/components/attribute-filters/AttributeFilters.vue";
-import ExportPanel from "@/arches_search/SimpleSearch/components/ExportPanel.vue";
+import ExportResultsPanel from "@/arches_search/SimpleSearch/components/ExportResultsPanel.vue";
 import IdleInfoTiles from "@/arches_search/SimpleSearch/components/IdleInfoTiles.vue";
 import RelatedResourcesPanel from "@/arches_search/SimpleSearch/components/RelatedResourcesPanel.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
@@ -25,7 +26,10 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import { fetchNodeFilterConfig } from "@/arches_search/SimpleSearch/api.ts";
+import {
+    fetchNodeFilterConfig,
+    startSearchResultsExport,
+} from "@/arches_search/SimpleSearch/api.ts";
 import {
     buildAttributeFilterQuery,
     formatAttributeFilterValue,
@@ -36,6 +40,8 @@ import {
     ACTIVE_FILTER_KIND_MAP,
     ACTIVE_FILTER_KIND_RESOURCE_TYPE,
     ACTIVE_FILTER_KIND_TIME,
+    EXPORT_STATE_IDLE,
+    EXPORT_STATE_PENDING,
     RESULTS_SORT_A_TO_Z,
     RESULTS_SORT_NEWEST,
     RESULTS_SORT_OLDEST,
@@ -56,6 +62,8 @@ import type {
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     ActiveFilter,
+    ExportRequest,
+    ExportState,
     NodeFilterConfigNode,
     ResourceType,
     ResultsSortValue,
@@ -67,6 +75,7 @@ const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
 
 const { $gettext } = useGettext();
+const toast = useToast();
 
 const {
     activeFilters,
@@ -75,6 +84,7 @@ const {
     clearMapFilter,
     clearQuery,
     clearTermFilter,
+    getExportPayload,
     isSearching,
     mapFilter,
     queries,
@@ -96,6 +106,8 @@ const {
     isMapFilterOpen,
     isSavedSearchesActive,
     isSavedSearchesOpen,
+    isExportResultsActive,
+    isExportResultsOpen,
     isTimeFilterActive,
     isTimeFilterOpen,
     isRelatedResourcesOpen,
@@ -109,6 +121,7 @@ const {
     onToggleAttributeFilters,
     onToggleMapFilter,
     onToggleSavedSearches,
+    onToggleExportResults,
     onToggleTimeFilter,
     openAttributeFilters,
     openMapFilter,
@@ -119,8 +132,43 @@ const {
 } = useSidePanel();
 
 const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
+const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
+
+// The export runs in the background; the user hears about its completion
+// through an Arches notification, so this only reports whether it started.
+async function onExportResults(exportRequest: ExportRequest): Promise<void> {
+    exportState.value = EXPORT_STATE_PENDING;
+    try {
+        await startSearchResultsExport({
+            ...getExportPayload(),
+            exportRequest,
+        });
+        toast.add({
+            severity: "success",
+            life: 3000,
+            summary: $gettext("Your export has started."),
+            detail: $gettext(
+                "You will be notified when it is ready to download.",
+            ),
+        });
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("Export could not be started."),
+            detail: error instanceof Error ? error.message : undefined,
+        });
+    } finally {
+        exportState.value = EXPORT_STATE_IDLE;
+    }
+}
+
+watch(isExportResultsOpen, (isOpen) => {
+    if (!isOpen) {
+        exportState.value = EXPORT_STATE_IDLE;
+    }
+});
 const graphModels = ref<GraphModel[]>([]);
-const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
 const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
 
@@ -473,6 +521,7 @@ async function onRunSavedQuery(
                         :show-time="isTimeFilterOpen"
                         :has-time-filter="hasTimeFilter"
                         :show-saved-searches="isSavedSearchesOpen"
+                        :show-export-results="isExportResultsOpen"
                         :hide-filters-button="!isSingleGraphSelected"
                         :hide-time-button="!isSingleGraphSelected"
                         @update:sort-value="onSortValueUpdate"
@@ -480,6 +529,7 @@ async function onRunSavedQuery(
                         @toggle-map="onToggleMapFilter"
                         @toggle-time="onToggleTimeFilter"
                         @toggle-saved-searches="onToggleSavedSearches"
+                        @toggle-export-results="onToggleExportResults"
                     />
                     <SearchResults
                         :results="searchResults"
@@ -532,7 +582,13 @@ async function onRunSavedQuery(
                         <SavedSearchPanel
                             v-else-if="isSavedSearchesActive"
                             @run-query="onRunSavedQuery"
-                            @open-export="showExportModal = true"
+                            @close="closeSidePanel()"
+                        />
+                        <ExportResultsPanel
+                            v-else-if="isExportResultsActive"
+                            :has-single-graph="isSingleGraphSelected"
+                            :export-state="exportState"
+                            @export="onExportResults"
                             @close="closeSidePanel()"
                         />
                         <IdleInfoTiles
@@ -543,14 +599,13 @@ async function onRunSavedQuery(
                             @open-map="onToggleMapFilter"
                             @open-time="onToggleTimeFilter"
                             @open-saved-searches="onToggleSavedSearches"
+                            @open-export-results="onToggleExportResults"
                         />
                     </div>
                 </SplitterPanel>
             </Splitter>
         </div>
     </div>
-
-    <ExportPanel v-model:visible="showExportModal" />
 
     <Toast />
 </template>

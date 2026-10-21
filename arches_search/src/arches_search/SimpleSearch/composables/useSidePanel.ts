@@ -24,6 +24,7 @@ const ATTRIBUTE_FILTERS_PANEL = "attribute-filters" as const;
 const TIME_FILTER_PANEL = "time-filter" as const;
 const MAP_FILTER_PANEL = "map-filter" as const;
 const SAVED_SEARCHES_PANEL = "saved-searches" as const;
+const EXPORT_RESULTS_PANEL = "export-results" as const;
 const RELATED_RESOURCES_PANEL = "related-resources" as const;
 
 interface SplitterResizeEvent {
@@ -41,6 +42,7 @@ type SidePanelType =
     | typeof TIME_FILTER_PANEL
     | typeof MAP_FILTER_PANEL
     | typeof SAVED_SEARCHES_PANEL
+    | typeof EXPORT_RESULTS_PANEL
     | typeof RELATED_RESOURCES_PANEL;
 
 const PANEL_SIZES: Record<SidePanelType, number> = {
@@ -49,6 +51,7 @@ const PANEL_SIZES: Record<SidePanelType, number> = {
     [TIME_FILTER_PANEL]: SIDE_PANEL_SIZE,
     [MAP_FILTER_PANEL]: 65,
     [SAVED_SEARCHES_PANEL]: 27,
+    [EXPORT_RESULTS_PANEL]: 27,
     [RELATED_RESOURCES_PANEL]: SIDE_PANEL_SIZE,
 };
 
@@ -84,6 +87,10 @@ export function useSidePanel() {
         () => activeSidePanel.value === SAVED_SEARCHES_PANEL,
     );
 
+    const isExportResultsOpen = computed<boolean>(
+        () => activeSidePanel.value === EXPORT_RESULTS_PANEL,
+    );
+
     const isRelatedResourcesOpen = computed<boolean>(
         () => activeSidePanel.value === RELATED_RESOURCES_PANEL,
     );
@@ -94,6 +101,7 @@ export function useSidePanel() {
     const isTimeFilterActive = isTimeFilterOpen;
     const isMapFilterActive = isMapFilterOpen;
     const isSavedSearchesActive = isSavedSearchesOpen;
+    const isExportResultsActive = isExportResultsOpen;
 
     const resultsPanelSize = computed<number>(() => 100 - sidePanelBasis.value);
 
@@ -205,6 +213,10 @@ export function useSidePanel() {
         toggleSidePanel(SAVED_SEARCHES_PANEL);
     }
 
+    function onToggleExportResults(): void {
+        toggleSidePanel(EXPORT_RESULTS_PANEL);
+    }
+
     // Non-toggling opens, distinct from the onToggle* functions above: an
     // active-filter chip's click-to-edit action must always land on its
     // panel, even if that panel is already open — toggling would close it.
@@ -230,6 +242,8 @@ export function useSidePanel() {
         isMapFilterOpen,
         isSavedSearchesActive,
         isSavedSearchesOpen,
+        isExportResultsActive,
+        isExportResultsOpen,
         isTimeFilterActive,
         isTimeFilterOpen,
         isRelatedResourcesOpen,
@@ -243,6 +257,7 @@ export function useSidePanel() {
         onToggleAttributeFilters,
         onToggleMapFilter,
         onToggleSavedSearches,
+        onToggleExportResults,
         onToggleTimeFilter,
         openAttributeFilters,
         openMapFilter,

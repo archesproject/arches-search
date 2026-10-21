@@ -38,6 +38,7 @@ defineProps<{
     showTime: boolean;
     hasTimeFilter: boolean;
     showSavedSearches: boolean;
+    showExportResults: boolean;
     hideFiltersButton?: boolean;
     hideTimeButton?: boolean;
 }>();
@@ -56,6 +57,7 @@ defineEmits<{
     (event: "toggle-map"): void;
     (event: "toggle-time"): void;
     (event: "toggle-saved-searches"): void;
+    (event: "toggle-export-results"): void;
 }>();
 </script>
 
@@ -104,7 +106,7 @@ defineEmits<{
                 @click="$emit('toggle-map')"
             />
             <Button
-                :label="$gettext('Save/Export Search')"
+                :label="$gettext('Save Search')"
                 :icon="
                     showSavedSearches ? 'pi pi-bookmark-fill' : 'pi pi-bookmark'
                 "
@@ -112,6 +114,14 @@ defineEmits<{
                 size="small"
                 :class="['toolbar-btn', { active: showSavedSearches }]"
                 @click="$emit('toggle-saved-searches')"
+            />
+            <Button
+                :label="$gettext('Export Search Results')"
+                icon="pi pi-download"
+                icon-pos="left"
+                size="small"
+                :class="['toolbar-btn', { active: showExportResults }]"
+                @click="$emit('toggle-export-results')"
             />
         </div>
     </div>
