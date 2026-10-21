@@ -192,16 +192,11 @@ export interface ExportRequest {
     format: ExportFormat;
     filename: string;
     exportConceptsAs: ExportConceptsAs;
-    email: string;
 }
 
 export const EXPORT_STATE_IDLE = "idle";
 export const EXPORT_STATE_PENDING = "pending";
-export const EXPORT_STATE_STARTED = "started";
-export const EXPORT_STATE_FAILED = "failed";
 
 export type ExportState =
     | typeof EXPORT_STATE_IDLE
-    | typeof EXPORT_STATE_PENDING
-    | typeof EXPORT_STATE_STARTED
-    | typeof EXPORT_STATE_FAILED;
+    | typeof EXPORT_STATE_PENDING;

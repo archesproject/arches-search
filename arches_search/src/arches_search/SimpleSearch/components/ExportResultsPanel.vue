@@ -13,10 +13,8 @@ import {
     EXPORT_CONCEPTS_AS_UUIDS,
     EXPORT_FORMAT_BRANCH_EXCEL,
     EXPORT_FORMAT_TILE_EXCEL,
-    EXPORT_STATE_FAILED,
     EXPORT_STATE_IDLE,
     EXPORT_STATE_PENDING,
-    EXPORT_STATE_STARTED,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ExportConceptsAs,
@@ -28,20 +26,10 @@ import type {
 const CLOSE_EVENT = "close" as const;
 const EXPORT_EVENT = "export" as const;
 
-// Loose on purpose: the server validates, this only catches obvious typos.
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const {
-    hasSingleGraph = true,
-    exportState = EXPORT_STATE_IDLE,
-    errorMessage = null,
-    defaultEmail = "",
-} = defineProps<{
+const { hasSingleGraph = true, exportState = EXPORT_STATE_IDLE } = defineProps<{
     // Both Bulk Data Manager exporters operate on a single resource model.
     hasSingleGraph?: boolean;
     exportState?: ExportState;
-    errorMessage?: string | null;
-    defaultEmail?: string;
 }>();
 
 const emit = defineEmits<{
@@ -55,7 +43,6 @@ const { searchResults } = useSearchFilters();
 const selectedFormat = ref<ExportFormat>(EXPORT_FORMAT_BRANCH_EXCEL);
 const exportConceptsAs = ref<ExportConceptsAs>(EXPORT_CONCEPTS_AS_LABELS);
 const filename = ref("search_export");
-const email = ref(defaultEmail);
 
 const totalResults = computed<number>(
     () => searchResults.value.pagination?.total_results ?? 0,
@@ -76,17 +63,12 @@ const isExporting = computed<boolean>(
     () => exportState === EXPORT_STATE_PENDING,
 );
 
-const isEmailValid = computed<boolean>(
-    () => email.value.trim() === "" || EMAIL_PATTERN.test(email.value.trim()),
-);
-
 const canExport = computed<boolean>(
     () =>
         hasSingleGraph &&
         !isExporting.value &&
         totalResults.value > 0 &&
-        filename.value.trim() !== "" &&
-        isEmailValid.value,
+        filename.value.trim() !== "",
 );
 
 watch(
@@ -104,7 +86,6 @@ function onExport(): void {
         format: selectedFormat.value,
         filename: filename.value.trim(),
         exportConceptsAs: exportConceptsAs.value,
-        email: email.value.trim(),
     });
 }
 </script>
@@ -229,67 +210,6 @@ function onExport(): void {
                     :disabled="!hasSingleGraph"
                     @keydown.enter="onExport"
                 />
-            </div>
-
-            <div class="export-field">
-                <label
-                    for="export-email"
-                    class="export-label"
-                >
-                    {{ $gettext("Email address (optional)") }}
-                </label>
-                <InputText
-                    id="export-email"
-                    v-model="email"
-                    type="email"
-                    class="export-input"
-                    :fluid="true"
-                    :disabled="!hasSingleGraph"
-                    :invalid="!isEmailValid"
-                    :placeholder="$gettext('Use my account email')"
-                    aria-describedby="export-email-hint"
-                    @keydown.enter="onExport"
-                />
-                <small
-                    id="export-email-hint"
-                    class="export-hint"
-                    :class="{ 'export-hint-invalid': !isEmailValid }"
-                >
-                    {{
-                        isEmailValid
-                            ? $gettext(
-                                  "Exports run in the background. You will receive an Arches notification when the file is ready, and an email if one is provided.",
-                              )
-                            : $gettext("Enter a valid email address.")
-                    }}
-                </small>
-            </div>
-
-            <div
-                v-if="exportState === EXPORT_STATE_STARTED"
-                class="export-status"
-                role="status"
-            >
-                <i class="pi pi-check-circle" />
-                <span>
-                    {{
-                        $gettext(
-                            "Your export has started. You will be notified when it is ready to download.",
-                        )
-                    }}
-                </span>
-            </div>
-            <div
-                v-else-if="exportState === EXPORT_STATE_FAILED"
-                class="export-status export-status-error"
-                role="alert"
-            >
-                <i class="pi pi-exclamation-triangle" />
-                <span>
-                    {{
-                        errorMessage || $gettext("Export could not be started.")
-                    }}
-                </span>
             </div>
 
             <div class="export-actions">
@@ -459,35 +379,6 @@ function onExport(): void {
 
 .concepts-option label {
     cursor: pointer;
-}
-
-.export-hint {
-    color: var(--p-text-muted-color);
-    line-height: 1.4;
-}
-
-.export-hint-invalid {
-    color: var(--p-red-500);
-}
-
-.export-status {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.8rem;
-    padding: 0.8rem 1.2rem;
-    border: 0.1rem solid var(--p-content-border-color);
-    border-radius: 0.6rem;
-    background: var(--arches-search-page-bg);
-    color: var(--p-text-color);
-}
-
-.export-status .pi {
-    margin-block-start: 0.2rem;
-    color: var(--p-primary-color);
-}
-
-.export-status-error .pi {
-    color: var(--p-red-500);
 }
 
 .export-actions {
