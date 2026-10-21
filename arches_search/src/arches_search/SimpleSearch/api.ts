@@ -13,6 +13,7 @@ import type {
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     DateRangeFilter,
+    ExportRequest,
     NodeFilterConfigResponse,
     ResourceFieldFilter,
     ResourceFieldMetadata,
@@ -275,6 +276,54 @@ export async function exportSearchResults({
     anchor.download = filename;
     anchor.click();
     window.URL.revokeObjectURL(url);
+}
+
+export async function startSearchResultsExport({
+    terms = [],
+    query,
+    graphSlugs = [],
+    mapFilter = null,
+    dateRange = null,
+    resourceFieldFilters = null,
+    exportRequest,
+}: {
+    terms?: SearchRequestTerm[];
+    query?: GroupPayload;
+    graphSlugs?: string[];
+    mapFilter?: FeatureCollection | null;
+    dateRange?: DateRangeFilter | null;
+    resourceFieldFilters?: ResourceFieldFilter[] | null;
+    exportRequest: ExportRequest;
+}): Promise<void> {
+    const requestPayload = buildSearchApiRequestBody({
+        terms,
+        query,
+        graphSlugs,
+        mapFilter,
+        dateRange,
+        resourceFieldFilters,
+    });
+    requestPayload.format = exportRequest.format;
+    requestPayload.filename = exportRequest.filename;
+    requestPayload.exportConceptsAs = exportRequest.exportConceptsAs;
+    requestPayload.email = exportRequest.email;
+
+    const response = await fetch(
+        generateArchesURL("arches_search:search_results_export"),
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify(requestPayload),
+        },
+    );
+
+    if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error ?? response.statusText);
+    }
 }
 
 export async function fetchResourceFieldMetadata(
