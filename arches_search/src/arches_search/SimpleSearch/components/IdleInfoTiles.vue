@@ -15,6 +15,7 @@ defineEmits<{
     (event: "open-map"): void;
     (event: "open-time"): void;
     (event: "open-saved-searches"): void;
+    (event: "open-export-results"): void;
 }>();
 </script>
 
@@ -84,13 +85,24 @@ defineEmits<{
             >
                 <i class="pi pi-bookmark idle-info-tile-icon" />
                 <span class="idle-info-tile-title">
-                    {{ $gettext("Save & Export") }}
+                    {{ $gettext("Save Search") }}
+                </span>
+                <span class="idle-info-tile-desc">
+                    {{ $gettext("Save this search to run again later.") }}
+                </span>
+            </Button>
+            <Button
+                :text="true"
+                class="idle-info-tile"
+                @click="$emit('open-export-results')"
+            >
+                <i class="pi pi-download idle-info-tile-icon" />
+                <span class="idle-info-tile-title">
+                    {{ $gettext("Export Results") }}
                 </span>
                 <span class="idle-info-tile-desc">
                     {{
-                        $gettext(
-                            "Save this search for later or export the current results.",
-                        )
+                        $gettext("Export the current results to an Excel file.")
                     }}
                 </span>
             </Button>
