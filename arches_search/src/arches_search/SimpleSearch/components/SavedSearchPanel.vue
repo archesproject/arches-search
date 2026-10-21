@@ -30,7 +30,6 @@ const SORT_NEWEST = "newest" as const;
 const SORT_OLDEST = "oldest" as const;
 
 const RUN_QUERY_EVENT = "run-query" as const;
-const OPEN_EXPORT_EVENT = "open-export" as const;
 const CLOSE_EVENT = "close" as const;
 
 type SavedSearchSortValue =
@@ -50,7 +49,6 @@ const emit = defineEmits<{
         queryDefinition: Record<string, unknown>,
         searchName: string,
     ): void;
-    (event: "open-export"): void;
     (event: "close"): void;
 }>();
 
@@ -218,7 +216,7 @@ function queryTypeLabel(search: SavedSearch): string {
         >
             <span class="panel-header-title">
                 <i class="pi pi-bookmark-fill" />
-                {{ $gettext("Save/Export Search") }}
+                {{ $gettext("Save Search") }}
             </span>
             <Button
                 icon="pi pi-times"
@@ -233,7 +231,7 @@ function queryTypeLabel(search: SavedSearch): string {
         <div class="panel-tabs">
             <Button
                 v-if="shouldShowSaveTab"
-                :label="$gettext('Save/Export this search')"
+                :label="$gettext('Save this search')"
                 :text="true"
                 :class="['panel-tab', { active: activeTab === SAVE_TAB }]"
                 @click="activeTab = SAVE_TAB"
@@ -300,13 +298,6 @@ function queryTypeLabel(search: SavedSearch): string {
                     :loading="isSaving"
                     :disabled="isSaving || !saveSearchName.trim()"
                     @click="onSaveSearch"
-                />
-                <Button
-                    icon="pi pi-upload"
-                    severity="secondary"
-                    class="export-trigger-btn"
-                    :label="$gettext('Export')"
-                    @click="emit(OPEN_EXPORT_EVENT)"
                 />
             </div>
         </div>
@@ -536,12 +527,6 @@ function queryTypeLabel(search: SavedSearch): string {
 .save-form-actions {
     display: flex;
     gap: 0.8rem;
-}
-
-.export-trigger-btn.p-button {
-    background: var(--p-content-background);
-    border-color: var(--p-content-border-color);
-    color: var(--p-text-color);
 }
 
 .panel-controls {
