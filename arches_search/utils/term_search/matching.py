@@ -1,11 +1,29 @@
 from django.contrib.postgres.search import SearchQuery
-from django.db.models import Q
+from django.db.models import BooleanField, F, Func, Q, Value
 
 from arches.app.models.models import ResourceInstance
 from arches_search.models.models import TermSearch
 from arches_search.utils.term_search.relationship_expansion import (
     expand_matches_via_relationships,
 )
+
+
+def _contains_ignoring_case(term_text):
+    """
+    `value ILIKE '%term%'`. Unlike icontains (UPPER(value) LIKE UPPER(...)), this is
+    served by the gin_trgm_ops index on TermSearch.value and can be BitmapOr'd
+    with the search_vector match.
+    """
+    escaped_term = (
+        term_text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
+    return Func(
+        F("value"),
+        Value(f"%{escaped_term}%"),
+        arg_joiner=" ILIKE ",
+        template="(%(expressions)s)",
+        output_field=BooleanField(),
+    )
 
 
 def build_term_match_filter(term_text, datatype=None):
@@ -16,7 +34,9 @@ def build_term_match_filter(term_text, datatype=None):
     Pass datatype to additionally restrict matches to that TermSearch.datatype.
     """
     full_text_query = SearchQuery(term_text, search_type="plain", config="english")
-    match_filter = Q(search_vector=full_text_query) | Q(value__icontains=term_text)
+    match_filter = Q(search_vector=full_text_query) | Q(
+        _contains_ignoring_case(term_text)
+    )
     if datatype is not None:
         match_filter &= Q(datatype=datatype)
     return match_filter
