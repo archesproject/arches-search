@@ -40,6 +40,7 @@ interface ExportPayload {
     terms: SearchRequestTerm[];
     query: GroupPayload | undefined;
     graphSlugs: string[];
+    mapFilter: FeatureCollection | null;
     dateRange: DateRangeFilter | null;
     resourceFieldFilters: ResourceFieldFilter[] | null;
 }
@@ -475,6 +476,7 @@ function createSearchFilters(): SearchFilters {
             terms: toRequestTerms([...terms.value.values()]),
             query: buildRequestQuery(requestQueries),
             graphSlugs: getRequestGraphs().map((graph) => graph.slug),
+            mapFilter: mapFilter.value,
             dateRange: buildRequestDateRange(requestQueries),
             resourceFieldFilters: getRequestResourceFieldFilters(),
         };
