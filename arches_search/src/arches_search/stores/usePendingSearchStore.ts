@@ -6,6 +6,7 @@ import type { TermKind } from "@/arches_search/SimpleSearch/types.ts";
 
 export interface PendingSearch {
     searchDefinition?: Record<string, unknown>;
+    searchName?: string;
     term?: string;
     termKind?: TermKind;
     termIcon?: string;

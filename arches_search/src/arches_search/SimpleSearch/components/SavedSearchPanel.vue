@@ -45,7 +45,11 @@ const { shouldShowHeader = true, shouldShowSaveTab = true } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: "run-query", queryDefinition: Record<string, unknown>): void;
+    (
+        event: "run-query",
+        queryDefinition: Record<string, unknown>,
+        searchName: string,
+    ): void;
     (event: "open-export"): void;
     (event: "close"): void;
 }>();
@@ -384,7 +388,11 @@ function queryTypeLabel(search: SavedSearch): string {
                             :label="$gettext('Run query')"
                             :text="true"
                             @click="
-                                emit(RUN_QUERY_EVENT, search.query_definition)
+                                emit(
+                                    RUN_QUERY_EVENT,
+                                    search.query_definition,
+                                    search.name,
+                                )
                             "
                         />
                         <Button

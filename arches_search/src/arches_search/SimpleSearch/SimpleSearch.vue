@@ -72,6 +72,7 @@ const {
     activeFilters,
     activeGraphs,
     applySearchDefinition,
+    clearAll,
     clearMapFilter,
     clearQuery,
     clearTermFilter,
@@ -123,6 +124,7 @@ const graphModels = ref<GraphModel[]>([]);
 const showExportModal = ref(false);
 const filterValues = ref<Record<string, unknown>>({});
 const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
+const savedSearchName = ref<string | null>(null);
 
 const isSingleGraphSelected = computed<boolean>(
     () => activeGraphs.value.length === 1,
@@ -254,20 +256,59 @@ const attributeActiveFilters = computed<ActiveFilter[]>(() => {
     });
 });
 
+const unrepresentedQueryKeys = computed<string[]>(() => {
+    const representedKeys = new Set<string>([
+        TIME_FILTER_QUERY_KEY,
+        ...attributeActiveFilters.value.map((filter) => filter.id),
+    ]);
+
+    return [...queries.value.keys()].filter(
+        (filterKey) => !representedKeys.has(filterKey),
+    );
+});
+
+const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
+    if (unrepresentedQueryKeys.value.length === 0) {
+        return null;
+    }
+
+    return {
+        id: "advancedQuery",
+        text: savedSearchName.value ?? $gettext("Advanced query"),
+        clear: () => {
+            for (const filterKey of unrepresentedQueryKeys.value) {
+                clearAttributeFilter(filterKey);
+            }
+        },
+        inverted: false,
+        kind: ACTIVE_FILTER_KIND_ATTRIBUTE,
+        category: $gettext("Saved search"),
+        icon: "pi pi-bookmark",
+    };
+});
+
 const allActiveFilters = computed<ActiveFilter[]>(() => [
     ...activeFilters.value,
     ...resourceTypeActiveFilters.value,
     ...(timeActiveFilter.value ? [timeActiveFilter.value] : []),
     ...(mapActiveFilter.value ? [mapActiveFilter.value] : []),
     ...attributeActiveFilters.value,
+    ...(advancedQueryActiveFilter.value
+        ? [advancedQueryActiveFilter.value]
+        : []),
 ]);
 
 watch(
     () => activeGraphs.value,
     (graphs) => {
         // Drop any attribute-filter queries from the previously active graph.
+        const nextGraphSlug = graphs.length === 1 ? graphs[0].slug : null;
         for (const node of nodeFilterConfigNodes.value) {
-            clearQuery(node.node_alias);
+            if (
+                queries.value.get(node.node_alias)?.graph_slug !== nextGraphSlug
+            ) {
+                clearQuery(node.node_alias);
+            }
         }
         filterValues.value = {};
 
@@ -299,6 +340,7 @@ watchEffect(() => {
 onMounted(() => {
     const pendingSearch = usePendingSearchStore().consume();
     if (pendingSearch) {
+        savedSearchName.value = pendingSearch.searchName ?? null;
         applyPendingSearch(pendingSearch, {
             applySearchDefinition,
             clearTermFilter,
@@ -437,11 +479,19 @@ function clearAttributeFilter(nodeAlias: string): void {
     filterValues.value = remainingFilterValues;
 }
 
+function onClearAll(): void {
+    clearAll();
+    filterValues.value = {};
+    savedSearchName.value = null;
+}
+
 async function onRunSavedQuery(
     queryDefinition: Record<string, unknown>,
+    searchName: string,
 ): Promise<void> {
-    await applySearchDefinition(parseSearchDefinition(queryDefinition));
     filterValues.value = {};
+    savedSearchName.value = searchName;
+    await applySearchDefinition(parseSearchDefinition(queryDefinition));
 }
 </script>
 
@@ -451,7 +501,10 @@ async function onRunSavedQuery(
 
         <ResourceTypeFilter />
 
-        <ActiveFilters :active-filters="allActiveFilters" />
+        <ActiveFilters
+            :active-filters="allActiveFilters"
+            @clear-all="onClearAll"
+        />
 
         <div class="body">
             <Splitter
