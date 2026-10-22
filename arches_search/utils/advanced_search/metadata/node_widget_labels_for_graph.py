@@ -3,9 +3,11 @@ from django.db import models
 from arches.app.models import models as arches_models
 
 
-def get_nodes_with_widget_labels_for_graph(graph_id):
+def get_nodes_with_widget_labels_for_graph(graph_id, readable_nodes):
     node_rows = list(
-        arches_models.Node.objects.filter(graph_id=graph_id).values(
+        readable_nodes.filter_nodes(
+            arches_models.Node.objects.filter(graph_id=graph_id)
+        ).values(
             "nodeid", "nodegroup_id", "name", "sortorder", "datatype", "issearchable"
         )
     )

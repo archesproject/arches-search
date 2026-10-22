@@ -1,5 +1,6 @@
 import uuid
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 
 from arches.app.models.models import (
@@ -10,10 +11,12 @@ from arches.app.models.models import (
     NodeGroup,
     Widget,
 )
+from arches.app.utils.permission_backend import assign_perm
 
 from arches_search.utils.advanced_search.metadata.node_widget_labels_for_graph import (
     get_nodes_with_widget_labels_for_graph,
 )
+from arches_search.utils.readable_nodes import ReadableNodes
 
 # python manage.py test tests.test_node_widget_labels_for_graph --settings="tests.test_settings"
 
@@ -21,6 +24,7 @@ from arches_search.utils.advanced_search.metadata.node_widget_labels_for_graph i
 class NodeWidgetLabelsForGraphTest(TestCase):
     @classmethod
     def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="reader", password="reader")
         cls.graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
             name="Test Graph",
@@ -76,8 +80,17 @@ class NodeWidgetLabelsForGraphTest(TestCase):
         )
 
     def _nodes_by_id(self):
-        nodes = get_nodes_with_widget_labels_for_graph(self.graph.graphid)
+        nodes = get_nodes_with_widget_labels_for_graph(
+            self.graph.graphid, ReadableNodes(self.user)
+        )
         return {node["id"]: node for node in nodes}
+
+    def test_nodes_the_user_cannot_read_are_omitted(self):
+        assign_perm("write_nodegroup", self.user, self.part_nodegroup)
+
+        nodes_by_id = self._nodes_by_id()
+
+        self.assertNotIn(str(self.part_name_content_node.nodeid), nodes_by_id)
 
     def test_widget_less_non_root_node_is_omitted(self):
         nodes_by_id = self._nodes_by_id()
