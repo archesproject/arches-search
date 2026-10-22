@@ -8,8 +8,14 @@ import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchSt
 
 const router = useRouter();
 
-function onRunQuery(queryDefinition: Record<string, unknown>): void {
-    usePendingSearchStore().set({ searchDefinition: queryDefinition });
+function onRunQuery(
+    queryDefinition: Record<string, unknown>,
+    searchName: string,
+): void {
+    usePendingSearchStore().set({
+        searchDefinition: queryDefinition,
+        searchName,
+    });
     router.push({ name: routeNames.simpleSearch });
 }
 </script>

@@ -59,6 +59,7 @@ interface SearchFilters {
     searchResults: Ref<SearchResults>;
     sort: Ref<SortSpec[]>;
     applySearchDefinition(definition: SearchDefinition): Promise<void>;
+    clearAll(): void;
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(key: string): void;
@@ -227,6 +228,16 @@ function createSearchFilters(): SearchFilters {
 
     function clearMapFilter(): void {
         mapFilter.value = null;
+        search();
+    }
+
+    function clearAll(): void {
+        terms.value = new Map();
+        queries.value = new Map();
+        mapFilter.value = null;
+        resourceFieldFilters.value = new Map();
+        activeGraphs.value = [];
+        currentPage.value = FIRST_SEARCH_PAGE;
         search();
     }
 
@@ -475,6 +486,7 @@ function createSearchFilters(): SearchFilters {
         availableGraphs,
         loadAvailableGraphs,
         applySearchDefinition,
+        clearAll,
         clearMapFilter,
         clearQuery,
         clearTermFilter,
