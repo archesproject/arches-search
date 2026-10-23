@@ -14,6 +14,7 @@ from django.db.models import QuerySet
 from arches.app.utils.betterJSONSerializer import JSONSerializer
 
 from arches_search.utils.readable_nodes import ReadableNodes
+from arches_search.utils.search.additional_data import node_values
 from arches_search.utils.search.additional_data.additional_data import (
     AdditionalData,
     validate_additional_data,
@@ -55,16 +56,14 @@ def execute_search(
         payload, user, pre_filter=pre_filter, readable_nodes=readable_nodes
     ).compile()
 
-    additional_data = AdditionalData(
-        search_request.additional_data,
-        readable_nodes,
-        # Ordering by a node value needs it annotated too.
-        also_project_nodes=_node_keys_an_ordering_needs(sort_resolver),
+    additional_data = AdditionalData(search_request.additional_data, readable_nodes)
+
+    sort_nodes = node_values.resolve(
+        _node_keys_an_ordering_needs(sort_resolver), readable_nodes
     )
 
     results_queryset = sort_resolver.apply(
-        additional_data.annotate(search_result.results),
-        node_column_annotations=additional_data.node_annotation_names,
+        additional_data.annotate(search_result.results), sort_nodes=sort_nodes
     )
 
     paginator = Paginator(results_queryset, search_request.page_size)

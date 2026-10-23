@@ -1,6 +1,4 @@
-from django.contrib.postgres.search import SearchVector
 from arches.app.datatypes.datatypes import DataTypeFactory, BaseDataType
-from arches.app.models.models import Language
 from arches_search.models.models import TermSearch, UUIDSearch
 
 from arches_search.indexing.base import BaseIndexing
@@ -10,42 +8,46 @@ class ReferenceIndexing(BaseIndexing):
     def __init__(self):
         super().__init__()
         self.datatype: BaseDataType = DataTypeFactory().get_instance("reference")
-        self.languages: dict[str, Language] = {}
 
-    def _set_languages(self):
-        if not self.languages:
-            for l_obj in Language.objects.all():
-                self.languages[l_obj.code] = l_obj
+    def sort_row_filters(self) -> dict:
+        """Sort by the preferred label, not by an alternate one."""
+        return {"valuetype": "prefLabel"}
 
     def index(self, tile, node):
-        nodeid = str(node.nodeid)
-        self._set_languages()
-        document = {"strings": [], "references": []}
-        self.datatype.append_to_document(document, tile.data[nodeid], node, tile)
-        search_items = []
-        for string in document["strings"]:
-            if string["string"] is not None:
-                string_search = TermSearch(
-                    node_alias=node.alias,
-                    tileid_id=tile.tileid,
-                    resourceinstanceid_id=tile.resourceinstance_id,
-                    datatype=self.datatype.datatype_name,
-                    graph_slug=node.graph.slug,
-                    language=node.config.lang,
-                    value=string["string"],
-                )
-                search_items.append(string_search)
+        """
+        A row per label, carrying the language and valuetype it declares.
 
-        for reference in document["references"]:
-            if reference["id"] is not None:
-                uuid_search = UUIDSearch(
-                    node_alias=node.alias,
-                    tileid_id=tile.tileid,
-                    resourceinstanceid_id=tile.resourceinstance_id,
-                    datatype=self.datatype.datatype_name,
-                    graph_slug=node.graph.slug,
-                    value=reference["id"],
-                )
-                search_items.append(uuid_search)
+        Read from the tile rather than through append_to_document(), which
+        flattens labels to bare strings and so loses both.
+        """
+        search_items = []
+
+        for reference in tile.data[str(node.nodeid)]:
+            for label in reference["labels"]:
+                if label["value"] is not None:
+                    search_items.append(
+                        TermSearch(
+                            node_alias=node.alias,
+                            tileid_id=tile.tileid,
+                            resourceinstanceid_id=tile.resourceinstance_id,
+                            datatype=self.datatype.datatype_name,
+                            graph_slug=node.graph.slug,
+                            language=label["language_id"],
+                            valuetype=label["valuetype_id"],
+                            value=label["value"],
+                        )
+                    )
+
+                if label["id"] is not None:
+                    search_items.append(
+                        UUIDSearch(
+                            node_alias=node.alias,
+                            tileid_id=tile.tileid,
+                            resourceinstanceid_id=tile.resourceinstance_id,
+                            datatype=self.datatype.datatype_name,
+                            graph_slug=node.graph.slug,
+                            value=label["id"],
+                        )
+                    )
 
         return search_items

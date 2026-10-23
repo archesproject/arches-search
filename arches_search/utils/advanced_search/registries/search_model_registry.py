@@ -130,6 +130,23 @@ class SearchModelRegistry:
 
         return model_class
 
+    def get_sort_model_for_datatype(self, datatype_name: str) -> Any:
+        """
+        The model an ordering reads, or None where the datatype has nothing
+        worth ordering by.
+        """
+        value_models = [
+            model_class
+            for model_class in self._datatype_to_model_classes.get(datatype_name, [])
+            if self._model_has_field(model_class, "value")
+            and not self._value_field_is_uuid(model_class)
+        ]
+
+        if len(value_models) != 1:
+            return None
+
+        return value_models[0]
+
     def get_relationship_model_for_datatype(self, datatype_name: str) -> Any:
         model_class = self._datatype_to_relationship_model_class.get(datatype_name)
 
