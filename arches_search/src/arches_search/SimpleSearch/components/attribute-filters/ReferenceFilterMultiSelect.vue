@@ -80,6 +80,7 @@ function onSelectionChange(value: ReferenceFilterValue): void {
     <div class="reference-filter">
         <MultiSelect
             class="reference-filter-select"
+            data-key="id"
             :input-id="node.node_alias"
             :model-value="modelValue ?? []"
             :options="options"
@@ -90,6 +91,7 @@ function onSelectionChange(value: ReferenceFilterValue): void {
             :placeholder="$gettext('Select options...')"
             :show-clear="true"
             :fluid="true"
+            :disabled="options.length === 0 && !isLoading"
             :aria-label="node.label"
             @update:model-value="onSelectionChange"
         />
