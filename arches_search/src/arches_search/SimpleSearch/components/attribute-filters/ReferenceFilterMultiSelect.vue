@@ -60,7 +60,7 @@ watch(
             }));
         } catch (error) {
             console.error(
-                "[ReferenceFilter] failed to load controlled list items:",
+                "[ReferenceFilterMultiSelect] failed to load controlled list items:",
                 error,
             );
             options.value = [];
@@ -109,17 +109,18 @@ function onSelectionChange(value: ReferenceFilterValue): void {
     padding: 0.4rem 0 0.8rem 0;
 }
 
-:deep(.p-multiselect-label) {
-    font-size: 1.2rem;
+.reference-filter .reference-filter-select {
+    padding-block: 0.4rem;
+    padding-inline: 0.8rem;
 }
 
-:deep(.reference-filter-select .p-multiselect) {
-    padding: 0.4rem 0.8rem;
+.reference-filter :deep(.p-multiselect-label) {
+    font-size: var(--p-arches-search-font-size);
 }
 
-.status {
+.reference-filter .status {
     display: block;
-    font-size: 1.2rem;
+    font-size: var(--p-arches-search-font-size);
     color: var(--p-text-muted-color);
     padding: 0.4rem 0 0 0;
     line-height: 1.5;
