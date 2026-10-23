@@ -104,6 +104,10 @@ function componentFor(node: NodeFilterConfigNode): Component | null {
     gap: 1.6rem;
 }
 
+.attribute-filters :deep(.p-accordioncontent-wrapper) {
+    min-inline-size: 0;
+}
+
 .attribute-filters-header {
     display: flex;
     align-items: center;
