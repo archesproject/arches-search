@@ -2,8 +2,8 @@
 Term matching, and expansion across relationships.
 
 Terms are matched against every indexed text value on a resource -- no node is
-named -- and then walked back to the graph being searched across at most two
-relationship hops.
+named -- and then walked back to the graph being searched across at most
+settings.TERM_SEARCH_MAX_HOPS relationship hops (two by default).
 
 That traversal is anonymous: it follows any relationship, in either direction,
 ignoring ontology properties. It is deliberately not an advanced search clause,

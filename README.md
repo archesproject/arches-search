@@ -642,7 +642,7 @@ reference values, rather than any text that happens to contain its label:
 }
 ```
 
-`max_hops` is capped at 2, and `0` means "match directly, do not traverse".
+`max_hops` is capped by the `TERM_SEARCH_MAX_HOPS` setting (default 2), and `0` means "match directly, do not traverse".
 
 **This is the only anonymous traversal in the API.** It follows any relationship
 the requester can read, in either direction, ignoring ontology properties —
