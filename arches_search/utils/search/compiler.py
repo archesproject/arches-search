@@ -9,6 +9,7 @@ results are unioned. A graph no payload addresses skips that last step.
 from functools import cached_property
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db.models import Count, QuerySet
 from django.utils.translation import gettext as _
@@ -292,7 +293,9 @@ class SearchCompiler:
         if not term_search or not term_search.get("terms"):
             return None
 
-        max_hops = term_search.get("max_hops") or 0
+        max_hops = min(
+            term_search.get("max_hops") or 0, settings.TERM_SEARCH_MAX_HOPS
+        )
         matches = None
         for datatype, term_texts in _term_texts_by_datatype(
             term_search["terms"]
