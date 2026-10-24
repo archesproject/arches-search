@@ -4,6 +4,7 @@ own tests for how they seed it)."""
 
 import uuid
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -178,7 +179,7 @@ class RelationshipExpansionTests(TestCase):
             self.assertIn(self.target_one_hop.resourceinstanceid, self._matched_ids(1))
 
     def test_max_hops_out_of_range_raises(self):
-        for max_hops in (-1, 3):
+        for max_hops in (-1, settings.TERM_SEARCH_MAX_HOPS + 1):
             with self.subTest(max_hops=max_hops), self.assertRaises(ValueError):
                 expand_matches_via_relationships(
                     self._seed_ids(),

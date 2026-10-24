@@ -1,9 +1,9 @@
+from django.conf import settings
 from django.db.models import Expression, UUIDField
 from django.db.models.expressions import RawSQL
 
 from arches.app.models.models import ResourceInstance, ResourceXResource
 
-MAX_ALLOWED_HOPS = 2
 SEED_CTE_NAME = "term_direct_matches"
 FRONTIER_CTE_PREFIX = "term_frontier_"
 
@@ -71,8 +71,10 @@ def expand_matches_via_relationships(
 
     Links made through a node the user cannot read are not followed.
     """
-    if not 0 <= max_hops <= MAX_ALLOWED_HOPS:
-        raise ValueError(f"max_hops must be between 0 and {MAX_ALLOWED_HOPS}")
+    if not 0 <= max_hops <= settings.TERM_SEARCH_MAX_HOPS:
+        raise ValueError(
+            f"max_hops must be between 0 and {settings.TERM_SEARCH_MAX_HOPS}"
+        )
 
     relations = readable_nodes.exclude_unreadable_relations(
         ResourceXResource.objects.all()

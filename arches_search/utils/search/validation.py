@@ -10,8 +10,6 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
-from arches_search.utils.term_search.relationship_expansion import MAX_ALLOWED_HOPS
-
 
 def _positive_integer(value) -> bool:
     # bool is an int subclass, and True would otherwise pass as page 1.
@@ -77,11 +75,11 @@ def validate_term_search(term_search):
     if (
         not isinstance(max_hops, int)
         or isinstance(max_hops, bool)
-        or not (0 <= max_hops <= MAX_ALLOWED_HOPS)
+        or not (0 <= max_hops <= settings.TERM_SEARCH_MAX_HOPS)
     ):
         raise ValidationError(
             _("term_search max_hops must be an integer between 0 and %(max)s.")
-            % {"max": MAX_ALLOWED_HOPS}
+            % {"max": settings.TERM_SEARCH_MAX_HOPS}
         )
 
 
