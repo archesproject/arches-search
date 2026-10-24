@@ -5,7 +5,7 @@ from arches.app.models.system_settings import settings
 
 from arches_search.models.models import NodeFilterConfig
 
-CONFIGURABLE_DATATYPES = ("number", "non-localized-string", "reference", "string")
+CONFIGURABLE_DATATYPES = ("number", "reference")
 
 
 class Command(BaseCommand):
