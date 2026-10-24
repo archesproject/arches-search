@@ -4,6 +4,7 @@ from django.db.models.expressions import RawSQL
 
 from arches.app.models.models import ResourceInstance, ResourceXResource
 
+DEFAULT_MAX_HOPS = 2
 SEED_CTE_NAME = "term_direct_matches"
 FRONTIER_CTE_PREFIX = "term_frontier_"
 
@@ -57,6 +58,10 @@ class MaterializedUnion(Expression):
         return f"(WITH {', '.join(cte_parts)} {final_sql})", params
 
 
+def get_max_allowed_hops():
+    return getattr(settings, "TERM_SEARCH_MAX_HOPS", DEFAULT_MAX_HOPS)
+
+
 def set_reference(name):
     """Right-hand side of an `__in` lookup selecting from a named set."""
     return RawSQL(f"SELECT resourceinstanceid FROM {name}", [])
@@ -71,10 +76,9 @@ def expand_matches_via_relationships(
 
     Links made through a node the user cannot read are not followed.
     """
-    if not 0 <= max_hops <= settings.TERM_SEARCH_MAX_HOPS:
-        raise ValueError(
-            f"max_hops must be between 0 and {settings.TERM_SEARCH_MAX_HOPS}"
-        )
+    max_allowed_hops = get_max_allowed_hops()
+    if not 0 <= max_hops <= max_allowed_hops:
+        raise ValueError(f"max_hops must be between 0 and {max_allowed_hops}")
 
     relations = readable_nodes.exclude_unreadable_relations(
         ResourceXResource.objects.all()
