@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.db.models import Prefetch
 
 from arches.app.models import models
 from arches.app.models.system_settings import settings
@@ -78,16 +79,31 @@ class Command(BaseCommand):
                     return
 
         for graph in eligible_graphs:
-            filterable_nodes = models.Node.objects.filter(
-                graph=graph,
-                datatype__in=CONFIGURABLE_DATATYPES,
-                issearchable=True,
-            ).order_by("name")
+            filterable_nodes = (
+                models.Node.objects.filter(
+                    graph=graph,
+                    datatype__in=CONFIGURABLE_DATATYPES,
+                    issearchable=True,
+                    nodegroup__isnull=False,
+                    nodegroup__parentnodegroup__isnull=True,
+                    cardxnodexwidget__visible=True,
+                )
+                .distinct()
+                .prefetch_related(
+                    Prefetch(
+                        "cardxnodexwidget_set",
+                        queryset=models.CardXNodeXWidget.objects.filter(visible=True)
+                        .select_related("card")
+                        .order_by("card__sortorder", "sortorder"),
+                    )
+                )
+            )
+            filterable_nodes = sorted(filterable_nodes, key=self.get_sort_key)
 
             config = {
                 "nodes": [
                     {
-                        "label": str(node.name),
+                        "label": self.get_widget_label(node),
                         "sortorder": index,
                         "node_alias": node.alias,
                         "filterable": False,
@@ -112,3 +128,23 @@ class Command(BaseCommand):
                 )
                 status = "Created" if created else "Skipped"
             self.stdout.write(f"\t{status}: [filtering] on {graph.slug}")
+
+    def get_sort_key(self, node):
+        card_node_widget = node.cardxnodexwidget_set.all()[0]
+        card_sortorder = card_node_widget.card.sortorder
+        widget_sortorder = card_node_widget.sortorder
+        return (
+            card_sortorder is None,
+            card_sortorder or 0,
+            widget_sortorder is None,
+            widget_sortorder or 0,
+            str(node.name),
+        )
+
+    def get_widget_label(self, node):
+        card_node_widgets = list(node.cardxnodexwidget_set.all())
+        if card_node_widgets and card_node_widgets[0].label:
+            widget_label = str(card_node_widgets[0].label).strip()
+            if widget_label:
+                return widget_label
+        return str(node.name)
