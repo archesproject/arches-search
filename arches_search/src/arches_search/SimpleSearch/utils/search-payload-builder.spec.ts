@@ -42,6 +42,20 @@ describe("buildSearchApiRequestBody", () => {
         });
     });
 
+    it("sends the given max hops", () => {
+        const body = buildSearchApiRequestBody({
+            terms: [{ type: "string", text: "mission", inverted: false }],
+            graphSlugs: GRAPH_SLUGS,
+            mapFilter: null,
+            maxHops: 0,
+        });
+
+        expect(body.term_search).toEqual({
+            terms: ["mission"],
+            max_hops: 0,
+        });
+    });
+
     it("sends no term search when there are no terms", () => {
         const body = buildSearchApiRequestBody({
             terms: [],

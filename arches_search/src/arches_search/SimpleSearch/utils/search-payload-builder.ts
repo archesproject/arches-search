@@ -11,7 +11,8 @@ import type {
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-const TERM_SEARCH_MAX_HOPS = 2;
+// The server lowers this to its own TERM_SEARCH_MAX_HOPS setting.
+export const TERM_SEARCH_MAX_HOPS = 2;
 
 // A string matches any datatype; an object only matches its own.
 type TermSearchTerm = string | { text: string; datatype: string };
@@ -49,13 +50,16 @@ function buildTermSearchTerm(term: SearchRequestTerm): TermSearchTerm {
     return term.text;
 }
 
-function buildTermSearch(terms: SearchRequestTerm[]): TermSearch | null {
+function buildTermSearch(
+    terms: SearchRequestTerm[],
+    maxHops: number,
+): TermSearch | null {
     if (terms.length === 0) {
         return null;
     }
     return {
         terms: terms.map(buildTermSearchTerm),
-        max_hops: TERM_SEARCH_MAX_HOPS,
+        max_hops: maxHops,
     };
 }
 
@@ -173,6 +177,7 @@ export function buildSearchApiRequestBody({
     mapFilter,
     dateRange,
     resourceFieldFilters,
+    maxHops = TERM_SEARCH_MAX_HOPS,
     page,
     sort,
 }: {
@@ -182,12 +187,13 @@ export function buildSearchApiRequestBody({
     mapFilter: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
+    maxHops?: number;
     page?: number;
     sort?: SortSpec[];
 }): Record<string, unknown> {
     const requestPayload: Record<string, unknown> = {
         graph_slugs: graphSlugs.length > 0 ? graphSlugs : null,
-        term_search: buildTermSearch(terms),
+        term_search: buildTermSearch(terms, maxHops),
         advanced_search_queries: buildAdvancedSearchQueries(
             query,
             resourceFieldFilters,
