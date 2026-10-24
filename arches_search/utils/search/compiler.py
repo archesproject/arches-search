@@ -9,7 +9,6 @@ results are unioned. A graph no payload addresses skips that last step.
 from functools import cached_property
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db.models import Count, QuerySet
 from django.utils.translation import gettext as _
@@ -27,6 +26,9 @@ from arches_search.utils.advanced_search.registries.search_model_registry import
 from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.search.types import SearchPayload, SearchResult
 from arches_search.utils.term_search.matching import get_related_resources_by_text
+from arches_search.utils.term_search.relationship_expansion import (
+    get_max_allowed_hops,
+)
 
 
 class SearchableGraph(NamedTuple):
@@ -293,9 +295,7 @@ class SearchCompiler:
         if not term_search or not term_search.get("terms"):
             return None
 
-        max_hops = min(
-            term_search.get("max_hops") or 0, settings.TERM_SEARCH_MAX_HOPS
-        )
+        max_hops = min(term_search.get("max_hops") or 0, get_max_allowed_hops())
         matches = None
         for datatype, term_texts in _term_texts_by_datatype(
             term_search["terms"]
