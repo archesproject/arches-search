@@ -1,3 +1,9 @@
+import glob
+import json
+import os
+from pathlib import Path
+
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand
 from django.db.models import Prefetch
 
@@ -18,8 +24,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "operation",
-            choices=["generate"],
-            help='"generate" (create filter configs for all the graphs).',
+            choices=["load", "write", "generate"],
+            help='"load", "write", or "generate" (create filter configs for all the graphs).',
         )
 
         parser.add_argument(
@@ -32,6 +38,30 @@ class Command(BaseCommand):
         )
 
         parser.add_argument(
+            "-s",
+            "--source",
+            action="store",
+            dest="source",
+            help="Source location of filter configs",
+        )
+
+        parser.add_argument(
+            "-d",
+            "--dest",
+            action="store",
+            dest="dest",
+            help="Destination location of filter configs",
+        )
+
+        parser.add_argument(
+            "--slug",
+            action="store",
+            dest="slug",
+            default=None,
+            help="Filter config slug to operate on (write operation only). Defaults to all slugs.",
+        )
+
+        parser.add_argument(
             "--overwrite",
             action="store_true",
             dest="overwrite",
@@ -40,11 +70,71 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        if options["operation"] == "generate":
+        graph_slug = options["graph"]
+
+        if options["operation"] == "load":
+            if options["source"]:
+                self.load_filter_configs(options["source"], graph_slug=graph_slug)
+            elif os.path.exists(os.path.join(settings.APP_ROOT, "filter_configs")):
+                source = os.path.join(settings.APP_ROOT, "filter_configs/**")
+                self.load_filter_configs(source, graph_slug=graph_slug)
+
+        elif options["operation"] == "write":
+            if options["dest"]:
+                self.write_filter_configs(
+                    options["dest"], slug=options["slug"], graph_slug=graph_slug
+                )
+            elif os.path.exists(os.path.join(settings.APP_ROOT, "filter_configs")):
+                dest = os.path.join(settings.APP_ROOT, "filter_configs")
+                self.write_filter_configs(
+                    dest=dest, slug=options["slug"], graph_slug=graph_slug
+                )
+
+        elif options["operation"] == "generate":
             self.generate_filter_configs(
-                graph_slug=options["graph"],
+                graph_slug=graph_slug,
                 overwrite=options["overwrite"],
             )
+
+    def write_filter_configs(self, dest, slug=None, graph_slug=None):
+        configs = NodeFilterConfig.objects.select_related("graph")
+        if slug:
+            configs = configs.filter(slug=slug)
+        if graph_slug and graph_slug != "all":
+            configs = configs.filter(graph__slug=graph_slug)
+        for config in configs:
+            os.makedirs(os.path.join(dest, config.graph.slug), exist_ok=True)
+            file_path = os.path.join(dest, config.graph.slug, f"{config.slug}.json")
+            with open(file_path, "w") as f:
+                json.dump(config.config, f, indent=2)
+            self.stdout.write(f"\tWritten: [{config.slug}] on {config.graph.slug}")
+
+    def load_filter_configs(self, configs_dir, graph_slug=None):
+        config_dirs = glob.glob(configs_dir)
+        for config_dir in config_dirs:
+            dir_graph_slug = Path(config_dir).stem
+            if graph_slug and graph_slug != "all" and dir_graph_slug != graph_slug:
+                continue
+            for file in glob.glob(os.path.join(config_dir, "*.json")):
+                with open(file) as f:
+                    data = json.load(f)
+                try:
+                    graph = models.GraphModel.objects.get(slug=dir_graph_slug)
+                except ObjectDoesNotExist as e:
+                    self.stderr.write(
+                        self.style.ERROR(
+                            f"\tFilter config at {file} failed to save and was not loaded.\n\tErrors: {e}"
+                        )
+                    )
+                    continue
+                NodeFilterConfig.objects.update_or_create(
+                    graph=graph,
+                    slug=Path(file).stem,
+                    defaults={"config": data},
+                )
+                self.stdout.write(
+                    f'\tLoaded: [{Path(file).stem}] on graph "{dir_graph_slug}"'
+                )
 
     def generate_filter_configs(self, graph_slug=None, overwrite=False):
         eligible_graphs = models.GraphModel.objects.filter(
