@@ -5,6 +5,7 @@ import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 import Select from "openvue/select";
+import ToggleSwitch from "openvue/toggleswitch";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
@@ -21,7 +22,7 @@ import type {
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const { $gettext } = useGettext();
-const { searchResults } = useSearchFilters();
+const { includeRelated, searchResults, setIncludeRelated } = useSearchFilters();
 
 const totalResults = computed<number>(
     () => searchResults.value.pagination?.total_results ?? 0,
@@ -76,6 +77,16 @@ defineEmits<{
                 overlay-class="sort-select-overlay"
                 @update:model-value="$emit('update:sortValue', $event)"
             />
+            <div class="include-related">
+                <ToggleSwitch
+                    :model-value="includeRelated"
+                    input-id="include-related-toggle"
+                    @update:model-value="setIncludeRelated"
+                />
+                <label for="include-related-toggle">
+                    {{ $gettext("Include Related") }}
+                </label>
+            </div>
         </div>
 
         <div class="toolbar-right">
@@ -166,6 +177,16 @@ defineEmits<{
 
 :deep(.sort-select .p-select) {
     padding: 0.4rem 0.8rem;
+}
+
+.include-related {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8rem;
+    color: var(--p-text-muted-color);
+    font-size: 1.2rem;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 .toolbar-right {

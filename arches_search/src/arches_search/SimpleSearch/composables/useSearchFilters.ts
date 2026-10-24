@@ -12,6 +12,7 @@ import {
     buildRequestQuery,
     buildRequestTerms,
 } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
+import { TERM_SEARCH_MAX_HOPS } from "@/arches_search/SimpleSearch/utils/search-payload-builder.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
 import type {
@@ -43,6 +44,7 @@ interface ExportPayload {
     mapFilter: FeatureCollection | null;
     dateRange: DateRangeFilter | null;
     resourceFieldFilters: ResourceFieldFilter[] | null;
+    maxHops: number;
 }
 
 interface SearchFilters {
@@ -51,6 +53,7 @@ interface SearchFilters {
     availableGraphs: Ref<ResourceType[]>;
     loadAvailableGraphs(): Promise<void>;
     currentPage: Ref<number>;
+    includeRelated: Ref<boolean>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
     resourceFieldFilters: Ref<Map<string, ResourceFieldFilter>>;
@@ -68,6 +71,7 @@ interface SearchFilters {
     getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
     setGraphsBySlug(graphSlugs: string[]): Promise<void>;
+    setIncludeRelated(include: boolean): void;
     setMapFilter(featureCollection: FeatureCollection): void;
     setQuery(filterKey: string, payload: GroupPayload): void;
     setResourceFieldFilter(
@@ -100,6 +104,12 @@ function createSearchFilters(): SearchFilters {
     const terms = ref<Map<string, ActiveFilter>>(new Map());
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const mapFilter = ref<FeatureCollection | null>(null);
+    // Whether term matches also bring in resources related to the matches.
+    const includeRelated = ref(true);
+    // Not including related resources is a search of no hops.
+    const requestMaxHops = computed(() =>
+        includeRelated.value ? TERM_SEARCH_MAX_HOPS : 0,
+    );
     // Keyed by field name so re-selecting a field replaces its filter rather
     // than stacking a second, contradictory one.
     const resourceFieldFilters = ref<Map<string, ResourceFieldFilter>>(
@@ -314,6 +324,12 @@ function createSearchFilters(): SearchFilters {
         setGraphs(nextGraphs);
     }
 
+    function setIncludeRelated(include: boolean): void {
+        includeRelated.value = include;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
     function setSort(next: SortSpec[]): void {
         sort.value = next;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -341,6 +357,7 @@ function createSearchFilters(): SearchFilters {
                     graphSlugs: requestGraphs.map((graph) => graph.slug),
                     mapFilter: mapFilter.value,
                     resourceFieldFilters: getRequestResourceFieldFilters(),
+                    maxHops: requestMaxHops.value,
                     sort: sort.value,
                 };
 
@@ -430,6 +447,7 @@ function createSearchFilters(): SearchFilters {
             queries: Object.fromEntries(queries.value),
             graphSlugs: getRequestGraphs().map((graph) => graph.slug),
             mapFilter: mapFilter.value,
+            includeRelated: includeRelated.value,
         };
     }
 
@@ -446,6 +464,9 @@ function createSearchFilters(): SearchFilters {
         for (const filterKey of [...queries.value.keys()]) {
             clearQuery(filterKey);
         }
+
+        // Set directly: the setters below trigger the search.
+        includeRelated.value = definition.includeRelated;
 
         setGraphs(findAvailableGraphs(definition.graphSlugs));
 
@@ -479,6 +500,7 @@ function createSearchFilters(): SearchFilters {
             mapFilter: mapFilter.value,
             dateRange: buildRequestDateRange(requestQueries),
             resourceFieldFilters: getRequestResourceFieldFilters(),
+            maxHops: requestMaxHops.value,
         };
     }
 
@@ -495,6 +517,7 @@ function createSearchFilters(): SearchFilters {
         currentPage,
         getSearchDefinition,
         getExportPayload,
+        includeRelated,
         isSearching,
         mapFilter,
         queries: queriesView,
@@ -506,6 +529,7 @@ function createSearchFilters(): SearchFilters {
         clearResourceFieldFilters,
         searchResults,
         setGraphsBySlug,
+        setIncludeRelated,
         setMapFilter,
         setQuery,
         setSort,

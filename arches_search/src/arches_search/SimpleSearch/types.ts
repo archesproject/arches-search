@@ -17,6 +17,7 @@ export interface SearchDefinition {
     queries: Record<string, GroupPayload>;
     graphSlugs: string[];
     mapFilter: FeatureCollection | null;
+    includeRelated: boolean;
 }
 
 export const TERM_KIND_CONTROLLED_TERM = "controlled-term";
