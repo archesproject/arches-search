@@ -72,15 +72,8 @@ def validate_term_search(term_search):
         )
 
     max_hops = term_search.get("max_hops", 0)
-    if (
-        not isinstance(max_hops, int)
-        or isinstance(max_hops, bool)
-        or not (0 <= max_hops <= settings.TERM_SEARCH_MAX_HOPS)
-    ):
-        raise ValidationError(
-            _("term_search max_hops must be an integer between 0 and %(max)s.")
-            % {"max": settings.TERM_SEARCH_MAX_HOPS}
-        )
+    if not isinstance(max_hops, int) or isinstance(max_hops, bool) or max_hops < 0:
+        raise ValidationError(_("term_search max_hops must be a non-negative integer."))
 
 
 def validate_advanced_search_queries(advanced_search_queries):
