@@ -132,5 +132,8 @@ export function parseSearchDefinition(
         mapFilter = raw.mapFilter as FeatureCollection;
     }
 
-    return { terms, queries: queriesIn, graphSlugs, mapFilter };
+    // Searches saved before the switch existed included related resources.
+    const includeRelated = raw.includeRelated !== false;
+
+    return { terms, queries: queriesIn, graphSlugs, mapFilter, includeRelated };
 }
