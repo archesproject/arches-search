@@ -69,6 +69,17 @@ class SortResolverValidationTests(SimpleTestCase):
         resolver = SortResolver([{"type": SORT_TYPE_PRIMARY_NAME}])
         self.assertEqual(resolver.sort_specs, [{"type": SORT_TYPE_PRIMARY_NAME}])
 
+    def test_node_spec_requires_graph_slug_and_node_alias(self):
+        invalid_specs = [
+            {"type": SORT_TYPE_NODE, "node_alias": "score"},
+            {"type": SORT_TYPE_NODE, "graph_slug": "some-graph"},
+            {"type": SORT_TYPE_NODE, "graph_slug": "", "node_alias": "score"},
+            {"type": SORT_TYPE_NODE, "graph_slug": "some-graph", "node_alias": None},
+        ]
+        for spec in invalid_specs:
+            with self.subTest(spec=spec), self.assertRaises(ValidationError):
+                SortResolver([spec])
+
 
 class SortResolverApplyTests(TestCase):
     """
@@ -296,3 +307,178 @@ class SortResolverNodeSortTests(TestCase):
             ]
         )
         self.assertEqual(ordered_ids, [self.id_high, self.id_low, self.id_no_value])
+
+
+def _node_spec(graph, alias, direction=DIRECTION_ASC):
+    return {
+        "type": SORT_TYPE_NODE,
+        "graph_slug": graph.slug,
+        "node_alias": alias,
+        "direction": direction,
+    }
+
+
+class SortResolverNodeTextTests(TestCase):
+    """
+    A string node sorts case-insensitively by the active language's value,
+    and node specs that cannot be resolved are ignored.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.graph = GraphModel.objects.create(
+            graphid=uuid.uuid4(), slug="test-node-sort-text", isresource=True
+        )
+        cls.nodegroup = NodeGroup.objects.create(
+            nodegroupid=uuid.uuid4(), cardinality="1"
+        )
+        cls.label_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="label",
+            alias="label",
+            datatype="string",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=True,
+        )
+        # No sort model reads a geometry, so a spec naming one is ignored.
+        cls.geometry_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="geometry",
+            alias="geometry",
+            datatype="geojson-feature-collection",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+        )
+
+        cls.id_zebra = uuid.UUID("00000000-0000-0000-0000-000000000101")
+        cls.id_apple = uuid.UUID("00000000-0000-0000-0000-000000000102")
+        cls.id_en_only = uuid.UUID("00000000-0000-0000-0000-000000000103")
+        cls.id_no_tile = uuid.UUID("00000000-0000-0000-0000-000000000104")
+
+        labels = {
+            cls.id_zebra: {"en": "Zebra", "fr": "avocat"},
+            cls.id_apple: {"en": "apple", "fr": "zèbre"},
+            cls.id_en_only: {"en": "cherry"},
+        }
+        for resourceinstanceid, label in labels.items():
+            resource = ResourceInstance.objects.create(
+                resourceinstanceid=resourceinstanceid, graph=cls.graph
+            )
+            TileModel.objects.create(
+                tileid=uuid.uuid4(),
+                nodegroup=cls.nodegroup,
+                resourceinstance=resource,
+                data={
+                    str(cls.label_node.nodeid): {
+                        language: {"value": value, "direction": "ltr"}
+                        for language, value in label.items()
+                    }
+                },
+                provisionaledits=None,
+            )
+        ResourceInstance.objects.create(
+            resourceinstanceid=cls.id_no_tile, graph=cls.graph
+        )
+
+        call_command("arches_search", "reindex_database")
+
+    def _ordered_ids(self, sort_specs, sort_nodes):
+        queryset = ResourceInstance.objects.filter(graph=self.graph)
+        ordered = SortResolver(sort_specs).apply(queryset, sort_nodes=sort_nodes)
+        return [row.resourceinstanceid for row in ordered]
+
+    def test_text_node_sorts_case_insensitively_in_active_language(self):
+        sort_nodes = {(self.graph.slug, "label"): self.label_node}
+        spec = [_node_spec(self.graph, "label")]
+
+        # Each resource appears once, so every language's row is not joined in.
+        # Resources without a label in the language sort last, by id.
+        expected = {
+            "en": [self.id_apple, self.id_en_only, self.id_zebra, self.id_no_tile],
+            "fr": [self.id_zebra, self.id_apple, self.id_en_only, self.id_no_tile],
+        }
+        for language, expected_ids in expected.items():
+            with self.subTest(language=language), translation.override(language):
+                self.assertEqual(self._ordered_ids(spec, sort_nodes), expected_ids)
+
+    def test_unresolvable_node_specs_are_ignored(self):
+        sort_nodes = {(self.graph.slug, "geometry"): self.geometry_node}
+        specs = [
+            _node_spec(self.graph, "geometry", DIRECTION_DESC),
+            _node_spec(self.graph, "not_in_sort_nodes", DIRECTION_DESC),
+        ]
+
+        ordered_ids = self._ordered_ids(specs, sort_nodes)
+
+        self.assertEqual(ordered_ids, sorted(ordered_ids))
+        self.assertEqual(len(ordered_ids), 4)
+
+
+class SortResolverMultiRowNodeTests(TestCase):
+    """
+    A node in a cardinality-n nodegroup indexes a row per tile, so a resource
+    sorts by its first tile's value (by sortorder), not its lowest.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.graph = GraphModel.objects.create(
+            graphid=uuid.uuid4(), slug="test-node-sort-multi", isresource=True
+        )
+        cls.nodegroup = NodeGroup.objects.create(
+            nodegroupid=uuid.uuid4(), cardinality="n"
+        )
+        cls.node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="rank",
+            alias="rank",
+            datatype="number",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=True,
+        )
+
+        cls.id_no_tile = uuid.UUID("00000000-0000-0000-0000-000000000203")
+        cls.id_first_high = uuid.UUID("00000000-0000-0000-0000-000000000202")
+        cls.id_first_low = uuid.UUID("00000000-0000-0000-0000-000000000201")
+
+        # first_high holds the lowest value overall, but only as its second tile.
+        rows = {cls.id_first_low: [5, 50], cls.id_first_high: [20, 1]}
+        for resourceinstanceid, values in rows.items():
+            resource = ResourceInstance.objects.create(
+                resourceinstanceid=resourceinstanceid, graph=cls.graph
+            )
+            for sortorder, value in reversed(list(enumerate(values))):
+                TileModel.objects.create(
+                    tileid=uuid.uuid4(),
+                    nodegroup=cls.nodegroup,
+                    resourceinstance=resource,
+                    sortorder=sortorder,
+                    data={str(cls.node.nodeid): value},
+                    provisionaledits=None,
+                )
+        ResourceInstance.objects.create(
+            resourceinstanceid=cls.id_no_tile, graph=cls.graph
+        )
+
+        call_command("arches_search", "reindex_database")
+
+    def _ordered_ids(self, direction):
+        queryset = ResourceInstance.objects.filter(graph=self.graph)
+        sort_nodes = {(self.graph.slug, self.node.alias): self.node}
+        ordered = SortResolver([_node_spec(self.graph, "rank", direction)]).apply(
+            queryset, sort_nodes=sort_nodes
+        )
+        return [row.resourceinstanceid for row in ordered]
+
+    def test_orders_by_first_tile_once_per_resource_and_missing_last(self):
+        self.assertEqual(
+            self._ordered_ids(DIRECTION_ASC),
+            [self.id_first_low, self.id_first_high, self.id_no_tile],
+        )
+        self.assertEqual(
+            self._ordered_ids(DIRECTION_DESC),
+            [self.id_first_high, self.id_first_low, self.id_no_tile],
+        )
