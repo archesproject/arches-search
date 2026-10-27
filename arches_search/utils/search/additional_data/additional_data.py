@@ -12,7 +12,7 @@ aliased "principaluser" and the resource field of that name -- so the formatted
 result nests them under node_values and resource_fields instead of one flat map.
 """
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
@@ -80,15 +80,11 @@ class AdditionalData:
         self,
         additional_data: Optional[List[Dict[str, Any]]],
         readable_nodes: ReadableNodes,
-        also_project_nodes: Iterable[NodeKey] = (),
     ):
         entries = additional_data or []
         node_keys = node_values.keys(
             [entry for entry in entries if entry.get("type") == SUBJECT_TYPE_NODE]
         )
-        for node_key in also_project_nodes:
-            if node_key not in node_keys:
-                node_keys.append(node_key)
 
         self.nodes_by_key = node_values.resolve(node_keys, readable_nodes)
         self.fields_by_name = resource_fields.resolve(
