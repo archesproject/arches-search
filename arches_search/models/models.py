@@ -152,12 +152,16 @@ def _normalize_operands_via_factory(operand_items, datatype_name):
 class TermSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.ForeignKey(
-        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+        "models.Tile",
+        on_delete=models.CASCADE,
+        db_column="tileid",
+        db_index=False,
     )
     resourceinstanceid = models.ForeignKey(
         "models.ResourceInstance",
         on_delete=models.CASCADE,
         db_column="resourceinstanceid",
+        db_index=False,
     )
     graph_slug = models.TextField()
     node_alias = models.TextField()
@@ -246,12 +250,16 @@ class TermSearch(models.Model):
 class NumericSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.ForeignKey(
-        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+        "models.Tile",
+        on_delete=models.CASCADE,
+        db_column="tileid",
+        db_index=False,
     )
     resourceinstanceid = models.ForeignKey(
         "models.ResourceInstance",
         on_delete=models.CASCADE,
         db_column="resourceinstanceid",
+        db_index=False,
     )
     graph_slug = models.TextField()
     node_alias = models.TextField()
@@ -283,12 +291,16 @@ class NumericSearch(models.Model):
 class UUIDSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.ForeignKey(
-        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+        "models.Tile",
+        on_delete=models.CASCADE,
+        db_column="tileid",
+        db_index=False,
     )
     resourceinstanceid = models.ForeignKey(
         "models.ResourceInstance",
         on_delete=models.CASCADE,
         db_column="resourceinstanceid",
+        db_index=False,
     )
     graph_slug = models.TextField()
     node_alias = models.TextField()
@@ -320,12 +332,16 @@ class UUIDSearch(models.Model):
 class DateSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.ForeignKey(
-        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+        "models.Tile",
+        on_delete=models.CASCADE,
+        db_column="tileid",
+        db_index=False,
     )
     resourceinstanceid = models.ForeignKey(
         "models.ResourceInstance",
         on_delete=models.CASCADE,
         db_column="resourceinstanceid",
+        db_index=False,
     )
     graph_slug = models.TextField()
     node_alias = models.TextField()
@@ -357,12 +373,16 @@ class DateSearch(models.Model):
 class DateRangeSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.ForeignKey(
-        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+        "models.Tile",
+        on_delete=models.CASCADE,
+        db_column="tileid",
+        db_index=False,
     )
     resourceinstanceid = models.ForeignKey(
         "models.ResourceInstance",
         on_delete=models.CASCADE,
         db_column="resourceinstanceid",
+        db_index=False,
     )
     graph_slug = models.TextField()
     node_alias = models.TextField()
@@ -403,12 +423,16 @@ class DateRangeSearch(models.Model):
 class BooleanSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.ForeignKey(
-        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+        "models.Tile",
+        on_delete=models.CASCADE,
+        db_column="tileid",
+        db_index=False,
     )
     resourceinstanceid = models.ForeignKey(
         "models.ResourceInstance",
         on_delete=models.CASCADE,
         db_column="resourceinstanceid",
+        db_index=False,
     )
     graph_slug = models.TextField()
     node_alias = models.TextField()
@@ -440,12 +464,16 @@ class BooleanSearch(models.Model):
 class GeometrySearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.ForeignKey(
-        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+        "models.Tile",
+        on_delete=models.CASCADE,
+        db_column="tileid",
+        db_index=False,
     )
     resourceinstanceid = models.ForeignKey(
         "models.ResourceInstance",
         on_delete=models.CASCADE,
         db_column="resourceinstanceid",
+        db_index=False,
     )
     graph_slug = models.TextField()
     node_alias = models.TextField()
@@ -477,12 +505,16 @@ class GeometrySearch(models.Model):
 class FileListSearch(models.Model):
     id = models.AutoField(primary_key=True)
     tileid = models.ForeignKey(
-        "models.Tile", on_delete=models.CASCADE, db_column="tileid"
+        "models.Tile",
+        on_delete=models.CASCADE,
+        db_column="tileid",
+        db_index=False,
     )
     resourceinstanceid = models.ForeignKey(
         "models.ResourceInstance",
         on_delete=models.CASCADE,
         db_column="resourceinstanceid",
+        db_index=False,
     )
     graph_slug = models.TextField()
     node_alias = models.TextField()
