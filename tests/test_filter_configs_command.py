@@ -5,7 +5,14 @@ from unittest.mock import patch
 from django.core.management import call_command
 from django.test import TestCase
 
-from arches.app.models.models import GraphModel, Node, NodeGroup
+from arches.app.models.models import (
+    CardModel,
+    CardXNodeXWidget,
+    GraphModel,
+    Node,
+    NodeGroup,
+    Widget,
+)
 from arches.app.models.system_settings import settings
 
 from arches_search.models.models import NodeFilterConfig
@@ -94,6 +101,40 @@ class FilterConfigsCommandTest(TestCase):
             istopnode=False,
             issearchable=False,
         )
+        cls.hidden_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="Hidden Node",
+            alias="hidden_node",
+            datatype="reference",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+            issearchable=True,
+        )
+
+        card = CardModel.objects.create(
+            graph=cls.graph, nodegroup=cls.nodegroup, sortorder=0
+        )
+        widget = Widget.objects.create(
+            name="test-widget", component="test-widget", datatype="string"
+        )
+        # Widget order differs from the alphabetical order of the node names.
+        for node, sortorder, visible in [
+            (cls.reference_node, 0, True),
+            (cls.number_node, 1, True),
+            (cls.hidden_node, 2, False),
+            (cls.string_node, 3, True),
+            (cls.non_localized_string_node, 4, True),
+            (cls.unfilterable_node, 5, True),
+            (cls.unsearchable_node, 6, True),
+        ]:
+            CardXNodeXWidget.objects.create(
+                node=node,
+                card=card,
+                widget=widget,
+                sortorder=sortorder,
+                visible=visible,
+            )
 
     def test_generate_populates_eligible_graphs_with_filtered_ordered_nodes(self):
         call_command("filter_configs", "generate")
@@ -102,12 +143,7 @@ class FilterConfigsCommandTest(TestCase):
         nodes = config.config["nodes"]
         self.assertEqual(
             [n["node_alias"] for n in nodes],
-            [
-                "non_localized_string_node",
-                "number_node",
-                "reference_node",
-                "string_node",
-            ],
+            ["reference_node", "number_node"],
         )
         for node in nodes:
             self.assertEqual(node["filterable"], False)
@@ -155,12 +191,4 @@ class FilterConfigsCommandTest(TestCase):
         mock_input.assert_called_once()
         config.refresh_from_db()
         aliases = [node["node_alias"] for node in config.config["nodes"]]
-        self.assertEqual(
-            sorted(aliases),
-            [
-                "non_localized_string_node",
-                "number_node",
-                "reference_node",
-                "string_node",
-            ],
-        )
+        self.assertEqual(aliases, ["reference_node", "number_node"])
