@@ -95,7 +95,7 @@ def _state_operations():
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("arches_search", "0023_seed_resource_field_facets"),
+        ("arches_search", "0024_term_valuetype"),
     ]
 
     # AlterField alone would drop and re-add (and re-validate) every FK
