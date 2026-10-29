@@ -23,6 +23,10 @@ INCOMING = "incoming"
 
 MAX_SELECTED_RESOURCES = 10
 MAX_GRAPH_NODES = 300
+# How far apart two resources may be for a path between them to be found, and
+# how many resources the search may visit before it gives up
+MAX_PATH_HOPS = 6
+MAX_PATH_SEARCH_NODES = 5000
 
 
 class RelationshipGraphSummaryAPI(APIBase):
@@ -194,13 +198,16 @@ class RelationshipGraphAPI(APIBase):
         "selections": [
             {"resource_id": "<uuid>", "row_ids": ["<summary row id>", ...]},
             ...
-        ]
+        ],
+        "path_relationship_ids": ["<resourcexid>", ...]   (optional)
     }
 
     A row id is the id the summary endpoint gave the row. The graph holds each
     selected resource, plus the resources on the far end of the relationships
     its selected rows stand for. A resource with no selected rows is still
-    drawn, on its own.
+    drawn, on its own. The relationships of a path, as the path endpoint gave
+    them, are always drawn too, with the resources they join, and are flagged
+    `on_path`.
 
     Response shape:
     {
@@ -210,7 +217,8 @@ class RelationshipGraphAPI(APIBase):
                 "name": "...",
                 "model": {"id", "name", "color", "icon"},
                 "is_seed": true,
-                "related_count": 12
+                "related_count": 12,
+                "on_path": false
             },
             ...
         ],
@@ -220,7 +228,8 @@ class RelationshipGraphAPI(APIBase):
                 "source": "<uuid>",
                 "target": "<uuid>",
                 "relationship_type_id": "...",
-                "relationship_type_label": "..."
+                "relationship_type_label": "...",
+                "on_path": false
             },
             ...
         ],
@@ -234,7 +243,9 @@ class RelationshipGraphAPI(APIBase):
 
     def post(self, request):
         try:
-            selections = _parse_selections(JSONDeserializer().deserialize(request.body))
+            body = JSONDeserializer().deserialize(request.body)
+            selections = _parse_selections(body)
+            path_relationship_ids = _parse_path_relationship_ids(body)
         except ValueError:
             return JSONErrorResponse(_("Invalid selection"), status=400)
 
@@ -246,13 +257,25 @@ class RelationshipGraphAPI(APIBase):
             return JSONErrorResponse(_("Resource not found"), status=404)
 
         readable_nodes = ReadableNodes(request.user)
+        path_relations = _readable_relations_by_id(
+            request.user, readable_nodes, path_relationship_ids
+        )
+        if len(path_relations) != len(set(path_relationship_ids)):
+            return JSONErrorResponse(_("Relationship not found"), status=404)
+        path_node_ids = {
+            end
+            for relation in path_relations.values()
+            for end in (relation["from_resource_id"], relation["to_resource_id"])
+        }
+
         relations_by_id = {}
         for resource_id, rows in selections:
             relations_by_id.update(
                 _selected_relations(request.user, readable_nodes, resource_id, rows)
             )
+        relations_by_id.update(path_relations)
 
-        node_ids = set(seed_ids)
+        node_ids = set(seed_ids) | path_node_ids
         relations = []
         truncated = False
         for relation in sorted(
@@ -283,6 +306,7 @@ class RelationshipGraphAPI(APIBase):
                         "model": models_by_id[resource.graph_id],
                         "is_seed": resource.pk in seed_ids,
                         "related_count": related_counts[resource.pk],
+                        "on_path": resource.pk in path_node_ids,
                     }
                     for resource in resources
                 ],
@@ -295,6 +319,7 @@ class RelationshipGraphAPI(APIBase):
                         "relationship_type_label": relationship_type_labels[
                             relation["relationshiptype"] or ""
                         ],
+                        "on_path": relation["resourcexid"] in path_relations,
                     }
                     for relation in relations
                 ],
@@ -324,6 +349,15 @@ def _parse_selections(body):
         resource_id = uuid.UUID(str(selection.get("resource_id")))
         parsed[resource_id] = [_parse_row_id(row_id) for row_id in selection["row_ids"]]
     return list(parsed.items())
+
+
+def _parse_path_relationship_ids(body):
+    """The ids of the relationships of a path, or none. Raises ValueError for
+    anything that is not a short list of ids."""
+    relationship_ids = body.get("path_relationship_ids", [])
+    if not isinstance(relationship_ids, list) or len(relationship_ids) > MAX_PATH_HOPS:
+        raise ValueError("path_relationship_ids")
+    return [uuid.UUID(str(relationship_id)) for relationship_id in relationship_ids]
 
 
 def _parse_row_id(row_id):
@@ -468,3 +502,228 @@ def _display_name(resource):
             str(resource.pk),
         )
     return name
+
+
+def _readable_relations_by_id(user, readable_nodes, relationship_ids):
+    """The given relationships the user may read, between resources the user
+    may read, as {resourcexid: {resourcexid, from_resource_id, to_resource_id,
+    relationshiptype}}."""
+    relations = readable_nodes.exclude_unreadable_relations(
+        ResourceXResource.objects.filter(
+            pk__in=relationship_ids,
+            from_resource_graph__isresource=True,
+            to_resource_graph__isresource=True,
+        )
+    )
+    for resource_field in ("from_resource_id", "to_resource_id"):
+        relations = filter_resource_queryset(
+            user, relations, resourceinstance_field=resource_field
+        )
+    return {
+        relation["resourcexid"]: relation
+        for relation in relations.order_by().values(
+            "resourcexid", "from_resource_id", "to_resource_id", "relationshiptype"
+        )
+    }
+
+
+class RelationshipGraphPathAPI(APIBase):
+    """How two resources are related: the relationships between them, and the
+    shortest chain of relationships that links them, if there is one.
+
+    GET /arches_search/api/relationship-graph/path?from=<uuid>&to=<uuid>
+
+    Response shape:
+    {
+        "from_resource_id": "<uuid>",
+        "to_resource_id": "<uuid>",
+        "direct_relationships": [
+            {
+                "id": "<resourcexid>",
+                "direction": "outgoing" | "incoming",
+                "relationship_type_id": "...",
+                "relationship_type_label": "..."
+            },
+            ...
+        ],
+        "hops": 2,
+        "relationship_ids": ["<resourcexid>", ...],
+        "max_hops": 6,
+        "limit_reached": false
+    }
+
+    A direct relationship is worded from the `from` resource's side, as a
+    summary row is. `hops` is the number of relationships in the shortest
+    chain, ignoring which way each points, and `relationship_ids` lists them
+    in order from `from` to `to`. Both are empty when no chain of at most
+    `max_hops` was found; `limit_reached` says the search gave up on the
+    number of resources it had to visit rather than on the distance. Only
+    readable resources and relationships are followed.
+    """
+
+    def get(self, request):
+        try:
+            from_id = uuid.UUID(request.GET.get("from", ""))
+            to_id = uuid.UUID(request.GET.get("to", ""))
+        except (TypeError, ValueError):
+            return JSONErrorResponse(_("Invalid resource ID"), status=400)
+        if from_id == to_id:
+            return JSONErrorResponse(_("Choose two different resources"), status=400)
+
+        resources = ResourceInstance.objects.filter(
+            pk__in=(from_id, to_id), graph__isresource=True
+        )
+        if len(resources) != 2 or not all(
+            user_can_read_resource(request.user, resource=resource)
+            for resource in resources
+        ):
+            return JSONErrorResponse(_("Resource not found"), status=404)
+
+        readable_nodes = ReadableNodes(request.user)
+        path = _shortest_path(request.user, readable_nodes, from_id, to_id)
+
+        return JSONResponse(
+            {
+                "from_resource_id": str(from_id),
+                "to_resource_id": str(to_id),
+                "direct_relationships": _direct_relationships(
+                    readable_nodes, from_id, to_id
+                ),
+                "hops": len(path["relationship_ids"]) if path["found"] else None,
+                "relationship_ids": [
+                    str(relationship_id) for relationship_id in path["relationship_ids"]
+                ],
+                "max_hops": MAX_PATH_HOPS,
+                "limit_reached": path["limit_reached"],
+            }
+        )
+
+
+def _direct_relationships(readable_nodes, from_id, to_id):
+    relations = readable_nodes.exclude_unreadable_relations(
+        ResourceXResource.objects.filter(
+            Q(from_resource_id=from_id, to_resource_id=to_id)
+            | Q(from_resource_id=to_id, to_resource_id=from_id)
+        )
+    )
+    rows = list(
+        relations.order_by().values(
+            "resourcexid",
+            "from_resource_id",
+            "relationshiptype",
+            "inverserelationshiptype",
+        )
+    )
+
+    direct_relationships = []
+    for row in rows:
+        is_outgoing = row["from_resource_id"] == from_id
+        relationship_type_id = (
+            row["relationshiptype"]
+            if is_outgoing
+            else row["inverserelationshiptype"] or row["relationshiptype"]
+        ) or ""
+        direct_relationships.append(
+            {
+                "id": str(row["resourcexid"]),
+                "direction": OUTGOING if is_outgoing else INCOMING,
+                "relationship_type_id": relationship_type_id,
+            }
+        )
+
+    labels = _relationship_type_labels(
+        {relationship["relationship_type_id"] for relationship in direct_relationships}
+    )
+    for relationship in direct_relationships:
+        relationship["relationship_type_label"] = labels[
+            relationship["relationship_type_id"]
+        ]
+    return sorted(
+        direct_relationships,
+        key=lambda relationship: (
+            relationship["relationship_type_label"].lower(),
+            relationship["direction"],
+        ),
+    )
+
+
+class _SearchSide:
+    """One end of a search for the shortest chain between two resources. It
+    knows how far each resource it has reached is from its start, and how it
+    got there."""
+
+    def __init__(self, start):
+        self.depth = 0
+        self.depths = {start: 0}
+        self.previous = {}
+        self.frontier = {start}
+
+    def expand(self, user, relations, other_depths):
+        """Reach every resource one relationship further, in either direction.
+        Returns those the other end of the search had already reached."""
+        reached = {}
+        for near, far in (
+            ("from_resource_id", "to_resource_id"),
+            ("to_resource_id", "from_resource_id"),
+        ):
+            rows = filter_resource_queryset(
+                user,
+                relations.filter(**{f"{near}__in": self.frontier}).exclude(
+                    from_resource_id=F("to_resource_id")
+                ),
+                resourceinstance_field=far,
+            )
+            for row in rows.order_by().values("resourcexid", near, far):
+                if row[far] not in self.depths and row[far] not in reached:
+                    reached[row[far]] = (row[near], row["resourcexid"])
+
+        self.depth += 1
+        for resource_id, (previous_id, relationship_id) in reached.items():
+            self.depths[resource_id] = self.depth
+            self.previous[resource_id] = (previous_id, relationship_id)
+        self.frontier = set(reached)
+        return [resource_id for resource_id in reached if resource_id in other_depths]
+
+    def trace(self, resource_id):
+        """The relationships from the start to a resource this side reached,
+        in order."""
+        relationship_ids = []
+        while resource_id in self.previous:
+            resource_id, relationship_id = self.previous[resource_id]
+            relationship_ids.append(relationship_id)
+        return relationship_ids[::-1]
+
+
+def _shortest_path(user, readable_nodes, from_id, to_id):
+    """Search outward from both resources at once, always widening the end
+    with fewer resources to look at, until the two meet. Because the ends
+    only ever grow by whole steps, the first meeting is the shortest chain."""
+    relations = readable_nodes.exclude_unreadable_relations(
+        ResourceXResource.objects.filter(
+            from_resource_graph__isresource=True, to_resource_graph__isresource=True
+        )
+    )
+    from_side = _SearchSide(from_id)
+    to_side = _SearchSide(to_id)
+    not_found = {"found": False, "relationship_ids": [], "limit_reached": False}
+
+    while from_side.depth + to_side.depth < MAX_PATH_HOPS:
+        if len(from_side.frontier) <= len(to_side.frontier):
+            side, other = from_side, to_side
+        else:
+            side, other = to_side, from_side
+        if not side.frontier:
+            return not_found
+
+        meeting_ids = side.expand(user, relations, other.depths)
+        if meeting_ids:
+            meeting_id = min(meeting_ids, key=str)
+            return {
+                "found": True,
+                "relationship_ids": from_side.trace(meeting_id)
+                + to_side.trace(meeting_id)[::-1],
+                "limit_reached": False,
+            }
+        if len(from_side.depths) + len(to_side.depths) > MAX_PATH_SEARCH_NODES:
+            return {**not_found, "limit_reached": True}
+    return not_found

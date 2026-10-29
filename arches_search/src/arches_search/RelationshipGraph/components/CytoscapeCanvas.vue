@@ -80,10 +80,15 @@ onBeforeUnmount(() => {
 function applyGraph(): void {
     if (!cy) return;
 
+    const isPathShown =
+        nodes.some((node) => node.on_path) ||
+        edges.some((edge) => edge.on_path);
     const { addedNodeIds } = syncGraphElements(
         cy,
-        nodes.map((node) => toNodeElement(node, colorFor(node.model))),
-        edges.map(toEdgeElement),
+        nodes.map((node) =>
+            toNodeElement(node, colorFor(node.model), isPathShown),
+        ),
+        edges.map((edge) => toEdgeElement(edge, isPathShown)),
     );
     if (addedNodeIds.length > 0) {
         runLayout(addedNodeIds);

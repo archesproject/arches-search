@@ -14,6 +14,48 @@ export interface SyncResult {
     addedNodeIds: string[];
 }
 
+function isSeed(definition: ElementDefinition): boolean {
+    return String(definition.classes ?? "")
+        .split(" ")
+        .includes(SEED_CLASS);
+}
+
+function addNeighbor(
+    neighbors: Map<string, string[]>,
+    id: string,
+    neighbor: string,
+): void {
+    const known = neighbors.get(id);
+    if (known) {
+        known.push(neighbor);
+    } else {
+        neighbors.set(id, [neighbor]);
+    }
+}
+
+// Cytoscape restyles an element it is written to, whether or not anything
+// changed, so only what differs is written
+function refreshElement(
+    existing: ReturnType<Core["getElementById"]>,
+    definition: ElementDefinition,
+): void {
+    const changedData = Object.fromEntries(
+        Object.entries(definition.data).filter(
+            ([key, value]) => existing.data(key) !== value,
+        ),
+    );
+    if (Object.keys(changedData).length > 0) existing.data(changedData);
+
+    const wantedClasses = String(definition.classes ?? "")
+        .split(" ")
+        .filter(Boolean)
+        .sort()
+        .join(" ");
+    if ([...existing.classes()].sort().join(" ") !== wantedClasses) {
+        existing.classes(wantedClasses);
+    }
+}
+
 // Every element built here is given an id
 function idOf(definition: ElementDefinition): string {
     return definition.data.id as string;
@@ -109,8 +151,8 @@ export function syncGraphElements(
         for (const edge of drawableEdges) {
             const source = edge.data.source as string;
             const target = edge.data.target as string;
-            neighbors.set(source, [...(neighbors.get(source) ?? []), target]);
-            neighbors.set(target, [...(neighbors.get(target) ?? []), source]);
+            addNeighbor(neighbors, source, target);
+            addNeighbor(neighbors, target, source);
         }
 
         const center = centerOf(positions.values());
@@ -119,8 +161,7 @@ export function syncGraphElements(
             .filter((node) => cy.getElementById(idOf(node)).empty())
             .sort(
                 (first, second) =>
-                    Number(second.classes === SEED_CLASS) -
-                    Number(first.classes === SEED_CLASS),
+                    Number(isSeed(second)) - Number(isSeed(first)),
             );
 
         const placedNodes: ElementDefinition[] = [];
@@ -140,16 +181,9 @@ export function syncGraphElements(
             addedNodeIds.push(id);
         }
 
-        for (const node of nodes) {
-            const existing = cy.getElementById(idOf(node));
-            if (existing.nonempty()) {
-                existing.data(node.data);
-                existing.classes(node.classes ?? "");
-            }
-        }
-        for (const edge of drawableEdges) {
-            const existing = cy.getElementById(idOf(edge));
-            if (existing.nonempty()) existing.data(edge.data);
+        for (const definition of [...nodes, ...drawableEdges]) {
+            const existing = cy.getElementById(idOf(definition));
+            if (existing.nonempty()) refreshElement(existing, definition);
         }
 
         cy.add([
