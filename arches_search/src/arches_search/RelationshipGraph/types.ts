@@ -52,6 +52,10 @@ export interface GraphEdge {
     target: string;
     relationship_type_id: string;
     relationship_type_label: string;
+    // The relationship as worded from the target's side; empty if not recorded
+    inverse_relationship_type_id: string;
+    inverse_relationship_type_label: string;
+    notes: string;
     on_path: boolean;
 }
 
