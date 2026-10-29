@@ -42,6 +42,7 @@ from arches_search.views.api.search_results_export import (
     SearchResultsExportAPI,
 )
 from arches_search.views.api.search import SearchAPI
+from arches_search.views.api.relationship_graph import RelationshipGraphSummaryAPI
 
 urlpatterns = [
     path("api/search", SearchAPI.as_view(), name="search"),
@@ -159,6 +160,11 @@ urlpatterns = [
         "api/search-results-export",
         SearchResultsExportAPI.as_view(),
         name="search_results_export",
+    ),
+    path(
+        "api/relationship-graph/summary",
+        RelationshipGraphSummaryAPI.as_view(),
+        name="relationship_graph_summary",
     ),
 ]
 
