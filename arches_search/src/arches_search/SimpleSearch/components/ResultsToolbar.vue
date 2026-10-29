@@ -189,6 +189,11 @@ defineEmits<{
     white-space: nowrap;
 }
 
+.include-related label {
+    margin: 0;
+    line-height: 1;
+}
+
 .toolbar-right {
     display: inline-flex;
     align-items: center;
