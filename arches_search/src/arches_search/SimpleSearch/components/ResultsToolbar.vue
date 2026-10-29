@@ -116,7 +116,7 @@ defineEmits<{
                 @click="$emit('toggle-saved-searches')"
             />
             <Button
-                :label="$gettext('Export Search Results')"
+                :label="$gettext('Export Results')"
                 icon="pi pi-download"
                 icon-pos="left"
                 size="small"
