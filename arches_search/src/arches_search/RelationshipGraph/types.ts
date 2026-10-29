@@ -43,6 +43,7 @@ export interface GraphNode {
     model: ResourceModel;
     is_seed: boolean;
     related_count: number;
+    on_path: boolean;
 }
 
 export interface GraphEdge {
@@ -51,6 +52,7 @@ export interface GraphEdge {
     target: string;
     relationship_type_id: string;
     relationship_type_label: string;
+    on_path: boolean;
 }
 
 export interface RelationshipGraphData {
@@ -59,4 +61,26 @@ export interface RelationshipGraphData {
     // Whether more resources were left out than the node limit allows
     truncated: boolean;
     node_limit: number;
+}
+
+// A relationship between the two resources being compared, worded from the
+// first one's side
+export interface PathRelationship {
+    id: string;
+    direction: RelationshipDirection;
+    relationship_type_id: string;
+    relationship_type_label: string;
+}
+
+export interface RelationshipPath {
+    from_resource_id: string;
+    to_resource_id: string;
+    direct_relationships: PathRelationship[];
+    // Null when no chain of at most max_hops relationships was found
+    hops: number | null;
+    // The relationships of the shortest chain, in order from the first resource
+    relationship_ids: string[];
+    max_hops: number;
+    // The search gave up on its size rather than on the distance
+    limit_reached: boolean;
 }

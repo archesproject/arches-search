@@ -1,4 +1,8 @@
-import { SEED_CLASS } from "@/arches_search/RelationshipGraph/utils/graph-elements.ts";
+import {
+    FADED_CLASS,
+    ON_PATH_CLASS,
+    SEED_CLASS,
+} from "@/arches_search/RelationshipGraph/utils/graph-elements.ts";
 
 import type { StylesheetJson } from "cytoscape";
 
@@ -8,6 +12,7 @@ export interface GraphTheme {
     nodeBorder: string;
     seedBorder: string;
     edge: string;
+    path: string;
 }
 
 // A canvas cannot read CSS variables, so the theme is resolved up front and
@@ -18,6 +23,7 @@ const FALLBACK_THEME: GraphTheme = {
     nodeBorder: "#ffffff",
     seedBorder: "#1e293b",
     edge: "#94a3b8",
+    path: "#0d9488",
 };
 
 const LABEL_FONT_SIZE = 11;
@@ -27,6 +33,9 @@ const LABEL_MIN_ZOOMED_FONT_SIZE = 8;
 const NODE_BORDER_WIDTH = 2;
 const SEED_BORDER_WIDTH = 4;
 const EDGE_WIDTH = 1.5;
+const PATH_BORDER_WIDTH = 4;
+const PATH_EDGE_WIDTH = 3.5;
+const FADED_OPACITY = 0.3;
 const ARROW_SCALE = 0.9;
 
 const RESOLVED_COLOR_PATTERN = /^(rgb|rgba|#)/;
@@ -71,6 +80,7 @@ export function readGraphTheme(container: HTMLElement): GraphTheme {
             FALLBACK_THEME.seedBorder,
         ),
         edge: resolveColor(container, "--p-surface-400", FALLBACK_THEME.edge),
+        path: resolveColor(container, "--p-primary-color", FALLBACK_THEME.path),
     };
 }
 
@@ -107,6 +117,14 @@ export function buildGraphStylesheet(theme: GraphTheme): StylesheetJson {
             },
         },
         {
+            selector: `node.${ON_PATH_CLASS}`,
+            style: {
+                "border-width": PATH_BORDER_WIDTH,
+                "border-color": theme.path,
+                "z-index": 10,
+            },
+        },
+        {
             selector: "edge",
             style: {
                 width: EDGE_WIDTH,
@@ -115,6 +133,21 @@ export function buildGraphStylesheet(theme: GraphTheme): StylesheetJson {
                 "target-arrow-shape": "triangle",
                 "arrow-scale": ARROW_SCALE,
                 "curve-style": "bezier",
+            },
+        },
+        {
+            selector: `edge.${ON_PATH_CLASS}`,
+            style: {
+                width: PATH_EDGE_WIDTH,
+                "line-color": theme.path,
+                "target-arrow-color": theme.path,
+                "z-index": 9,
+            },
+        },
+        {
+            selector: `.${FADED_CLASS}`,
+            style: {
+                opacity: FADED_OPACITY,
             },
         },
     ];

@@ -5,9 +5,11 @@ import { useGettext } from "vue3-gettext";
 import Button from "openvue/button";
 
 import CytoscapeCanvas from "@/arches_search/RelationshipGraph/components/CytoscapeCanvas.vue";
+import ResourcePairSummary from "@/arches_search/RelationshipGraph/components/ResourcePairSummary.vue";
 import ResourceRelationshipSummary from "@/arches_search/RelationshipGraph/components/ResourceRelationshipSummary.vue";
 import { useRelationshipGraph } from "@/arches_search/RelationshipGraph/composables/useRelationshipGraph.ts";
 import { useRelationshipSummaries } from "@/arches_search/RelationshipGraph/composables/useRelationshipSummaries.ts";
+import { useResourcePath } from "@/arches_search/RelationshipGraph/composables/useResourcePath.ts";
 
 import type { SelectedResource } from "@/arches_search/RelationshipGraph/types.ts";
 
@@ -32,6 +34,14 @@ const {
     loadSummary,
 } = useRelationshipSummaries(() => resources.map((resource) => resource.id));
 
+const {
+    pathState,
+    isPathShown,
+    shownPathRelationshipIds,
+    togglePath,
+    loadPath,
+} = useResourcePath(() => resources.map((resource) => resource.id));
+
 const isGraphVisible = ref(false);
 
 const {
@@ -39,7 +49,7 @@ const {
     isLoading: isGraphLoading,
     hasFailed: hasGraphFailed,
     loadGraph,
-} = useRelationshipGraph(selections, isGraphVisible);
+} = useRelationshipGraph(selections, isGraphVisible, shownPathRelationshipIds);
 
 const panelTitle = computed<string>(() =>
     resources.length === 1
@@ -139,6 +149,15 @@ const truncatedNotice = computed<string>(() =>
                     @toggle-row="toggleRow(resource.id, $event)"
                     @retry="loadSummary(resource.id)"
                     @remove="emit('remove-resource', resource.id)"
+                />
+                <ResourcePairSummary
+                    v-if="resources.length === 2"
+                    :from-title="resources[0].title"
+                    :to-title="resources[1].title"
+                    :path-state="pathState"
+                    :is-path-shown="isPathShown"
+                    @toggle-path="togglePath"
+                    @retry="loadPath()"
                 />
             </div>
         </div>
