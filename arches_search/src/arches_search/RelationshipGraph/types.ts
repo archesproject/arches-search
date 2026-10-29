@@ -30,3 +30,33 @@ export interface SelectedResource {
     id: string;
     title: string;
 }
+
+// The summary rows of one resource that the graph should draw
+export interface RowSelection {
+    resource_id: string;
+    row_ids: string[];
+}
+
+export interface GraphNode {
+    id: string;
+    name: string;
+    model: ResourceModel;
+    is_seed: boolean;
+    related_count: number;
+}
+
+export interface GraphEdge {
+    id: string;
+    source: string;
+    target: string;
+    relationship_type_id: string;
+    relationship_type_label: string;
+}
+
+export interface RelationshipGraphData {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+    // Whether more resources were left out than the node limit allows
+    truncated: boolean;
+    node_limit: number;
+}

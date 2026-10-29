@@ -1,13 +1,17 @@
 import { computed, ref, toValue, watch } from "vue";
 
 import { fetchRelationshipSummary } from "@/arches_search/RelationshipGraph/api.ts";
+import {
+    FAILED,
+    LOADED,
+    LOADING,
+} from "@/arches_search/RelationshipGraph/utils/load-status.ts";
 
 import type { MaybeRefOrGetter } from "vue";
-import type { RelationshipSummary } from "@/arches_search/RelationshipGraph/types.ts";
-
-export const LOADING = "loading" as const;
-export const LOADED = "loaded" as const;
-export const FAILED = "failed" as const;
+import type {
+    RelationshipSummary,
+    RowSelection,
+} from "@/arches_search/RelationshipGraph/types.ts";
 
 export type SummaryState =
     | { status: typeof LOADING }
@@ -33,6 +37,22 @@ export function useRelationshipSummaries(
         }
         return total;
     });
+
+    // What the graph should draw: each loaded resource, with its selected rows
+    const selections = computed<RowSelection[]>(() =>
+        toValue(resourceIds).flatMap((resourceId) => {
+            const state = summaryStates.value[resourceId];
+            if (state?.status !== LOADED) return [];
+            return [
+                {
+                    resource_id: resourceId,
+                    row_ids: state.summary.rows
+                        .filter((row) => isRowSelected(resourceId, row.id))
+                        .map((row) => row.id),
+                },
+            ];
+        }),
+    );
 
     const isLoading = computed<boolean>(() =>
         Object.values(summaryStates.value).some(
@@ -99,6 +119,7 @@ export function useRelationshipSummaries(
         summaryStates,
         deselectedRowIds,
         selectedRelationshipCount,
+        selections,
         isLoading,
         isRowSelected,
         toggleRow,
