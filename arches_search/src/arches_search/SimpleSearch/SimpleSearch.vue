@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, watchEffect } from "vue";
+import {
+    computed,
+    defineAsyncComponent,
+    onMounted,
+    ref,
+    watch,
+    watchEffect,
+} from "vue";
 import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
 
@@ -19,7 +26,6 @@ import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearc
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter/TermFilter.vue";
 import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
-import RelationshipGraph from "@/arches_search/RelationshipGraph/RelationshipGraph.vue";
 
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
@@ -69,6 +75,12 @@ import type {
     ResultsSortValue,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
+
+// Kept out of the search page's own code, as most visits never open it and it
+// brings a graph library with it
+const RelationshipGraph = defineAsyncComponent(
+    () => import("@/arches_search/RelationshipGraph/RelationshipGraph.vue"),
+);
 
 const TIME_FILTER_QUERY_KEY = "timeFilter";
 const INITIAL_RESULTS_PAGE = 1;
@@ -120,6 +132,7 @@ const {
     sidePanelStyle,
     closeSidePanel,
     removeRelatedResource,
+    setRelatedResourcesGraphVisible,
     onToggleAttributeFilters,
     onToggleMapFilter,
     onToggleSavedSearches,
@@ -615,6 +628,9 @@ async function onRunSavedQuery(
                             v-if="isRelatedResourcesOpen"
                             :resources="relatedResources"
                             @remove-resource="removeRelatedResource"
+                            @graph-visibility-change="
+                                setRelatedResourcesGraphVisible
+                            "
                             @close="closeSidePanel()"
                         />
                         <TimeFilter

@@ -155,7 +155,15 @@ const toggleLabel = computed<string>(() =>
     text-align: center;
 }
 
-.relationship-summary-row .toggle {
+/* One and a half times a small icon button */
+.relationship-summary-row .toggle.p-button {
     flex-shrink: 0;
+    inline-size: 3rem;
+    block-size: 3rem;
+}
+
+/* The icon takes its size from the theme, not from the button */
+.relationship-summary-row .toggle.p-button :deep(.p-button-icon) {
+    font-size: 1.3rem;
 }
 </style>

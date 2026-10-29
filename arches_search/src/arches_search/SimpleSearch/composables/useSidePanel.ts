@@ -27,6 +27,8 @@ const SAVED_SEARCHES_PANEL = "saved-searches" as const;
 const EXPORT_RESULTS_PANEL = "export-results" as const;
 const RELATED_RESOURCES_PANEL = "related-resources" as const;
 const MAX_RELATED_RESOURCES = 2;
+const RELATED_RESOURCES_PANEL_SIZE = 35;
+const RELATED_RESOURCES_GRAPH_PANEL_SIZE = 65;
 
 interface SplitterResizeEvent {
     sizes?: number[];
@@ -53,7 +55,7 @@ const PANEL_SIZES: Record<SidePanelType, number> = {
     [MAP_FILTER_PANEL]: 65,
     [SAVED_SEARCHES_PANEL]: 27,
     [EXPORT_RESULTS_PANEL]: 27,
-    [RELATED_RESOURCES_PANEL]: SIDE_PANEL_SIZE,
+    [RELATED_RESOURCES_PANEL]: RELATED_RESOURCES_PANEL_SIZE,
 };
 
 export function useSidePanel() {
@@ -67,6 +69,10 @@ export function useSidePanel() {
     const relatedResources = ref<RelatedResource[]>([]);
 
     let switchTimer: ReturnType<typeof setTimeout> | null = null;
+    // How wide the panel was before the graph widened it, to go back to
+    let basisBeforeGraph: number | null = null;
+    // How wide it was made, to tell whether the user has resized it since
+    let basisWithGraph: number | null = null;
 
     const isIdle = computed<boolean>(
         () => activeSidePanel.value === IDLE_PANEL,
@@ -152,6 +158,8 @@ export function useSidePanel() {
         }
         activeSidePanel.value = nextPanel;
         sidePanelBasis.value = PANEL_SIZES[nextPanel];
+        basisBeforeGraph = null;
+        basisWithGraph = null;
         isSidePanelVisible.value = true;
     }
 
@@ -174,15 +182,35 @@ export function useSidePanel() {
     function viewRelatedResource(resource: RelatedResource): void {
         const selected = relatedResources.value;
         if (!selected.some((related) => related.id === resource.id)) {
-            relatedResources.value =
-                selected.length < MAX_RELATED_RESOURCES
-                    ? [...selected, resource]
-                    : [
-                          ...selected.slice(0, MAX_RELATED_RESOURCES - 1),
-                          resource,
-                      ];
+            // Past the limit the newest resource replaces the last one
+            relatedResources.value = [
+                ...selected.slice(0, MAX_RELATED_RESOURCES - 1),
+                resource,
+            ];
         }
         switchToPanel(RELATED_RESOURCES_PANEL);
+    }
+
+    // The graph is what needs the room, so the panel widens for it and goes back
+    // afterwards. A panel the user has already made wider is left as it is, and
+    // so is one the user has resized while the graph was open.
+    function setRelatedResourcesGraphVisible(isVisible: boolean): void {
+        if (activeSidePanel.value !== RELATED_RESOURCES_PANEL) return;
+
+        if (isVisible) {
+            basisBeforeGraph ??= sidePanelBasis.value;
+            sidePanelBasis.value = Math.max(
+                sidePanelBasis.value,
+                RELATED_RESOURCES_GRAPH_PANEL_SIZE,
+            );
+            basisWithGraph = sidePanelBasis.value;
+        } else if (basisBeforeGraph !== null) {
+            if (sidePanelBasis.value === basisWithGraph) {
+                sidePanelBasis.value = basisBeforeGraph;
+            }
+            basisBeforeGraph = null;
+            basisWithGraph = null;
+        }
     }
 
     function removeRelatedResource(resourceId: string): void {
@@ -276,6 +304,7 @@ export function useSidePanel() {
         sidePanelStyle,
         closeSidePanel,
         removeRelatedResource,
+        setRelatedResourcesGraphVisible,
         onToggleAttributeFilters,
         onToggleMapFilter,
         onToggleSavedSearches,

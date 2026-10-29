@@ -6,8 +6,8 @@ import type {
 } from "@/arches_search/RelationshipGraph/types.ts";
 
 const MIN_NODE_SIZE = 26;
-const MAX_NODE_SIZE = 40;
-const SIZE_PER_RELATED_COUNT_ROOT = 2;
+const MAX_NODE_SIZE = 50;
+const SIZE_PER_RELATED_COUNT_ROOT = 3;
 
 export const SEED_CLASS = "seed";
 export const ON_PATH_CLASS = "on-path";

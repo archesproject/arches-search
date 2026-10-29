@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import cytoscape from "cytoscape";
-import Button from "openvue/button";
 
 import EdgeDetailsPopup from "@/arches_search/RelationshipGraph/components/EdgeDetailsPopup.vue";
 import GraphPopup from "@/arches_search/RelationshipGraph/components/GraphPopup.vue";
@@ -25,11 +24,7 @@ import type {
     GraphEdge,
     GraphNode,
 } from "@/arches_search/RelationshipGraph/types.ts";
-
-interface SelectedElement {
-    kind: "node" | "edge";
-    id: string;
-}
+import type { GraphTheme } from "@/arches_search/RelationshipGraph/utils/graph-style.ts";
 
 // Where the selected element is on the canvas, and how far a popup about it
 // has to keep to stay off it
@@ -54,28 +49,28 @@ const { nodes, edges } = defineProps<{
     edges: GraphEdge[];
 }>();
 
+defineExpose({ fitToGraph });
+
 const { $gettext } = useGettext();
 const { colorFor } = useGraphColors();
 
 const containerElement = ref<HTMLDivElement | null>(null);
-const selectedElement = ref<SelectedElement | null>(null);
+// The node or edge whose details are on show; their ids cannot clash, as one
+// is a resource's and the other a relationship's
+const selectedId = ref<string | null>(null);
 const popupAnchor = ref<PopupAnchor | null>(null);
 const stageSize = ref({ width: 0, height: 0 });
 
-const selectedNode = computed<GraphNode | null>(() =>
-    selectedElement.value?.kind === "node"
-        ? nodes.find((node) => node.id === selectedElement.value?.id) ?? null
-        : null,
+const selectedNode = computed<GraphNode | null>(
+    () => nodes.find((node) => node.id === selectedId.value) ?? null,
 );
 
-const selectedEdge = computed<GraphEdge | null>(() =>
-    selectedElement.value?.kind === "edge"
-        ? edges.find((edge) => edge.id === selectedElement.value?.id) ?? null
-        : null,
+const selectedEdge = computed<GraphEdge | null>(
+    () => edges.find((edge) => edge.id === selectedId.value) ?? null,
 );
 
 const popupLabel = computed<string>(() =>
-    selectedElement.value?.kind === "edge"
+    selectedEdge.value
         ? $gettext("Relationship details")
         : $gettext("Resource details"),
 );
@@ -90,6 +85,8 @@ let activeLayout: Layouts | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let hasLaidOut = false;
 let anchorFrame: number | null = null;
+let themeObserver: MutationObserver | null = null;
+let theme: GraphTheme | null = null;
 
 watch(() => [nodes, edges], applyGraph);
 
@@ -97,16 +94,16 @@ onMounted(() => {
     if (!containerElement.value) return;
 
     registerCytoscapeLayouts();
+    theme = readGraphTheme(containerElement.value);
     cy = cytoscape({
         container: containerElement.value,
-        style: buildGraphStylesheet(readGraphTheme(containerElement.value)),
+        style: buildGraphStylesheet(theme),
         minZoom: MIN_ZOOM,
         maxZoom: MAX_ZOOM,
         wheelSensitivity: WHEEL_SENSITIVITY,
     });
 
-    cy.on("tap", "node", (event) => selectElement("node", event.target.id()));
-    cy.on("tap", "edge", (event) => selectElement("edge", event.target.id()));
+    cy.on("tap", "node, edge", (event) => selectElement(event.target.id()));
     cy.on("tap", (event) => {
         if (event.target === cy) closePopup();
     });
@@ -114,6 +111,14 @@ onMounted(() => {
     // being dragged, a layout moving things
     cy.on("render", scheduleAnchorUpdate);
     document.addEventListener("keydown", onKeydown);
+
+    // The canvas cannot follow the page's CSS, so a switch between the light
+    // and dark theme, which is a class on the page, has to be passed on to it
+    themeObserver = new MutationObserver(applyTheme);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+    });
 
     resizeObserver = new ResizeObserver(() => {
         cy?.resize();
@@ -127,6 +132,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     if (anchorFrame !== null) cancelAnimationFrame(anchorFrame);
+    themeObserver?.disconnect();
     document.removeEventListener("keydown", onKeydown);
     resizeObserver?.disconnect();
     activeLayout?.stop();
@@ -156,6 +162,26 @@ function applyGraph(): void {
     updateAnchor();
 }
 
+function applyTheme(): void {
+    if (!cy || !containerElement.value) return;
+
+    // The page's class changes for other reasons than the theme too
+    const nextTheme = readGraphTheme(containerElement.value);
+    const isUnchanged = (Object.keys(nextTheme) as (keyof GraphTheme)[]).every(
+        (key) => nextTheme[key] === theme?.[key],
+    );
+    if (isUnchanged) return;
+
+    theme = nextTheme;
+    cy.style(buildGraphStylesheet(theme));
+}
+
+// Whether the user has asked for less movement, which the graph settling into
+// place and sliding to fit is plenty of
+function prefersReducedMotion(): boolean {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 function measureStage(): void {
     if (!containerElement.value) return;
     stageSize.value = {
@@ -164,27 +190,27 @@ function measureStage(): void {
     };
 }
 
-function selectElement(kind: SelectedElement["kind"], id: string): void {
+function selectElement(id: string): void {
     if (!cy) return;
 
     cy.elements().unselect();
     cy.getElementById(id).select();
-    selectedElement.value = { kind, id };
+    selectedId.value = id;
     updateAnchor();
 }
 
 function closePopup(): void {
-    selectedElement.value = null;
+    selectedId.value = null;
     popupAnchor.value = null;
     cy?.elements().unselect();
 }
 
 function onKeydown(event: KeyboardEvent): void {
-    if (event.key === "Escape" && selectedElement.value) closePopup();
+    if (event.key === "Escape" && selectedId.value) closePopup();
 }
 
 function scheduleAnchorUpdate(): void {
-    if (!selectedElement.value || anchorFrame !== null) return;
+    if (!selectedId.value || anchorFrame !== null) return;
 
     anchorFrame = requestAnimationFrame(() => {
         anchorFrame = null;
@@ -193,16 +219,16 @@ function scheduleAnchorUpdate(): void {
 }
 
 function updateAnchor(): void {
-    if (!cy || !selectedElement.value) return;
+    if (!cy || !selectedId.value) return;
 
-    const element = cy.getElementById(selectedElement.value.id);
+    const element = cy.getElementById(selectedId.value);
     if (element.empty()) {
         closePopup();
         return;
     }
 
     let anchor: PopupAnchor;
-    if (selectedElement.value.kind === "node") {
+    if (element.group() === "nodes") {
         const position = element.renderedPosition();
         anchor = {
             x: position.x,
@@ -248,7 +274,7 @@ function runLayout(addedNodeIds: string[]): void {
     // Not a literal: the layout options of an extension are not typed
     const layoutOptions = {
         name: "cola",
-        animate: true,
+        animate: !prefersReducedMotion(),
         randomize: false,
         fit: false,
         edgeLength: LAYOUT_EDGE_LENGTH,
@@ -296,7 +322,7 @@ function isOutOfView(nodeIds: Set<string>): boolean {
 function fitToGraph(): void {
     cy?.animate({
         fit: { eles: cy.elements(), padding: FIT_PADDING },
-        duration: RECENTER_DURATION_MS,
+        duration: prefersReducedMotion() ? 0 : RECENTER_DURATION_MS,
     });
 }
 </script>
@@ -309,17 +335,8 @@ function fitToGraph(): void {
             role="img"
             :aria-label="$gettext('Relationship graph')"
         />
-        <Button
-            class="recenter"
-            severity="secondary"
-            size="small"
-            icon="pi pi-arrows-alt"
-            :aria-label="$gettext('Fit the graph to the panel')"
-            :title="$gettext('Fit the graph to the panel')"
-            @click="fitToGraph"
-        />
         <GraphPopup
-            v-if="selectedElement && popupAnchor"
+            v-if="selectedId && popupAnchor"
             :anchor-x="popupAnchor.x"
             :anchor-y="popupAnchor.y"
             :clearance="popupAnchor.clearance"
@@ -359,11 +376,5 @@ function fitToGraph(): void {
 .cytoscape-canvas .canvas {
     inline-size: 100%;
     block-size: 100%;
-}
-
-.cytoscape-canvas .recenter {
-    position: absolute;
-    inset-block-start: 0.8rem;
-    inset-inline-end: 0.8rem;
 }
 </style>
