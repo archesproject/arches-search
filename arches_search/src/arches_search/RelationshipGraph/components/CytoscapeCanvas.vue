@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import cytoscape from "cytoscape";
 import Button from "openvue/button";
 
+import EdgeDetailsPopup from "@/arches_search/RelationshipGraph/components/EdgeDetailsPopup.vue";
+import GraphPopup from "@/arches_search/RelationshipGraph/components/GraphPopup.vue";
+import NodeDetailsPopup from "@/arches_search/RelationshipGraph/components/NodeDetailsPopup.vue";
 import { useGraphColors } from "@/arches_search/RelationshipGraph/composables/useGraphColors.ts";
 import {
     toEdgeElement,
@@ -23,6 +26,19 @@ import type {
     GraphNode,
 } from "@/arches_search/RelationshipGraph/types.ts";
 
+interface SelectedElement {
+    kind: "node" | "edge";
+    id: string;
+}
+
+// Where the selected element is on the canvas, and how far a popup about it
+// has to keep to stay off it
+interface PopupAnchor {
+    x: number;
+    y: number;
+    clearance: number;
+}
+
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 3;
 const WHEEL_SENSITIVITY = 0.3;
@@ -31,6 +47,7 @@ const RECENTER_DURATION_MS = 300;
 const LAYOUT_EDGE_LENGTH = 120;
 const LAYOUT_NODE_SPACING = 16;
 const LAYOUT_MAX_SIMULATION_MS = 2500;
+const POPUP_GAP = 8;
 
 const { nodes, edges } = defineProps<{
     nodes: GraphNode[];
@@ -41,12 +58,38 @@ const { $gettext } = useGettext();
 const { colorFor } = useGraphColors();
 
 const containerElement = ref<HTMLDivElement | null>(null);
+const selectedElement = ref<SelectedElement | null>(null);
+const popupAnchor = ref<PopupAnchor | null>(null);
+const stageSize = ref({ width: 0, height: 0 });
+
+const selectedNode = computed<GraphNode | null>(() =>
+    selectedElement.value?.kind === "node"
+        ? nodes.find((node) => node.id === selectedElement.value?.id) ?? null
+        : null,
+);
+
+const selectedEdge = computed<GraphEdge | null>(() =>
+    selectedElement.value?.kind === "edge"
+        ? edges.find((edge) => edge.id === selectedElement.value?.id) ?? null
+        : null,
+);
+
+const popupLabel = computed<string>(() =>
+    selectedElement.value?.kind === "edge"
+        ? $gettext("Relationship details")
+        : $gettext("Resource details"),
+);
+
+function nameOf(resourceId: string): string {
+    return nodes.find((node) => node.id === resourceId)?.name ?? "";
+}
 
 // Cytoscape owns these, and Vue must not wrap them in proxies
 let cy: Core | null = null;
 let activeLayout: Layouts | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let hasLaidOut = false;
+let anchorFrame: number | null = null;
 
 watch(() => [nodes, edges], applyGraph);
 
@@ -62,13 +105,29 @@ onMounted(() => {
         wheelSensitivity: WHEEL_SENSITIVITY,
     });
 
-    resizeObserver = new ResizeObserver(() => cy?.resize());
+    cy.on("tap", "node", (event) => selectElement("node", event.target.id()));
+    cy.on("tap", "edge", (event) => selectElement("edge", event.target.id()));
+    cy.on("tap", (event) => {
+        if (event.target === cy) closePopup();
+    });
+    // Fires for every change to what is on screen: panning, zooming, a node
+    // being dragged, a layout moving things
+    cy.on("render", scheduleAnchorUpdate);
+    document.addEventListener("keydown", onKeydown);
+
+    resizeObserver = new ResizeObserver(() => {
+        cy?.resize();
+        measureStage();
+    });
     resizeObserver.observe(containerElement.value);
+    measureStage();
 
     applyGraph();
 });
 
 onBeforeUnmount(() => {
+    if (anchorFrame !== null) cancelAnimationFrame(anchorFrame);
+    document.removeEventListener("keydown", onKeydown);
     resizeObserver?.disconnect();
     activeLayout?.stop();
     cy?.destroy();
@@ -92,6 +151,78 @@ function applyGraph(): void {
     );
     if (addedNodeIds.length > 0) {
         runLayout(addedNodeIds);
+    }
+    // What was selected may be gone
+    updateAnchor();
+}
+
+function measureStage(): void {
+    if (!containerElement.value) return;
+    stageSize.value = {
+        width: containerElement.value.clientWidth,
+        height: containerElement.value.clientHeight,
+    };
+}
+
+function selectElement(kind: SelectedElement["kind"], id: string): void {
+    if (!cy) return;
+
+    cy.elements().unselect();
+    cy.getElementById(id).select();
+    selectedElement.value = { kind, id };
+    updateAnchor();
+}
+
+function closePopup(): void {
+    selectedElement.value = null;
+    popupAnchor.value = null;
+    cy?.elements().unselect();
+}
+
+function onKeydown(event: KeyboardEvent): void {
+    if (event.key === "Escape" && selectedElement.value) closePopup();
+}
+
+function scheduleAnchorUpdate(): void {
+    if (!selectedElement.value || anchorFrame !== null) return;
+
+    anchorFrame = requestAnimationFrame(() => {
+        anchorFrame = null;
+        updateAnchor();
+    });
+}
+
+function updateAnchor(): void {
+    if (!cy || !selectedElement.value) return;
+
+    const element = cy.getElementById(selectedElement.value.id);
+    if (element.empty()) {
+        closePopup();
+        return;
+    }
+
+    let anchor: PopupAnchor;
+    if (selectedElement.value.kind === "node") {
+        const position = element.renderedPosition();
+        anchor = {
+            x: position.x,
+            y: position.y,
+            clearance: element.renderedWidth() / 2 + POPUP_GAP,
+        };
+    } else {
+        const midpoint = element.renderedMidpoint();
+        anchor = { x: midpoint.x, y: midpoint.y, clearance: POPUP_GAP };
+    }
+
+    // A frame in which nothing moved should not redraw the popup
+    const current = popupAnchor.value;
+    if (
+        !current ||
+        current.x !== anchor.x ||
+        current.y !== anchor.y ||
+        current.clearance !== anchor.clearance
+    ) {
+        popupAnchor.value = anchor;
     }
 }
 
@@ -187,6 +318,33 @@ function fitToGraph(): void {
             :title="$gettext('Fit the graph to the panel')"
             @click="fitToGraph"
         />
+        <GraphPopup
+            v-if="selectedElement && popupAnchor"
+            :anchor-x="popupAnchor.x"
+            :anchor-y="popupAnchor.y"
+            :clearance="popupAnchor.clearance"
+            :stage-width="stageSize.width"
+            :stage-height="stageSize.height"
+            :label="popupLabel"
+            @close="closePopup"
+        >
+            <NodeDetailsPopup
+                v-if="selectedNode"
+                :resource-id="selectedNode.id"
+                :name="selectedNode.name"
+                :model-name="selectedNode.model.name"
+                :model-color="colorFor(selectedNode.model)"
+                :related-count="selectedNode.related_count"
+            />
+            <EdgeDetailsPopup
+                v-else-if="selectedEdge"
+                :source-name="nameOf(selectedEdge.source)"
+                :target-name="nameOf(selectedEdge.target)"
+                :relationship-type-label="selectedEdge.relationship_type_label"
+                :inverse-label="selectedEdge.inverse_relationship_type_label"
+                :notes="selectedEdge.notes"
+            />
+        </GraphPopup>
     </div>
 </template>
 

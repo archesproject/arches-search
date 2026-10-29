@@ -46,7 +46,7 @@ def _collect_uuid_strings_from_group_payload(
     return uuid_strings_found
 
 
-def _resolve_resource_display_name(
+def resolve_resource_display_name(
     descriptors_field_value: Any,
     i18n_name_field_value: Any,
     language_code: str,
@@ -103,7 +103,7 @@ def build_resource_names_for_payload(
     resource_names_by_id: Dict[str, str] = {}
     for row in resource_instance_rows.iterator():
         resource_instance_id = str(row["resourceinstanceid"])
-        resolved_display_name = _resolve_resource_display_name(
+        resolved_display_name = resolve_resource_display_name(
             row["descriptors"],
             row["name"],
             language_code,
