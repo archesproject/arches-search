@@ -104,7 +104,7 @@ function createSearchFilters(): SearchFilters {
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const mapFilter = ref<FeatureCollection | null>(null);
     // Whether term matches also bring in resources related to the matches.
-    const includeRelated = ref(true);
+    const includeRelated = ref(false);
     // Not including related resources is a search of no hops.
     const requestMaxHops = computed(() =>
         includeRelated.value ? TERM_SEARCH_MAX_HOPS : 0,
