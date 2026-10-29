@@ -26,6 +26,7 @@ const MAP_FILTER_PANEL = "map-filter" as const;
 const SAVED_SEARCHES_PANEL = "saved-searches" as const;
 const EXPORT_RESULTS_PANEL = "export-results" as const;
 const RELATED_RESOURCES_PANEL = "related-resources" as const;
+const MAX_RELATED_RESOURCES = 2;
 
 interface SplitterResizeEvent {
     sizes?: number[];
@@ -63,7 +64,7 @@ export function useSidePanel() {
     const sidePanelBasis = ref(PANEL_SIZES[IDLE_PANEL]);
     const isSplitterResizing = ref(false);
     const isSidePanelVisible = ref(true);
-    const relatedResource = ref<RelatedResource | null>(null);
+    const relatedResources = ref<RelatedResource[]>([]);
 
     let switchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -146,6 +147,9 @@ export function useSidePanel() {
     }
 
     function applyPanel(nextPanel: SidePanelType): void {
+        if (nextPanel !== RELATED_RESOURCES_PANEL) {
+            relatedResources.value = [];
+        }
         activeSidePanel.value = nextPanel;
         sidePanelBasis.value = PANEL_SIZES[nextPanel];
         isSidePanelVisible.value = true;
@@ -164,13 +168,30 @@ export function useSidePanel() {
     }
 
     function closeSidePanel(): void {
-        relatedResource.value = null;
         switchToPanel(IDLE_PANEL);
     }
 
     function viewRelatedResource(resource: RelatedResource): void {
-        relatedResource.value = resource;
+        const selected = relatedResources.value;
+        if (!selected.some((related) => related.id === resource.id)) {
+            relatedResources.value =
+                selected.length < MAX_RELATED_RESOURCES
+                    ? [...selected, resource]
+                    : [
+                          ...selected.slice(0, MAX_RELATED_RESOURCES - 1),
+                          resource,
+                      ];
+        }
         switchToPanel(RELATED_RESOURCES_PANEL);
+    }
+
+    function removeRelatedResource(resourceId: string): void {
+        relatedResources.value = relatedResources.value.filter(
+            (related) => related.id !== resourceId,
+        );
+        if (relatedResources.value.length === 0) {
+            closeSidePanel();
+        }
     }
 
     provide("viewRelatedResource", viewRelatedResource);
@@ -247,13 +268,14 @@ export function useSidePanel() {
         isTimeFilterActive,
         isTimeFilterOpen,
         isRelatedResourcesOpen,
-        relatedResource,
+        relatedResources,
         resultsPanelSize,
         visibleSidePanelSize,
         sidePanelMinSize,
         sidePanelContentClass,
         sidePanelStyle,
         closeSidePanel,
+        removeRelatedResource,
         onToggleAttributeFilters,
         onToggleMapFilter,
         onToggleSavedSearches,
