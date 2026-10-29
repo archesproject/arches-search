@@ -4,7 +4,9 @@ import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 
+import CytoscapeCanvas from "@/arches_search/RelationshipGraph/components/CytoscapeCanvas.vue";
 import ResourceRelationshipSummary from "@/arches_search/RelationshipGraph/components/ResourceRelationshipSummary.vue";
+import { useRelationshipGraph } from "@/arches_search/RelationshipGraph/composables/useRelationshipGraph.ts";
 import { useRelationshipSummaries } from "@/arches_search/RelationshipGraph/composables/useRelationshipSummaries.ts";
 
 import type { SelectedResource } from "@/arches_search/RelationshipGraph/types.ts";
@@ -24,12 +26,20 @@ const {
     summaryStates,
     deselectedRowIds,
     selectedRelationshipCount,
+    selections,
     isLoading,
     toggleRow,
     loadSummary,
 } = useRelationshipSummaries(() => resources.map((resource) => resource.id));
 
 const isGraphVisible = ref(false);
+
+const {
+    graphData,
+    isLoading: isGraphLoading,
+    hasFailed: hasGraphFailed,
+    loadGraph,
+} = useRelationshipGraph(selections, isGraphVisible);
 
 const panelTitle = computed<string>(() =>
     resources.length === 1
@@ -53,6 +63,13 @@ const showRelationshipsLabel = computed<string>(() =>
 const canShowRelationships = computed<boolean>(
     () => !isLoading.value && selectedRelationshipCount.value > 0,
 );
+
+const truncatedNotice = computed<string>(() =>
+    $gettext(
+        "Showing the first %{count} resources. Hide some relationships to see the rest.",
+        { count: String(graphData.value?.node_limit ?? 0) },
+    ),
+);
 </script>
 
 <template>
@@ -72,27 +89,58 @@ const canShowRelationships = computed<boolean>(
         </div>
 
         <div
-            v-if="isGraphVisible"
-            class="graph-placeholder"
+            class="body"
+            :class="{ 'body-graph': isGraphVisible }"
         >
-            <i class="pi pi-share-alt" />
-            <span>{{ $gettext("The graph is not available yet.") }}</span>
-        </div>
+            <div
+                v-if="isGraphVisible"
+                class="graph-stage"
+            >
+                <CytoscapeCanvas
+                    v-if="graphData"
+                    :nodes="graphData.nodes"
+                    :edges="graphData.edges"
+                />
+                <div
+                    v-if="isGraphLoading"
+                    class="graph-overlay"
+                >
+                    <i class="pi pi-spin pi-spinner" />
+                    <span>{{ $gettext("Loading the graph…") }}</span>
+                </div>
+                <div
+                    v-else-if="hasGraphFailed"
+                    class="graph-overlay"
+                >
+                    <span>{{
+                        $gettext("The graph could not be loaded.")
+                    }}</span>
+                    <Button
+                        variant="link"
+                        :label="$gettext('Try again')"
+                        @click="loadGraph()"
+                    />
+                </div>
+                <p
+                    v-if="graphData?.truncated"
+                    class="graph-notice"
+                >
+                    {{ truncatedNotice }}
+                </p>
+            </div>
 
-        <div
-            v-else
-            class="summaries"
-        >
-            <ResourceRelationshipSummary
-                v-for="resource in resources"
-                :key="resource.id"
-                :title="resource.title"
-                :summary-state="summaryStates[resource.id]"
-                :deselected-row-ids="deselectedRowIds[resource.id] ?? []"
-                @toggle-row="toggleRow(resource.id, $event)"
-                @retry="loadSummary(resource.id)"
-                @remove="emit('remove-resource', resource.id)"
-            />
+            <div class="summaries">
+                <ResourceRelationshipSummary
+                    v-for="resource in resources"
+                    :key="resource.id"
+                    :title="resource.title"
+                    :summary-state="summaryStates[resource.id]"
+                    :deselected-row-ids="deselectedRowIds[resource.id] ?? []"
+                    @toggle-row="toggleRow(resource.id, $event)"
+                    @retry="loadSummary(resource.id)"
+                    @remove="emit('remove-resource', resource.id)"
+                />
+            </div>
         </div>
 
         <div class="footer">
@@ -172,7 +220,14 @@ const canShowRelationships = computed<boolean>(
     color: var(--p-text-color);
 }
 
-.relationship-graph .summaries {
+.relationship-graph .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+}
+
+.relationship-graph .body .summaries {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -182,20 +237,45 @@ const canShowRelationships = computed<boolean>(
     overflow-y: auto;
 }
 
-.relationship-graph .graph-placeholder {
-    flex: 1;
+/* With the graph on show, the rows share the panel with it as its legend */
+.relationship-graph .body.body-graph .summaries {
+    flex: 0 1 auto;
+    max-block-size: 40%;
+    border-block-start: 0.125rem solid var(--p-content-border-color);
+}
+
+.relationship-graph .body .graph-stage {
+    position: relative;
+    flex: 1 1 0;
+    min-block-size: 16rem;
+}
+
+.relationship-graph .body .graph-stage .graph-overlay {
+    position: absolute;
+    inset: 0;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1.2rem;
+    gap: 1rem;
+    background: color-mix(
+        in srgb,
+        var(--arches-search-card-bg) 70%,
+        transparent
+    );
     color: var(--p-text-muted-color);
     font-size: 1.4rem;
 }
 
-.relationship-graph .graph-placeholder .pi {
-    font-size: 4.8rem;
-    opacity: 0.3;
+.relationship-graph .body .graph-stage .graph-notice {
+    position: absolute;
+    inset-block-end: 0.8rem;
+    inset-inline: 0.8rem;
+    margin: 0;
+    padding: 0.6rem 1rem;
+    border-radius: 0.4rem;
+    background: var(--arches-search-highlight-bg);
+    color: var(--arches-search-highlight-text);
+    font-size: 1.2rem;
 }
 
 .relationship-graph .footer {
