@@ -5,11 +5,14 @@ import { useGettext } from "vue3-gettext";
 import Button from "openvue/button";
 import Skeleton from "openvue/skeleton";
 
+import LoadFailedMessage from "@/arches_search/RelationshipGraph/components/LoadFailedMessage.vue";
+import RelationshipSentence from "@/arches_search/RelationshipGraph/components/RelationshipSentence.vue";
+
 import {
     FAILED,
     LOADED,
     LOADING,
-} from "@/arches_search/RelationshipGraph/composables/useRelationshipSummaries.ts";
+} from "@/arches_search/RelationshipGraph/utils/load-status.ts";
 
 import type { PathState } from "@/arches_search/RelationshipGraph/composables/useResourcePath.ts";
 
@@ -65,10 +68,6 @@ const togglePathLabel = computed<string>(() =>
         ? $gettext("Hide the path from the graph")
         : $gettext("Show the path in the graph"),
 );
-
-function relationshipTypeLabel(label: string): string {
-    return label || $gettext("Unspecified relationship");
-}
 </script>
 
 <template>
@@ -85,19 +84,11 @@ function relationshipTypeLabel(label: string): string {
             <Skeleton class="loading-row" />
         </div>
 
-        <div
+        <LoadFailedMessage
             v-else-if="hasFailed"
-            class="message"
-        >
-            <span>{{
-                $gettext("How they are related could not be loaded.")
-            }}</span>
-            <Button
-                variant="link"
-                :label="$gettext('Try again')"
-                @click="emit('retry')"
-            />
-        </div>
+            :message="$gettext('How they are related could not be loaded.')"
+            @retry="emit('retry')"
+        />
 
         <template v-else-if="path">
             <div class="hops-row">
@@ -123,17 +114,11 @@ function relationshipTypeLabel(label: string): string {
                     :key="relationship.id"
                     class="relationship"
                 >
-                    <span class="resource">{{ fromTitle }}</span>
-                    {{ " " }}
-                    <span class="relationship-type">
-                        {{
-                            relationshipTypeLabel(
-                                relationship.relationship_type_label,
-                            )
-                        }}
-                    </span>
-                    {{ " " }}
-                    <span class="resource">{{ toTitle }}</span>
+                    <RelationshipSentence
+                        :from-name="fromTitle"
+                        :to-name="toTitle"
+                        :label="relationship.relationship_type_label"
+                    />
                 </li>
             </ul>
         </template>
@@ -165,15 +150,28 @@ function relationshipTypeLabel(label: string): string {
 
 .resource-pair-summary .hops-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.4rem 1rem;
 }
 
 .resource-pair-summary .hops-row .hops {
+    white-space: nowrap;
     font-size: 1.4rem;
     font-weight: 600;
     color: var(--p-text-color);
+}
+
+/* One and a half times a small text button */
+.resource-pair-summary .hops-row .path-toggle.p-button {
+    flex-shrink: 0;
+    font-size: 1.3rem;
+}
+
+/* The icon takes its size from the theme, not from the button */
+.resource-pair-summary .hops-row .path-toggle.p-button :deep(.p-button-icon) {
+    font-size: 1.3rem;
 }
 
 .resource-pair-summary .relationships {
@@ -186,36 +184,11 @@ function relationshipTypeLabel(label: string): string {
 }
 
 .resource-pair-summary .relationships .relationship {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.6rem;
     font-size: 1.3rem;
     color: var(--p-text-color);
 }
 
-.resource-pair-summary .relationships .relationship .resource {
-    font-weight: 600;
-    overflow-wrap: anywhere;
-}
-
-.resource-pair-summary .relationships .relationship .relationship-type {
-    padding: 0.1rem 0.8rem;
-    border-radius: var(--arches-search-radius-pill);
-    background: var(--arches-search-chip-search-bg);
-    color: var(--arches-search-chip-search-text);
-    font-size: 1.2rem;
-}
-
 .resource-pair-summary .loading .loading-row {
     block-size: 3.6rem;
-}
-
-.resource-pair-summary .message {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    font-size: 1.3rem;
-    color: var(--p-text-muted-color);
 }
 </style>

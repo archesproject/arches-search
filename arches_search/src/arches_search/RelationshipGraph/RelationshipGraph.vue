@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 
 import CytoscapeCanvas from "@/arches_search/RelationshipGraph/components/CytoscapeCanvas.vue";
+import GraphControls from "@/arches_search/RelationshipGraph/components/GraphControls.vue";
 import ResourcePairSummary from "@/arches_search/RelationshipGraph/components/ResourcePairSummary.vue";
 import ResourceRelationshipSummary from "@/arches_search/RelationshipGraph/components/ResourceRelationshipSummary.vue";
+import { useFullscreen } from "@/arches_search/RelationshipGraph/composables/useFullscreen.ts";
 import { useRelationshipGraph } from "@/arches_search/RelationshipGraph/composables/useRelationshipGraph.ts";
 import { useRelationshipSummaries } from "@/arches_search/RelationshipGraph/composables/useRelationshipSummaries.ts";
 import { useResourcePath } from "@/arches_search/RelationshipGraph/composables/useResourcePath.ts";
@@ -19,6 +21,7 @@ const { resources } = defineProps<{
 
 const emit = defineEmits<{
     (event: "remove-resource", resourceId: string): void;
+    (event: "graph-visibility-change", isVisible: boolean): void;
     (event: "close"): void;
 }>();
 
@@ -43,6 +46,14 @@ const {
 } = useResourcePath(() => resources.map((resource) => resource.id));
 
 const isGraphVisible = ref(false);
+const stageElement = ref<HTMLDivElement | null>(null);
+const canvasRef = ref<InstanceType<typeof CytoscapeCanvas> | null>(null);
+
+const {
+    isFullscreen,
+    isSupported: isFullscreenSupported,
+    toggle: toggleFullscreen,
+} = useFullscreen(stageElement);
 
 const {
     graphData,
@@ -74,6 +85,31 @@ const canShowRelationships = computed<boolean>(
     () => !isLoading.value && selectedRelationshipCount.value > 0,
 );
 
+const graphResourceCountLabel = computed<string>(() => {
+    const count = graphData.value?.nodes.length ?? 0;
+    return $ngettext(
+        "%{count} resource in the graph",
+        "%{count} resources in the graph",
+        count,
+        { count: String(count) },
+    );
+});
+
+// The graph wants room of its own, which the panel around this makes
+watch(isGraphVisible, (isVisible) =>
+    emit("graph-visibility-change", isVisible),
+);
+
+// Going to or from full screen changes the room the graph has, so it is fitted
+// to it. That is two frames on, when the browser has resized the stage.
+watch(isFullscreen, () => {
+    void nextTick(() => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => canvasRef.value?.fitToGraph());
+        });
+    });
+});
+
 const truncatedNotice = computed<string>(() =>
     $gettext(
         "Showing the first %{count} resources. Hide some relationships to see the rest.",
@@ -104,10 +140,12 @@ const truncatedNotice = computed<string>(() =>
         >
             <div
                 v-if="isGraphVisible"
+                ref="stageElement"
                 class="graph-stage"
             >
                 <CytoscapeCanvas
                     v-if="graphData"
+                    ref="canvasRef"
                     :nodes="graphData.nodes"
                     :edges="graphData.edges"
                 />
@@ -137,9 +175,33 @@ const truncatedNotice = computed<string>(() =>
                 >
                     {{ truncatedNotice }}
                 </p>
+                <GraphControls
+                    :is-fullscreen="isFullscreen"
+                    :is-fullscreen-supported="isFullscreenSupported"
+                    :can-fit="graphData !== null"
+                    @close="isGraphVisible = false"
+                    @toggle-fullscreen="toggleFullscreen"
+                    @fit="canvasRef?.fitToGraph()"
+                />
             </div>
 
             <div class="summaries">
+                <p
+                    v-if="isGraphVisible && graphData"
+                    class="graph-resource-count"
+                >
+                    <i class="pi pi-share-alt" />
+                    <span>{{ graphResourceCountLabel }}</span>
+                </p>
+                <ResourcePairSummary
+                    v-if="resources.length === 2"
+                    :from-title="resources[0].title"
+                    :to-title="resources[1].title"
+                    :path-state="pathState"
+                    :is-path-shown="isPathShown"
+                    @toggle-path="togglePath"
+                    @retry="loadPath()"
+                />
                 <ResourceRelationshipSummary
                     v-for="resource in resources"
                     :key="resource.id"
@@ -150,30 +212,14 @@ const truncatedNotice = computed<string>(() =>
                     @retry="loadSummary(resource.id)"
                     @remove="emit('remove-resource', resource.id)"
                 />
-                <ResourcePairSummary
-                    v-if="resources.length === 2"
-                    :from-title="resources[0].title"
-                    :to-title="resources[1].title"
-                    :path-state="pathState"
-                    :is-path-shown="isPathShown"
-                    @toggle-path="togglePath"
-                    @retry="loadPath()"
-                />
             </div>
         </div>
 
-        <div class="footer">
+        <div
+            v-if="!isGraphVisible"
+            class="footer"
+        >
             <Button
-                v-if="isGraphVisible"
-                class="footer-btn"
-                icon="pi pi-list"
-                icon-pos="left"
-                severity="secondary"
-                :label="$gettext('Back to summary')"
-                @click="isGraphVisible = false"
-            />
-            <Button
-                v-else
                 class="footer-btn"
                 icon="pi pi-share-alt"
                 icon-pos="left"
@@ -246,6 +292,11 @@ const truncatedNotice = computed<string>(() =>
     min-block-size: 0;
 }
 
+/* With the graph on show, it takes the left and the summary the right */
+.relationship-graph .body.body-graph {
+    flex-direction: row;
+}
+
 .relationship-graph .body .summaries {
     display: flex;
     flex: 1;
@@ -256,22 +307,38 @@ const truncatedNotice = computed<string>(() =>
     overflow-y: auto;
 }
 
-/* With the graph on show, the rows share the panel with it as its legend */
 .relationship-graph .body.body-graph .summaries {
-    flex: 0 1 auto;
-    max-block-size: 40%;
-    border-block-start: 0.125rem solid var(--p-content-border-color);
+    flex: 0 0 38%;
+    min-inline-size: 28rem;
+    border-inline-start: 0.125rem solid var(--p-content-border-color);
+}
+
+.relationship-graph .body .summaries .graph-resource-count {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--p-text-color);
+}
+
+.relationship-graph .body .summaries .graph-resource-count .pi {
+    color: var(--p-primary-color);
 }
 
 .relationship-graph .body .graph-stage {
     position: relative;
     flex: 1 1 0;
-    min-block-size: 16rem;
+    min-inline-size: 0;
+    /* Without one, the full screen shows what is behind it */
+    background-color: var(--arches-search-page-bg);
 }
 
 .relationship-graph .body .graph-stage .graph-overlay {
     position: absolute;
     inset: 0;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -289,6 +356,7 @@ const truncatedNotice = computed<string>(() =>
     position: absolute;
     inset-block-end: 0.8rem;
     inset-inline: 0.8rem;
+    z-index: 1;
     margin: 0;
     padding: 0.6rem 1rem;
     border-radius: 0.4rem;
