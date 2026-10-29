@@ -24,3 +24,9 @@ export interface RelationshipSummary {
     resource_model: ResourceModel | null;
     rows: RelationshipSummaryRow[];
 }
+
+// A resource picked in the search results to look at the relationships of
+export interface SelectedResource {
+    id: string;
+    title: string;
+}

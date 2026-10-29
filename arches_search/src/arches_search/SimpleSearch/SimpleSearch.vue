@@ -13,13 +13,13 @@ import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters
 import AttributeFilters from "@/arches_search/SimpleSearch/components/attribute-filters/AttributeFilters.vue";
 import ExportResultsPanel from "@/arches_search/SimpleSearch/components/ExportResultsPanel.vue";
 import IdleInfoTiles from "@/arches_search/SimpleSearch/components/IdleInfoTiles.vue";
-import RelatedResourcesPanel from "@/arches_search/SimpleSearch/components/RelatedResourcesPanel.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
 import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter/TermFilter.vue";
 import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
+import RelationshipGraph from "@/arches_search/RelationshipGraph/RelationshipGraph.vue";
 
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
@@ -112,13 +112,14 @@ const {
     isTimeFilterActive,
     isTimeFilterOpen,
     isRelatedResourcesOpen,
-    relatedResource,
+    relatedResources,
     resultsPanelSize,
     visibleSidePanelSize,
     sidePanelMinSize,
     sidePanelContentClass,
     sidePanelStyle,
     closeSidePanel,
+    removeRelatedResource,
     onToggleAttributeFilters,
     onToggleMapFilter,
     onToggleSavedSearches,
@@ -610,9 +611,10 @@ async function onRunSavedQuery(
                             @remove="onRemoveMapFilter"
                             @close="closeSidePanel()"
                         />
-                        <RelatedResourcesPanel
+                        <RelationshipGraph
                             v-if="isRelatedResourcesOpen"
-                            :resource-title="relatedResource!.title"
+                            :resources="relatedResources"
+                            @remove-resource="removeRelatedResource"
                             @close="closeSidePanel()"
                         />
                         <TimeFilter
