@@ -362,8 +362,7 @@ function onExport(): void {
 }
 
 .format-option-name {
-    font-weight: 600;
-    color: var(--p-text-color);
+    font-size: var(--p-arches-search-font-size);
 }
 
 .concepts-options {
