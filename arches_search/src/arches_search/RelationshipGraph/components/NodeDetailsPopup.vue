@@ -19,7 +19,9 @@ const { resourceId, name, modelName, modelColor, relatedCount } = defineProps<{
 
 const { $gettext, $ngettext } = useGettext();
 
-const { description, isLoading } = useResourceDescription(() => resourceId);
+const { description, isLoading, canEdit, hasFailed } = useResourceDescription(
+    () => resourceId,
+);
 
 const relatedCountLabel = computed<string>(() =>
     $ngettext("%{count} relationship", "%{count} relationships", relatedCount, {
@@ -54,6 +56,13 @@ const editorLink = computed<string>(() =>
             class="description-loading"
         />
         <p
+            v-else-if="hasFailed"
+            class="description"
+            role="status"
+        >
+            {{ $gettext("The resource details could not be loaded.") }}
+        </p>
+        <p
             v-else-if="description"
             class="description"
         >
@@ -66,14 +75,17 @@ const editorLink = computed<string>(() =>
             <Button
                 as="a"
                 icon="pi pi-external-link"
+                rel="noopener noreferrer"
                 target="_blank"
                 variant="link"
                 :href="reportLink"
                 :label="$gettext('View Report')"
             />
             <Button
+                v-if="canEdit"
                 as="a"
                 icon="pi pi-wrench"
+                rel="noopener noreferrer"
                 target="_blank"
                 variant="link"
                 :href="editorLink"

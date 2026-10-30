@@ -166,7 +166,10 @@ export function useSidePanel() {
     function switchToPanel(nextPanel: SidePanelType): void {
         clearSwitchTimer();
 
-        if (nextPanel === activeSidePanel.value) return;
+        if (nextPanel === activeSidePanel.value) {
+            isSidePanelVisible.value = true;
+            return;
+        }
 
         isSidePanelVisible.value = false;
         switchTimer = setTimeout(() => {

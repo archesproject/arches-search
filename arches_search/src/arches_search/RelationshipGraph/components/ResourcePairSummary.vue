@@ -121,6 +121,16 @@ const togglePathLabel = computed<string>(() =>
                     />
                 </li>
             </ul>
+            <p
+                v-if="path.direct_relationships_truncated"
+                role="status"
+            >
+                {{
+                    $gettext(
+                        "Some direct relationships are not shown because the relationship limit was reached.",
+                    )
+                }}
+            </p>
         </template>
     </section>
 </template>

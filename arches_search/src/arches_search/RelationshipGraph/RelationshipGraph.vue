@@ -112,8 +112,11 @@ watch(isFullscreen, () => {
 
 const truncatedNotice = computed<string>(() =>
     $gettext(
-        "Showing the first %{count} resources. Hide some relationships to see the rest.",
-        { count: String(graphData.value?.node_limit ?? 0) },
+        "The graph is limited to %{nodes} resources and %{edges} relationships. Hide some relationships to see the rest.",
+        {
+            nodes: String(graphData.value?.node_limit ?? 0),
+            edges: String(graphData.value?.edge_limit ?? 0),
+        },
     ),
 );
 </script>
@@ -172,6 +175,7 @@ const truncatedNotice = computed<string>(() =>
                 <p
                     v-if="graphData?.truncated"
                     class="graph-notice"
+                    role="status"
                 >
                     {{ truncatedNotice }}
                 </p>
