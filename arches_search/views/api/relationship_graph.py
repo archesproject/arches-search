@@ -30,6 +30,7 @@ MAX_SELECTED_RESOURCES = 10
 # dozen at most; more than this is not a request the panel makes
 MAX_ROWS_PER_SELECTION = 500
 MAX_GRAPH_NODES = 300
+MAX_GRAPH_EDGES = 1000
 # How far apart two resources may be for a path between them to be found, and
 # how many resources the search may visit before it gives up
 MAX_PATH_HOPS = 6
@@ -194,7 +195,17 @@ def _relationship_type_labels(relationship_type_ids):
     """Map each relationship type id to a display label. A type with no
     preferred label is shown as its raw value, trimmed to the last segment
     when that value is a URL."""
-    preferred_labels = get_resource_relationship_type_label(relationship_type_ids)
+    # Arches a12-a15 discard all labels if even one value is not a UUID.
+    valid_ids = []
+    for relationship_type_id in relationship_type_ids:
+        try:
+            uuid.UUID(str(relationship_type_id))
+        except (ValueError, TypeError):
+            continue
+        valid_ids.append(relationship_type_id)
+    preferred_labels = (
+        get_resource_relationship_type_label(valid_ids) if valid_ids else {}
+    )
 
     labels = {}
     for relationship_type_id in relationship_type_ids:
@@ -267,12 +278,13 @@ class RelationshipGraphAPI(APIBase):
             ...
         ],
         "truncated": false,
-        "node_limit": 300
+        "node_limit": 300,
+        "edge_limit": 1000
     }
 
     The inverse relationship type, which names the relationship from the
     target's side, and the notes are empty when none were recorded. The graph
-    stops adding resources at the node limit and says so with `truncated`.
+    stops at either the node or edge limit and says so with `truncated`.
     Only readable resources and relationships are included.
     """
 
@@ -303,21 +315,22 @@ class RelationshipGraphAPI(APIBase):
             for end in (relation["from_resource_id"], relation["to_resource_id"])
         }
 
-        relations_by_id = {}
-        for resource_id, rows in selections:
-            relations_by_id.update(
-                _selected_relations(request.user, readable_nodes, resource_id, rows)
-            )
-        relations_by_id.update(path_relations)
+        relations_by_id = _selected_relations(request.user, readable_nodes, selections)
 
         node_ids = set(seed_ids) | path_node_ids
-        relations = []
-        truncated = False
+        # Reserve space for the explicit path, even when a selection hits a cap.
+        relations = list(path_relations.values())
+        truncated = len(relations_by_id) > MAX_GRAPH_EDGES
         for relation in sorted(
             relations_by_id.values(), key=lambda row: str(row["resourcexid"])
         ):
+            if relation["resourcexid"] in path_relations:
+                continue
             ends = {relation["from_resource_id"], relation["to_resource_id"]}
-            if len(node_ids | ends) > MAX_GRAPH_NODES:
+            if (
+                len(node_ids | ends) > MAX_GRAPH_NODES
+                or len(relations) >= MAX_GRAPH_EDGES
+            ):
                 truncated = True
                 continue
             node_ids |= ends
@@ -334,7 +347,9 @@ class RelationshipGraphAPI(APIBase):
             }
         )
         related_counts = _related_counts(request.user, readable_nodes, node_ids)
-        resources = ResourceInstance.objects.filter(pk__in=node_ids)
+        resources = ResourceInstance.objects.filter(pk__in=node_ids).only(
+            "graph_id", "descriptors", "name"
+        )
         models_by_id = _models_by_id({resource.graph_id for resource in resources})
 
         return JSONResponse(
@@ -372,6 +387,7 @@ class RelationshipGraphAPI(APIBase):
                 ],
                 "truncated": truncated,
                 "node_limit": MAX_GRAPH_NODES,
+                "edge_limit": MAX_GRAPH_EDGES,
             }
         )
 
@@ -448,18 +464,23 @@ def _incoming_row_filter(relationship_type_id, graph_id):
     return type_filter & Q(from_resource_graph_id=graph_id)
 
 
-def _selected_relations(user, readable_nodes, resource_id, rows):
-    """The relationships of one resource that the summary rows stand for, as
+def _selected_relations(user, readable_nodes, selections):
+    """The relationships that the selected summary rows stand for, as
     {resourcexid: {resourcexid, from_resource_id, to_resource_id,
     relationshiptype, inverserelationshiptype, notes}}. Mirrors how the summary groups relationships, so a
     row selects exactly the relationships it counted."""
     outgoing_rows = Q()
     incoming_rows = Q()
-    for direction, relationship_type_id, graph_id in rows:
-        if direction == OUTGOING:
-            outgoing_rows |= _outgoing_row_filter(relationship_type_id, graph_id)
-        else:
-            incoming_rows |= _incoming_row_filter(relationship_type_id, graph_id)
+    for resource_id, rows in selections:
+        for direction, relationship_type_id, graph_id in rows:
+            if direction == OUTGOING:
+                outgoing_rows |= Q(from_resource_id=resource_id) & _outgoing_row_filter(
+                    relationship_type_id, graph_id
+                )
+            else:
+                incoming_rows |= Q(to_resource_id=resource_id) & _incoming_row_filter(
+                    relationship_type_id, graph_id
+                )
 
     relations = _readable_relations(readable_nodes)
     querysets = []
@@ -469,7 +490,6 @@ def _selected_relations(user, readable_nodes, resource_id, rows):
                 user,
                 relations.filter(
                     outgoing_rows,
-                    from_resource_id=resource_id,
                     to_resource_graph__isresource=True,
                 ),
                 resourceinstance_field="to_resource_id",
@@ -481,17 +501,21 @@ def _selected_relations(user, readable_nodes, resource_id, rows):
                 user,
                 relations.filter(
                     incoming_rows,
-                    to_resource_id=resource_id,
                     from_resource_graph__isresource=True,
-                ).exclude(from_resource_id=resource_id),
+                ).exclude(from_resource_id=F("to_resource_id")),
                 resourceinstance_field="from_resource_id",
             )
         )
 
+    if not querysets:
+        return {}
+    projected = [queryset.order_by().values(*RELATION_FIELDS) for queryset in querysets]
+    relations = (
+        projected[0].union(*projected[1:]) if len(projected) > 1 else projected[0]
+    )
     return {
         relation["resourcexid"]: relation
-        for queryset in querysets
-        for relation in queryset.order_by().values(*RELATION_FIELDS)
+        for relation in relations.order_by("resourcexid")[: MAX_GRAPH_EDGES + 1]
     }
 
 
@@ -613,13 +637,15 @@ class RelationshipGraphPathAPI(APIBase):
             request.user, readable_nodes, from_id, to_id
         )
 
+        direct_relationships, direct_truncated = _direct_relationships(
+            readable_nodes, from_id, to_id
+        )
         return JSONResponse(
             {
                 "from_resource_id": str(from_id),
                 "to_resource_id": str(to_id),
-                "direct_relationships": _direct_relationships(
-                    readable_nodes, from_id, to_id
-                ),
+                "direct_relationships": direct_relationships,
+                "direct_relationships_truncated": direct_truncated,
                 "hops": len(relationship_ids) or None,
                 "relationship_ids": [
                     str(relationship_id) for relationship_id in relationship_ids
@@ -637,13 +663,15 @@ def _direct_relationships(readable_nodes, from_id, to_id):
         | Q(from_resource_id=to_id, to_resource_id=from_id),
     )
     rows = list(
-        relations.order_by().values(
+        relations.order_by("resourcexid").values(
             "resourcexid",
             "from_resource_id",
             "relationshiptype",
             "inverserelationshiptype",
-        )
+        )[: MAX_GRAPH_EDGES + 1]
     )
+    truncated = len(rows) > MAX_GRAPH_EDGES
+    rows = rows[:MAX_GRAPH_EDGES]
 
     direct_relationships = []
     for row in rows:
@@ -668,12 +696,15 @@ def _direct_relationships(readable_nodes, from_id, to_id):
         relationship["relationship_type_label"] = labels[
             relationship["relationship_type_id"]
         ]
-    return sorted(
-        direct_relationships,
-        key=lambda relationship: (
-            relationship["relationship_type_label"].lower(),
-            relationship["direction"],
+    return (
+        sorted(
+            direct_relationships,
+            key=lambda relationship: (
+                relationship["relationship_type_label"].lower(),
+                relationship["direction"],
+            ),
         ),
+        truncated,
     )
 
 
@@ -688,7 +719,7 @@ class _SearchSide:
         self.previous = {}
         self.frontier = {start}
 
-    def expand(self, user, relations, other_depths):
+    def expand(self, user, relations, other_depths, row_budget):
         """Reach every resource one relationship further, in either direction.
         Returns those the other end of the search had already reached."""
         reached = {}
@@ -703,7 +734,15 @@ class _SearchSide:
                 ),
                 resourceinstance_field=far,
             )
-            for row in rows.order_by().values("resourcexid", near, far):
+            rows = list(
+                rows.order_by("resourcexid").values("resourcexid", near, far)[
+                    : row_budget + 1
+                ]
+            )
+            if len(rows) > row_budget:
+                return [], True
+            row_budget -= len(rows)
+            for row in rows:
                 if row[far] not in self.depths and row[far] not in reached:
                     reached[row[far]] = (row[near], row["resourcexid"])
 
@@ -712,7 +751,9 @@ class _SearchSide:
             self.depths[resource_id] = self.depth
             self.previous[resource_id] = (previous_id, relationship_id)
         self.frontier = set(reached)
-        return [resource_id for resource_id in reached if resource_id in other_depths]
+        return [
+            resource_id for resource_id in reached if resource_id in other_depths
+        ], False
 
     def trace(self, resource_id):
         """The relationships from the start to a resource this side reached,
@@ -744,7 +785,12 @@ def _shortest_path(user, readable_nodes, from_id, to_id):
         if not side.frontier:
             return [], False
 
-        meeting_ids = side.expand(user, relations, other.depths)
+        remaining = MAX_PATH_SEARCH_NODES - len(from_side.depths) - len(to_side.depths)
+        meeting_ids, limit_reached = side.expand(
+            user, relations, other.depths, remaining
+        )
+        if limit_reached:
+            return [], True
         if meeting_ids:
             meeting_id = min(meeting_ids, key=str)
             return (
