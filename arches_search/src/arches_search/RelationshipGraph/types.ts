@@ -62,9 +62,10 @@ export interface GraphEdge {
 export interface RelationshipGraphData {
     nodes: GraphNode[];
     edges: GraphEdge[];
-    // Whether more resources were left out than the node limit allows
+    // Whether a node or edge limit left out part of the selection
     truncated: boolean;
     node_limit: number;
+    edge_limit: number;
 }
 
 // A relationship between the two resources being compared, worded from the
@@ -80,6 +81,7 @@ export interface RelationshipPath {
     from_resource_id: string;
     to_resource_id: string;
     direct_relationships: PathRelationship[];
+    direct_relationships_truncated: boolean;
     // Null when no chain of at most max_hops relationships was found
     hops: number | null;
     // The relationships of the shortest chain, in order from the first resource

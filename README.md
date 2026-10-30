@@ -4,6 +4,22 @@ Arches Search is an Arches application that provides a modern, configurable sear
 
 Please see the [project page](http://archesproject.org/) for more information on the Arches project.
 
+## Relationship graph limits
+
+The relationship graph shows at most 300 resources and 1,000 relationships.
+Selections are fetched together in one bounded query; explicitly shown paths
+take priority over selected summary rows. When a node or relationship limit is
+reached, the panel asks users to narrow their selection. Summary and node
+relationship counts remain exact permission-filtered database aggregates.
+
+Shortest-path searches stop at six hops or 5,000 visited resources, with each
+expansion's relationship query bounded by the remaining search budget. A dense
+hub or many parallel relationships can exhaust that budget before a full layer
+is explored; the panel then reports an incomplete search, not a missing path.
+Direct relationship lists are also capped at 1,000 and marked when incomplete.
+Blank and non-UUID relationship types retain their fallback labels on supported
+Arches versions, including 8.2.0a12-a15.
+
 ## Installation
 
 If you are installing Arches Search for the first time, **we strongly recommend** that you install it as an Arches application into an existing (or new) project. Running Arches Search as a standalone project can provide some convenience if you are a developer contributing to the Arches Search project, but you risk conflicts when upgrading to the next version of Arches Search.
