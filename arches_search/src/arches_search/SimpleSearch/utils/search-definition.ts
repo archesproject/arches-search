@@ -176,8 +176,10 @@ function isSortSpec(value: unknown): value is SortSpec {
     return (
         typeof value === "object" &&
         value !== null &&
-        typeof (value as Record<string, unknown>).type === "string" &&
-        typeof (value as Record<string, unknown>).direction === "string"
+        "type" in value &&
+        typeof value.type === "string" &&
+        "direction" in value &&
+        typeof value.direction === "string"
     );
 }
 
@@ -197,5 +199,40 @@ export function buildAdvancedSearchDefinition(
         graphSlugs: [graphSlug],
         mapFilter: null,
         sort,
+    };
+}
+
+// Keyed queries Simple Search cannot show as filters join the advanced query,
+// ANDed, so Advanced Search can show and edit them. Only those on its model
+// can join; with no advanced query yet, the first one's model is used.
+export function foldQueriesIntoAdvancedQuery(
+    advancedQuery: GroupPayload | null,
+    queriesToFold: ReadonlyMap<string, GroupPayload>,
+): { advancedQuery: GroupPayload; foldedKeys: string[] } | null {
+    const candidates = [...queriesToFold].map(([key, query]) => ({
+        key,
+        query,
+    }));
+    if (candidates.length === 0) {
+        return null;
+    }
+
+    const graphSlug =
+        advancedQuery?.graph_slug ?? candidates[0].query.graph_slug;
+    const candidatesOnModel = candidates.filter(
+        (candidate) => candidate.query.graph_slug === graphSlug,
+    );
+    if (candidatesOnModel.length === 0) {
+        return null;
+    }
+
+    const foldedQueries = candidatesOnModel.map((candidate) => candidate.query);
+    let queriesToCombine = foldedQueries;
+    if (advancedQuery) {
+        queriesToCombine = [advancedQuery, ...foldedQueries];
+    }
+    return {
+        advancedQuery: mergeQueries(queriesToCombine),
+        foldedKeys: candidatesOnModel.map((candidate) => candidate.key),
     };
 }

@@ -70,8 +70,12 @@ const RESULTS_PANEL_MIN_SIZE = 20;
 
 const { $gettext } = useGettext();
 const toast = useToast();
-const { advancedQuery, applyAdvancedQuery, applySearchDefinition } =
-    useSearchFilters();
+const {
+    advancedQuery,
+    applyAdvancedQuery,
+    applySearchDefinition,
+    foldUnrepresentedQueriesIntoAdvancedQuery,
+} = useSearchFilters();
 const {
     isExportResultsOpen,
     isOperandPanelOpen,
@@ -153,8 +157,13 @@ watchEffect(async () => {
 
 // The query applied when the page opens is searched once everything it needs
 // has loaded, so arriving from Simple Search shows its results straight away.
+// Filters Simple Search could not show are folded into it first.
 watch(isLoading, (loading) => {
-    if (!loading && advancedQuery.value) {
+    if (loading) {
+        return;
+    }
+    foldUnrepresentedQueriesIntoAdvancedQuery();
+    if (advancedQuery.value) {
         searchedGraphSlug.value = advancedQuery.value.graph_slug;
         void performSearch(FIRST_RESULTS_PAGE);
     }

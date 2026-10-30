@@ -10,12 +10,14 @@ import {
 } from "@/arches_search/SimpleSearch/api.ts";
 import {
     buildAttributeFilterQuery,
+    formatAttributeFilterValue,
     parseAttributeFilterValue,
 } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 import {
     buildRequestDateRange,
     buildRequestQueries,
     buildRequestTerms,
+    foldQueriesIntoAdvancedQuery,
 } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
@@ -61,6 +63,7 @@ interface SearchFilters {
     advancedQuery: Ref<GroupPayload | null>;
     advancedQueryDraft: Ref<QueryBuilderGroup | null>;
     attributeFilterValues: ComputedRef<Record<string, unknown>>;
+    unrepresentedQueryKeys: ComputedRef<string[]>;
     availableGraphs: Ref<ResourceType[]>;
     loadAvailableGraphs(): Promise<void>;
     currentPage: Ref<number>;
@@ -80,6 +83,7 @@ interface SearchFilters {
         searchName?: string | null,
     ): Promise<void>;
     applyAdvancedQuery(payload: GroupPayload | null): void;
+    foldUnrepresentedQueriesIntoAdvancedQuery(): void;
     clearAll(): void;
     clearAttributeFilter(nodeAlias: string): void;
     clearMapFilter(): void;
@@ -189,6 +193,24 @@ function createSearchFilters(): SearchFilters {
                     parseAttributeFilterValue(node, query);
                 return [[node.node_alias, value]];
             }),
+        );
+    });
+
+    // Keyed queries the filters cannot show, like those of searches saved
+    // before a node had a filter.
+    const unrepresentedQueryKeys = computed<string[]>(() => {
+        const representedKeys = new Set<string>([TIME_FILTER_QUERY_KEY]);
+        for (const node of nodeFilterConfigNodes.value) {
+            const formattedValue = formatAttributeFilterValue(
+                node,
+                attributeFilterValues.value[node.node_alias],
+            );
+            if (queries.value.has(node.node_alias) && formattedValue) {
+                representedKeys.add(node.node_alias);
+            }
+        }
+        return [...queries.value.keys()].filter(
+            (filterKey) => !representedKeys.has(filterKey),
         );
     });
 
@@ -334,6 +356,27 @@ function createSearchFilters(): SearchFilters {
 
     // Advanced Search runs its own search over the query alone; Simple Search
     // searches again with it when next opened.
+    function foldUnrepresentedQueriesIntoAdvancedQuery(): void {
+        const unrepresentedQueries = new Map(
+            [...queries.value].filter(([filterKey]) =>
+                unrepresentedQueryKeys.value.includes(filterKey),
+            ),
+        );
+        const folded = foldQueriesIntoAdvancedQuery(
+            advancedQuery.value,
+            unrepresentedQueries,
+        );
+        if (!folded) {
+            return;
+        }
+        const nextQueries = new Map(queries.value);
+        for (const foldedKey of folded.foldedKeys) {
+            nextQueries.delete(foldedKey);
+        }
+        queries.value = nextQueries;
+        setAdvancedQuery(folded.advancedQuery);
+    }
+
     function applyAdvancedQuery(payload: GroupPayload | null): void {
         advancedQuery.value = payload;
     }
@@ -613,9 +656,11 @@ function createSearchFilters(): SearchFilters {
         advancedQuery,
         advancedQueryDraft,
         attributeFilterValues,
+        unrepresentedQueryKeys,
         availableGraphs,
         loadAvailableGraphs,
         applyAdvancedQuery,
+        foldUnrepresentedQueriesIntoAdvancedQuery,
         applySearchDefinition,
         clearAll,
         clearAttributeFilter,

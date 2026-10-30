@@ -13,6 +13,7 @@ import {
     buildRequestDateRange,
     buildRequestQueries,
     buildRequestQuery,
+    foldQueriesIntoAdvancedQuery,
     parseSearchDefinition,
 } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import { ADVANCED_QUERY_KEY } from "@/arches_search/SimpleSearch/types.ts";
@@ -162,6 +163,57 @@ describe("buildRequestQueries", () => {
         expect(
             buildRequestQueries([allDateNodesTimeFilter], [GRAPH_SLUG]),
         ).toEqual([]);
+    });
+});
+
+describe("foldQueriesIntoAdvancedQuery", () => {
+    const sampleQuery: GroupPayload = {
+        ...constructionDateTimeFilter,
+        graph_slug: "sample",
+    };
+
+    it("ANDs the queries into the advanced query and says which keys moved", () => {
+        const folded = foldQueriesIntoAdvancedQuery(
+            constructionDateTimeFilter,
+            new Map([
+                ["survey", surveyDateTimeFilter],
+                ["sample", sampleQuery],
+            ]),
+        );
+
+        expect(folded).toEqual({
+            advancedQuery: {
+                graph_slug: GRAPH_SLUG,
+                scope: GraphScopeToken.RESOURCE,
+                logic: LogicToken.AND,
+                clauses: [],
+                groups: [constructionDateTimeFilter, surveyDateTimeFilter],
+                aggregations: [],
+                relationship: null,
+            },
+            foldedKeys: ["survey"],
+        });
+    });
+
+    it("starts the advanced query from the first query when there is none", () => {
+        expect(
+            foldQueriesIntoAdvancedQuery(
+                null,
+                new Map([["survey", surveyDateTimeFilter]]),
+            ),
+        ).toEqual({
+            advancedQuery: surveyDateTimeFilter,
+            foldedKeys: ["survey"],
+        });
+    });
+
+    it("folds nothing when no query is on the advanced query's model", () => {
+        expect(
+            foldQueriesIntoAdvancedQuery(
+                constructionDateTimeFilter,
+                new Map([["sample", sampleQuery]]),
+            ),
+        ).toBeNull();
     });
 });
 
