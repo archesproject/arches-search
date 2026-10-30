@@ -6,8 +6,10 @@ import {
     addRelatedGroup,
     addRow,
     buildPrunedPayload,
+    canGroupQueryBuilderItems,
     createQueryBuilderRoot,
     draftDiffersFromApplied,
+    findQueryBuilderItem,
     groupQueryBuilderItems,
     queryBuilderRootFromPayload,
     removeQueryBuilderItem,
@@ -24,6 +26,7 @@ import { QUERY_BUILDER_ITEM_RELATED_GROUP } from "@/arches_search/AdvancedSearch
 import type { ComputedRef, InjectionKey, Ref } from "vue";
 import type {
     AdvancedSearchFacet,
+    AdvancedSearchOperandComponent,
     GraphModel,
     GroupPayload,
     LiteralClause,
@@ -31,7 +34,6 @@ import type {
     QueryBuilderGroup,
     QueryBuilderItem,
     QueryBuilderLookups,
-    QueryBuilderRowKind,
     RelationshipBlock,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
@@ -40,9 +42,12 @@ interface QueryBuilderContext {
     lookups: QueryBuilderLookups;
     prunedPayload: ComputedRef<GroupPayload | null>;
     hasUnsearchedChanges: ComputedRef<boolean>;
+    isSelecting: ComputedRef<boolean>;
+    selectedItemIds: ComputedRef<string[]>;
+    canGroupSelection: ComputedRef<boolean>;
     startQuery(graphSlug: string): void;
     clearQuery(): void;
-    addRow(containerId: string, rowKind: QueryBuilderRowKind): string | null;
+    addRow(containerId: string): string | null;
     addGroup(containerId: string): string | null;
     addRelatedGroup(containerId: string): string | null;
     removeItem(itemId: string): void;
@@ -56,7 +61,10 @@ interface QueryBuilderContext {
         relationship: RelationshipBlock,
     ): void;
     toggleRelatedNot(groupId: string): void;
-    groupItems(itemIds: string[]): string | null;
+    startSelecting(): void;
+    stopSelecting(): void;
+    toggleItemSelected(itemId: string): void;
+    groupSelectedItems(): void;
 }
 
 const QUERY_BUILDER_KEY: InjectionKey<QueryBuilderContext> =
@@ -65,10 +73,12 @@ const QUERY_BUILDER_KEY: InjectionKey<QueryBuilderContext> =
 function createQueryBuilder({
     graphs,
     datatypesToAdvancedSearchFacets,
+    operandComponents,
     getNodesForGraphId,
 }: {
     graphs: Ref<GraphModel[]>;
     datatypesToAdvancedSearchFacets: Ref<Record<string, AdvancedSearchFacet[]>>;
+    operandComponents: Ref<AdvancedSearchOperandComponent[]>;
     getNodesForGraphId: (graphId: string) => Promise<Node[]>;
 }): QueryBuilderContext {
     const { advancedQuery, advancedQueryDraft, setAdvancedQueryDraft } =
@@ -78,6 +88,8 @@ function createQueryBuilder({
         Record<string, Record<string, string>>
     >({});
     const requestedGraphSlugs = new Set<string>();
+    const isSelectingItems = ref(false);
+    const selectedItemIdList = ref<string[]>([]);
 
     const lookups: QueryBuilderLookups = {
         getNodeDatatype: (graphSlug, nodeAlias) =>
@@ -86,6 +98,10 @@ function createQueryBuilder({
             datatypesToAdvancedSearchFacets.value[datatype]?.find(
                 (facet) => facet.operator === operator,
             )?.arity,
+        getOperandComponent: (datatype) =>
+            operandComponents.value.find(
+                (operandComponent) => operandComponent.datatype_id === datatype,
+            ),
     };
 
     const root = computed<QueryBuilderGroup | null>(
@@ -102,6 +118,17 @@ function createQueryBuilder({
     const hasUnsearchedChanges = computed<boolean>(() =>
         draftDiffersFromApplied(root.value, advancedQuery.value, lookups),
     );
+
+    const isSelecting = computed<boolean>(() => isSelectingItems.value);
+
+    const selectedItemIds = computed<string[]>(() => selectedItemIdList.value);
+
+    const canGroupSelection = computed<boolean>(() => {
+        if (!root.value) {
+            return false;
+        }
+        return canGroupQueryBuilderItems(root.value, selectedItemIdList.value);
+    });
 
     watch(
         advancedQuery,
@@ -160,21 +187,20 @@ function createQueryBuilder({
     }
 
     function startQuery(graphSlug: string): void {
+        stopSelecting();
         setAdvancedQueryDraft(createQueryBuilderRoot(graphSlug));
     }
 
     function clearQuery(): void {
+        stopSelecting();
         setAdvancedQueryDraft(null);
     }
 
-    function addRowToContainer(
-        containerId: string,
-        rowKind: QueryBuilderRowKind,
-    ): string | null {
+    function addRowToContainer(containerId: string): string | null {
         if (!root.value) {
             return null;
         }
-        const result = addRow(root.value, containerId, rowKind);
+        const result = addRow(root.value, containerId);
         setAdvancedQueryDraft(result.root);
         return result.rowId;
     }
@@ -197,21 +223,49 @@ function createQueryBuilder({
         return result.groupId;
     }
 
-    function groupItems(itemIds: string[]): string | null {
-        if (!root.value) {
-            return null;
+    function startSelecting(): void {
+        isSelectingItems.value = true;
+    }
+
+    function stopSelecting(): void {
+        isSelectingItems.value = false;
+        selectedItemIdList.value = [];
+    }
+
+    function toggleItemSelected(itemId: string): void {
+        if (selectedItemIdList.value.includes(itemId)) {
+            selectedItemIdList.value = selectedItemIdList.value.filter(
+                (selectedItemId) => selectedItemId !== itemId,
+            );
+            return;
         }
-        const result = groupQueryBuilderItems(root.value, itemIds);
+        selectedItemIdList.value = [...selectedItemIdList.value, itemId];
+    }
+
+    function groupSelectedItems(): void {
+        if (!root.value) {
+            return;
+        }
+        const result = groupQueryBuilderItems(
+            root.value,
+            selectedItemIdList.value,
+        );
         if (!result) {
-            return null;
+            return;
         }
         setAdvancedQueryDraft(result.root);
-        return result.groupId;
+        stopSelecting();
     }
 
     function removeItem(itemId: string): void {
-        updateRoot((currentRoot) =>
-            removeQueryBuilderItem(currentRoot, itemId),
+        if (!root.value) {
+            return;
+        }
+        const nextRoot = removeQueryBuilderItem(root.value, itemId);
+        setAdvancedQueryDraft(nextRoot);
+        selectedItemIdList.value = selectedItemIdList.value.filter(
+            (selectedItemId) =>
+                findQueryBuilderItem(nextRoot, selectedItemId) !== null,
         );
     }
 
@@ -260,6 +314,9 @@ function createQueryBuilder({
         lookups,
         prunedPayload,
         hasUnsearchedChanges,
+        isSelecting,
+        selectedItemIds,
+        canGroupSelection,
         startQuery,
         clearQuery,
         addRow: addRowToContainer,
@@ -273,7 +330,10 @@ function createQueryBuilder({
         setRelatedTarget: setTargetOfRelatedGroup,
         setRelatedRelationship: setRelationshipOfRelatedGroup,
         toggleRelatedNot: toggleNotOfRelatedGroup,
-        groupItems,
+        startSelecting,
+        stopSelecting,
+        toggleItemSelected,
+        groupSelectedItems,
     };
 }
 

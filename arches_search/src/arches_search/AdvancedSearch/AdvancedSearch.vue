@@ -16,6 +16,7 @@ import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolb
 
 import {
     getAdvancedSearchFacets,
+    getAdvancedSearchOperandComponents,
     getGraphs,
     getNodesForGraphId as fetchNodesForGraphId,
     getRelatableNodesTreeForGraphId as fetchRelatableNodesTreeForGraphId,
@@ -31,6 +32,7 @@ import { RESULTS_SORT_RELEVANCE } from "@/arches_search/SimpleSearch/types.ts";
 
 import type {
     AdvancedSearchFacet,
+    AdvancedSearchOperandComponent,
     GraphModel,
     Node,
     RelatableNodesTreeForGraphPairResponse,
@@ -64,6 +66,7 @@ const graphs = ref<GraphModel[]>([]);
 const datatypesToAdvancedSearchFacets = ref<
     Record<string, AdvancedSearchFacet[]>
 >({});
+const operandComponents = ref<AdvancedSearchOperandComponent[]>([]);
 const graphIdToNodeCache = ref({});
 const graphIdToRelatableNodesTreeCache = ref({});
 const graphIdPairToRelatableNodesTreeCache = ref({});
@@ -84,13 +87,18 @@ provide("getRelatableNodesTreeForGraphPair", getRelatableNodesTreeForGraphPair);
 const { root, prunedPayload, clearQuery } = provideQueryBuilder({
     graphs,
     datatypesToAdvancedSearchFacets,
+    operandComponents,
     getNodesForGraphId,
 });
 
 watchEffect(async () => {
     try {
         isLoading.value = true;
-        await Promise.all([fetchGraphs(), fetchFacets()]);
+        await Promise.all([
+            fetchGraphs(),
+            fetchFacets(),
+            fetchOperandComponents(),
+        ]);
     } catch (error) {
         loadError.value = toError(error);
     } finally {
@@ -148,6 +156,10 @@ async function fetchFacets(): Promise<void> {
 
 async function fetchGraphs(): Promise<void> {
     graphs.value = await getGraphs();
+}
+
+async function fetchOperandComponents(): Promise<void> {
+    operandComponents.value = await getAdvancedSearchOperandComponents();
 }
 
 function toError(error: unknown): Error {

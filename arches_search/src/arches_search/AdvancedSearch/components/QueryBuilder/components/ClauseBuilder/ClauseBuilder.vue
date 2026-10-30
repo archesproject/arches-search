@@ -2,18 +2,25 @@
 import { computed, inject, ref, watch, useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Select from "openvue/select";
 import Button from "openvue/button";
+import InputText from "openvue/inputtext";
+import Select from "openvue/select";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/PathBuilder.vue";
 import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
-import TextSearchFilter from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/ClauseBuilder/components/TextSearchFilter.vue";
+
+import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
+import {
+    getClauseDatatype,
+    isClauseComplete,
+} from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Ref } from "vue";
 import type {
-    GraphModel,
     AdvancedSearchFacet,
+    AdvancedSearchOperandComponent,
+    GraphModel,
     LiteralClause,
     LiteralOperand,
     Node,
@@ -30,14 +37,13 @@ const CLAUSE_QUANTIFIER_NONE = "NONE" as const;
 
 const OPERAND_TYPE_LITERAL = "LITERAL" as const;
 
-const { modelValue, anchorGraph } = defineProps<{
+const { modelValue, operandComponent } = defineProps<{
     modelValue: LiteralClause;
-    anchorGraph: GraphModel;
+    operandComponent: AdvancedSearchOperandComponent | null;
 }>();
 
 const emit = defineEmits<{
     (event: "update:modelValue", updatedClause: LiteralClause): void;
-    (event: "request:remove"): void;
 }>();
 
 const datatypesToAdvancedSearchFacets = inject<
@@ -52,29 +58,29 @@ const getNodesForGraphId =
     )!;
 
 const { $gettext } = useGettext();
+const queryBuilder = useQueryBuilder();
 
 const subjectNode = ref<NodeWithCardinality | null>(null);
 const subjectGraph = ref<GraphModel | null>(null);
 const operandKeysByIndex = ref<string[]>([]);
 
 const clauseQuantifierOptions = computed(() => [
-    { label: $gettext("At least one"), value: CLAUSE_QUANTIFIER_ANY },
-    { label: $gettext("Every"), value: CLAUSE_QUANTIFIER_ALL },
-    { label: $gettext("No"), value: CLAUSE_QUANTIFIER_NONE },
+    { label: $gettext("any value"), value: CLAUSE_QUANTIFIER_ANY },
+    { label: $gettext("every value"), value: CLAUSE_QUANTIFIER_ALL },
 ]);
 
-const subjectAnchorGraph = computed<GraphModel>(
+const isNodeSubject = computed<boolean>(
+    () => modelValue.subject.type === ClauseSubjectTypeToken.NODE,
+);
+
+const isQuantifierShown = computed<boolean>(
     () =>
-        graphs.value.find(
-            (graph) => graph.slug === modelValue.subject.graph_slug,
-        ) ?? anchorGraph,
+        subjectNode.value?.nodegroup_has_cardinality_n === true &&
+        modelValue.quantifier !== CLAUSE_QUANTIFIER_NONE,
 );
 
 const selectedSubjectNode = computed<PathSelection | null>(() => {
-    if (
-        modelValue.subject.type !== ClauseSubjectTypeToken.NODE ||
-        !modelValue.subject.node_alias
-    ) {
+    if (!isNodeSubject.value || !modelValue.subject.node_alias) {
         return null;
     }
     return {
@@ -83,23 +89,42 @@ const selectedSubjectNode = computed<PathSelection | null>(() => {
     };
 });
 
-const availableOperatorOptions = computed<AdvancedSearchFacet[]>(() => {
-    if (modelValue.subject.type === ClauseSubjectTypeToken.SEARCH_MODELS) {
-        return datatypesToAdvancedSearchFacets.value["string"] ?? [];
+const clauseDatatype = computed<string | undefined>(() => {
+    if (isNodeSubject.value) {
+        return subjectNode.value?.datatype;
     }
-    const datatype = subjectNode.value?.datatype;
-    return datatype
-        ? datatypesToAdvancedSearchFacets.value[datatype] ?? []
-        : [];
+    return getClauseDatatype(modelValue, queryBuilder.lookups);
 });
 
-const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(() => {
-    if (!modelValue.operator) return null;
-    return (
+const availableOperatorOptions = computed<AdvancedSearchFacet[]>(() => {
+    if (!clauseDatatype.value) {
+        return [];
+    }
+    return datatypesToAdvancedSearchFacets.value[clauseDatatype.value] ?? [];
+});
+
+const selectedAdvancedSearchFacet = computed<AdvancedSearchFacet | null>(
+    () =>
         availableOperatorOptions.value.find(
             (facet) => facet.operator === modelValue.operator,
-        ) ?? null
-    );
+        ) ?? null,
+);
+
+const operandCount = computed<number>(
+    () => selectedAdvancedSearchFacet.value?.arity ?? 0,
+);
+
+const panelButtonLabel = computed<string>(() => {
+    if (!isClauseComplete(modelValue, queryBuilder.lookups)) {
+        return $gettext("Set in side panel");
+    }
+    const operandTexts = modelValue.operands
+        .slice(0, operandCount.value)
+        .map(operandText);
+    if (operandTexts.every((text) => text !== null)) {
+        return operandTexts.join(" – ");
+    }
+    return $gettext("Edit in side panel");
 });
 
 watch(
@@ -147,13 +172,29 @@ watch(
     (nodegroupHasCardinalityN) => {
         if (
             nodegroupHasCardinalityN === false &&
-            modelValue.quantifier !== CLAUSE_QUANTIFIER_ANY
+            modelValue.quantifier === CLAUSE_QUANTIFIER_ALL
         ) {
             patchClause({ quantifier: CLAUSE_QUANTIFIER_ANY });
         }
     },
     { immediate: true },
 );
+
+function operandText(operand: LiteralOperand | undefined): string | null {
+    if (!operand) {
+        return null;
+    }
+    if (operand.display_value) {
+        return operand.display_value;
+    }
+    if (
+        typeof operand.value === "string" ||
+        typeof operand.value === "number"
+    ) {
+        return String(operand.value);
+    }
+    return null;
+}
 
 function patchClause(partialClause: Partial<LiteralClause>): void {
     emit("update:modelValue", { ...modelValue, ...partialClause });
@@ -171,12 +212,30 @@ function handleSubjectUpdate(updatedSubject: PathSelection | null): void {
         subject: {
             type: ClauseSubjectTypeToken.NODE,
             graph_slug:
-                updatedSubject?.graph_slug ?? subjectAnchorGraph.value.slug,
+                updatedSubject?.graph_slug ?? modelValue.subject.graph_slug,
             node_alias: updatedSubject?.node_alias ?? "",
             search_models: [],
         },
         operator: null,
         operands: [],
+    });
+}
+
+function textOperandValue(parameterIndex: number): string {
+    const operandValue = modelValue.operands[parameterIndex]?.value;
+    if (typeof operandValue === "string") {
+        return operandValue;
+    }
+    return "";
+}
+
+function onTextOperandUpdate(
+    parameterIndex: number,
+    nextText: string | undefined,
+): void {
+    handleOperandUpdate(parameterIndex, {
+        type: OPERAND_TYPE_LITERAL,
+        value: nextText ?? "",
     });
 }
 
@@ -200,12 +259,11 @@ function handleOperatorChange(nextOperator: string | null): void {
         patchClause({ operator: null, operands: [] });
         return;
     }
-    const previousFacetArity = selectedAdvancedSearchFacet.value?.arity ?? 0;
     const nextFacetArity =
         availableOperatorOptions.value.find(
             (facet) => facet.operator === nextOperator,
         )?.arity ?? 0;
-    if (previousFacetArity !== nextFacetArity) {
+    if (operandCount.value !== nextFacetArity) {
         patchClause({ operator: nextOperator, operands: [] });
         return;
     }
@@ -224,147 +282,127 @@ function handleQuantifierChange(
 
 <template>
     <div class="clause-builder">
-        <div class="clause-main">
-            <div class="clause-core-row">
-                <PathBuilder
-                    v-if="
-                        modelValue.subject.type !==
-                        ClauseSubjectTypeToken.SEARCH_MODELS
-                    "
-                    class="clause-subject-path"
-                    :selected-node="selectedSubjectNode"
-                    :graph-slugs="[subjectAnchorGraph.slug]"
-                    @update:selected-node="handleSubjectUpdate"
-                />
-                <TextSearchFilter
-                    v-if="
-                        modelValue.subject.type ===
-                        ClauseSubjectTypeToken.SEARCH_MODELS
-                    "
-                    :model-value="modelValue"
-                    :available-operator-options="availableOperatorOptions"
-                    @update:model-value="
-                        emit('update:modelValue', $event as LiteralClause)
-                    "
-                />
-
-                <Select
-                    v-else-if="subjectNode?.nodegroup_has_cardinality_n"
-                    :model-value="modelValue.quantifier"
-                    class="clause-quantifier-select"
-                    :options="clauseQuantifierOptions"
-                    option-label="label"
-                    option-value="value"
-                    @update:model-value="handleQuantifierChange"
-                />
-
-                <Select
-                    v-if="
-                        modelValue.subject.type !==
-                        ClauseSubjectTypeToken.SEARCH_MODELS
-                    "
-                    :model-value="modelValue.operator"
-                    class="clause-operator-select"
-                    :options="availableOperatorOptions"
-                    option-label="label"
-                    option-value="operator"
-                    :disabled="availableOperatorOptions.length === 0"
-                    :placeholder="$gettext('Select an operator...')"
-                    @update:model-value="handleOperatorChange"
-                />
-
-                <div
-                    v-if="
-                        modelValue.subject.type !==
-                            ClauseSubjectTypeToken.SEARCH_MODELS &&
-                        selectedAdvancedSearchFacet?.arity &&
-                        subjectNode &&
-                        subjectGraph
-                    "
-                    class="clause-operands-row"
-                >
-                    <ClauseOperandBuilder
-                        v-for="parameterIndex in selectedAdvancedSearchFacet.arity"
-                        :key="ensureOperandKey(parameterIndex - 1)"
-                        :model-value="
-                            modelValue.operands[parameterIndex - 1] ?? null
-                        "
-                        :subject-terminal-node="subjectNode"
-                        :subject-terminal-graph="subjectGraph"
-                        :operand-type="OPERAND_TYPE_LITERAL"
-                        @update:model-value="
-                            handleOperandUpdate(
-                                parameterIndex - 1,
-                                $event as LiteralOperand,
-                            )
-                        "
-                    />
-                </div>
-            </div>
-
-            <div
-                v-if="subjectNode?.nodegroup_has_cardinality_n"
-                class="clause-cardinality-subtext"
-            >
-                {{
-                    $gettext(
-                        "This attribute can have multiple values. Please select how you want to filter values.",
-                    )
-                }}
-            </div>
-        </div>
-
-        <Button
-            class="clause-remove-button"
-            icon="pi pi-times"
-            severity="danger"
-            variant="text"
-            type="button"
-            :aria-label="$gettext('Remove filter')"
-            @click="emit('request:remove')"
+        <PathBuilder
+            v-if="isNodeSubject"
+            :selected-node="selectedSubjectNode"
+            :graph-slugs="[modelValue.subject.graph_slug]"
+            @update:selected-node="handleSubjectUpdate"
         />
+        <span
+            v-else
+            class="clause-builder-any-field"
+        >
+            {{ $gettext("Any field") }}
+        </span>
+
+        <Select
+            v-if="isQuantifierShown"
+            class="clause-builder-quantifier"
+            option-label="label"
+            option-value="value"
+            :model-value="modelValue.quantifier"
+            :options="clauseQuantifierOptions"
+            :aria-label="$gettext('Which values must match')"
+            @update:model-value="handleQuantifierChange"
+        />
+
+        <Select
+            class="clause-builder-operator"
+            option-label="label"
+            option-value="operator"
+            :model-value="modelValue.operator"
+            :options="availableOperatorOptions"
+            :disabled="availableOperatorOptions.length === 0"
+            :placeholder="$gettext('Select an operator')"
+            :aria-label="$gettext('Operator')"
+            @update:model-value="handleOperatorChange"
+        />
+
+        <template v-if="operandCount > 0">
+            <Button
+                v-if="operandComponent?.opens_in_panel"
+                class="clause-builder-panel-button"
+                size="small"
+                severity="secondary"
+                variant="outlined"
+                :icon="operandComponent.icon"
+                :label="panelButtonLabel"
+                :disabled="true"
+            />
+            <div
+                v-else-if="subjectNode && subjectGraph"
+                class="clause-builder-operands"
+            >
+                <ClauseOperandBuilder
+                    v-for="parameterIndex in operandCount"
+                    :key="ensureOperandKey(parameterIndex - 1)"
+                    :model-value="
+                        modelValue.operands[parameterIndex - 1] ?? null
+                    "
+                    :subject-terminal-node="subjectNode"
+                    :subject-terminal-graph="subjectGraph"
+                    :operand-type="OPERAND_TYPE_LITERAL"
+                    @update:model-value="
+                        handleOperandUpdate(
+                            parameterIndex - 1,
+                            $event as LiteralOperand,
+                        )
+                    "
+                />
+            </div>
+            <div
+                v-else-if="!isNodeSubject"
+                class="clause-builder-operands"
+            >
+                <InputText
+                    v-for="parameterIndex in operandCount"
+                    :key="parameterIndex"
+                    class="clause-builder-text"
+                    :model-value="textOperandValue(parameterIndex - 1)"
+                    :placeholder="$gettext('Search text')"
+                    :aria-label="$gettext('Search text')"
+                    @update:model-value="
+                        onTextOperandUpdate(parameterIndex - 1, $event)
+                    "
+                />
+            </div>
+        </template>
     </div>
 </template>
 
 <style scoped>
 .clause-builder {
-    font-size: 1rem;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: flex-start;
+    display: contents;
+    font-size: 1.2rem;
 }
 
-.clause-main {
-    grid-column: 1 / 3;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+.clause-builder :deep(.p-select-label) {
+    font-size: 1.2rem;
 }
 
-.clause-core-row {
+.clause-builder .clause-builder-any-field {
+    color: var(--p-text-muted-color);
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.clause-builder .clause-builder-panel-button {
+    border-style: dashed;
+    font-size: 1.2rem;
+}
+
+.clause-builder .clause-builder-text {
+    flex: 1;
+    min-inline-size: 12rem;
+    font-size: 1.2rem;
+}
+
+.clause-builder .clause-builder-operands {
     display: flex;
+    flex: 1;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.clause-operands-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.clause-cardinality-subtext {
-    margin-inline-start: 0.5rem;
-    margin-block-start: 1rem;
-    font-size: 1rem;
-    line-height: 1.25;
-    opacity: 0.75;
-}
-
-.clause-remove-button {
-    grid-column: 3;
-    justify-self: flex-end;
+    gap: 0.8rem;
+    min-inline-size: 12rem;
 }
 </style>

@@ -1,60 +1,68 @@
 <script setup lang="ts">
-import { computed, inject } from "vue";
+import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 
 import ClauseBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/ClauseBuilder/ClauseBuilder.vue";
+import QueryRowTags from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryRowTags.vue";
+import QuerySelectCheckbox from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QuerySelectCheckbox.vue";
 
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
-import { deriveRowKind } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
-import {
-    QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-    QUERY_BUILDER_ROW_KIND_MAP,
-    QUERY_BUILDER_ROW_KIND_TIME,
-} from "@/arches_search/AdvancedSearch/types.ts";
+import { getClauseDatatype } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 
-import type { Ref } from "vue";
 import type {
-    GraphModel,
+    AdvancedSearchOperandComponent,
     LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
+
+const ATTRIBUTE_BADGE_KIND = "attribute";
+const ATTRIBUTE_BADGE_ICON = "pi pi-tag";
+const QUANTIFIER_NONE = "NONE";
 
 const { rowId, clause } = defineProps<{
     rowId: string;
     clause: LiteralClause;
 }>();
 
-const graphs = inject<Ref<GraphModel[]>>("graphs")!;
-
 const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
+const { selectedItemIds } = queryBuilder;
 
-const rowKind = computed(() => deriveRowKind(clause, queryBuilder.lookups));
-
-const rowGraph = computed<GraphModel | null>(
-    () =>
-        graphs.value.find(
-            (graph) => graph.slug === clause.subject.graph_slug,
-        ) ?? null,
-);
-
-const isAttributeRow = computed<boolean>(
-    () => rowKind.value === QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-);
-
-const summaryText = computed<string>(() => {
-    if (rowKind.value === QUERY_BUILDER_ROW_KIND_TIME) {
-        return $gettext("Time filter");
+const operandComponent = computed<AdvancedSearchOperandComponent | null>(() => {
+    const datatype = getClauseDatatype(clause, queryBuilder.lookups);
+    if (!datatype) {
+        return null;
     }
-    if (rowKind.value === QUERY_BUILDER_ROW_KIND_MAP) {
-        return $gettext("Map filter");
-    }
-    return $gettext("Attribute filter");
+    return queryBuilder.lookups.getOperandComponent(datatype) ?? null;
 });
+
+const badgeLabel = computed<string>(
+    () => operandComponent.value?.label ?? $gettext("Attribute"),
+);
+
+const badgeIcon = computed<string>(
+    () => operandComponent.value?.icon ?? ATTRIBUTE_BADGE_ICON,
+);
+
+const badgeKind = computed<string>(
+    () => operandComponent.value?.slug ?? ATTRIBUTE_BADGE_KIND,
+);
+
+const isNegated = computed<boolean>(
+    () => clause.quantifier === QUANTIFIER_NONE,
+);
+
+const isSelected = computed<boolean>(() =>
+    selectedItemIds.value.includes(rowId),
+);
 
 function onUpdateClause(updatedClause: LiteralClause): void {
     queryBuilder.setRowClause(rowId, updatedClause);
+}
+
+function onToggleNot(): void {
+    queryBuilder.toggleRowNot(rowId);
 }
 
 function onRemove(): void {
@@ -63,26 +71,33 @@ function onRemove(): void {
 </script>
 
 <template>
-    <div class="query-row">
-        <ClauseBuilder
-            v-if="isAttributeRow && rowGraph"
-            class="query-row-clause"
-            :model-value="clause"
-            :anchor-graph="rowGraph"
-            @update:model-value="onUpdateClause"
-            @request:remove="onRemove"
+    <div
+        class="query-row"
+        :class="{ 'query-row-selected': isSelected }"
+    >
+        <QuerySelectCheckbox :item-id="rowId" />
+        <QueryRowTags
+            :graph-slug="clause.subject.graph_slug"
+            :badge-label="badgeLabel"
+            :badge-icon="badgeIcon"
+            :badge-kind="badgeKind"
+            :is-negated="isNegated"
+            @toggle-not="onToggleNot"
         />
-        <template v-else>
-            <span class="query-row-summary">{{ summaryText }}</span>
-            <Button
-                icon="pi pi-times"
-                severity="secondary"
-                variant="text"
-                size="small"
-                :aria-label="$gettext('Remove condition')"
-                @click="onRemove"
-            />
-        </template>
+        <ClauseBuilder
+            :model-value="clause"
+            :operand-component="operandComponent"
+            @update:model-value="onUpdateClause"
+        />
+        <Button
+            class="query-row-remove"
+            icon="pi pi-times"
+            severity="secondary"
+            variant="text"
+            size="small"
+            :aria-label="$gettext('Remove condition')"
+            @click="onRemove"
+        />
     </div>
 </template>
 
@@ -90,6 +105,7 @@ function onRemove(): void {
 .query-row {
     display: flex;
     flex: 1;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.8rem;
     min-inline-size: 0;
@@ -97,17 +113,21 @@ function onRemove(): void {
     border: 0.15rem solid var(--p-content-border-color);
     border-radius: 0.8rem;
     background: var(--p-content-background);
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
 }
 
-.query-row .query-row-clause {
-    flex: 1;
-    min-inline-size: 0;
+.query-row:hover {
+    border-color: var(--p-primary-color);
 }
 
-.query-row .query-row-summary {
-    flex: 1;
-    color: var(--p-text-muted-color);
-    font-size: 1.3rem;
-    font-weight: 600;
+.query-row.query-row-selected {
+    border-color: var(--p-primary-color);
+    box-shadow: 0 0 0 0.3rem var(--arches-search-primary-muted-bg);
+}
+
+.query-row .query-row-remove {
+    margin-inline-start: auto;
 }
 </style>

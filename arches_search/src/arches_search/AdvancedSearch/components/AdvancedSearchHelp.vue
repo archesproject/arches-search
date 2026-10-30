@@ -59,31 +59,18 @@ const { $gettext } = useGettext();
                             </span>
                         </p>
                         <p>
-                            <strong>{{ $gettext("Time") }}</strong>
-                            <span>
-                                {{
-                                    $gettext(
-                                        "filters by a date range, on any date or on one date field.",
-                                    )
-                                }}
-                            </span>
+                            {{
+                                $gettext(
+                                    "Picking a date field makes it a time filter, and a location field a map filter. Their values are set in the side panel.",
+                                )
+                            }}
                         </p>
                         <p>
-                            <strong>{{ $gettext("Map") }}</strong>
+                            <strong>{{ $gettext("Relationship") }}</strong>
                             <span>
                                 {{
                                     $gettext(
-                                        "filters by an area drawn on the map.",
-                                    )
-                                }}
-                            </span>
-                        </p>
-                        <p>
-                            <strong>{{ $gettext("Related") }}</strong>
-                            <span>
-                                {{
-                                    $gettext(
-                                        "follows a link field to another resource model and filters those records.",
+                                        "follows a link field to another resource model. Conditions inside it filter those related records; with none, any related record counts.",
                                     )
                                 }}
                             </span>
@@ -133,6 +120,13 @@ const { $gettext } = useGettext();
                             {{
                                 $gettext(
                                     "Groups nest logic, for example (A AND B) OR C. Each group has its own ALL or ANY, and a new group starts with the opposite of the group it sits in.",
+                                )
+                            }}
+                        </p>
+                        <p>
+                            {{
+                                $gettext(
+                                    "Select to group wraps conditions you check in a new group. They must sit in the same group.",
                                 )
                             }}
                         </p>

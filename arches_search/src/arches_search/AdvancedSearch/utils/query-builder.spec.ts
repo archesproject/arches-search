@@ -9,19 +9,17 @@ import {
     QUERY_BUILDER_ITEM_LOCKED_GROUP,
     QUERY_BUILDER_ITEM_RELATED_GROUP,
     QUERY_BUILDER_ITEM_ROW,
-    QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-    QUERY_BUILDER_ROW_KIND_MAP,
-    QUERY_BUILDER_ROW_KIND_TIME,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import {
     addGroup,
     addRelatedGroup,
     addRow,
     buildPrunedPayload,
+    canGroupQueryBuilderItems,
     createQueryBuilderRoot,
-    deriveRowKind,
     draftDiffersFromApplied,
     findQueryBuilderItem,
+    getClauseDatatype,
     groupQueryBuilderItems,
     isClauseComplete,
     queryBuilderRootFromPayload,
@@ -71,6 +69,7 @@ const LOOKUPS: QueryBuilderLookups = {
     getNodeDatatype: (graphSlug, nodeAlias) =>
         NODE_DATATYPES[`${graphSlug}:${nodeAlias}`],
     getOperatorArity: (_datatype, operator) => OPERATOR_ARITIES[operator],
+    getOperandComponent: () => undefined,
 };
 
 const DRAWN_AREA = {
@@ -109,13 +108,14 @@ function searchModelsClause(
     searchModels: string[],
     operator: string,
     values: unknown[],
+    graphSlug = SAMPLE,
 ): LiteralClause {
     return {
         type: "LITERAL",
         quantifier: "ANY",
         subject: {
             type: ClauseSubjectTypeToken.SEARCH_MODELS,
-            graph_slug: SAMPLE,
+            graph_slug: graphSlug,
             node_alias: "",
             search_models: searchModels,
         },
@@ -237,6 +237,35 @@ describe("loading and saving", () => {
         expect(rowsOf(relatedGroup)[0].clause).toEqual(NAME_LIKE_FORBES);
     });
 
+    it("loads a text search inside a related group as an editable row", () => {
+        const textSearch = searchModelsClause(
+            ["TermSearch"],
+            "LIKE",
+            ["Germany"],
+            PERSON,
+        );
+        const payload = group(
+            SAMPLE,
+            LogicToken.AND,
+            [],
+            [
+                group(
+                    SAMPLE,
+                    LogicToken.AND,
+                    [],
+                    [group(PERSON, LogicToken.AND, [textSearch])],
+                    relationship("creator"),
+                ),
+            ],
+        );
+
+        const root = queryBuilderRootFromPayload(payload);
+        const relatedGroup = groupById(root, root.items[0].id);
+
+        expect(rowsOf(relatedGroup)[0].clause).toEqual(textSearch);
+        expect(queryBuilderRootToPayload(root)).toEqual(payload);
+    });
+
     it("keeps what it cannot edit and writes it back unchanged", () => {
         const resourceFieldClause = {
             type: "LITERAL",
@@ -289,23 +318,11 @@ describe("loading and saving", () => {
 });
 
 describe("adding", () => {
-    it("adds empty attribute, time and map rows on the group's model", () => {
-        let root = createQueryBuilderRoot(SAMPLE);
-        root = addRow(root, root.id, QUERY_BUILDER_ROW_KIND_ATTRIBUTE).root;
-        root = addRow(root, root.id, QUERY_BUILDER_ROW_KIND_TIME).root;
-        root = addRow(root, root.id, QUERY_BUILDER_ROW_KIND_MAP).root;
+    it("adds an empty row on the group's model", () => {
+        const root = createQueryBuilderRoot(SAMPLE);
 
-        const [attributeRow, timeRow, mapRow] = rowsOf(root);
-        expect(attributeRow.clause).toEqual(nodeClause(SAMPLE, "", null, []));
-        expect(timeRow.clause).toEqual(
-            searchModelsClause(
-                ["DateSearch", "DateRangeSearch"],
-                "BETWEEN",
-                [],
-            ),
-        );
-        expect(mapRow.clause).toEqual(
-            searchModelsClause(["GeometrySearch"], "GEO_INTERSECTS", []),
+        expect(rowsOf(addRow(root, root.id).root)[0].clause).toEqual(
+            nodeClause(SAMPLE, "", null, []),
         );
     });
 
@@ -327,11 +344,7 @@ describe("adding", () => {
         const root = createQueryBuilderRoot(SAMPLE);
         const { root: withRelated, groupId } = addRelatedGroup(root, root.id);
         const withTarget = setRelatedTarget(withRelated, groupId, PERSON);
-        const { root: withRow } = addRow(
-            withTarget,
-            groupId,
-            QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-        );
+        const { root: withRow } = addRow(withTarget, groupId);
 
         const relatedGroup = groupById(withRow, groupId);
         expect(relatedGroup).toMatchObject({
@@ -355,11 +368,7 @@ describe("editing", () => {
 
     it("toggles NOT on a row between ANY and NONE", () => {
         let root = createQueryBuilderRoot(SAMPLE);
-        const { root: withRow, rowId } = addRow(
-            root,
-            root.id,
-            QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-        );
+        const { root: withRow, rowId } = addRow(root, root.id);
         root = setRowClause(
             withRow,
             rowId,
@@ -437,11 +446,7 @@ describe("grouping selected items", () => {
             WEIGHT_IS_TEN,
             MATERIAL_IS_GLASS,
         ]) {
-            const { root: withRow, rowId } = addRow(
-                root,
-                root.id,
-                QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-            );
+            const { root: withRow, rowId } = addRow(root, root.id);
             root = setRowClause(withRow, rowId, clause);
         }
         return root;
@@ -470,23 +475,36 @@ describe("grouping selected items", () => {
     it("refuses items from different groups or fewer than two", () => {
         const root = rootWithThreeRows();
         const { root: withGroup, groupId } = addGroup(root, root.id);
-        const { root: withNestedRow, rowId } = addRow(
-            withGroup,
-            groupId,
-            QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-        );
+        const { root: withNestedRow, rowId } = addRow(withGroup, groupId);
 
         expect(
             groupQueryBuilderItems(withNestedRow, [root.items[0].id, rowId]),
         ).toBeNull();
         expect(groupQueryBuilderItems(root, [root.items[0].id])).toBeNull();
     });
+
+    it("says ahead of time whether the items can be grouped", () => {
+        const root = rootWithThreeRows();
+        const { root: withGroup, groupId } = addGroup(root, root.id);
+        const { root: withNestedRow, rowId } = addRow(withGroup, groupId);
+
+        expect(
+            canGroupQueryBuilderItems(withNestedRow, [
+                root.items[0].id,
+                root.items[2].id,
+            ]),
+        ).toBe(true);
+        expect(
+            canGroupQueryBuilderItems(withNestedRow, [root.items[0].id, rowId]),
+        ).toBe(false);
+        expect(canGroupQueryBuilderItems(root, [root.items[0].id])).toBe(false);
+    });
 });
 
-describe("deriveRowKind", () => {
-    it("tells time, map and attribute rows apart", () => {
+describe("getClauseDatatype", () => {
+    it("reads a node's datatype, or the datatype of the search models", () => {
         expect(
-            deriveRowKind(
+            getClauseDatatype(
                 searchModelsClause(
                     ["DateSearch", "DateRangeSearch"],
                     "BETWEEN",
@@ -494,28 +512,29 @@ describe("deriveRowKind", () => {
                 ),
                 LOOKUPS,
             ),
-        ).toBe(QUERY_BUILDER_ROW_KIND_TIME);
+        ).toBe("date");
         expect(
-            deriveRowKind(
+            getClauseDatatype(
                 searchModelsClause(["GeometrySearch"], "GEO_WITHIN", []),
                 LOOKUPS,
             ),
-        ).toBe(QUERY_BUILDER_ROW_KIND_MAP);
+        ).toBe("geojson-feature-collection");
         expect(
-            deriveRowKind(
+            getClauseDatatype(
+                searchModelsClause(["TermSearch"], "LIKE", []),
+                LOOKUPS,
+            ),
+        ).toBe("string");
+        expect(
+            getClauseDatatype(
                 nodeClause(SAMPLE, "production_date", "BETWEEN", []),
                 LOOKUPS,
             ),
-        ).toBe(QUERY_BUILDER_ROW_KIND_TIME);
+        ).toBe("date");
+        expect(getClauseDatatype(MATERIAL_IS_GLASS, LOOKUPS)).toBe("reference");
         expect(
-            deriveRowKind(nodeClause(SAMPLE, "location", null, []), LOOKUPS),
-        ).toBe(QUERY_BUILDER_ROW_KIND_MAP);
-        expect(deriveRowKind(MATERIAL_IS_GLASS, LOOKUPS)).toBe(
-            QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-        );
-        expect(deriveRowKind(nodeClause(SAMPLE, "", null, []), LOOKUPS)).toBe(
-            QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-        );
+            getClauseDatatype(nodeClause(SAMPLE, "", null, []), LOOKUPS),
+        ).toBeUndefined();
     });
 });
 
@@ -583,15 +602,11 @@ describe("isClauseComplete", () => {
 describe("buildPrunedPayload", () => {
     it("drops unfinished rows and groups left empty, ANY groups included", () => {
         let root = createQueryBuilderRoot(SAMPLE);
-        const { root: withRow, rowId } = addRow(
-            root,
-            root.id,
-            QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-        );
+        const { root: withRow, rowId } = addRow(root, root.id);
         root = setRowClause(withRow, rowId, MATERIAL_IS_GLASS);
-        root = addRow(root, root.id, QUERY_BUILDER_ROW_KIND_TIME).root;
+        root = addRow(root, root.id).root;
         const { root: withGroup, groupId } = addGroup(root, root.id);
-        root = addRow(withGroup, groupId, QUERY_BUILDER_ROW_KIND_MAP).root;
+        root = addRow(withGroup, groupId).root;
 
         expect(groupById(root, groupId).logic).toBe(LogicToken.OR);
         expect(buildPrunedPayload(root, LOOKUPS)).toEqual(
@@ -642,10 +657,7 @@ describe("buildPrunedPayload", () => {
         const root = createQueryBuilderRoot(SAMPLE);
 
         expect(
-            buildPrunedPayload(
-                addRow(root, root.id, QUERY_BUILDER_ROW_KIND_ATTRIBUTE).root,
-                LOOKUPS,
-            ),
+            buildPrunedPayload(addRow(root, root.id).root, LOOKUPS),
         ).toBeNull();
     });
 });
@@ -653,11 +665,7 @@ describe("buildPrunedPayload", () => {
 describe("draftDiffersFromApplied", () => {
     it("ignores rows still being filled in", () => {
         const root = queryBuilderRootFromPayload(BUILDER_SHAPED_PAYLOAD);
-        const withUnfinishedRow = addRow(
-            root,
-            root.id,
-            QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-        ).root;
+        const withUnfinishedRow = addRow(root, root.id).root;
 
         expect(
             draftDiffersFromApplied(

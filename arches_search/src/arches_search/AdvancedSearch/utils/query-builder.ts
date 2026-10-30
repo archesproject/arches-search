@@ -9,9 +9,6 @@ import {
     QUERY_BUILDER_ITEM_LOCKED_GROUP,
     QUERY_BUILDER_ITEM_RELATED_GROUP,
     QUERY_BUILDER_ITEM_ROW,
-    QUERY_BUILDER_ROW_KIND_ATTRIBUTE,
-    QUERY_BUILDER_ROW_KIND_MAP,
-    QUERY_BUILDER_ROW_KIND_TIME,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type {
@@ -23,7 +20,6 @@ import type {
     QueryBuilderLookups,
     QueryBuilderRelatedGroup,
     QueryBuilderRow,
-    QueryBuilderRowKind,
     RelationshipBlock,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
@@ -32,13 +28,13 @@ type QueryBuilderContainer = QueryBuilderGroup | QueryBuilderRelatedGroup;
 const CLAUSE_TYPE_LITERAL = "LITERAL";
 const QUANTIFIER_ANY = "ANY";
 const QUANTIFIER_NONE = "NONE";
-const OPERATOR_BETWEEN = "BETWEEN";
-const OPERATOR_GEO_INTERSECTS = "GEO_INTERSECTS";
+const MINIMUM_ITEMS_TO_GROUP = 2;
 const SEARCH_MODEL_GEOMETRY = "GeometrySearch";
+const SEARCH_MODEL_TERM = "TermSearch";
 const SEARCH_MODELS_DATE = ["DateSearch", "DateRangeSearch"];
 const DATATYPE_DATE = "date";
-const DATATYPE_EDTF = "edtf";
 const DATATYPE_GEOJSON = "geojson-feature-collection";
+const DATATYPE_STRING = "string";
 
 export function createQueryBuilderRoot(graphSlug: string): QueryBuilderGroup {
     return {
@@ -94,28 +90,22 @@ export function draftDiffersFromApplied(
     return !isEqual(draftPayload, applied);
 }
 
-export function deriveRowKind(
+// A clause on any date or any geometry has no node, so its datatype comes from
+// the search models it reads.
+export function getClauseDatatype(
     clause: LiteralClause,
     lookups: QueryBuilderLookups,
-): QueryBuilderRowKind {
+): string | undefined {
     if (clause.subject.type === ClauseSubjectTypeToken.SEARCH_MODELS) {
-        if (clause.subject.search_models.includes(SEARCH_MODEL_GEOMETRY)) {
-            return QUERY_BUILDER_ROW_KIND_MAP;
-        }
-        return QUERY_BUILDER_ROW_KIND_TIME;
+        return searchModelsDatatype(clause.subject.search_models);
     }
-
-    const datatype = lookups.getNodeDatatype(
+    if (!clause.subject.node_alias) {
+        return undefined;
+    }
+    return lookups.getNodeDatatype(
         clause.subject.graph_slug,
         clause.subject.node_alias,
     );
-    if (datatype === DATATYPE_DATE || datatype === DATATYPE_EDTF) {
-        return QUERY_BUILDER_ROW_KIND_TIME;
-    }
-    if (datatype === DATATYPE_GEOJSON) {
-        return QUERY_BUILDER_ROW_KIND_MAP;
-    }
-    return QUERY_BUILDER_ROW_KIND_ATTRIBUTE;
 }
 
 export function isClauseComplete(
@@ -125,19 +115,14 @@ export function isClauseComplete(
     if (!clause.operator) {
         return false;
     }
-
-    let datatype: string | undefined;
-    if (clause.subject.type === ClauseSubjectTypeToken.SEARCH_MODELS) {
-        datatype = searchModelsDatatype(clause.subject.search_models);
-    } else {
-        if (!clause.subject.node_alias) {
-            return false;
-        }
-        datatype = lookups.getNodeDatatype(
-            clause.subject.graph_slug,
-            clause.subject.node_alias,
-        );
+    if (
+        clause.subject.type === ClauseSubjectTypeToken.NODE &&
+        !clause.subject.node_alias
+    ) {
+        return false;
     }
+
+    const datatype = getClauseDatatype(clause, lookups);
 
     let requiredOperandCount = clause.operands.length;
     if (datatype) {
@@ -167,7 +152,6 @@ export function findQueryBuilderItem(
 export function addRow(
     root: QueryBuilderGroup,
     containerId: string,
-    rowKind: QueryBuilderRowKind,
 ): { root: QueryBuilderGroup; rowId: string } {
     const rowId = crypto.randomUUID();
     const nextRoot = updateContainer(root, containerId, (container) => ({
@@ -177,7 +161,7 @@ export function addRow(
             {
                 id: rowId,
                 itemType: QUERY_BUILDER_ITEM_ROW,
-                clause: emptyClause(rowKind, itemsGraphSlug(container)),
+                clause: emptyClause(itemsGraphSlug(container)),
             },
         ],
     }));
@@ -346,6 +330,13 @@ export function toggleRelatedNot(
     });
 }
 
+export function canGroupQueryBuilderItems(
+    root: QueryBuilderGroup,
+    itemIds: string[],
+): boolean {
+    return findGroupableParent(root, new Set(itemIds)) !== null;
+}
+
 // Wraps two or more items that share a parent in a new group, placed where the
 // first of them was. Items from different parents cannot be grouped.
 export function groupQueryBuilderItems(
@@ -353,11 +344,7 @@ export function groupQueryBuilderItems(
     itemIds: string[],
 ): { root: QueryBuilderGroup; groupId: string } | null {
     const selectedIds = new Set(itemIds);
-    if (selectedIds.size < 2) {
-        return null;
-    }
-
-    const parent = findContainerHoldingAll(root, selectedIds);
+    const parent = findGroupableParent(root, selectedIds);
     if (!parent) {
         return null;
     }
@@ -602,6 +589,9 @@ function searchModelsDatatype(searchModels: string[]): string | undefined {
     if (searchModels.some((model) => SEARCH_MODELS_DATE.includes(model))) {
         return DATATYPE_DATE;
     }
+    if (searchModels.includes(SEARCH_MODEL_TERM)) {
+        return DATATYPE_STRING;
+    }
     return undefined;
 }
 
@@ -620,10 +610,12 @@ function isEditableClause(clause: LiteralClause): boolean {
     const searchModels = clause.subject.search_models;
     const isGeometry =
         searchModels.length === 1 && searchModels[0] === SEARCH_MODEL_GEOMETRY;
+    const isText =
+        searchModels.length === 1 && searchModels[0] === SEARCH_MODEL_TERM;
     const isDate =
         searchModels.length > 0 &&
         searchModels.every((model) => SEARCH_MODELS_DATE.includes(model));
-    return isGeometry || isDate;
+    return isGeometry || isDate || isText;
 }
 
 function isEditableGroupShape(payload: GroupPayload): boolean {
@@ -660,24 +652,7 @@ function isEditableRelatedGroup(
     return innerGroup.relationship === null && isEditableGroupShape(innerGroup);
 }
 
-function emptyClause(
-    rowKind: QueryBuilderRowKind,
-    graphSlug: string,
-): LiteralClause {
-    if (rowKind === QUERY_BUILDER_ROW_KIND_TIME) {
-        return searchModelsClause(
-            graphSlug,
-            SEARCH_MODELS_DATE,
-            OPERATOR_BETWEEN,
-        );
-    }
-    if (rowKind === QUERY_BUILDER_ROW_KIND_MAP) {
-        return searchModelsClause(
-            graphSlug,
-            [SEARCH_MODEL_GEOMETRY],
-            OPERATOR_GEO_INTERSECTS,
-        );
-    }
+function emptyClause(graphSlug: string): LiteralClause {
     return {
         type: CLAUSE_TYPE_LITERAL,
         quantifier: QUANTIFIER_ANY,
@@ -688,25 +663,6 @@ function emptyClause(
             search_models: [],
         },
         operator: null,
-        operands: [],
-    };
-}
-
-function searchModelsClause(
-    graphSlug: string,
-    searchModels: string[],
-    operator: string,
-): LiteralClause {
-    return {
-        type: CLAUSE_TYPE_LITERAL,
-        quantifier: QUANTIFIER_ANY,
-        subject: {
-            type: ClauseSubjectTypeToken.SEARCH_MODELS,
-            graph_slug: graphSlug,
-            node_alias: "",
-            search_models: [...searchModels],
-        },
-        operator,
         operands: [],
     };
 }
@@ -748,6 +704,16 @@ function findInContainer(
         }
     }
     return null;
+}
+
+function findGroupableParent(
+    root: QueryBuilderGroup,
+    selectedIds: Set<string>,
+): QueryBuilderContainer | null {
+    if (selectedIds.size < MINIMUM_ITEMS_TO_GROUP) {
+        return null;
+    }
+    return findContainerHoldingAll(root, selectedIds);
 }
 
 function findContainerHoldingAll(

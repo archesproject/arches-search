@@ -48,6 +48,10 @@ const cssOverrides = {
         "--arches-search-filter-record-border": "#86efac",
         "--arches-search-filter-record-text": "#15803d",
 
+        "--arches-search-filter-related-bg": "#fff7ed",
+        "--arches-search-filter-related-border": "#fed7aa",
+        "--arches-search-filter-related-text": "#c2410c",
+
         "--arches-search-sec-btn-hover-bg": "#e2e8f0",
         "--arches-search-sec-btn-text": "#475569",
         "--arches-search-chip-border": "#cbd5e1",
@@ -128,6 +132,11 @@ const cssOverrides = {
         "--arches-search-query-related-bg": "#eef2ff",
         "--arches-search-query-related-border": "#6366f1",
         "--arches-search-query-related-header": "rgba(99, 102, 241, 0.14)",
+        "--arches-search-query-related-accent": "#6366f1",
+        "--arches-search-query-negate-bg": "#fee2e2",
+        "--arches-search-query-negate-border": "#fca5a5",
+        "--arches-search-query-negate-text": "#b91c1c",
+        "--arches-search-query-model-pill-bg": "#e2e8f0",
     },
     ".p-theme-dark": {
         "--arches-search-page-bg": "#0a0a0a",
@@ -167,6 +176,10 @@ const cssOverrides = {
         "--arches-search-filter-record-border": "#16a34a",
         "--arches-search-filter-record-text": "#4ade80",
 
+        "--arches-search-filter-related-bg": "#2d1700",
+        "--arches-search-filter-related-border": "#f97316",
+        "--arches-search-filter-related-text": "#fb923c",
+
         "--arches-search-sec-btn-hover-bg": "#404040",
 
         "--arches-search-sec-btn-text": "#a3a3a3",
@@ -202,6 +215,11 @@ const cssOverrides = {
         "--arches-search-query-related-bg": "#1e1b4b",
         "--arches-search-query-related-border": "#6366f1",
         "--arches-search-query-related-header": "rgba(99, 102, 241, 0.24)",
+        "--arches-search-query-related-accent": "#818cf8",
+        "--arches-search-query-negate-bg": "#450a0a",
+        "--arches-search-query-negate-border": "#b91c1c",
+        "--arches-search-query-negate-text": "#fca5a5",
+        "--arches-search-query-model-pill-bg": "#1e293b",
 
         "--arches-search-hero-search-bg": "rgba(17, 24, 39, 0.97)",
         "--arches-search-hero-search-shadow":

@@ -1,35 +1,52 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
-import InputText from "openvue/inputtext";
-import SelectButton from "openvue/selectbutton";
 
 import QueryAddButtons from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryAddButtons.vue";
+import QueryGroupHeader from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryGroupHeader.vue";
 import QueryReadOnlyItem from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryReadOnlyItem.vue";
+import QueryRelatedLink from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryRelatedLink.vue";
 import QueryRow from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryRow.vue";
 
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import {
     LogicToken,
     QUERY_BUILDER_ITEM_GROUP,
+    QUERY_BUILDER_ITEM_RELATED_GROUP,
     QUERY_BUILDER_ITEM_ROW,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-import type { QueryBuilderItem } from "@/arches_search/AdvancedSearch/types.ts";
+import type { Ref } from "vue";
+import type {
+    GraphModel,
+    QueryBuilderGroup,
+    QueryBuilderItem,
+    QueryBuilderRelatedGroup,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 const GROUP_DEPTH_COLOR_COUNT = 3;
 
-const { containerId, items, logic, depth } = defineProps<{
+const {
+    containerId,
+    items,
+    logic,
+    depth,
+    emptyMessage = "",
+} = defineProps<{
     containerId: string;
     items: QueryBuilderItem[];
     logic: LogicToken;
     depth: number;
+    emptyMessage?: string;
 }>();
+
+const graphs = inject<Ref<GraphModel[]>>("graphs")!;
 
 const { $gettext, $pgettext } = useGettext();
 const queryBuilder = useQueryBuilder();
+const { selectedItemIds } = queryBuilder;
 
 const isAllLogic = computed<boolean>(() => logic === LogicToken.AND);
 
@@ -48,6 +65,9 @@ const leadText = computed<string>(() => {
 });
 
 const emptyHint = computed<string>(() => {
+    if (emptyMessage) {
+        return emptyMessage;
+    }
     if (depth === 0) {
         return $gettext(
             "No conditions yet. Add one below, or click Search to return every record of this model.",
@@ -56,35 +76,55 @@ const emptyHint = computed<string>(() => {
     return $gettext("Empty group. Add conditions with the buttons below.");
 });
 
-const logicOptions = computed(() => [
-    { label: $gettext("ALL"), value: LogicToken.AND },
-    { label: $gettext("ANY"), value: LogicToken.OR },
-]);
-
 const groupDepthClass = computed<string>(
     () => `query-group-depth-${depth % GROUP_DEPTH_COLOR_COUNT}`,
 );
 
+function isGroupItem(
+    item: QueryBuilderItem,
+): item is QueryBuilderGroup | QueryBuilderRelatedGroup {
+    return (
+        item.itemType === QUERY_BUILDER_ITEM_GROUP ||
+        item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP
+    );
+}
+
+function groupClasses(
+    item: QueryBuilderGroup | QueryBuilderRelatedGroup,
+): Record<string, boolean> {
+    const isRelated = item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP;
+    return {
+        [groupDepthClass.value]: !isRelated,
+        "query-group-related": isRelated,
+        "query-group-selected": selectedItemIds.value.includes(item.id),
+    };
+}
+
+function relatedEmptyHint(relatedGroup: QueryBuilderRelatedGroup): string {
+    if (!relatedGroup.targetGraphSlug) {
+        return $gettext("Choose the related model and how it is linked.");
+    }
+    const targetGraphName =
+        graphs.value.find(
+            (graph) => graph.slug === relatedGroup.targetGraphSlug,
+        )?.name ?? relatedGroup.targetGraphSlug;
+    return $gettext(
+        "Any related %{model} record counts. Add conditions to narrow it down.",
+        { model: targetGraphName },
+    );
+}
+
+function groupEmptyMessage(
+    item: QueryBuilderGroup | QueryBuilderRelatedGroup,
+): string {
+    if (item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP) {
+        return relatedEmptyHint(item);
+    }
+    return "";
+}
+
 function onToggleLogic(): void {
     queryBuilder.toggleGroupLogic(containerId);
-}
-
-function onGroupLogicChange(
-    groupId: string,
-    currentLogic: LogicToken,
-    nextLogic: LogicToken | null,
-): void {
-    if (nextLogic && nextLogic !== currentLogic) {
-        queryBuilder.toggleGroupLogic(groupId);
-    }
-}
-
-function onGroupLabelChange(groupId: string, label: string | undefined): void {
-    queryBuilder.setGroupLabel(groupId, label ?? "");
-}
-
-function onRemoveItem(itemId: string): void {
-    queryBuilder.removeItem(itemId);
 }
 </script>
 
@@ -128,54 +168,34 @@ function onRemoveItem(itemId: string): void {
                 :clause="item.clause"
             />
             <div
-                v-else-if="item.itemType === QUERY_BUILDER_ITEM_GROUP"
+                v-else-if="isGroupItem(item)"
                 class="query-group"
-                :class="groupDepthClass"
+                :class="groupClasses(item)"
             >
-                <div class="query-group-header">
-                    <i
-                        aria-hidden="true"
-                        class="pi pi-th-large"
-                    />
-                    <InputText
-                        class="query-group-label"
-                        size="small"
-                        :model-value="item.label"
-                        :placeholder="$gettext('Group label (optional)')"
-                        :aria-label="$gettext('Group label')"
-                        @update:model-value="
-                            onGroupLabelChange(item.id, $event)
-                        "
-                    />
-                    <SelectButton
-                        size="small"
-                        option-label="label"
-                        option-value="value"
-                        :model-value="item.logic"
-                        :options="logicOptions"
-                        :allow-empty="false"
-                        @update:model-value="
-                            onGroupLogicChange(item.id, item.logic, $event)
-                        "
-                    />
-                    <span class="query-group-match">
-                        {{ $pgettext("Query group: 'ALL/ANY match'", "match") }}
-                    </span>
-                    <Button
-                        icon="pi pi-times"
-                        severity="secondary"
-                        variant="text"
-                        size="small"
-                        :aria-label="$gettext('Remove group')"
-                        @click="onRemoveItem(item.id)"
-                    />
-                </div>
+                <QueryGroupHeader
+                    :group-id="item.id"
+                    :label="item.label"
+                    :logic="item.logic"
+                    :is-related="
+                        item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP
+                    "
+                />
                 <div class="query-group-body">
+                    <QueryRelatedLink
+                        v-if="
+                            item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP
+                        "
+                        :group-id="item.id"
+                        :anchor-graph-slug="item.anchorGraphSlug"
+                        :target-graph-slug="item.targetGraphSlug"
+                        :relationship="item.relationship"
+                    />
                     <QueryItemList
                         :container-id="item.id"
                         :items="item.items"
                         :logic="item.logic"
                         :depth="depth + 1"
+                        :empty-message="groupEmptyMessage(item)"
                     />
                     <QueryAddButtons
                         :container-id="item.id"
@@ -185,7 +205,7 @@ function onRemoveItem(itemId: string): void {
             </div>
             <QueryReadOnlyItem
                 v-else
-                :item="item"
+                :item-id="item.id"
             />
         </div>
     </div>
@@ -251,6 +271,7 @@ function onRemoveItem(itemId: string): void {
     border: 0.2rem solid var(--query-group-border);
     border-radius: 1rem;
     background: var(--query-group-bg);
+    transition: box-shadow 0.15s;
 }
 
 .query-item-list .query-group.query-group-depth-0 {
@@ -271,24 +292,14 @@ function onRemoveItem(itemId: string): void {
     --query-group-header: var(--arches-search-query-group-2-header);
 }
 
-.query-item-list .query-group-header {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    padding: 0.8rem 1.2rem;
-    border-block-end: 0.1rem solid var(--query-group-border);
-    background: var(--query-group-header);
+.query-item-list .query-group.query-group-related {
+    --query-group-bg: var(--arches-search-query-related-bg);
+    --query-group-border: var(--arches-search-query-related-border);
+    --query-group-header: var(--arches-search-query-related-header);
 }
 
-.query-item-list .query-group-label {
-    flex: 1;
-    min-inline-size: 0;
-}
-
-.query-item-list .query-group-match {
-    color: var(--p-text-muted-color);
-    font-size: 1.1rem;
-    font-weight: 500;
+.query-item-list .query-group.query-group-selected {
+    box-shadow: 0 0 0 0.3rem var(--arches-search-primary-muted-bg);
 }
 
 .query-item-list .query-group-body {

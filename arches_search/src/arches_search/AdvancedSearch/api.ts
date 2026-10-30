@@ -140,6 +140,23 @@ export async function getAdvancedSearchFacets() {
     return parsed;
 }
 
+export async function getAdvancedSearchOperandComponents() {
+    const response = await fetch(
+        generateArchesURL("arches_search:advanced_search_operand_components"),
+        {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
 export async function getDateBoundsForGraphId(
     graphId: string,
     nodeAliases: string[] = [],

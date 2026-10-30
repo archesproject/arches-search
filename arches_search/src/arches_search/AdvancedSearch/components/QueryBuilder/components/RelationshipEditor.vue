@@ -2,7 +2,6 @@
 import { computed, inject, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Card from "openvue/card";
 import Message from "openvue/message";
 import Select from "openvue/select";
 
@@ -16,14 +15,14 @@ import type {
     RelationshipBlock,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-const { $gettext, $pgettext } = useGettext();
+const { $gettext } = useGettext();
 
 const TRAVERSAL_QUANTIFIER_ANY = "ANY";
 const TRAVERSAL_QUANTIFIER_ALL = "ALL";
 const TRAVERSAL_QUANTIFIER_NONE = "NONE";
 
 const emit = defineEmits<{
-    "update:relationship": [RelationshipBlock | null];
+    "update:relationship": [RelationshipBlock];
     "update:innerGraphSlug": [string];
 }>();
 
@@ -68,15 +67,6 @@ const innerGraph = computed(() => {
     );
 });
 
-const tagText = computed(() => {
-    const name = anchorGraph.value?.name;
-
-    if (name) {
-        return $gettext("Relate %{name} to", { name });
-    }
-    return $gettext("Relate to");
-});
-
 const relatableGraphOptions = computed(() =>
     (relatableNodesTree.value?.relatable_graphs ?? [])
         .map((graph) => ({ label: graph.name, value: graph.slug }))
@@ -85,22 +75,28 @@ const relatableGraphOptions = computed(() =>
 
 const traversalQuantifierOptions = computed(() => [
     {
-        label: $gettext("At least one related record must match"),
+        label: $gettext("at least one related record matches"),
         value: TRAVERSAL_QUANTIFIER_ANY,
     },
     {
-        label: $gettext("Every related record must match"),
+        label: $gettext("every related record matches"),
         value: TRAVERSAL_QUANTIFIER_ALL,
-    },
-    {
-        label: $gettext("No related records match"),
-        value: TRAVERSAL_QUANTIFIER_NONE,
     },
 ]);
 
-const currentTraversalQuantifier = computed(() => {
-    return relationship.traversal_quantifier ?? TRAVERSAL_QUANTIFIER_ANY;
-});
+const hasChosenLink = computed<boolean>(() =>
+    Boolean(
+        innerGraphSlug &&
+            relationship.path.graph_slug &&
+            relationship.path.node_alias,
+    ),
+);
+
+const isTraversalQuantifierShown = computed<boolean>(
+    () =>
+        hasChosenLink.value &&
+        relationship.traversal_quantifier !== TRAVERSAL_QUANTIFIER_NONE,
+);
 
 const selectedRelationshipNode = computed<PathSelection | null>(() => {
     if (!relationship.path.graph_slug || !relationship.path.node_alias) {
@@ -238,140 +234,95 @@ function onUpdateSelectedNode(nextSelectedNode: PathSelection | null): void {
     });
 }
 
-function onChangeTraversalQuantifier(nextQuantifier: string): void {
+function onChangeTraversalQuantifier(
+    nextQuantifier: RelationshipBlock["traversal_quantifier"],
+): void {
     emit("update:relationship", {
         ...relationship,
-        traversal_quantifier:
-            nextQuantifier as RelationshipBlock["traversal_quantifier"],
+        traversal_quantifier: nextQuantifier,
     });
 }
 </script>
 
 <template>
-    <Card class="relationship-card">
-        <template #content>
-            <Message
-                v-if="relatableTreeError"
-                severity="error"
-                class="relationship-message"
-            >
-                {{ relatableTreeError.message }}
-            </Message>
+    <div class="relationship-editor">
+        <Message
+            v-if="relatableTreeError"
+            severity="error"
+            size="small"
+        >
+            {{ relatableTreeError.message }}
+        </Message>
 
-            <div
-                v-else
-                class="relationship-inline-row"
-            >
-                <span class="relationship-leadin-text">
-                    {{ tagText }}
-                </span>
+        <template v-else>
+            <Select
+                v-if="relatableGraphOptions.length > 0"
+                class="relationship-editor-model"
+                option-label="label"
+                option-value="value"
+                :model-value="innerGraphSlug"
+                :options="relatableGraphOptions"
+                :filter="true"
+                :disabled="isLoadingRelatableTree"
+                :placeholder="$gettext('Select a model')"
+                :aria-label="$gettext('Related model')"
+                @update:model-value="emit('update:innerGraphSlug', $event)"
+            />
 
-                <Select
-                    v-if="relatableGraphOptions.length > 0"
-                    :model-value="innerGraphSlug"
-                    :options="relatableGraphOptions"
-                    :filter="true"
-                    option-label="label"
-                    option-value="value"
-                    class="relationship-related-graph-select"
-                    :disabled="isLoadingRelatableTree"
-                    :placeholder="$gettext('Related record type')"
-                    :aria-label="$gettext('Related record type')"
-                    @update:model-value="emit('update:innerGraphSlug', $event)"
-                />
-
-                <span
-                    v-if="innerGraphSlug"
-                    class="relationship-leadin-text"
-                >
+            <template v-if="innerGraphSlug">
+                <span class="relationship-editor-word">
                     {{
                         $pgettext(
-                            'relationship editor: "Relate [type] to [type] via [field] and [quantifier]"',
+                            "Query condition: 'Related to a [model] via [field]'",
                             "via",
                         )
                     }}
                 </span>
 
                 <Message
-                    v-if="innerGraphSlug && pairwiseTreeError"
+                    v-if="pairwiseTreeError"
                     severity="error"
-                    class="relationship-message"
+                    size="small"
                 >
                     {{ pairwiseTreeError.message }}
                 </Message>
 
-                <div
-                    v-else-if="innerGraphSlug"
-                    class="relationship-path-builder"
-                >
-                    <PathBuilder
-                        :graph-options-tree="pairwiseNodesTree?.options ?? []"
-                        :selected-node="selectedRelationshipNode"
-                        :should-prepend-graph-name="true"
-                        @update:selected-node="onUpdateSelectedNode"
-                    />
-                </div>
-
-                <span
-                    v-if="
-                        innerGraphSlug &&
-                        relationship.path.graph_slug &&
-                        relationship.path.node_alias
-                    "
-                    class="relationship-leadin-text"
-                >
-                    {{
-                        $pgettext(
-                            'relationship editor: "Relate [type] to [type] via [field] and [quantifier]"',
-                            "and",
-                        )
-                    }}
-                </span>
-
-                <Select
-                    v-if="
-                        innerGraphSlug &&
-                        relationship.path.graph_slug &&
-                        relationship.path.node_alias
-                    "
-                    :model-value="currentTraversalQuantifier"
-                    :options="traversalQuantifierOptions"
-                    option-label="label"
-                    option-value="value"
-                    class="relationship-quantifier-select"
-                    :placeholder="$gettext('Match requirement')"
-                    :aria-label="$gettext('Relationship match requirement')"
-                    @update:model-value="onChangeTraversalQuantifier"
+                <PathBuilder
+                    v-else
+                    :graph-options-tree="pairwiseNodesTree?.options ?? []"
+                    :selected-node="selectedRelationshipNode"
+                    :should-prepend-graph-name="true"
+                    @update:selected-node="onUpdateSelectedNode"
                 />
-            </div>
+            </template>
+
+            <Select
+                v-if="isTraversalQuantifierShown"
+                class="relationship-editor-quantifier"
+                option-label="label"
+                option-value="value"
+                :model-value="relationship.traversal_quantifier"
+                :options="traversalQuantifierOptions"
+                :aria-label="$gettext('Which related records must match')"
+                @update:model-value="onChangeTraversalQuantifier"
+            />
         </template>
-    </Card>
+    </div>
 </template>
 
 <style scoped>
-.relationship-card {
+.relationship-editor {
+    display: contents;
     font-size: 1.2rem;
-    border: 0.125rem solid var(--p-content-border-color);
-    background: var(--p-content-background);
-    box-shadow: none;
 }
 
-.relationship-inline-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+.relationship-editor :deep(.p-select-label) {
+    font-size: 1.2rem;
 }
 
-.relationship-leadin-text {
-    font-weight: 600;
-}
-
-.relationship-path-builder {
-    display: flex;
-}
-
-.relationship-message {
-    flex: 1 1 auto;
+.relationship-editor .relationship-editor-word {
+    color: var(--p-text-muted-color);
+    font-size: 1.1rem;
+    white-space: nowrap;
 }
 </style>

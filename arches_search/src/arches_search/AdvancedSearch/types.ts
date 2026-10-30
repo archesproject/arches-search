@@ -138,15 +138,6 @@ export const QUERY_BUILDER_ITEM_RELATED_GROUP = "related-group";
 export const QUERY_BUILDER_ITEM_LOCKED_CLAUSE = "locked-clause";
 export const QUERY_BUILDER_ITEM_LOCKED_GROUP = "locked-group";
 
-export const QUERY_BUILDER_ROW_KIND_ATTRIBUTE = "attribute";
-export const QUERY_BUILDER_ROW_KIND_TIME = "time";
-export const QUERY_BUILDER_ROW_KIND_MAP = "map";
-
-export type QueryBuilderRowKind =
-    | typeof QUERY_BUILDER_ROW_KIND_ATTRIBUTE
-    | typeof QUERY_BUILDER_ROW_KIND_TIME
-    | typeof QUERY_BUILDER_ROW_KIND_MAP;
-
 export type QueryBuilderRow = {
     id: string;
     itemType: typeof QUERY_BUILDER_ITEM_ROW;
@@ -197,9 +188,21 @@ export type QueryBuilderItem =
     | QueryBuilderLockedClause
     | QueryBuilderLockedGroup;
 
+export interface AdvancedSearchOperandComponent {
+    datatype_id: string;
+    slug: string;
+    label: string;
+    icon: string;
+    component: string;
+    opens_in_panel: boolean;
+}
+
 export interface QueryBuilderLookups {
     getNodeDatatype(graphSlug: string, nodeAlias: string): string | undefined;
     getOperatorArity(datatype: string, operator: string): number | undefined;
+    getOperandComponent(
+        datatype: string,
+    ): AdvancedSearchOperandComponent | undefined;
 }
 
 export type NodeMetadataEntry = {
