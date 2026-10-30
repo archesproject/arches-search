@@ -132,6 +132,10 @@ export type GroupPayload = {
     label?: string;
 };
 
+export const SEARCH_MODEL_GEOMETRY = "GeometrySearch";
+export const SEARCH_MODEL_TERM = "TermSearch";
+export const SEARCH_MODELS_DATE = ["DateSearch", "DateRangeSearch"];
+
 export const QUERY_BUILDER_ITEM_ROW = "row";
 export const QUERY_BUILDER_ITEM_GROUP = "group";
 export const QUERY_BUILDER_ITEM_RELATED_GROUP = "related-group";

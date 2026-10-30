@@ -10,6 +10,7 @@ import QuerySelectCheckbox from "@/arches_search/AdvancedSearch/components/Query
 
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import { getClauseDatatype } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
+import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type {
     AdvancedSearchOperandComponent,
@@ -18,6 +19,8 @@ import type {
 
 const ATTRIBUTE_BADGE_KIND = "attribute";
 const ATTRIBUTE_BADGE_ICON = "pi pi-tag";
+const TEXT_SEARCH_BADGE_KIND = "text";
+const TEXT_SEARCH_BADGE_ICON = "pi pi-search";
 const QUANTIFIER_NONE = "NONE";
 
 const { rowId, clause } = defineProps<{
@@ -37,17 +40,41 @@ const operandComponent = computed<AdvancedSearchOperandComponent | null>(() => {
     return queryBuilder.lookups.getOperandComponent(datatype) ?? null;
 });
 
-const badgeLabel = computed<string>(
-    () => operandComponent.value?.label ?? $gettext("Attribute"),
+const isTextSearch = computed<boolean>(
+    () =>
+        clause.subject.type === ClauseSubjectTypeToken.SEARCH_MODELS &&
+        operandComponent.value === null,
 );
 
-const badgeIcon = computed<string>(
-    () => operandComponent.value?.icon ?? ATTRIBUTE_BADGE_ICON,
-);
+const badgeLabel = computed<string>(() => {
+    if (operandComponent.value) {
+        return operandComponent.value.label;
+    }
+    if (isTextSearch.value) {
+        return $gettext("Text search");
+    }
+    return $gettext("Attribute");
+});
 
-const badgeKind = computed<string>(
-    () => operandComponent.value?.slug ?? ATTRIBUTE_BADGE_KIND,
-);
+const badgeIcon = computed<string>(() => {
+    if (operandComponent.value) {
+        return operandComponent.value.icon;
+    }
+    if (isTextSearch.value) {
+        return TEXT_SEARCH_BADGE_ICON;
+    }
+    return ATTRIBUTE_BADGE_ICON;
+});
+
+const badgeKind = computed<string>(() => {
+    if (operandComponent.value) {
+        return operandComponent.value.slug;
+    }
+    if (isTextSearch.value) {
+        return TEXT_SEARCH_BADGE_KIND;
+    }
+    return ATTRIBUTE_BADGE_KIND;
+});
 
 const isNegated = computed<boolean>(
     () => clause.quantifier === QUANTIFIER_NONE,

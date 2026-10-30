@@ -9,8 +9,12 @@ import {
     QUERY_BUILDER_ITEM_LOCKED_GROUP,
     QUERY_BUILDER_ITEM_RELATED_GROUP,
     QUERY_BUILDER_ITEM_ROW,
+    SEARCH_MODEL_GEOMETRY,
+    SEARCH_MODEL_TERM,
+    SEARCH_MODELS_DATE,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
+import type { FeatureCollection } from "geojson";
 import type {
     GroupPayload,
     LiteralClause,
@@ -29,9 +33,6 @@ const CLAUSE_TYPE_LITERAL = "LITERAL";
 const QUANTIFIER_ANY = "ANY";
 const QUANTIFIER_NONE = "NONE";
 const MINIMUM_ITEMS_TO_GROUP = 2;
-const SEARCH_MODEL_GEOMETRY = "GeometrySearch";
-const SEARCH_MODEL_TERM = "TermSearch";
-const SEARCH_MODELS_DATE = ["DateSearch", "DateRangeSearch"];
 const DATATYPE_DATE = "date";
 const DATATYPE_GEOJSON = "geojson-feature-collection";
 const DATATYPE_STRING = "string";
@@ -90,8 +91,8 @@ export function draftDiffersFromApplied(
     return !isEqual(draftPayload, applied);
 }
 
-// A clause on any date or any geometry has no node, so its datatype comes from
-// the search models it reads.
+// A clause on any date, location or text has no node, so its datatype comes
+// from the search models it reads.
 export function getClauseDatatype(
     clause: LiteralClause,
     lookups: QueryBuilderLookups,
@@ -147,6 +148,17 @@ export function findQueryBuilderItem(
         return root;
     }
     return findInContainer(root, itemId);
+}
+
+export function isFeatureCollection(
+    value: unknown,
+): value is FeatureCollection {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "features" in value &&
+        Array.isArray(value.features)
+    );
 }
 
 export function listQueryBuilderRows(

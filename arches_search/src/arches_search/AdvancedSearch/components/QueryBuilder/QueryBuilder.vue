@@ -11,11 +11,15 @@ import Tag from "openvue/tag";
 import QueryAddButtons from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryAddButtons.vue";
 import QueryItemList from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryItemList.vue";
 
+import { useQueryDescription } from "@/arches_search/AdvancedSearch/composables/useQueryDescription.ts";
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Ref } from "vue";
-import type { GraphModel } from "@/arches_search/AdvancedSearch/types.ts";
+import type {
+    AdvancedSearchFacet,
+    GraphModel,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 const SEARCH_EVENT = "search" as const;
 const DESCRIBE_EVENT = "describe" as const;
@@ -32,10 +36,18 @@ const emit = defineEmits<{
 }>();
 
 const graphs = inject<Ref<GraphModel[]>>("graphs")!;
+const datatypesToAdvancedSearchFacets = inject<
+    Ref<Record<string, AdvancedSearchFacet[]>>
+>("datatypesToAdvancedSearchFacets")!;
 
 const { $gettext, $pgettext } = useGettext();
 const queryBuilder = useQueryBuilder();
 const { root, prunedPayload, hasUnsearchedChanges } = queryBuilder;
+const { description } = useQueryDescription({
+    payload: prunedPayload,
+    graphs,
+    datatypesToAdvancedSearchFacets,
+});
 
 const pendingGraphSlug = ref<string | null>(null);
 
@@ -53,6 +65,12 @@ const logicOptions = computed(() => [
     { label: $gettext("ALL"), value: LogicToken.AND },
     { label: $gettext("ANY"), value: LogicToken.OR },
 ]);
+
+const inlineDescription = computed<string>(
+    () =>
+        description.value ||
+        $gettext("Add conditions above to build your query…"),
+);
 
 const pendingGraphName = computed<string>(
     () =>
@@ -225,6 +243,12 @@ function onRootLogicChange(nextLogic: LogicToken | null): void {
                 :disabled="!root"
                 @click="emit(CLEAR_ALL_EVENT)"
             />
+            <span
+                class="query-builder-description"
+                :class="{ 'query-builder-description-empty': !description }"
+            >
+                {{ inlineDescription }}
+            </span>
         </div>
     </section>
 </template>
@@ -282,5 +306,21 @@ function onRootLogicChange(nextLogic: LogicToken | null): void {
     gap: 1rem;
     padding-block-start: 1.6rem;
     border-block-start: 0.1rem solid var(--arches-search-query-builder-border);
+}
+
+.query-builder .query-builder-description {
+    flex: 1;
+    max-inline-size: 48rem;
+    margin-inline-start: auto;
+    color: var(--arches-search-query-builder-word);
+    font-size: 1.2rem;
+    font-style: italic;
+    line-height: 1.5;
+    text-align: end;
+}
+
+.query-builder .query-builder-description.query-builder-description-empty {
+    color: var(--p-text-muted-color);
+    font-style: normal;
 }
 </style>

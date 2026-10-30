@@ -5,6 +5,7 @@ import MapComponent from "@/arches_vue_components/components/MapComponent/MapCom
 import MapToolsPanel from "@/arches_vue_components/components/MapComponent/components/MapToolsPanel/MapToolsPanel.vue";
 
 import { useDefaultMapInteractionTools } from "@/arches_vue_components/components/MapComponent/composables/useDefaultMapInteractionTools.ts";
+import { isFeatureCollection } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 
 import type { FeatureCollection } from "geojson";
 import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
@@ -33,15 +34,6 @@ const drawnArea = computed<FeatureCollection | null>(() => {
     }
     return null;
 });
-
-function isFeatureCollection(value: unknown): value is FeatureCollection {
-    return (
-        typeof value === "object" &&
-        value !== null &&
-        "features" in value &&
-        Array.isArray(value.features)
-    );
-}
 
 function onMapReady(): void {
     if (mapToolsTool) {
