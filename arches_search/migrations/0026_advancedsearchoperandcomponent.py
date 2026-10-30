@@ -7,16 +7,18 @@ TIME_FILTER = {
     "slug": "time",
     "label": {"en": "Time filter"},
     "icon": "pi pi-calendar",
-    "component": "arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue",
+    "component": "arches_search/AdvancedSearch/components/OperandPanel/components/TimeOperandEditor.vue",
     "opens_in_panel": True,
+    "sets_operator": True,
 }
 
 MAP_FILTER = {
     "slug": "map",
     "label": {"en": "Map filter"},
     "icon": "pi pi-map-marker",
-    "component": "arches_search/SimpleSearch/components/MapFilterPanel.vue",
+    "component": "arches_search/AdvancedSearch/components/OperandPanel/components/MapOperandEditor.vue",
     "opens_in_panel": True,
+    "sets_operator": False,
 }
 
 OPERAND_COMPONENTS_BY_DATATYPE = {
@@ -84,6 +86,14 @@ class Migration(migrations.Migration):
                         default=False,
                         help_text="Whether the component opens in the side panel instead of inline.",
                         verbose_name="Opens in panel",
+                    ),
+                ),
+                (
+                    "sets_operator",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Whether the component chooses the operator itself, so the builder does not show its own operator select.",
+                        verbose_name="Sets operator",
                     ),
                 ),
                 (

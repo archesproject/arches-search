@@ -169,6 +169,14 @@ class AdvancedSearchOperandComponent(models.Model):
         verbose_name=_("Opens in panel"),
         help_text=_("Whether the component opens in the side panel instead of inline."),
     )
+    sets_operator = models.BooleanField(
+        default=False,
+        verbose_name=_("Sets operator"),
+        help_text=_(
+            "Whether the component chooses the operator itself, so the "
+            "builder does not show its own operator select."
+        ),
+    )
 
     def serialize(self, fields=None, exclude=None, **kwargs):
         return {
@@ -178,6 +186,7 @@ class AdvancedSearchOperandComponent(models.Model):
             "icon": self.icon,
             "component": self.component,
             "opens_in_panel": self.opens_in_panel,
+            "sets_operator": self.sets_operator,
         }
 
     def __str__(self):

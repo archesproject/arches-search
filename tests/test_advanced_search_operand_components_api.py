@@ -33,12 +33,21 @@ class AdvancedSearchOperandComponentsAPITest(TestCase):
                 "slug": "time",
                 "label": "Time filter",
                 "icon": "pi pi-calendar",
-                "component": "arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue",
+                "component": "arches_search/AdvancedSearch/components/OperandPanel/components/TimeOperandEditor.vue",
                 "opens_in_panel": True,
+                "sets_operator": True,
             },
         )
         self.assertEqual(components_by_datatype["edtf"]["slug"], "time")
         self.assertEqual(
-            components_by_datatype["geojson-feature-collection"]["component"],
-            "arches_search/SimpleSearch/components/MapFilterPanel.vue",
+            components_by_datatype["geojson-feature-collection"],
+            {
+                "datatype_id": "geojson-feature-collection",
+                "slug": "map",
+                "label": "Map filter",
+                "icon": "pi pi-map-marker",
+                "component": "arches_search/AdvancedSearch/components/OperandPanel/components/MapOperandEditor.vue",
+                "opens_in_panel": True,
+                "sets_operator": False,
+            },
         )
