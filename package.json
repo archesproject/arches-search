@@ -23,7 +23,7 @@
         "arches-modular-reports": "archesproject/arches-modular-reports#semver:^v2.1.0-alpha.4",
         "cytoscape": "3.33.1",
         "cytoscape-cola": "2.5.1",
-        "vue-router": "4.4.3"
+        "vue-router": "5.4.0"
     },
     "devDependencies": {
         "geojson": "npm:@types/geojson@^7946.0.16"
