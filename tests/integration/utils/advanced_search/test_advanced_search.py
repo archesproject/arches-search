@@ -5096,6 +5096,210 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
         self.assertIn(PERSON_D_ID, result)
         self.assertEqual(result, {PERSON_A_ID, PERSON_B_ID, PERSON_D_ID})
 
+    # --- Self-exclusion under an OR parent ---
+
+    def _age_over_23_or_friend_under_10_payload(self):
+        return {
+            "graph_slug": "person",
+            "scope": "RESOURCE",
+            "logic": "OR",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "age",
+                        "search_models": [],
+                    },
+                    "operator": "GREATER_THAN",
+                    "operands": [{"type": "LITERAL", "value": 23}],
+                }
+            ],
+            "groups": [
+                {
+                    "graph_slug": "person",
+                    "scope": "RESOURCE",
+                    "logic": "AND",
+                    "clauses": [],
+                    "groups": [
+                        {
+                            "graph_slug": "person",
+                            "scope": "RESOURCE",
+                            "logic": "AND",
+                            "clauses": [
+                                {
+                                    "type": "LITERAL",
+                                    "quantifier": "ANY",
+                                    "subject": {
+                                        "type": "NODE",
+                                        "graph_slug": "person",
+                                        "node_alias": "age",
+                                        "search_models": [],
+                                    },
+                                    "operator": "LESS_THAN",
+                                    "operands": [{"type": "LITERAL", "value": 10}],
+                                }
+                            ],
+                            "groups": [],
+                            "aggregations": [],
+                            "relationship": None,
+                        }
+                    ],
+                    "aggregations": [],
+                    "relationship": {
+                        "path": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "friends",
+                        },
+                        "is_inverse": False,
+                        "traversal_quantifier": "ANY",
+                    },
+                }
+            ],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+    def test_person_self_excluded_from_own_friends_under_or_parent(self):
+        """
+        Tests self-exclusion when the relationship group sits under an OR parent. Only Person C
+        (age=24) passes age > 23. The only person under 10 is Person D (age=5), and the only
+        friends list naming Person D is Person D's own, so with self-exclusion nobody has a
+        friend under 10 and the result is just C. Without self-exclusion Person D would match.
+        """
+        result = self._compile(self._age_over_23_or_friend_under_10_payload())
+        self.assertEqual(result, {PERSON_C_ID})
+
+    def test_forward_self_exclusion_compares_within_the_link_row(self):
+        """
+        Tests that forward self-exclusion compares the link's target with the link row's own
+        source rather than with the outer resource. Referencing the outer resource a second
+        time stops Postgres from building the relationship subquery's result once and hashing
+        it, so under an OR parent it re-runs the subquery for every resource of the graph.
+        """
+        compiled_sql = str(
+            AdvancedSearchQueryCompiler(self._age_over_23_or_friend_under_10_payload())
+            .compile()
+            .query
+        )
+        self.assertRegex(
+            compiled_sql,
+            r'NOT \("(\w+)"\."value" = \("\1"\."resourceinstanceid"\)\)',
+        )
+        self.assertNotIn(
+            '"value" = ("resource_instances"."resourceinstanceid")', compiled_sql
+        )
+
+    # --- OR parent combining sibling subgroups with a relationship subgroup ---
+
+    def _person_age_equals_group(self, age):
+        return {
+            "graph_slug": "person",
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "age",
+                        "search_models": [],
+                    },
+                    "operator": "EQUALS",
+                    "operands": [{"type": "LITERAL", "value": age}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+    def _friend_aged_group(self, friend_age, anchor_clauses):
+        return {
+            "graph_slug": "person",
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": anchor_clauses,
+            "groups": [self._person_age_equals_group(friend_age)],
+            "aggregations": [],
+            "relationship": {
+                "path": {
+                    "type": "NODE",
+                    "graph_slug": "person",
+                    "node_alias": "friends",
+                },
+                "is_inverse": False,
+                "traversal_quantifier": "ANY",
+            },
+        }
+
+    def test_or_parent_keeps_sibling_subgroups_or_combined_beside_relationship_group(
+        self,
+    ):
+        """
+        Tests an OR root holding two plain subgroups and a relationship subgroup. Person A
+        (age=22) matches the first subgroup, Person C (age=24) the second, and Persons B and D
+        list Person A (age=22) as a friend. Any one subgroup is enough under OR, so all four
+        match. AND-combining the plain subgroups would demand an age of both 22 and 24 and
+        leave only B and D.
+        """
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "OR",
+                "clauses": [],
+                "groups": [
+                    self._person_age_equals_group(22),
+                    self._person_age_equals_group(24),
+                    self._friend_aged_group(22, anchor_clauses=[]),
+                ],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, {PERSON_A_ID, PERSON_B_ID, PERSON_C_ID, PERSON_D_ID})
+
+    def test_or_parent_keeps_relationship_group_anchor_clause_and_combined(self):
+        """
+        Tests an OR root holding a literal clause and a relationship subgroup that carries its
+        own anchor clause. Person C (age=24) matches the literal. The relationship subgroup
+        means age=5 AND a friend aged 22, which only Person D (age=5, friend Person A) meets.
+        Person B also lists Person A as a friend but is not age 5, so B must not match.
+        """
+        age_equals_five_clause = self._person_age_equals_group(5)["clauses"][0]
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "OR",
+                "clauses": self._person_age_equals_group(24)["clauses"],
+                "groups": [
+                    self._friend_aged_group(22, anchor_clauses=[age_equals_five_clause])
+                ],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, {PERSON_C_ID, PERSON_D_ID})
+
+    def test_group_label_is_accepted_and_does_not_change_results(self):
+        """
+        Tests that groups may carry a label for the query builder to display. The label is
+        not part of the query, so a labelled payload returns the same resources as the
+        unlabelled one.
+        """
+        payload = self._age_over_23_or_friend_under_10_payload()
+        payload["label"] = "Age or young friends"
+        payload["groups"][0]["label"] = "Young friends"
+        payload["groups"][0]["groups"][0]["label"] = "Under ten"
+        self.assertEqual(self._compile(payload), {PERSON_C_ID})
+
     # --- ALL→ANY conversion for single-hop inverse relationships ---
 
     def test_person_all_inverse_dogs_tail_gt_50_semantics_match_any_due_to_conversion(
