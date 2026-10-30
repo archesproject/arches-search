@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, watchEffect } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 import { useToast } from "openvue/usetoast";
 
@@ -17,6 +17,7 @@ import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSe
 
 import type {
     SavedSearch,
+    SearchDefinition,
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -38,9 +39,15 @@ type SavedSearchSortValue =
     | typeof SORT_NEWEST
     | typeof SORT_OLDEST;
 
-const { shouldShowHeader = true, shouldShowSaveTab = true } = defineProps<{
+const {
+    shouldShowHeader = true,
+    shouldShowSaveTab = true,
+    definitionToSave,
+} = defineProps<{
     shouldShowHeader?: boolean;
     shouldShowSaveTab?: boolean;
+    // Left out, the current Simple Search is saved; null means nothing to save.
+    definitionToSave?: SearchDefinition | null;
 }>();
 
 const emit = defineEmits<{
@@ -68,6 +75,20 @@ const saveSearchName = ref("");
 const saveSearchDescription = ref("");
 const isSaving = ref(false);
 
+const savableDefinition = computed<SearchDefinition | null>(() => {
+    if (definitionToSave !== undefined) {
+        return definitionToSave;
+    }
+    return searchFilters?.getSearchDefinition() ?? null;
+});
+
+const isSaveDisabled = computed<boolean>(
+    () =>
+        isSaving.value ||
+        saveSearchName.value.trim() === "" ||
+        savableDefinition.value === null,
+);
+
 const sortOptions: SortOption[] = [
     { label: $gettext("Sort A to Z"), value: SORT_A_TO_Z },
     { label: $gettext("Sort Z to A"), value: SORT_Z_TO_A },
@@ -85,7 +106,8 @@ watch(sortValue, () => {
 
 async function onSaveSearch(): Promise<void> {
     const name = saveSearchName.value.trim();
-    if (!name || !searchFilters) {
+    const definition = savableDefinition.value;
+    if (!name || !definition) {
         return;
     }
 
@@ -94,10 +116,7 @@ async function onSaveSearch(): Promise<void> {
         await createSavedSearch(
             name,
             saveSearchDescription.value.trim(),
-            searchFilters.getSearchDefinition() as unknown as Record<
-                string,
-                unknown
-            >,
+            definition as unknown as Record<string, unknown>,
         );
         saveSearchName.value = "";
         saveSearchDescription.value = "";
@@ -296,7 +315,7 @@ function queryTypeLabel(search: SavedSearch): string {
                     icon="pi pi-check"
                     :label="$gettext('Save')"
                     :loading="isSaving"
-                    :disabled="isSaving || !saveSearchName.trim()"
+                    :disabled="isSaveDisabled"
                     @click="onSaveSearch"
                 />
             </div>

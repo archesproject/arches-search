@@ -3,6 +3,7 @@ import {
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import {
+    ADVANCED_QUERY_KEY,
     TERM_KIND_CONTROLLED_TERM,
     TERM_KIND_RECORD,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -178,4 +179,23 @@ function isSortSpec(value: unknown): value is SortSpec {
         typeof (value as Record<string, unknown>).type === "string" &&
         typeof (value as Record<string, unknown>).direction === "string"
     );
+}
+
+// What Advanced Search saves: its query alone, on its model.
+export function buildAdvancedSearchDefinition(
+    graphSlug: string,
+    advancedQuery: GroupPayload | null,
+    sort: SortSpec[],
+): SearchDefinition {
+    let queries: Record<string, GroupPayload> = {};
+    if (advancedQuery) {
+        queries = { [ADVANCED_QUERY_KEY]: advancedQuery };
+    }
+    return {
+        terms: [],
+        queries,
+        graphSlugs: [graphSlug],
+        mapFilter: null,
+        sort,
+    };
 }

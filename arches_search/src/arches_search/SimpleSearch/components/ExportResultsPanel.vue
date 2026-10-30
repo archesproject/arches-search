@@ -26,10 +26,16 @@ import type {
 const CLOSE_EVENT = "close" as const;
 const EXPORT_EVENT = "export" as const;
 
-const { hasSingleGraph = true, exportState = EXPORT_STATE_IDLE } = defineProps<{
+const {
+    hasSingleGraph = true,
+    exportState = EXPORT_STATE_IDLE,
+    resultCount = null,
+} = defineProps<{
     // Both Bulk Data Manager exporters operate on a single resource model.
     hasSingleGraph?: boolean;
     exportState?: ExportState;
+    // Left out, the count of the current Simple Search results is used.
+    resultCount?: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -45,7 +51,7 @@ const exportConceptsAs = ref<ExportConceptsAs>(EXPORT_CONCEPTS_AS_LABELS);
 const filename = ref("search_export");
 
 const totalResults = computed<number>(
-    () => searchResults.value.pagination?.total_results ?? 0,
+    () => resultCount ?? searchResults.value.pagination?.total_results ?? 0,
 );
 
 const formatOptions = computed(() => [

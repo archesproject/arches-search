@@ -9,6 +9,7 @@ import {
     buildNodeDateSearchClause,
 } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 import {
+    buildAdvancedSearchDefinition,
     buildRequestDateRange,
     buildRequestQueries,
     buildRequestQuery,
@@ -20,6 +21,7 @@ import type {
     GroupPayload,
     LiteralClause,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import type { SortSpec } from "@/arches_search/SimpleSearch/types.ts";
 
 const GRAPH_SLUG = "heritage_resource";
 
@@ -160,6 +162,32 @@ describe("buildRequestQueries", () => {
         expect(
             buildRequestQueries([allDateNodesTimeFilter], [GRAPH_SLUG]),
         ).toEqual([]);
+    });
+});
+
+describe("buildAdvancedSearchDefinition", () => {
+    it("saves the advanced query alone and reads back unchanged", () => {
+        const sort: SortSpec[] = [{ type: "primary_name", direction: "desc" }];
+        const definition = buildAdvancedSearchDefinition(
+            GRAPH_SLUG,
+            constructionDateTimeFilter,
+            sort,
+        );
+
+        expect(definition).toEqual({
+            terms: [],
+            queries: { [ADVANCED_QUERY_KEY]: constructionDateTimeFilter },
+            graphSlugs: [GRAPH_SLUG],
+            mapFilter: null,
+            sort,
+        });
+        expect(parseSearchDefinition({ ...definition })).toEqual(definition);
+    });
+
+    it("saves just the model when there are no conditions", () => {
+        expect(
+            buildAdvancedSearchDefinition(GRAPH_SLUG, null, []).queries,
+        ).toEqual({});
     });
 });
 

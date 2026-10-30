@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { provide, ref, watch, watchEffect } from "vue";
+import { computed, provide, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Message from "openvue/message";
 import Skeleton from "openvue/skeleton";
 import Splitter from "openvue/splitter";
 import SplitterPanel from "openvue/splitterpanel";
+import Toast from "openvue/toast";
+import { useToast } from "openvue/usetoast";
 
 import AdvancedSearchHelp from "@/arches_search/AdvancedSearch/components/AdvancedSearchHelp.vue";
+import OperandPanel from "@/arches_search/AdvancedSearch/components/OperandPanel/OperandPanel.vue";
 import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/PayloadAnalyzer.vue";
 import QueryBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/QueryBuilder.vue";
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
+import ExportResultsPanel from "@/arches_search/SimpleSearch/components/ExportResultsPanel.vue";
 import RelatedResourcesPanel from "@/arches_search/SimpleSearch/components/RelatedResourcesPanel.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
+import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
 
 import {
     getAdvancedSearchFacets,
@@ -24,11 +29,25 @@ import {
 } from "@/arches_search/AdvancedSearch/api.ts";
 import { provideQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import { getFromCache } from "@/arches_search/AdvancedSearch/utils/async-cache.ts";
-import { fetchSearchResults } from "@/arches_search/SimpleSearch/api.ts";
+import {
+    fetchSearchResults,
+    startSearchResultsExport,
+} from "@/arches_search/SimpleSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
-import { sortSpecForValue } from "@/arches_search/SimpleSearch/utils/results-sort.ts";
-import { RESULTS_SORT_RELEVANCE } from "@/arches_search/SimpleSearch/types.ts";
+import {
+    sortSpecForValue,
+    sortValueForSpecs,
+} from "@/arches_search/SimpleSearch/utils/results-sort.ts";
+import {
+    buildAdvancedSearchDefinition,
+    parseSearchDefinition,
+} from "@/arches_search/SimpleSearch/utils/search-definition.ts";
+import {
+    EXPORT_STATE_IDLE,
+    EXPORT_STATE_PENDING,
+    RESULTS_SORT_RELEVANCE,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 import type {
     AdvancedSearchFacet,
@@ -39,15 +58,25 @@ import type {
     RelatableNodesTreeResponse,
     SearchResults as SearchResultsPayload,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import type { ResultsSortValue } from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    ExportRequest,
+    ExportState,
+    ResultsSortValue,
+    SearchDefinition,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 const FIRST_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
 
 const { $gettext } = useGettext();
-const { advancedQuery, applyAdvancedQuery } = useSearchFilters();
+const toast = useToast();
+const { advancedQuery, applyAdvancedQuery, applySearchDefinition } =
+    useSearchFilters();
 const {
+    isExportResultsOpen,
+    isOperandPanelOpen,
     isRelatedResourcesOpen,
+    isSavedSearchesOpen,
     relatedResource,
     resultsPanelSize,
     visibleSidePanelSize,
@@ -55,6 +84,9 @@ const {
     sidePanelContentClass,
     sidePanelStyle,
     closeSidePanel,
+    openOperandPanel,
+    onToggleExportResults,
+    onToggleSavedSearches,
     onSplitterResizeStart,
     onSplitterResize,
     onSplitterResizeEnd,
@@ -77,6 +109,7 @@ const searchError = ref<Error | null>(null);
 const searchedGraphSlug = ref<string | null>(null);
 const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
 const isDescribeVisible = ref(false);
+const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
 
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
@@ -84,11 +117,23 @@ provide("getNodesForGraphId", getNodesForGraphId);
 provide("getRelatableNodesTreeForGraphId", getRelatableNodesTreeForGraphId);
 provide("getRelatableNodesTreeForGraphPair", getRelatableNodesTreeForGraphPair);
 
-const { root, prunedPayload, clearQuery } = provideQueryBuilder({
-    graphs,
-    datatypesToAdvancedSearchFacets,
-    operandComponents,
-    getNodesForGraphId,
+const { root, prunedPayload, panelRowId, clearQuery, closeRowPanel } =
+    provideQueryBuilder({
+        graphs,
+        datatypesToAdvancedSearchFacets,
+        operandComponents,
+        getNodesForGraphId,
+    });
+
+const definitionToSave = computed<SearchDefinition | null>(() => {
+    if (!root.value) {
+        return null;
+    }
+    return buildAdvancedSearchDefinition(
+        root.value.graphSlug,
+        prunedPayload.value,
+        sortSpecForValue(sortValue.value),
+    );
 });
 
 watchEffect(async () => {
@@ -112,6 +157,22 @@ watch(isLoading, (loading) => {
     if (!loading && advancedQuery.value) {
         searchedGraphSlug.value = advancedQuery.value.graph_slug;
         void performSearch(FIRST_RESULTS_PAGE);
+    }
+});
+
+watch(panelRowId, (rowId) => {
+    if (rowId) {
+        openOperandPanel();
+        return;
+    }
+    if (isOperandPanelOpen.value) {
+        closeSidePanel();
+    }
+});
+
+watch(isOperandPanelOpen, (isOpen) => {
+    if (!isOpen && panelRowId.value) {
+        closeRowPanel();
     }
 });
 
@@ -228,6 +289,60 @@ function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
 function onRequestPage(page: number): void {
     void performSearch(page);
 }
+
+async function onRunSavedQuery(
+    queryDefinition: Record<string, unknown>,
+    searchName: string,
+): Promise<void> {
+    const definition = parseSearchDefinition(queryDefinition);
+    await applySearchDefinition(definition, searchName);
+    sortValue.value = sortValueForSpecs(definition.sort ?? []);
+
+    if (!advancedQuery.value) {
+        searchedGraphSlug.value = null;
+        searchResults.value = null;
+        toast.add({
+            severity: "info",
+            life: 5000,
+            summary: $gettext("This saved search has no advanced query."),
+            detail: $gettext("Open it in Simple Search to see its filters."),
+        });
+        return;
+    }
+    searchedGraphSlug.value = advancedQuery.value.graph_slug;
+    void performSearch(FIRST_RESULTS_PAGE);
+}
+
+async function onExportResults(exportRequest: ExportRequest): Promise<void> {
+    if (!searchedGraphSlug.value) {
+        return;
+    }
+    exportState.value = EXPORT_STATE_PENDING;
+    try {
+        await startSearchResultsExport({
+            queries: advancedQuery.value ? [advancedQuery.value] : [],
+            graphSlugs: [searchedGraphSlug.value],
+            exportRequest,
+        });
+        toast.add({
+            severity: "success",
+            life: 3000,
+            summary: $gettext("Your export has started."),
+            detail: $gettext(
+                "You will be notified when it is ready to download.",
+            ),
+        });
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("Export could not be started."),
+            detail: toError(error).message,
+        });
+    } finally {
+        exportState.value = EXPORT_STATE_IDLE;
+    }
+}
 </script>
 
 <template>
@@ -272,14 +387,14 @@ function onRequestPage(page: number): void {
                     :has-map-filter="false"
                     :show-time="false"
                     :has-time-filter="false"
-                    :show-saved-searches="false"
-                    :show-export-results="false"
+                    :show-saved-searches="isSavedSearchesOpen"
+                    :show-export-results="isExportResultsOpen"
                     :hide-filters-button="true"
                     :hide-time-button="true"
                     :hide-map-button="true"
-                    :hide-saved-searches-button="true"
-                    :hide-export-results-button="true"
                     @update:sort-value="onSortValueUpdate"
+                    @toggle-saved-searches="onToggleSavedSearches"
+                    @toggle-export-results="onToggleExportResults"
                 />
                 <Message
                     v-if="searchError"
@@ -319,9 +434,25 @@ function onRequestPage(page: number): void {
                     class="advanced-search-side-panel-content"
                     :class="sidePanelContentClass"
                 >
+                    <OperandPanel v-if="isOperandPanelOpen" />
                     <RelatedResourcesPanel
-                        v-if="isRelatedResourcesOpen && relatedResource"
+                        v-else-if="isRelatedResourcesOpen && relatedResource"
                         :resource-title="relatedResource.title"
+                        @close="closeSidePanel()"
+                    />
+                    <SavedSearchPanel
+                        v-else-if="isSavedSearchesOpen"
+                        :definition-to-save="definitionToSave"
+                        @run-query="onRunSavedQuery"
+                        @close="closeSidePanel()"
+                    />
+                    <ExportResultsPanel
+                        v-else-if="isExportResultsOpen"
+                        :export-state="exportState"
+                        :result-count="
+                            searchResults?.pagination.total_results ?? 0
+                        "
+                        @export="onExportResults"
                         @close="closeSidePanel()"
                     />
                     <AdvancedSearchHelp v-else />
@@ -339,6 +470,8 @@ function onRequestPage(page: number): void {
             :visible="isDescribeVisible"
             @update:visible="isDescribeVisible = $event"
         />
+
+        <Toast />
     </div>
 </template>
 
