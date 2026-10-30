@@ -49,7 +49,6 @@ const cssOverrides = {
         "--arches-search-filter-record-text": "#15803d",
 
         "--arches-search-filter-related-bg": "#fff7ed",
-        "--arches-search-filter-related-border": "#fed7aa",
         "--arches-search-filter-related-text": "#c2410c",
 
         "--arches-search-sec-btn-hover-bg": "#e2e8f0",
@@ -177,7 +176,6 @@ const cssOverrides = {
         "--arches-search-filter-record-text": "#4ade80",
 
         "--arches-search-filter-related-bg": "#2d1700",
-        "--arches-search-filter-related-border": "#f97316",
         "--arches-search-filter-related-text": "#fb923c",
 
         "--arches-search-sec-btn-hover-bg": "#404040",

@@ -44,8 +44,8 @@ const { description, isLoading, fetchError } = useQueryDescription({
     <Textarea
         v-else
         class="payload-analyzer-textarea"
-        :model-value="description"
         rows="38"
-        readonly
+        :model-value="description"
+        :readonly="true"
     />
 </template>

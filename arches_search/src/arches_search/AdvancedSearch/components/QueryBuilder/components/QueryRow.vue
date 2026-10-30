@@ -46,34 +46,26 @@ const isTextSearch = computed<boolean>(
         operandComponent.value === null,
 );
 
-const badgeLabel = computed<string>(() => {
+const badge = computed<{ label: string; icon: string; kind: string }>(() => {
     if (operandComponent.value) {
-        return operandComponent.value.label;
+        return {
+            label: operandComponent.value.label,
+            icon: operandComponent.value.icon,
+            kind: operandComponent.value.slug,
+        };
     }
     if (isTextSearch.value) {
-        return $gettext("Text search");
+        return {
+            label: $gettext("Text search"),
+            icon: TEXT_SEARCH_BADGE_ICON,
+            kind: TEXT_SEARCH_BADGE_KIND,
+        };
     }
-    return $gettext("Attribute");
-});
-
-const badgeIcon = computed<string>(() => {
-    if (operandComponent.value) {
-        return operandComponent.value.icon;
-    }
-    if (isTextSearch.value) {
-        return TEXT_SEARCH_BADGE_ICON;
-    }
-    return ATTRIBUTE_BADGE_ICON;
-});
-
-const badgeKind = computed<string>(() => {
-    if (operandComponent.value) {
-        return operandComponent.value.slug;
-    }
-    if (isTextSearch.value) {
-        return TEXT_SEARCH_BADGE_KIND;
-    }
-    return ATTRIBUTE_BADGE_KIND;
+    return {
+        label: $gettext("Attribute"),
+        icon: ATTRIBUTE_BADGE_ICON,
+        kind: ATTRIBUTE_BADGE_KIND,
+    };
 });
 
 const isNegated = computed<boolean>(
@@ -111,9 +103,9 @@ function onRemove(): void {
         <QuerySelectCheckbox :item-id="rowId" />
         <QueryRowTags
             :graph-slug="clause.subject.graph_slug"
-            :badge-label="badgeLabel"
-            :badge-icon="badgeIcon"
-            :badge-kind="badgeKind"
+            :badge-label="badge.label"
+            :badge-icon="badge.icon"
+            :badge-kind="badge.kind"
             :is-negated="isNegated"
             @toggle-not="onToggleNot"
         />

@@ -60,12 +60,6 @@ export function queryBuilderRootFromPayload(
     };
 }
 
-export function queryBuilderRootToPayload(
-    root: QueryBuilderGroup,
-): GroupPayload {
-    return plainGroupToPayload(root);
-}
-
 // The query that is sent: rows still being filled in and groups left empty
 // are dropped, and a root with nothing left becomes no query at all.
 export function buildPrunedPayload(

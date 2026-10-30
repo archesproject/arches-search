@@ -24,7 +24,6 @@ import {
     isClauseComplete,
     listQueryBuilderRows,
     queryBuilderRootFromPayload,
-    queryBuilderRootToPayload,
     removeQueryBuilderItem,
     setGroupLabel,
     setRelatedRelationship,
@@ -217,7 +216,9 @@ describe("loading and saving", () => {
     it("round-trips a query the builder made", () => {
         const root = queryBuilderRootFromPayload(BUILDER_SHAPED_PAYLOAD);
 
-        expect(queryBuilderRootToPayload(root)).toEqual(BUILDER_SHAPED_PAYLOAD);
+        expect(buildPrunedPayload(root, LOOKUPS)).toEqual(
+            BUILDER_SHAPED_PAYLOAD,
+        );
     });
 
     it("reads a related group's ALL/ANY from the rows it holds", () => {
@@ -264,7 +265,7 @@ describe("loading and saving", () => {
         const relatedGroup = groupById(root, root.items[0].id);
 
         expect(rowsOf(relatedGroup)[0].clause).toEqual(textSearch);
-        expect(queryBuilderRootToPayload(root)).toEqual(payload);
+        expect(buildPrunedPayload(root, LOOKUPS)).toEqual(payload);
     });
 
     it("keeps what it cannot edit and writes it back unchanged", () => {
@@ -301,7 +302,7 @@ describe("loading and saving", () => {
             QUERY_BUILDER_ITEM_LOCKED_GROUP,
             QUERY_BUILDER_ITEM_LOCKED_GROUP,
         ]);
-        expect(queryBuilderRootToPayload(root)).toEqual(payload);
+        expect(buildPrunedPayload(root, LOOKUPS)).toEqual(payload);
     });
 
     it("nests a root it cannot edit inside an editable one", () => {
@@ -311,8 +312,9 @@ describe("loading and saving", () => {
         };
 
         expect(
-            queryBuilderRootToPayload(
+            buildPrunedPayload(
                 queryBuilderRootFromPayload(tileScopeRoot),
+                LOOKUPS,
             ),
         ).toEqual(group(SAMPLE, LogicToken.AND, [], [tileScopeRoot]));
     });

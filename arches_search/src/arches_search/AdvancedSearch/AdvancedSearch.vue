@@ -304,7 +304,12 @@ async function onRunSavedQuery(
     searchName: string,
 ): Promise<void> {
     const definition = parseSearchDefinition(queryDefinition);
-    await applySearchDefinition(definition, searchName);
+    try {
+        await applySearchDefinition(definition, searchName);
+    } catch (error) {
+        searchError.value = toError(error);
+        return;
+    }
     sortValue.value = sortValueForSpecs(definition.sort ?? []);
 
     if (!advancedQuery.value) {
