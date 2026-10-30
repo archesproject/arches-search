@@ -149,6 +149,23 @@ export function findQueryBuilderItem(
     return findInContainer(root, itemId);
 }
 
+export function listQueryBuilderRows(
+    root: QueryBuilderGroup,
+): QueryBuilderRow[] {
+    function rowsIn(container: QueryBuilderContainer): QueryBuilderRow[] {
+        return container.items.flatMap((item) => {
+            if (item.itemType === QUERY_BUILDER_ITEM_ROW) {
+                return [item];
+            }
+            if (isContainer(item)) {
+                return rowsIn(item);
+            }
+            return [];
+        });
+    }
+    return rowsIn(root);
+}
+
 export function addRow(
     root: QueryBuilderGroup,
     containerId: string,

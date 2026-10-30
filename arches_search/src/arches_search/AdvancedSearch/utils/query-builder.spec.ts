@@ -22,6 +22,7 @@ import {
     getClauseDatatype,
     groupQueryBuilderItems,
     isClauseComplete,
+    listQueryBuilderRows,
     queryBuilderRootFromPayload,
     queryBuilderRootToPayload,
     removeQueryBuilderItem,
@@ -498,6 +499,20 @@ describe("grouping selected items", () => {
             canGroupQueryBuilderItems(withNestedRow, [root.items[0].id, rowId]),
         ).toBe(false);
         expect(canGroupQueryBuilderItems(root, [root.items[0].id])).toBe(false);
+    });
+});
+
+describe("listQueryBuilderRows", () => {
+    it("lists every row in the order it appears, nested ones included", () => {
+        const root = queryBuilderRootFromPayload(BUILDER_SHAPED_PAYLOAD);
+
+        expect(
+            listQueryBuilderRows(root).map((row) => row.clause.subject),
+        ).toEqual([
+            MATERIAL_IS_GLASS.subject,
+            WEIGHT_IS_TEN.subject,
+            NAME_LIKE_FORBES.subject,
+        ]);
     });
 });
 

@@ -43,6 +43,7 @@ interface QueryBuilderContext {
     prunedPayload: ComputedRef<GroupPayload | null>;
     hasUnsearchedChanges: ComputedRef<boolean>;
     isSelecting: ComputedRef<boolean>;
+    panelRowId: ComputedRef<string | null>;
     selectedItemIds: ComputedRef<string[]>;
     canGroupSelection: ComputedRef<boolean>;
     startQuery(graphSlug: string): void;
@@ -65,6 +66,8 @@ interface QueryBuilderContext {
     stopSelecting(): void;
     toggleItemSelected(itemId: string): void;
     groupSelectedItems(): void;
+    openRowPanel(rowId: string): void;
+    closeRowPanel(): void;
 }
 
 const QUERY_BUILDER_KEY: InjectionKey<QueryBuilderContext> =
@@ -89,6 +92,7 @@ function createQueryBuilder({
     >({});
     const requestedGraphSlugs = new Set<string>();
     const isSelectingItems = ref(false);
+    const panelRowIdState = ref<string | null>(null);
     const selectedItemIdList = ref<string[]>([]);
 
     const lookups: QueryBuilderLookups = {
@@ -122,6 +126,8 @@ function createQueryBuilder({
     const isSelecting = computed<boolean>(() => isSelectingItems.value);
 
     const selectedItemIds = computed<string[]>(() => selectedItemIdList.value);
+
+    const panelRowId = computed<string | null>(() => panelRowIdState.value);
 
     const canGroupSelection = computed<boolean>(() => {
         if (!root.value) {
@@ -188,11 +194,13 @@ function createQueryBuilder({
 
     function startQuery(graphSlug: string): void {
         stopSelecting();
+        closeRowPanel();
         setAdvancedQueryDraft(createQueryBuilderRoot(graphSlug));
     }
 
     function clearQuery(): void {
         stopSelecting();
+        closeRowPanel();
         setAdvancedQueryDraft(null);
     }
 
@@ -257,6 +265,14 @@ function createQueryBuilder({
         stopSelecting();
     }
 
+    function openRowPanel(rowId: string): void {
+        panelRowIdState.value = rowId;
+    }
+
+    function closeRowPanel(): void {
+        panelRowIdState.value = null;
+    }
+
     function removeItem(itemId: string): void {
         if (!root.value) {
             return;
@@ -267,6 +283,12 @@ function createQueryBuilder({
             (selectedItemId) =>
                 findQueryBuilderItem(nextRoot, selectedItemId) !== null,
         );
+        if (
+            panelRowIdState.value &&
+            findQueryBuilderItem(nextRoot, panelRowIdState.value) === null
+        ) {
+            closeRowPanel();
+        }
     }
 
     function toggleContainerLogic(containerId: string): void {
@@ -317,6 +339,7 @@ function createQueryBuilder({
         isSelecting,
         selectedItemIds,
         canGroupSelection,
+        panelRowId,
         startQuery,
         clearQuery,
         addRow: addRowToContainer,
@@ -334,6 +357,8 @@ function createQueryBuilder({
         stopSelecting,
         toggleItemSelected,
         groupSelectedItems,
+        openRowPanel,
+        closeRowPanel,
     };
 }
 

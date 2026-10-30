@@ -195,6 +195,7 @@ export interface AdvancedSearchOperandComponent {
     icon: string;
     component: string;
     opens_in_panel: boolean;
+    sets_operator: boolean;
 }
 
 export interface QueryBuilderLookups {

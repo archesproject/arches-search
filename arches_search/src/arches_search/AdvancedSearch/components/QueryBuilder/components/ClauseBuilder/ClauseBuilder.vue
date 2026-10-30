@@ -36,14 +36,17 @@ const CLAUSE_QUANTIFIER_ALL = "ALL" as const;
 const CLAUSE_QUANTIFIER_NONE = "NONE" as const;
 
 const OPERAND_TYPE_LITERAL = "LITERAL" as const;
+const OPEN_PANEL_EVENT = "open-panel" as const;
 
-const { modelValue, operandComponent } = defineProps<{
+const { modelValue, operandComponent, isEditingInPanel } = defineProps<{
     modelValue: LiteralClause;
     operandComponent: AdvancedSearchOperandComponent | null;
+    isEditingInPanel: boolean;
 }>();
 
 const emit = defineEmits<{
     (event: "update:modelValue", updatedClause: LiteralClause): void;
+    (event: typeof OPEN_PANEL_EVENT): void;
 }>();
 
 const datatypesToAdvancedSearchFacets = inject<
@@ -114,17 +117,43 @@ const operandCount = computed<number>(
     () => selectedAdvancedSearchFacet.value?.arity ?? 0,
 );
 
+const isOperatorSetInPanel = computed<boolean>(
+    () =>
+        operandComponent?.opens_in_panel === true &&
+        operandComponent.sets_operator,
+);
+
+const isPanelButtonShown = computed<boolean>(() => {
+    if (operandComponent?.opens_in_panel !== true) {
+        return false;
+    }
+    return isOperatorSetInPanel.value || operandCount.value > 0;
+});
+
+const operandSummary = computed<string | null>(() => {
+    const operandTexts = modelValue.operands
+        .slice(0, operandCount.value)
+        .map(operandText);
+    if (operandTexts.some((text) => text === null)) {
+        return null;
+    }
+    return operandTexts.join(" – ");
+});
+
 const panelButtonLabel = computed<string>(() => {
     if (!isClauseComplete(modelValue, queryBuilder.lookups)) {
         return $gettext("Set in side panel");
     }
-    const operandTexts = modelValue.operands
-        .slice(0, operandCount.value)
-        .map(operandText);
-    if (operandTexts.every((text) => text !== null)) {
-        return operandTexts.join(" – ");
+    if (isOperatorSetInPanel.value && selectedAdvancedSearchFacet.value) {
+        if (!operandSummary.value) {
+            return selectedAdvancedSearchFacet.value.label;
+        }
+        return $gettext("%{operator} %{values}", {
+            operator: selectedAdvancedSearchFacet.value.label,
+            values: operandSummary.value,
+        });
     }
-    return $gettext("Edit in side panel");
+    return operandSummary.value || $gettext("Edit in side panel");
 });
 
 watch(
@@ -307,6 +336,7 @@ function handleQuantifierChange(
         />
 
         <Select
+            v-if="!isOperatorSetInPanel"
             class="clause-builder-operator"
             option-label="label"
             option-value="operator"
@@ -318,19 +348,20 @@ function handleQuantifierChange(
             @update:model-value="handleOperatorChange"
         />
 
-        <template v-if="operandCount > 0">
-            <Button
-                v-if="operandComponent?.opens_in_panel"
-                class="clause-builder-panel-button"
-                size="small"
-                severity="secondary"
-                variant="outlined"
-                :icon="operandComponent.icon"
-                :label="panelButtonLabel"
-                :disabled="true"
-            />
+        <Button
+            v-if="operandComponent && isPanelButtonShown"
+            class="clause-builder-panel-button"
+            size="small"
+            severity="secondary"
+            variant="outlined"
+            :class="{ 'clause-builder-panel-button-editing': isEditingInPanel }"
+            :icon="operandComponent.icon"
+            :label="panelButtonLabel"
+            @click="emit(OPEN_PANEL_EVENT)"
+        />
+        <template v-else-if="operandCount > 0">
             <div
-                v-else-if="subjectNode && subjectGraph"
+                v-if="subjectNode && subjectGraph"
                 class="clause-builder-operands"
             >
                 <ClauseOperandBuilder
@@ -389,6 +420,15 @@ function handleQuantifierChange(
 .clause-builder .clause-builder-panel-button {
     border-style: dashed;
     font-size: 1.2rem;
+}
+
+.clause-builder
+    .clause-builder-panel-button.clause-builder-panel-button-editing {
+    border-style: solid;
+    border-color: var(--p-primary-color);
+    background: var(--arches-search-primary-muted-bg);
+    color: var(--p-primary-color);
+    font-weight: 600;
 }
 
 .clause-builder .clause-builder-text {

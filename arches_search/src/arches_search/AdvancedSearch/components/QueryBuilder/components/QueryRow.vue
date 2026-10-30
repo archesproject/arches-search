@@ -27,7 +27,7 @@ const { rowId, clause } = defineProps<{
 
 const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
-const { selectedItemIds } = queryBuilder;
+const { selectedItemIds, panelRowId } = queryBuilder;
 
 const operandComponent = computed<AdvancedSearchOperandComponent | null>(() => {
     const datatype = getClauseDatatype(clause, queryBuilder.lookups);
@@ -57,8 +57,14 @@ const isSelected = computed<boolean>(() =>
     selectedItemIds.value.includes(rowId),
 );
 
+const isEditingInPanel = computed<boolean>(() => panelRowId.value === rowId);
+
 function onUpdateClause(updatedClause: LiteralClause): void {
     queryBuilder.setRowClause(rowId, updatedClause);
+}
+
+function onOpenPanel(): void {
+    queryBuilder.openRowPanel(rowId);
 }
 
 function onToggleNot(): void {
@@ -87,7 +93,9 @@ function onRemove(): void {
         <ClauseBuilder
             :model-value="clause"
             :operand-component="operandComponent"
+            :is-editing-in-panel="isEditingInPanel"
             @update:model-value="onUpdateClause"
+            @open-panel="onOpenPanel"
         />
         <Button
             class="query-row-remove"
