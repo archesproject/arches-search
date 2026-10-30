@@ -6,8 +6,6 @@ import { useGettext } from "vue3-gettext";
 import Button from "openvue/button";
 import Select from "openvue/select";
 
-import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
-
 import {
     RESULTS_SORT_A_TO_Z,
     RESULTS_SORT_NEWEST,
@@ -20,17 +18,8 @@ import type {
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-const { $gettext } = useGettext();
-const { searchResults } = useSearchFilters();
-
-const totalResults = computed<number>(
-    () => searchResults.value.pagination?.total_results ?? 0,
-);
-const resultsLabelText = computed(() =>
-    $gettext("%{count} results", { count: String(totalResults.value) }),
-);
-
-defineProps<{
+const { totalResults } = defineProps<{
+    totalResults: number;
     sortValue: ResultsSortValue | null;
     showFilters: boolean;
     showMap: boolean;
@@ -41,7 +30,16 @@ defineProps<{
     showExportResults: boolean;
     hideFiltersButton?: boolean;
     hideTimeButton?: boolean;
+    hideMapButton?: boolean;
+    hideSavedSearchesButton?: boolean;
+    hideExportResultsButton?: boolean;
 }>();
+
+const { $gettext } = useGettext();
+
+const resultsLabelText = computed(() =>
+    $gettext("%{count} results", { count: String(totalResults) }),
+);
 
 const sortOptions = computed<SortOption[]>(() => [
     { label: $gettext("Relevance"), value: RESULTS_SORT_RELEVANCE },
@@ -98,6 +96,7 @@ defineEmits<{
                 @click="$emit('toggle-time')"
             />
             <Button
+                v-if="!hideMapButton"
                 :label="$gettext('Map')"
                 icon="pi pi-map"
                 icon-pos="left"
@@ -106,6 +105,7 @@ defineEmits<{
                 @click="$emit('toggle-map')"
             />
             <Button
+                v-if="!hideSavedSearchesButton"
                 :label="$gettext('Save Search')"
                 :icon="
                     showSavedSearches ? 'pi pi-bookmark-fill' : 'pi pi-bookmark'
@@ -116,6 +116,7 @@ defineEmits<{
                 @click="$emit('toggle-saved-searches')"
             />
             <Button
+                v-if="!hideExportResultsButton"
                 :label="$gettext('Export Results')"
                 icon="pi pi-download"
                 icon-pos="left"

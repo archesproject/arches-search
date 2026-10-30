@@ -37,16 +37,17 @@ import {
     ADVANCED_QUERY_KEY,
     EXPORT_STATE_IDLE,
     EXPORT_STATE_PENDING,
-    RESULTS_SORT_A_TO_Z,
-    RESULTS_SORT_NEWEST,
-    RESULTS_SORT_OLDEST,
     RESULTS_SORT_RELEVANCE,
-    RESULTS_SORT_Z_TO_A,
     TERM_FILTER_KEY,
     TIME_FILTER_QUERY_KEY,
 } from "@/arches_search/SimpleSearch/types.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 import { applyPendingSearch } from "@/arches_search/SimpleSearch/utils/apply-pending-search.ts";
+import {
+    sortSpecForValue,
+    sortSpecsMatch,
+    sortValueForSpecs,
+} from "@/arches_search/SimpleSearch/utils/results-sort.ts";
 import { parseSearchDefinition } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
 import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
@@ -61,7 +62,6 @@ import type {
     ExportRequest,
     ExportState,
     ResultsSortValue,
-    SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const INITIAL_RESULTS_PAGE = 1;
@@ -394,38 +394,6 @@ function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
     setSort(sortSpecForValue(nextSortValue));
 }
 
-function sortSpecForValue(value: ResultsSortValue | null): SortSpec[] {
-    switch (value) {
-        case RESULTS_SORT_A_TO_Z:
-            return [{ type: "primary_name", direction: "asc" }];
-        case RESULTS_SORT_Z_TO_A:
-            return [{ type: "primary_name", direction: "desc" }];
-        case RESULTS_SORT_NEWEST:
-            return [{ type: "created_time", direction: "desc" }];
-        case RESULTS_SORT_OLDEST:
-            return [{ type: "created_time", direction: "asc" }];
-        default:
-            return [];
-    }
-}
-
-function sortValueForSpecs(specs: SortSpec[]): ResultsSortValue | null {
-    const sortValues: ResultsSortValue[] = [
-        RESULTS_SORT_A_TO_Z,
-        RESULTS_SORT_Z_TO_A,
-        RESULTS_SORT_NEWEST,
-        RESULTS_SORT_OLDEST,
-    ];
-    const matchingValue = sortValues.find((candidate) =>
-        sortSpecsMatch(sortSpecForValue(candidate), specs),
-    );
-    return matchingValue ?? RESULTS_SORT_RELEVANCE;
-}
-
-function sortSpecsMatch(left: SortSpec[], right: SortSpec[]): boolean {
-    return JSON.stringify(left) === JSON.stringify(right);
-}
-
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {
     const graphSlug = activeGraphSlug.value;
     if (!graphSlug || clauses.length === 0) {
@@ -512,6 +480,7 @@ async function onRunSavedQuery(
                     :min-size="RESULTS_PANEL_MIN_SIZE"
                 >
                     <ResultsToolbar
+                        :total-results="searchResults.pagination.total_results"
                         :sort-value="sortValue"
                         :show-filters="isAttributeFiltersOpen"
                         :show-map="isMapFilterOpen"

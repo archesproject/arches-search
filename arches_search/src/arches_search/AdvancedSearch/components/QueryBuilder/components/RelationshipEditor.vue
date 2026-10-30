@@ -6,7 +6,7 @@ import Card from "openvue/card";
 import Message from "openvue/message";
 import Select from "openvue/select";
 
-import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/PathBuilder.vue";
+import PathBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/PathBuilder.vue";
 
 import type {
     GraphModel,

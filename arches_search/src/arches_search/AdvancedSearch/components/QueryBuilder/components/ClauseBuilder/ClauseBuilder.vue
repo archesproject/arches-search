@@ -5,9 +5,9 @@ import { useGettext } from "vue3-gettext";
 import Select from "openvue/select";
 import Button from "openvue/button";
 
-import PathBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/PathBuilder.vue";
-import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
-import TextSearchFilter from "@/arches_search/AdvancedSearch/components/PayloadBuilder/components/GroupBuilder/components/ClauseBuilder/components/TextSearchFilter.vue";
+import PathBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/PathBuilder.vue";
+import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
+import TextSearchFilter from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/ClauseBuilder/components/TextSearchFilter.vue";
 import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Ref } from "vue";

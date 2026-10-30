@@ -35,10 +35,21 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
             <header
                 v-if="!isSearchLanding"
                 class="simple-search-header"
+                :class="{ 'advanced-search-header': !isSimpleSearch }"
             >
-                <h1 class="search-title">
+                <h1
+                    v-if="isSimpleSearch"
+                    class="search-title"
+                >
                     <i class="pi pi-search" />
                     {{ $gettext("Search the Collection") }}
+                </h1>
+                <h1
+                    v-else
+                    class="search-title"
+                >
+                    <i class="pi pi-sliders-h" />
+                    {{ $gettext("Advanced Search") }}
                 </h1>
                 <nav
                     v-if="isSimpleSearch"
@@ -60,7 +71,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
                     class="header-nav"
                 >
                     <Button
-                        icon="pi pi-sliders-h"
+                        icon="pi pi-arrow-left"
                         icon-pos="left"
                         class="header-link"
                         :label="$gettext('Simple Search')"
@@ -108,10 +119,15 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     background-color: var(--arches-search-card-bg);
 }
 
+.simple-search-header.advanced-search-header {
+    padding: 1.4rem 2.4rem;
+    border-block-end: 0.1rem solid var(--p-content-border-color);
+}
+
 .search-title {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 1.2rem;
     margin: 0;
     color: var(--p-text-color);
     font-size: 2.2rem;

@@ -22,6 +22,7 @@ import type { ComputedRef, InjectionKey, Ref } from "vue";
 import type {
     GraphModel,
     GroupPayload,
+    QueryBuilderGroup,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import {
@@ -58,6 +59,7 @@ interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
     activeGraphs: Ref<ResourceType[]>;
     advancedQuery: Ref<GroupPayload | null>;
+    advancedQueryDraft: Ref<QueryBuilderGroup | null>;
     attributeFilterValues: ComputedRef<Record<string, unknown>>;
     availableGraphs: Ref<ResourceType[]>;
     loadAvailableGraphs(): Promise<void>;
@@ -77,6 +79,7 @@ interface SearchFilters {
         definition: SearchDefinition,
         searchName?: string | null,
     ): Promise<void>;
+    applyAdvancedQuery(payload: GroupPayload | null): void;
     clearAll(): void;
     clearAttributeFilter(nodeAlias: string): void;
     clearMapFilter(): void;
@@ -86,6 +89,7 @@ interface SearchFilters {
     getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
     setAdvancedQuery(payload: GroupPayload | null): void;
+    setAdvancedQueryDraft(root: QueryBuilderGroup | null): void;
     setAttributeFilter(nodeAlias: string, value: unknown): void;
     setGraphsBySlug(graphSlugs: string[]): Promise<void>;
     setMapFilter(featureCollection: FeatureCollection): void;
@@ -113,6 +117,7 @@ function createSearchFilters(): SearchFilters {
     const terms = ref<SerializedTerm[]>([]);
     const queries = ref<Map<string, GroupPayload>>(new Map());
     const advancedQuery = ref<GroupPayload | null>(null);
+    const advancedQueryDraft = ref<QueryBuilderGroup | null>(null);
     const mapFilter = ref<FeatureCollection | null>(null);
     // Keyed by field name so re-selecting a field replaces its filter rather
     // than stacking a second, contradictory one.
@@ -322,8 +327,19 @@ function createSearchFilters(): SearchFilters {
 
     function setAdvancedQuery(payload: GroupPayload | null): void {
         advancedQuery.value = payload;
+        advancedQueryDraft.value = null;
         currentPage.value = FIRST_SEARCH_PAGE;
         search();
+    }
+
+    // Advanced Search runs its own search over the query alone; Simple Search
+    // searches again with it when next opened.
+    function applyAdvancedQuery(payload: GroupPayload | null): void {
+        advancedQuery.value = payload;
+    }
+
+    function setAdvancedQueryDraft(root: QueryBuilderGroup | null): void {
+        advancedQueryDraft.value = root;
     }
 
     function setMapFilter(featureCollection: FeatureCollection): void {
@@ -341,6 +357,7 @@ function createSearchFilters(): SearchFilters {
         terms.value = [];
         queries.value = new Map();
         advancedQuery.value = null;
+        advancedQueryDraft.value = null;
         storedAttributeFilterValues.value = {};
         mapFilter.value = null;
         resourceFieldFilters.value = new Map();
@@ -594,9 +611,11 @@ function createSearchFilters(): SearchFilters {
         activeFilters,
         activeGraphs,
         advancedQuery,
+        advancedQueryDraft,
         attributeFilterValues,
         availableGraphs,
         loadAvailableGraphs,
+        applyAdvancedQuery,
         applySearchDefinition,
         clearAll,
         clearAttributeFilter,
@@ -616,6 +635,7 @@ function createSearchFilters(): SearchFilters {
         savedSearchName,
         search,
         setAdvancedQuery,
+        setAdvancedQueryDraft,
         setAttributeFilter,
         setResourceFieldFilter,
         clearResourceFieldFilters,
