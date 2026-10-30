@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch, watchEffect } from "vue";
 import dayjs from "dayjs";
+import { useRouter } from "vue-router";
 import { useGettext } from "vue3-gettext";
 
 import Splitter from "openvue/splitter";
@@ -26,6 +27,7 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import { routeNames } from "@/arches_search/routes.ts";
 import { startSearchResultsExport } from "@/arches_search/SimpleSearch/api.ts";
 import { formatAttributeFilterValue } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
@@ -66,9 +68,11 @@ import type {
 
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
+const UNREPRESENTED_QUERIES_FILTER_ID = "unrepresentedQueries";
 
 const { $gettext } = useGettext();
 const toast = useToast();
+const router = useRouter();
 
 const {
     activeFilters,
@@ -266,24 +270,46 @@ const unrepresentedQueryKeys = computed<string[]>(() => {
     );
 });
 
-const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
-    if (unrepresentedQueryKeys.value.length === 0 && !advancedQuery.value) {
+const unrepresentedQueriesActiveFilter = computed<ActiveFilter | null>(() => {
+    if (unrepresentedQueryKeys.value.length === 0) {
         return null;
     }
 
     return {
-        id: ADVANCED_QUERY_KEY,
-        text: savedSearchName.value ?? $gettext("Advanced query"),
+        id: UNREPRESENTED_QUERIES_FILTER_ID,
+        text: savedSearchName.value ?? $gettext("Saved filters"),
         clear: () => {
             for (const filterKey of unrepresentedQueryKeys.value) {
                 clearAttributeFilter(filterKey);
             }
-            setAdvancedQuery(null);
         },
         inverted: false,
         kind: ACTIVE_FILTER_KIND_ATTRIBUTE,
         category: $gettext("Saved search"),
         icon: "pi pi-bookmark",
+    };
+});
+
+const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
+    const appliedQuery = advancedQuery.value;
+    if (!appliedQuery) {
+        return null;
+    }
+
+    const graphName =
+        graphModels.value.find(
+            (graphModel) => graphModel.slug === appliedQuery.graph_slug,
+        )?.name ?? appliedQuery.graph_slug;
+
+    return {
+        id: ADVANCED_QUERY_KEY,
+        text: graphName,
+        clear: () => setAdvancedQuery(null),
+        inverted: false,
+        kind: ACTIVE_FILTER_KIND_ATTRIBUTE,
+        category: $gettext("Advanced search"),
+        icon: "pi pi-sliders-h",
+        onEdit: openAdvancedSearch,
     };
 });
 
@@ -293,6 +319,9 @@ const allActiveFilters = computed<ActiveFilter[]>(() => [
     ...(timeActiveFilter.value ? [timeActiveFilter.value] : []),
     ...(mapActiveFilter.value ? [mapActiveFilter.value] : []),
     ...attributeActiveFilters.value,
+    ...(unrepresentedQueriesActiveFilter.value
+        ? [unrepresentedQueriesActiveFilter.value]
+        : []),
     ...(advancedQueryActiveFilter.value
         ? [advancedQueryActiveFilter.value]
         : []),
@@ -443,6 +472,10 @@ function formatTimeFilterLabel(clause: LiteralClause): string {
 
 function onClearAll(): void {
     clearAll();
+}
+
+function openAdvancedSearch(): void {
+    void router.push({ name: routeNames.advancedSearch });
 }
 
 async function onRunSavedQuery(
