@@ -14,6 +14,7 @@ import type {
     SearchDefinition,
     SearchRequestTerm,
     SerializedTerm,
+    SortSpec,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -68,15 +69,45 @@ export function buildRequestQuery(
     if (advancedQueries.length === 0) {
         return undefined;
     }
-    if (advancedQueries.length === 1) {
-        return advancedQueries[0];
+    return mergeQueries(advancedQueries);
+}
+
+// The API takes one payload per graph, so queries are grouped by the graph
+// they filter and each group is AND-combined. A query for a graph that is not
+// being searched is left out rather than sent to be ignored.
+export function buildRequestQueries(
+    queries: GroupPayload[],
+    requestedGraphSlugs: string[],
+): GroupPayload[] {
+    const requestedGraphSlugSet = new Set(requestedGraphSlugs);
+    const queriesByGraphSlug = new Map<string, GroupPayload[]>();
+
+    for (const payload of queries) {
+        if (
+            isNodeAgnosticDateQuery(payload) ||
+            !requestedGraphSlugSet.has(payload.graph_slug)
+        ) {
+            continue;
+        }
+        queriesByGraphSlug.set(payload.graph_slug, [
+            ...(queriesByGraphSlug.get(payload.graph_slug) ?? []),
+            payload,
+        ]);
+    }
+
+    return [...queriesByGraphSlug.values()].map(mergeQueries);
+}
+
+function mergeQueries(queries: GroupPayload[]): GroupPayload {
+    if (queries.length === 1) {
+        return queries[0];
     }
     return {
-        graph_slug: advancedQueries[0].graph_slug,
-        scope: advancedQueries[0].scope,
+        graph_slug: queries[0].graph_slug,
+        scope: queries[0].scope,
         logic: LogicToken.AND,
         clauses: [],
-        groups: advancedQueries,
+        groups: queries,
         aggregations: [],
         relationship: null,
     };
@@ -132,5 +163,19 @@ export function parseSearchDefinition(
         mapFilter = raw.mapFilter as FeatureCollection;
     }
 
-    return { terms, queries: queriesIn, graphSlugs, mapFilter };
+    let sort: SortSpec[] = [];
+    if (Array.isArray(raw.sort)) {
+        sort = raw.sort.filter(isSortSpec);
+    }
+
+    return { terms, queries: queriesIn, graphSlugs, mapFilter, sort };
+}
+
+function isSortSpec(value: unknown): value is SortSpec {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        typeof (value as Record<string, unknown>).type === "string" &&
+        typeof (value as Record<string, unknown>).direction === "string"
+    );
 }

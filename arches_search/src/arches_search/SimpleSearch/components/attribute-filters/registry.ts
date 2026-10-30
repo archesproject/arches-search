@@ -16,6 +16,7 @@ import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts
 import type {
     AttributeFilterEntry,
     NumericFilterValue,
+    NumericToken,
     ReferenceFilterValue,
 } from "@/arches_search/SimpleSearch/components/attribute-filters/types.ts";
 
@@ -122,6 +123,42 @@ function formatNumericValue(value: unknown): string {
     return (value as NumericFilterValue | null)?.text ?? "";
 }
 
+// A saved query holds only the labels, so the restored options are keyed by
+// label — which is also what the widget matches its options on.
+function parseReferenceValue(query: GroupPayload): ReferenceFilterValue {
+    const labels = query.clauses[0]?.operands[0]?.value;
+    if (!Array.isArray(labels)) {
+        return [];
+    }
+    return labels
+        .filter((label): label is string => typeof label === "string")
+        .map((label) => ({ id: label, label }));
+}
+
+function parseNumericValue(query: GroupPayload): NumericFilterValue {
+    const tokens = query.clauses.flatMap((clause): NumericToken[] => {
+        const [first, second] = clause.operands.map((operand) => operand.value);
+        if (clause.operator === "BETWEEN") {
+            return [{ kind: "range", min: Number(first), max: Number(second) }];
+        }
+        if (clause.operator === "EQUALS") {
+            return [{ kind: "value", value: Number(first) }];
+        }
+        return [];
+    });
+
+    const text = tokens
+        .map((token) => {
+            if (token.kind === "range") {
+                return `${token.min}-${token.max}`;
+            }
+            return String(token.value);
+        })
+        .join(", ");
+
+    return { text, tokens };
+}
+
 // Maps an Arches node datatype to its filter widget + query builder. Add a new
 // datatype by registering one entry here and dropping in its widget component.
 const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry> = {
@@ -129,11 +166,13 @@ const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry> = {
         component: ReferenceFilterMultiSelect,
         buildQuery: buildReferenceQuery,
         formatValue: formatReferenceValue,
+        parseValue: parseReferenceValue,
     },
     number: {
         component: NumericFilter,
         buildQuery: buildNumericQuery,
         formatValue: formatNumericValue,
+        parseValue: parseNumericValue,
     },
 };
 
@@ -162,4 +201,11 @@ export function formatAttributeFilterValue(
     value: unknown,
 ): string {
     return getAttributeFilterEntry(node.datatype)?.formatValue(value) ?? "";
+}
+
+export function parseAttributeFilterValue(
+    node: NodeFilterConfigNode,
+    query: GroupPayload,
+): unknown {
+    return getAttributeFilterEntry(node.datatype)?.parseValue(query) ?? null;
 }

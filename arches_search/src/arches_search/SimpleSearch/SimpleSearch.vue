@@ -26,20 +26,15 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import {
-    fetchNodeFilterConfig,
-    startSearchResultsExport,
-} from "@/arches_search/SimpleSearch/api.ts";
-import {
-    buildAttributeFilterQuery,
-    formatAttributeFilterValue,
-} from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
-import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+import { startSearchResultsExport } from "@/arches_search/SimpleSearch/api.ts";
+import { formatAttributeFilterValue } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import {
     ACTIVE_FILTER_KIND_ATTRIBUTE,
     ACTIVE_FILTER_KIND_MAP,
     ACTIVE_FILTER_KIND_RESOURCE_TYPE,
     ACTIVE_FILTER_KIND_TIME,
+    ADVANCED_QUERY_KEY,
     EXPORT_STATE_IDLE,
     EXPORT_STATE_PENDING,
     RESULTS_SORT_A_TO_Z,
@@ -48,6 +43,7 @@ import {
     RESULTS_SORT_RELEVANCE,
     RESULTS_SORT_Z_TO_A,
     TERM_FILTER_KEY,
+    TIME_FILTER_QUERY_KEY,
 } from "@/arches_search/SimpleSearch/types.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 import { applyPendingSearch } from "@/arches_search/SimpleSearch/utils/apply-pending-search.ts";
@@ -64,13 +60,10 @@ import type {
     ActiveFilter,
     ExportRequest,
     ExportState,
-    NodeFilterConfigNode,
-    ResourceType,
     ResultsSortValue,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-const TIME_FILTER_QUERY_KEY = "timeFilter";
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
 
@@ -80,24 +73,32 @@ const toast = useToast();
 const {
     activeFilters,
     activeGraphs,
+    advancedQuery,
     applySearchDefinition,
+    attributeFilterValues,
     clearAll,
+    clearAttributeFilter,
     clearMapFilter,
     clearQuery,
-    clearTermFilter,
     getExportPayload,
     isSearching,
     mapFilter,
+    nodeFilterConfigNodes,
     queries,
+    savedSearchName,
     search,
     searchResults,
+    setAdvancedQuery,
+    setAttributeFilter,
     setGraphsBySlug,
     setMapFilter,
     setQuery,
     setSort,
     setTermFilter,
+    singleActiveGraph,
+    sort,
     toggleGraph,
-} = provideSearchFilters();
+} = useSearchFilters();
 
 const {
     isIdle,
@@ -134,52 +135,10 @@ const {
 
 const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
 const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
-
-// The export runs in the background; the user hears about its completion
-// through an Arches notification, so this only reports whether it started.
-async function onExportResults(exportRequest: ExportRequest): Promise<void> {
-    exportState.value = EXPORT_STATE_PENDING;
-    try {
-        await startSearchResultsExport({
-            ...getExportPayload(),
-            exportRequest,
-        });
-        toast.add({
-            severity: "success",
-            life: 3000,
-            summary: $gettext("Your export has started."),
-            detail: $gettext(
-                "You will be notified when it is ready to download.",
-            ),
-        });
-    } catch (error) {
-        toast.add({
-            severity: "error",
-            life: 5000,
-            summary: $gettext("Export could not be started."),
-            detail: error instanceof Error ? error.message : undefined,
-        });
-    } finally {
-        exportState.value = EXPORT_STATE_IDLE;
-    }
-}
-
-watch(isExportResultsOpen, (isOpen) => {
-    if (!isOpen) {
-        exportState.value = EXPORT_STATE_IDLE;
-    }
-});
 const graphModels = ref<GraphModel[]>([]);
-const filterValues = ref<Record<string, unknown>>({});
-const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
-const savedSearchName = ref<string | null>(null);
 
 const isSingleGraphSelected = computed<boolean>(
-    () => activeGraphs.value.length === 1,
-);
-
-const singleActiveGraph = computed<ResourceType | null>(() =>
-    isSingleGraphSelected.value ? activeGraphs.value[0] : null,
+    () => singleActiveGraph.value !== null,
 );
 
 const activeGraphId = computed<string | null>(
@@ -190,28 +149,20 @@ const activeGraphLabel = computed<string | null>(
     () => singleActiveGraph.value?.label ?? null,
 );
 
-const activeGraphSlug = computed<string | null>(() => {
-    if (!activeGraphId.value) {
-        return null;
-    }
-
-    const matchingGraph = graphModels.value.find((graphModel) => {
-        return graphModel.graphid === activeGraphId.value;
-    });
-
-    return matchingGraph?.slug ?? null;
-});
+const activeGraphSlug = computed<string | null>(
+    () => singleActiveGraph.value?.slug ?? null,
+);
 
 const timeFilterQuery = computed(
     () => queries.value.get(TIME_FILTER_QUERY_KEY) ?? null,
 );
 
-const hasTimeFilter = computed<boolean>(
-    () => (timeFilterQuery.value?.clauses.length ?? 0) > 0,
+const timeFilterClauses = computed<LiteralClause[]>(
+    () => timeFilterQuery.value?.clauses ?? [],
 );
 
-const selectedTimeFilterClause = computed<LiteralClause | null>(
-    () => timeFilterQuery.value?.clauses[0] ?? null,
+const hasTimeFilter = computed<boolean>(
+    () => timeFilterClauses.value.length > 0,
 );
 
 // The chip row surfaces every active filter, but only term/resource-type
@@ -238,8 +189,8 @@ const resourceTypeActiveFilters = computed<ActiveFilter[]>(() =>
 );
 
 const timeActiveFilter = computed<ActiveFilter | null>(() => {
-    const clause = selectedTimeFilterClause.value;
-    if (!hasTimeFilter.value || !clause) {
+    const clause = timeFilterClauses.value[0];
+    if (!clause) {
         return null;
     }
 
@@ -283,7 +234,7 @@ const attributeActiveFilters = computed<ActiveFilter[]>(() => {
 
         const text = formatAttributeFilterValue(
             node,
-            filterValues.value[node.node_alias],
+            attributeFilterValues.value[node.node_alias],
         );
         if (!text) {
             return [];
@@ -316,17 +267,18 @@ const unrepresentedQueryKeys = computed<string[]>(() => {
 });
 
 const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
-    if (unrepresentedQueryKeys.value.length === 0) {
+    if (unrepresentedQueryKeys.value.length === 0 && !advancedQuery.value) {
         return null;
     }
 
     return {
-        id: "advancedQuery",
+        id: ADVANCED_QUERY_KEY,
         text: savedSearchName.value ?? $gettext("Advanced query"),
         clear: () => {
             for (const filterKey of unrepresentedQueryKeys.value) {
                 clearAttributeFilter(filterKey);
             }
+            setAdvancedQuery(null);
         },
         inverted: false,
         kind: ACTIVE_FILTER_KIND_ATTRIBUTE,
@@ -346,40 +298,28 @@ const allActiveFilters = computed<ActiveFilter[]>(() => [
         : []),
 ]);
 
-watch(
-    () => activeGraphs.value,
-    (graphs) => {
-        // Drop any attribute-filter queries from the previously active graph.
-        const nextGraphSlug = graphs.length === 1 ? graphs[0].slug : null;
-        for (const node of nodeFilterConfigNodes.value) {
-            if (
-                queries.value.get(node.node_alias)?.graph_slug !== nextGraphSlug
-            ) {
-                clearQuery(node.node_alias);
-            }
-        }
-        filterValues.value = {};
+watch(isExportResultsOpen, (isOpen) => {
+    if (!isOpen) {
+        exportState.value = EXPORT_STATE_IDLE;
+    }
+});
 
-        if (graphs.length !== 1) {
-            nodeFilterConfigNodes.value = [];
-            // Attribute/time filters are single-graph features and are
-            // unreachable outside the exactly-one-selected state; clear the
-            // time-filter query explicitly rather than relying on
-            // TimeFilter.vue's own prop watcher, since closeSidePanel()
-            // below unmounts it synchronously (and it may already be
-            // unmounted), so that watcher isn't guaranteed to run.
-            clearQuery(TIME_FILTER_QUERY_KEY);
+// Attribute and time filters are single-graph features, so their panels
+// close once more or fewer than one resource model is selected.
+watch(singleActiveGraph, (graph) => {
+    if (graph) {
+        return;
+    }
+    if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
+        closeSidePanel();
+    }
+});
 
-            if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
-                closeSidePanel();
-            }
-
-            return;
-        }
-
-        void loadNodeFilterConfig(graphs[0].id as string);
-    },
-);
+watch(sort, (nextSort) => {
+    if (!sortSpecsMatch(sortSpecForValue(sortValue.value), nextSort)) {
+        sortValue.value = sortValueForSpecs(nextSort);
+    }
+});
 
 watchEffect(() => {
     void initializeSearch();
@@ -388,10 +328,9 @@ watchEffect(() => {
 onMounted(() => {
     const pendingSearch = usePendingSearchStore().consume();
     if (pendingSearch) {
-        savedSearchName.value = pendingSearch.searchName ?? null;
         applyPendingSearch(pendingSearch, {
             applySearchDefinition,
-            clearTermFilter,
+            clearAll,
             openMapFilter,
             setGraphsBySlug,
             setMapFilter,
@@ -400,35 +339,32 @@ onMounted(() => {
     }
 });
 
-async function loadNodeFilterConfig(graphId: string): Promise<void> {
+// The export runs in the background; the user hears about its completion
+// through an Arches notification, so this only reports whether it started.
+async function onExportResults(exportRequest: ExportRequest): Promise<void> {
+    exportState.value = EXPORT_STATE_PENDING;
     try {
-        const config = await fetchNodeFilterConfig(graphId);
-        nodeFilterConfigNodes.value = config.nodes;
-    } catch (err) {
-        console.error("[SimpleSearch] error loading filter config:", err);
-        nodeFilterConfigNodes.value = [];
-    }
-}
-
-// Each attribute-filter widget emits a datatype-specific value; the registry
-// turns it into a query (or null to clear). Query-shape logic lives in the
-// per-datatype builders, so this handler stays datatype-agnostic.
-function onAttributeFilterChange(nodeAlias: string, value: unknown): void {
-    filterValues.value = { ...filterValues.value, [nodeAlias]: value };
-
-    const node = nodeFilterConfigNodes.value.find(
-        (candidate) => candidate.node_alias === nodeAlias,
-    );
-    const graphSlug = activeGraphSlug.value;
-    if (!node || !graphSlug) {
-        return;
-    }
-
-    const query = buildAttributeFilterQuery(node, value, graphSlug);
-    if (query) {
-        setQuery(nodeAlias, query);
-    } else {
-        clearQuery(nodeAlias);
+        await startSearchResultsExport({
+            ...getExportPayload(),
+            exportRequest,
+        });
+        toast.add({
+            severity: "success",
+            life: 3000,
+            summary: $gettext("Your export has started."),
+            detail: $gettext(
+                "You will be notified when it is ready to download.",
+            ),
+        });
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("Export could not be started."),
+            detail: error instanceof Error ? error.message : undefined,
+        });
+    } finally {
+        exportState.value = EXPORT_STATE_IDLE;
     }
 }
 
@@ -471,6 +407,23 @@ function sortSpecForValue(value: ResultsSortValue | null): SortSpec[] {
         default:
             return [];
     }
+}
+
+function sortValueForSpecs(specs: SortSpec[]): ResultsSortValue | null {
+    const sortValues: ResultsSortValue[] = [
+        RESULTS_SORT_A_TO_Z,
+        RESULTS_SORT_Z_TO_A,
+        RESULTS_SORT_NEWEST,
+        RESULTS_SORT_OLDEST,
+    ];
+    const matchingValue = sortValues.find((candidate) =>
+        sortSpecsMatch(sortSpecForValue(candidate), specs),
+    );
+    return matchingValue ?? RESULTS_SORT_RELEVANCE;
+}
+
+function sortSpecsMatch(left: SortSpec[], right: SortSpec[]): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {
@@ -520,26 +473,18 @@ function formatTimeFilterLabel(clause: LiteralClause): string {
     return `${fromText} – ${dayjs(to).format("MMM D, YYYY")}`;
 }
 
-function clearAttributeFilter(nodeAlias: string): void {
-    clearQuery(nodeAlias);
-    const { [nodeAlias]: _removedValue, ...remainingFilterValues } =
-        filterValues.value;
-    filterValues.value = remainingFilterValues;
-}
-
 function onClearAll(): void {
     clearAll();
-    filterValues.value = {};
-    savedSearchName.value = null;
 }
 
 async function onRunSavedQuery(
     queryDefinition: Record<string, unknown>,
     searchName: string,
 ): Promise<void> {
-    filterValues.value = {};
-    savedSearchName.value = searchName;
-    await applySearchDefinition(parseSearchDefinition(queryDefinition));
+    await applySearchDefinition(
+        parseSearchDefinition(queryDefinition),
+        searchName,
+    );
 }
 </script>
 
@@ -620,7 +565,7 @@ async function onRunSavedQuery(
                             :graph-slug="activeGraphSlug"
                             :graph-id="activeGraphId"
                             :graph-label="activeGraphLabel"
-                            :model-value="selectedTimeFilterClause"
+                            :model-value="timeFilterClauses"
                             @update:model-value="onTimeFilterUpdate"
                             @remove="onRemoveTimeFilter"
                             @close="closeSidePanel()"
@@ -628,8 +573,8 @@ async function onRunSavedQuery(
                         <AttributeFilters
                             v-else-if="isAttributeFiltersActive"
                             :nodes="nodeFilterConfigNodes"
-                            :values="filterValues"
-                            @update:value="onAttributeFilterChange"
+                            :values="attributeFilterValues"
+                            @update:value="setAttributeFilter"
                             @close="closeSidePanel()"
                         />
                         <SavedSearchPanel

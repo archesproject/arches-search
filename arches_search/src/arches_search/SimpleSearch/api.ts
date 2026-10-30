@@ -25,7 +25,7 @@ import type {
 
 export async function createSearchMVTContext(params: {
     terms?: SearchRequestTerm[];
-    query?: GroupPayload;
+    queries?: GroupPayload[];
     graphSlugs?: string[];
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
@@ -33,7 +33,7 @@ export async function createSearchMVTContext(params: {
 }): Promise<{ context_id: string }> {
     const requestPayload = buildSearchApiRequestBody({
         terms: params.terms ?? [],
-        query: params.query,
+        queries: params.queries,
         graphSlugs: params.graphSlugs ?? [],
         mapFilter: params.mapFilter ?? null,
         dateRange: params.dateRange ?? null,
@@ -57,7 +57,7 @@ export async function createSearchMVTContext(params: {
 
 export async function fetchSearchResults({
     terms = [],
-    query = {} as GroupPayload,
+    queries = [],
     graphSlugs = [],
     mapFilter = null,
     dateRange = null,
@@ -66,7 +66,7 @@ export async function fetchSearchResults({
     sort,
 }: {
     terms?: SearchRequestTerm[];
-    query?: GroupPayload;
+    queries?: GroupPayload[];
     graphSlugs?: string[];
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
@@ -76,7 +76,7 @@ export async function fetchSearchResults({
 } = {}): Promise<SearchResults> {
     const requestPayload = buildSearchApiRequestBody({
         terms,
-        query,
+        queries,
         graphSlugs,
         mapFilter,
         dateRange,
@@ -280,7 +280,7 @@ export async function exportSearchResults({
 
 export async function startSearchResultsExport({
     terms = [],
-    query,
+    queries,
     graphSlugs = [],
     mapFilter = null,
     dateRange = null,
@@ -288,7 +288,7 @@ export async function startSearchResultsExport({
     exportRequest,
 }: {
     terms?: SearchRequestTerm[];
-    query?: GroupPayload;
+    queries?: GroupPayload[];
     graphSlugs?: string[];
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
@@ -297,7 +297,7 @@ export async function startSearchResultsExport({
 }): Promise<void> {
     const requestPayload = buildSearchApiRequestBody({
         terms,
-        query,
+        queries,
         graphSlugs,
         mapFilter,
         dateRange,

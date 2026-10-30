@@ -30,6 +30,7 @@ import {
     getDateBoundsForGraphId,
     getNodesForGraphId,
 } from "@/arches_search/AdvancedSearch/api.ts";
+import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import { HISTORICAL_CUTOFF_YEAR } from "@/arches_search/SimpleSearch/components/TimeFilter/constants.ts";
 
@@ -40,7 +41,7 @@ const { graphSlug, graphId, graphLabel, modelValue } = defineProps<{
     graphSlug: string | null;
     graphId: string | null;
     graphLabel: string | null;
-    modelValue: LiteralClause | null;
+    modelValue: LiteralClause[];
 }>();
 
 const emit = defineEmits<{
@@ -52,13 +53,13 @@ const emit = defineEmits<{
 const { $gettext } = useGettext();
 
 const selectedRange = ref<[Date, Date]>([new Date(), new Date()]);
-const selectedNodeAliases = ref<string[]>([]);
+const selectedNodeAliases = ref<string[]>(nodeAliasesFromClauses(modelValue));
 const graphNodes = ref<TimeFilterNodeSummary[]>([]);
 const isLoadingNodes = ref(false);
 const isLoadingBounds = ref(false);
 const noBoundsData = ref(false);
 const hasGraphDateData = ref(true);
-const isUserInitiated = ref(false);
+const isUserInitiated = ref(modelValue.length > 0);
 const sliderBounds = ref<[Date, Date]>([new Date(), new Date()]);
 
 const isLoading = computed<boolean>(
@@ -104,25 +105,30 @@ const noBoundsDataMessage = computed<string>(() => {
     return $gettext("This resource type has no date data.");
 });
 
-watch(
-    [() => graphSlug, selectedRange, selectedNodeAliases, isUserInitiated],
-    () => emit("update:modelValue", buildClauses()),
-    { immediate: true },
-);
-
+// Only the user's own edits are emitted. Echoing a change that arrived through
+// modelValue back out would re-create a filter the parent had just cleared.
 watch(
     () => modelValue,
-    (clause) => {
-        if (clause) isUserInitiated.value = true;
+    (clauses) => {
+        isUserInitiated.value = clauses.length > 0;
+
+        const restoredNodeAliases = nodeAliasesFromClauses(clauses);
+        if (
+            !nodeAliasListsMatch(restoredNodeAliases, selectedNodeAliases.value)
+        ) {
+            selectedNodeAliases.value = restoredNodeAliases;
+        }
 
         const [boundsStart, boundsEnd] = sliderBounds.value;
+        const firstClause = clauses[0];
 
         let from: Date;
         let to: Date;
 
-        if (clause) {
-            from = parseStoredDate(clause.operands[0]?.value) ?? boundsStart;
-            to = parseStoredDate(clause.operands[1]?.value) ?? from;
+        if (firstClause) {
+            from =
+                parseStoredDate(firstClause.operands[0]?.value) ?? boundsStart;
+            to = parseStoredDate(firstClause.operands[1]?.value) ?? from;
         } else {
             from = boundsStart;
             to = boundsEnd;
@@ -142,8 +148,10 @@ watch(
 watch(
     () => graphId,
     async (incomingGraphId, previousGraphId) => {
-        selectedNodeAliases.value = [];
-        isUserInitiated.value = false;
+        if (previousGraphId) {
+            selectedNodeAliases.value = [];
+            isUserInitiated.value = false;
+        }
 
         if (!incomingGraphId) {
             graphNodes.value = [];
@@ -161,8 +169,8 @@ watch(
             getNodesForGraphId(incomingGraphId),
             loadBoundsForAliases(
                 incomingGraphId,
-                [],
-                Boolean(previousGraphId) || !modelValue,
+                selectedNodeAliases.value,
+                Boolean(previousGraphId) || modelValue.length === 0,
             ),
         ]);
 
@@ -222,16 +230,35 @@ function buildClauses(): LiteralClause[] {
     );
 }
 
+function nodeAliasesFromClauses(clauses: LiteralClause[]): string[] {
+    return clauses
+        .filter((clause) => clause.subject.type === ClauseSubjectTypeToken.NODE)
+        .map((clause) => clause.subject.node_alias);
+}
+
+function nodeAliasListsMatch(left: string[], right: string[]): boolean {
+    return (
+        left.length === right.length &&
+        left.every((nodeAlias, index) => nodeAlias === right[index])
+    );
+}
+
+function emitClauses(): void {
+    emit("update:modelValue", buildClauses());
+}
+
 function onDateFromChange(value: unknown): void {
     if (!(value instanceof Date)) return;
     isUserInitiated.value = true;
     selectedRange.value = normalizeRange(value, selectedRange.value[1]);
+    emitClauses();
 }
 
 function onDateToChange(value: unknown): void {
     if (!(value instanceof Date)) return;
     isUserInitiated.value = true;
     selectedRange.value = normalizeRange(selectedRange.value[0], value);
+    emitClauses();
 }
 
 function onYearFromChange(year: number | null): void {
@@ -241,6 +268,7 @@ function onYearFromChange(year: number | null): void {
         startOfYear(year),
         selectedRange.value[1],
     );
+    emitClauses();
 }
 
 function onYearToChange(year: number | null): void {
@@ -250,6 +278,7 @@ function onYearToChange(year: number | null): void {
         selectedRange.value[0],
         endOfYear(year),
     );
+    emitClauses();
 }
 
 function onSliderUpdate(offsets: [number, number]): void {
@@ -258,12 +287,14 @@ function onSliderUpdate(offsets: [number, number]): void {
         addDays(sliderBounds.value[0], offsets[0]),
         addDays(sliderBounds.value[0], offsets[1]),
     ];
+    emitClauses();
 }
 
 async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
     isUserInitiated.value = true;
     selectedNodeAliases.value = aliases;
     if (graphId) await loadBoundsForAliases(graphId, aliases, true);
+    emitClauses();
 }
 </script>
 

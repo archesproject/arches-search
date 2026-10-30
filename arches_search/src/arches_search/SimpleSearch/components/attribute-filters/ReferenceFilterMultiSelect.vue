@@ -80,7 +80,7 @@ function onSelectionChange(value: ReferenceFilterValue): void {
     <div class="reference-filter">
         <MultiSelect
             class="reference-filter-select"
-            data-key="id"
+            data-key="label"
             :input-id="node.node_alias"
             :model-value="modelValue ?? []"
             :options="options"

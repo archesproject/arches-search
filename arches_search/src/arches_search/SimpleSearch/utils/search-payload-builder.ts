@@ -111,13 +111,12 @@ function buildSearchModelClauses(
 }
 
 function buildAdvancedSearchQueries(
-    query: GroupPayload | undefined,
+    baseQueries: GroupPayload[],
     resourceFieldFilters: ResourceFieldFilter[] | null | undefined,
     mapFilter: FeatureCollection | null,
     dateRange: DateRangeFilter | null,
     graphSlugs: string[],
 ): Array<GroupPayload | Record<string, unknown>> | null {
-    const baseQuery = query && Object.keys(query).length > 0 ? query : null;
     const resourceFieldClauses: SearchClause[] = (
         resourceFieldFilters ?? []
     ).map((filter) => ({
@@ -137,15 +136,15 @@ function buildAdvancedSearchQueries(
         Boolean(dateRange);
 
     if (!hasClausesToPlace) {
-        return baseQuery ? [baseQuery] : null;
+        return baseQueries.length > 0 ? baseQueries : null;
     }
 
     // A clause only filters the graph whose payload it sits in, so each is
     // repeated per resource model. The advanced query nests rather than merges,
     // so it stays AND-ed even when its own logic is OR.
     let targetSlugs = graphSlugs;
-    if (targetSlugs.length === 0 && baseQuery) {
-        targetSlugs = [baseQuery.graph_slug];
+    if (targetSlugs.length === 0) {
+        targetSlugs = baseQueries.map((baseQuery) => baseQuery.graph_slug);
     }
     if (targetSlugs.length === 0) {
         return null;
@@ -159,8 +158,9 @@ function buildAdvancedSearchQueries(
             ...resourceFieldClauses,
             ...buildSearchModelClauses(graphSlug, mapFilter, dateRange),
         ],
-        groups:
-            baseQuery && baseQuery.graph_slug === graphSlug ? [baseQuery] : [],
+        groups: baseQueries.filter(
+            (baseQuery) => baseQuery.graph_slug === graphSlug,
+        ),
         aggregations: [],
         relationship: null,
     }));
@@ -169,6 +169,7 @@ function buildAdvancedSearchQueries(
 export function buildSearchApiRequestBody({
     terms,
     query,
+    queries,
     graphSlugs,
     mapFilter,
     dateRange,
@@ -177,7 +178,9 @@ export function buildSearchApiRequestBody({
     sort,
 }: {
     terms: SearchRequestTerm[];
+    // One query for one graph; `queries` takes one per graph.
     query?: GroupPayload;
+    queries?: GroupPayload[];
     graphSlugs: string[];
     mapFilter: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
@@ -185,11 +188,16 @@ export function buildSearchApiRequestBody({
     page?: number;
     sort?: SortSpec[];
 }): Record<string, unknown> {
+    let baseQueries: GroupPayload[] = queries ?? [];
+    if (!queries && query) {
+        baseQueries = [query];
+    }
+
     const requestPayload: Record<string, unknown> = {
         graph_slugs: graphSlugs.length > 0 ? graphSlugs : null,
         term_search: buildTermSearch(terms),
         advanced_search_queries: buildAdvancedSearchQueries(
-            query,
+            baseQueries,
             resourceFieldFilters,
             mapFilter,
             dateRange ?? null,

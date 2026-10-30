@@ -6,10 +6,13 @@ import Button from "openvue/button";
 import Card from "openvue/card";
 
 import { routeNames } from "@/arches_search/routes.ts";
+import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
 
 const router = useRouter();
 const route = useRoute();
+
+provideSearchFilters();
 
 router.afterEach((to, _from, failure) => {
     if (to.name !== routeNames.simpleSearch || failure) {

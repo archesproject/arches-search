@@ -40,4 +40,7 @@ export interface AttributeFilterEntry {
     // the active-filters row) — kept per-datatype here alongside buildQuery
     // since both are just different views of the same datatype-specific value.
     formatValue(value: unknown): string;
+    // The inverse of buildQuery, for a query restored from a saved search
+    // rather than built from this widget.
+    parseValue(query: GroupPayload): unknown;
 }
