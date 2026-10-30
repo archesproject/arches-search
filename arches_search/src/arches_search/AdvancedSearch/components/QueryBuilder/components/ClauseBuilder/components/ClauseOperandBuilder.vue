@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, watchEffect } from "vue";
 
 import GenericWidget from "@/arches_vue_components/generics/GenericWidget/GenericWidget.vue";
+
+import {
+    isLabelList,
+    referenceValuesForLabels,
+} from "@/arches_search/AdvancedSearch/utils/reference-labels.ts";
 
 import type { AliasedNodeData } from "@/arches_vue_components/types.ts";
 import type { GraphModel, Node } from "@/arches_search/AdvancedSearch/types.ts";
 
 const OPERAND_TYPE_LITERAL = "LITERAL";
+const DATATYPE_REFERENCE = "reference";
 const UPDATE_MODEL_VALUE = "update:modelValue" as const;
 
 type OperandPayloadTypeToken = typeof OPERAND_TYPE_LITERAL | "PATH";
@@ -37,6 +43,8 @@ const initialValue = ref<unknown>(
 const initialAliasedNodeData = ref<AliasedNodeData | undefined>(
     buildInitialAliasedNodeData(),
 );
+const referenceLabelLookup = labelsToLookUp();
+const isLookingUpLabels = ref(referenceLabelLookup !== null);
 
 watch(
     () => operandType,
@@ -45,6 +53,45 @@ watch(
         emitUpdatedOperand();
     },
 );
+
+watchEffect(async () => {
+    if (!referenceLabelLookup) {
+        return;
+    }
+    try {
+        const nodeValue = await referenceValuesForLabels(
+            subjectTerminalGraph.slug,
+            subjectTerminalNode.alias,
+            referenceLabelLookup.listId,
+            referenceLabelLookup.labels,
+        );
+        initialAliasedNodeData.value = {
+            node_value: nodeValue,
+            display_value: referenceLabelLookup.labels.join(", "),
+            details: [],
+        };
+    } catch (error) {
+        console.error(error);
+    } finally {
+        isLookingUpLabels.value = false;
+    }
+});
+
+function labelsToLookUp(): { labels: string[]; listId: string } | null {
+    const value = modelValue?.value;
+    if (
+        operandType !== OPERAND_TYPE_LITERAL ||
+        subjectTerminalNode.datatype !== DATATYPE_REFERENCE ||
+        !isLabelList(value)
+    ) {
+        return null;
+    }
+    const listId = subjectTerminalNode.config.controlledList;
+    if (typeof listId !== "string") {
+        return null;
+    }
+    return { labels: value, listId };
+}
 
 function buildInitialAliasedNodeData(): AliasedNodeData | undefined {
     if (operandType !== OPERAND_TYPE_LITERAL || modelValue?.value == null) {
@@ -92,6 +139,7 @@ function handleGenericWidgetUpdate(
     <div class="clause-operand-builder">
         <div class="clause-operand-editor">
             <GenericWidget
+                v-if="!isLookingUpLabels"
                 mode="edit"
                 :graph-slug="subjectTerminalGraph.slug"
                 :node-alias="subjectTerminalNode.alias"

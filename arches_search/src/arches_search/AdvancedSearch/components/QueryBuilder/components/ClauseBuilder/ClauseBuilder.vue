@@ -190,7 +190,9 @@ watch(
 
         subjectNode.value =
             allNodesForGraph.find(
-                (graphNode) => graphNode.alias === terminalNodeAlias,
+                (graphNode) =>
+                    graphNode.alias === terminalNodeAlias &&
+                    graphNode.selectable !== false,
             ) ?? null;
     },
     { immediate: true },

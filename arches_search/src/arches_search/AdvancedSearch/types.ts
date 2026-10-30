@@ -55,6 +55,8 @@ export interface Node {
     nodegroup_id: string;
     nodeid: string;
     ontologyclass: string | null;
+    // False for a card heading listed beside its top node, under the same alias.
+    selectable?: boolean;
     sortorder: number;
     source_identifier_id: number | null;
     sourcebranchpublication_id: string | null;

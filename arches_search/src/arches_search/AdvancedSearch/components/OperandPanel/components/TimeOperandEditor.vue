@@ -131,7 +131,11 @@ watch(
             }
             if (isNodeSubject.value) {
                 subjectNode.value =
-                    nodes.find((node) => node.alias === nodeAlias) ?? null;
+                    nodes.find(
+                        (node) =>
+                            node.alias === nodeAlias &&
+                            node.selectable !== false,
+                    ) ?? null;
             }
         } catch (error) {
             console.error(error);

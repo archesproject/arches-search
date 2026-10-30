@@ -29,6 +29,7 @@ type NodeWithLabel = {
     alias: string;
     name: string;
     card_x_node_x_widget_label?: string;
+    selectable?: boolean;
 };
 
 const graphs = inject<Ref<GraphModel[]>>("graphs")!;
@@ -110,7 +111,9 @@ watch(
         try {
             const nodes = await getNodesForGraphId(graph.graphid);
             const node = nodes.find(
-                (candidate) => candidate.alias === subject.node_alias,
+                (candidate) =>
+                    candidate.alias === subject.node_alias &&
+                    candidate.selectable !== false,
             );
             fieldLabel.value =
                 node?.card_x_node_x_widget_label || node?.name || "";
