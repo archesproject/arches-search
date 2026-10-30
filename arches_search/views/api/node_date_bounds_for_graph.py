@@ -61,11 +61,15 @@ class NodeDateBoundsForGraphAPI(APIBase):
             node_alias=OuterRef("node_alias"),
             value__gte=UNKNOWN_YEAR_SORTABLE_DATE,
         )
-        date_search_bounds = (
+        # Read off the index from each end, so only the few values skipped
+        # there are checked, rather than aggregating every value of the node.
+        known_date_values = (
             DateSearch.objects.filter(**node_alias_filter)
             .exclude(Exists(has_unknown_year))
-            .aggregate(min_value=Min("value"), max_value=Max("value"))
+            .values_list("value", flat=True)
         )
+        earliest_date_value = known_date_values.order_by("value").first()
+        latest_date_value = known_date_values.order_by("-value").first()
         date_range_search_bounds = (
             DateRangeSearch.objects.filter(**node_alias_filter)
             .exclude(end_value__gte=UNKNOWN_YEAR_SORTABLE_DATE)
@@ -77,7 +81,7 @@ class NodeDateBoundsForGraphAPI(APIBase):
         min_candidates = [
             candidate
             for candidate in [
-                date_search_bounds["min_value"],
+                earliest_date_value,
                 date_range_search_bounds["min_start_value"],
             ]
             if candidate is not None
@@ -85,7 +89,7 @@ class NodeDateBoundsForGraphAPI(APIBase):
         max_candidates = [
             candidate
             for candidate in [
-                date_search_bounds["max_value"],
+                latest_date_value,
                 date_range_search_bounds["max_end_value"],
             ]
             if candidate is not None
