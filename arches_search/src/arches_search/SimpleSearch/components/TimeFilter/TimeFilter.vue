@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import dayjs from "dayjs";
+import { isEqual } from "es-toolkit";
 import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
@@ -61,6 +62,9 @@ const noBoundsData = ref(false);
 const hasGraphDateData = ref(true);
 const isUserInitiated = ref(modelValue.length > 0);
 const sliderBounds = ref<[Date, Date]>([new Date(), new Date()]);
+// What this filter last sent; the same clauses coming back through modelValue
+// are its own echo, not a change to apply.
+let lastEmittedClauses: LiteralClause[] | null = null;
 
 const isLoading = computed<boolean>(
     () => isLoadingNodes.value || isLoadingBounds.value,
@@ -87,8 +91,13 @@ const isSingleDay = computed<boolean>(() =>
     dayjs(sliderBounds.value[0]).isSame(sliderBounds.value[1], "day"),
 );
 
-const fromYear = computed<number>(() => selectedRange.value[0].getFullYear());
-const toYear = computed<number>(() => selectedRange.value[1].getFullYear());
+// The slider's handles may be dragged past each other; dates read in order.
+const sortedRange = computed<[Date, Date]>(() =>
+    normalizeRange(selectedRange.value[0], selectedRange.value[1]),
+);
+
+const fromYear = computed<number>(() => sortedRange.value[0].getFullYear());
+const toYear = computed<number>(() => sortedRange.value[1].getFullYear());
 const isHistoricalFrom = computed<boolean>(
     () => fromYear.value < HISTORICAL_CUTOFF_YEAR,
 );
@@ -110,6 +119,12 @@ const noBoundsDataMessage = computed<string>(() => {
 watch(
     () => modelValue,
     (clauses) => {
+        if (
+            lastEmittedClauses !== null &&
+            isEqual(clauses, lastEmittedClauses)
+        ) {
+            return;
+        }
         isUserInitiated.value = clauses.length > 0;
 
         const restoredNodeAliases = nodeAliasesFromClauses(clauses);
@@ -244,20 +259,21 @@ function nodeAliasListsMatch(left: string[], right: string[]): boolean {
 }
 
 function emitClauses(): void {
-    emit("update:modelValue", buildClauses());
+    lastEmittedClauses = buildClauses();
+    emit("update:modelValue", lastEmittedClauses);
 }
 
 function onDateFromChange(value: unknown): void {
     if (!(value instanceof Date)) return;
     isUserInitiated.value = true;
-    selectedRange.value = normalizeRange(value, selectedRange.value[1]);
+    selectedRange.value = normalizeRange(value, sortedRange.value[1]);
     emitClauses();
 }
 
 function onDateToChange(value: unknown): void {
     if (!(value instanceof Date)) return;
     isUserInitiated.value = true;
-    selectedRange.value = normalizeRange(selectedRange.value[0], value);
+    selectedRange.value = normalizeRange(sortedRange.value[0], value);
     emitClauses();
 }
 
@@ -266,7 +282,7 @@ function onYearFromChange(year: number | null): void {
     isUserInitiated.value = true;
     selectedRange.value = normalizeRange(
         startOfYear(year),
-        selectedRange.value[1],
+        sortedRange.value[1],
     );
     emitClauses();
 }
@@ -274,10 +290,7 @@ function onYearFromChange(year: number | null): void {
 function onYearToChange(year: number | null): void {
     if (year === null) return;
     isUserInitiated.value = true;
-    selectedRange.value = normalizeRange(
-        selectedRange.value[0],
-        endOfYear(year),
-    );
+    selectedRange.value = normalizeRange(sortedRange.value[0], endOfYear(year));
     emitClauses();
 }
 
@@ -372,7 +385,7 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                         />
                         <DatePicker
                             v-else
-                            :model-value="selectedRange[0]"
+                            :model-value="sortedRange[0]"
                             class="time-filter-date-picker"
                             :placeholder="$gettext('From...')"
                             :show-icon="true"
@@ -393,7 +406,7 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                         />
                         <DatePicker
                             v-else
-                            :model-value="selectedRange[1]"
+                            :model-value="sortedRange[1]"
                             class="time-filter-date-picker"
                             :placeholder="$gettext('To...')"
                             :show-icon="true"
