@@ -21,6 +21,9 @@ const { $gettext } = useGettext();
 const hasActiveFilters = computed(() => activeFilters.length > 0);
 
 function editTitle(activeFilter: ActiveFilter): string | undefined {
+    if (activeFilter.inactiveNote) {
+        return activeFilter.inactiveNote;
+    }
     if (!activeFilter.onEdit) {
         return undefined;
     }
@@ -68,6 +71,7 @@ function clearAllFilters(): void {
             :class="[
                 'filter-chip--' + activeFilter.kind,
                 { 'filter-chip--editable': activeFilter.onEdit != null },
+                { 'filter-chip-inactive': activeFilter.inactiveNote },
             ]"
             :title="editTitle(activeFilter)"
             @click="onChipClick(activeFilter)"
@@ -77,6 +81,12 @@ function clearAllFilters(): void {
                 <span class="fc-category">{{ activeFilter.category }}</span>
                 <span class="fc-sep">·</span>
                 <span class="fc-value">{{ activeFilter.text }}</span>
+                <span
+                    v-if="activeFilter.inactiveNote"
+                    class="fc-inactive"
+                >
+                    {{ $gettext("not applied") }}
+                </span>
             </span>
             <span
                 class="fc-dismiss"
@@ -235,6 +245,14 @@ function clearAllFilters(): void {
     background: var(--arches-search-filter-record-bg);
     border-color: var(--arches-search-filter-record-border);
     color: var(--arches-search-filter-record-text);
+}
+
+.filter-chip.filter-chip-inactive {
+    opacity: 0.55;
+}
+
+.filter-chip-inactive .fc-inactive {
+    font-style: italic;
 }
 
 .clear-all-button {

@@ -84,6 +84,8 @@ export interface ActiveFilter {
     icon: string;
     onEdit?: () => void;
     options?: Record<string, unknown>;
+    // Set when the filter is kept but not sent with the search; says why.
+    inactiveNote?: string;
 }
 
 export const RESULTS_SORT_RELEVANCE = "relevance";

@@ -102,6 +102,7 @@ const {
     singleActiveGraph,
     sort,
     toggleGraph,
+    unrepresentedQueryKeys,
 } = useSearchFilters();
 
 const {
@@ -259,17 +260,6 @@ const attributeActiveFilters = computed<ActiveFilter[]>(() => {
     });
 });
 
-const unrepresentedQueryKeys = computed<string[]>(() => {
-    const representedKeys = new Set<string>([
-        TIME_FILTER_QUERY_KEY,
-        ...attributeActiveFilters.value.map((filter) => filter.id),
-    ]);
-
-    return [...queries.value.keys()].filter(
-        (filterKey) => !representedKeys.has(filterKey),
-    );
-});
-
 const unrepresentedQueriesActiveFilter = computed<ActiveFilter | null>(() => {
     if (unrepresentedQueryKeys.value.length === 0) {
         return null;
@@ -300,6 +290,19 @@ const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
         graphModels.value.find(
             (graphModel) => graphModel.slug === appliedQuery.graph_slug,
         )?.name ?? appliedQuery.graph_slug;
+    const isModelSearched =
+        activeGraphs.value.length === 0 ||
+        activeGraphs.value.some(
+            (graph) => graph.slug === appliedQuery.graph_slug,
+        );
+
+    let inactiveNote: string | undefined;
+    if (!isModelSearched) {
+        inactiveNote = $gettext(
+            "Not applied while %{model} is not selected. Select it to apply the advanced query.",
+            { model: graphName },
+        );
+    }
 
     return {
         id: ADVANCED_QUERY_KEY,
@@ -310,6 +313,7 @@ const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
         category: $gettext("Advanced search"),
         icon: "pi pi-sliders-h",
         onEdit: openAdvancedSearch,
+        inactiveNote,
     };
 });
 
