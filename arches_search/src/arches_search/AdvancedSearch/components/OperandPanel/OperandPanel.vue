@@ -9,7 +9,7 @@ import { removeVueExtension } from "@/arches_vue_components/generics/GenericWidg
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import {
     findQueryBuilderItem,
-    getClauseDatatype,
+    getClauseOperandComponent,
     listQueryBuilderRows,
 } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 import {
@@ -60,7 +60,7 @@ const panelOperandComponent = computed<AdvancedSearchOperandComponent | null>(
         if (!panelRow.value) {
             return null;
         }
-        return operandComponentOf(panelRow.value);
+        return getClauseOperandComponent(panelRow.value.clause, lookups);
     },
 );
 
@@ -84,7 +84,11 @@ const switcherOptions = computed(() => {
         return [];
     }
     return listQueryBuilderRows(root.value)
-        .filter((row) => operandComponentOf(row)?.slug === panelSlug)
+        .filter(
+            (row) =>
+                getClauseOperandComponent(row.clause, lookups)?.slug ===
+                panelSlug,
+        )
         .map((row, rowIndex) => ({
             label: String(rowIndex + 1),
             value: row.id,
@@ -123,16 +127,6 @@ watch(
     },
     { immediate: true },
 );
-
-function operandComponentOf(
-    row: QueryBuilderRow,
-): AdvancedSearchOperandComponent | null {
-    const datatype = getClauseDatatype(row.clause, lookups);
-    if (!datatype) {
-        return null;
-    }
-    return lookups.getOperandComponent(datatype) ?? null;
-}
 
 function onSwitchRow(rowId: string | null): void {
     if (rowId) {

@@ -318,6 +318,9 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    // Each attribute-filter widget emits a datatype-specific value; the registry
+    // turns it into a query (or null to clear). Query-shape logic lives in the
+    // per-datatype builders, so this handler stays datatype-agnostic.
     function setAttributeFilter(nodeAlias: string, value: unknown): void {
         storedAttributeFilterValues.value = {
             ...storedAttributeFilterValues.value,
@@ -354,8 +357,6 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
-    // Advanced Search runs its own search over the query alone; Simple Search
-    // searches again with it when next opened.
     function foldUnrepresentedQueriesIntoAdvancedQuery(): void {
         const unrepresentedQueries = new Map(
             [...queries.value].filter(([filterKey]) =>
@@ -377,6 +378,8 @@ function createSearchFilters(): SearchFilters {
         setAdvancedQuery(folded.advancedQuery);
     }
 
+    // Advanced Search runs its own search over the query alone; Simple Search
+    // searches again with it when next opened.
     function applyAdvancedQuery(payload: GroupPayload | null): void {
         advancedQuery.value = payload;
     }

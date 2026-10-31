@@ -150,14 +150,14 @@ const { $gettext } = useGettext();
                         <p>
                             {{
                                 $gettext(
-                                    "Search runs the query. Describe Query shows it in plain language.",
+                                    "Search runs the query. The line beside Clear all describes it as you build it, and Describe Query shows it in full.",
                                 )
                             }}
                         </p>
                         <p>
                             {{
                                 $gettext(
-                                    "Simple Search also uses the query, alongside its own filters, until you remove it there.",
+                                    "Save Search keeps the query on its own, and Export Results exports what Search found. Simple Search also uses the query, alongside its own filters, while its model is selected there.",
                                 )
                             }}
                         </p>

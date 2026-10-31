@@ -67,6 +67,7 @@ export function useQueryDescription({
                 clearTimeout(fetchTimeout);
             }
             if (!currentPayload) {
+                isLoading.value = false;
                 return;
             }
             isLoading.value = true;

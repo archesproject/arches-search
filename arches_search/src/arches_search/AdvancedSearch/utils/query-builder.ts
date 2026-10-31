@@ -16,6 +16,7 @@ import {
 
 import type { FeatureCollection } from "geojson";
 import type {
+    AdvancedSearchOperandComponent,
     GroupPayload,
     LiteralClause,
     LiteralOperand,
@@ -101,6 +102,17 @@ export function getClauseDatatype(
         clause.subject.graph_slug,
         clause.subject.node_alias,
     );
+}
+
+export function getClauseOperandComponent(
+    clause: LiteralClause,
+    lookups: QueryBuilderLookups,
+): AdvancedSearchOperandComponent | null {
+    const datatype = getClauseDatatype(clause, lookups);
+    if (!datatype) {
+        return null;
+    }
+    return lookups.getOperandComponent(datatype) ?? null;
 }
 
 export function isClauseComplete(
@@ -604,8 +616,8 @@ function isEmptyOperand(operand: LiteralOperand | undefined): boolean {
     if (Array.isArray(value)) {
         return value.length === 0;
     }
-    if (typeof value === "object" && "features" in value) {
-        return !Array.isArray(value.features) || value.features.length === 0;
+    if (isFeatureCollection(value)) {
+        return value.features.length === 0;
     }
     return false;
 }

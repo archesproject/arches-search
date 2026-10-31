@@ -31,8 +31,6 @@ const { totalResults } = defineProps<{
     hideFiltersButton?: boolean;
     hideTimeButton?: boolean;
     hideMapButton?: boolean;
-    hideSavedSearchesButton?: boolean;
-    hideExportResultsButton?: boolean;
 }>();
 
 const { $gettext } = useGettext();
@@ -105,7 +103,6 @@ defineEmits<{
                 @click="$emit('toggle-map')"
             />
             <Button
-                v-if="!hideSavedSearchesButton"
                 :label="$gettext('Save Search')"
                 :icon="
                     showSavedSearches ? 'pi pi-bookmark-fill' : 'pi pi-bookmark'
@@ -116,7 +113,6 @@ defineEmits<{
                 @click="$emit('toggle-saved-searches')"
             />
             <Button
-                v-if="!hideExportResultsButton"
                 :label="$gettext('Export Results')"
                 icon="pi pi-download"
                 icon-pos="left"

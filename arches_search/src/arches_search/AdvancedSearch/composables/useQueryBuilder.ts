@@ -48,9 +48,9 @@ interface QueryBuilderContext {
     canGroupSelection: ComputedRef<boolean>;
     startQuery(graphSlug: string): void;
     clearQuery(): void;
-    addRow(containerId: string): string | null;
-    addGroup(containerId: string): string | null;
-    addRelatedGroup(containerId: string): string | null;
+    addRow(containerId: string): void;
+    addGroup(containerId: string): void;
+    addRelatedGroup(containerId: string): void;
     removeItem(itemId: string): void;
     toggleGroupLogic(containerId: string): void;
     setGroupLabel(containerId: string, label: string): void;
@@ -204,31 +204,18 @@ function createQueryBuilder({
         setAdvancedQueryDraft(null);
     }
 
-    function addRowToContainer(containerId: string): string | null {
-        if (!root.value) {
-            return null;
-        }
-        const result = addRow(root.value, containerId);
-        setAdvancedQueryDraft(result.root);
-        return result.rowId;
+    function addRowToContainer(containerId: string): void {
+        updateRoot((currentRoot) => addRow(currentRoot, containerId).root);
     }
 
-    function addGroupToContainer(containerId: string): string | null {
-        if (!root.value) {
-            return null;
-        }
-        const result = addGroup(root.value, containerId);
-        setAdvancedQueryDraft(result.root);
-        return result.groupId;
+    function addGroupToContainer(containerId: string): void {
+        updateRoot((currentRoot) => addGroup(currentRoot, containerId).root);
     }
 
-    function addRelatedGroupToContainer(containerId: string): string | null {
-        if (!root.value) {
-            return null;
-        }
-        const result = addRelatedGroup(root.value, containerId);
-        setAdvancedQueryDraft(result.root);
-        return result.groupId;
+    function addRelatedGroupToContainer(containerId: string): void {
+        updateRoot(
+            (currentRoot) => addRelatedGroup(currentRoot, containerId).root,
+        );
     }
 
     function startSelecting(): void {

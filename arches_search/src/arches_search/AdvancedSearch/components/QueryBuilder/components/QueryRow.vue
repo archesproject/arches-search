@@ -9,7 +9,7 @@ import QueryRowTags from "@/arches_search/AdvancedSearch/components/QueryBuilder
 import QuerySelectCheckbox from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QuerySelectCheckbox.vue";
 
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
-import { getClauseDatatype } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
+import { getClauseOperandComponent } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type {
@@ -33,13 +33,9 @@ const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
 const { selectedItemIds, panelRowId } = queryBuilder;
 
-const operandComponent = computed<AdvancedSearchOperandComponent | null>(() => {
-    const datatype = getClauseDatatype(clause, queryBuilder.lookups);
-    if (!datatype) {
-        return null;
-    }
-    return queryBuilder.lookups.getOperandComponent(datatype) ?? null;
-});
+const operandComponent = computed<AdvancedSearchOperandComponent | null>(() =>
+    getClauseOperandComponent(clause, queryBuilder.lookups),
+);
 
 const isTextSearch = computed<boolean>(
     () =>

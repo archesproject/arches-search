@@ -129,6 +129,10 @@ const { root, prunedPayload, panelRowId, clearQuery, closeRowPanel } =
         getNodesForGraphId,
     });
 
+const resultCount = computed<number>(
+    () => searchResults.value?.pagination.total_results ?? 0,
+);
+
 const definitionToSave = computed<SearchDefinition | null>(() => {
     if (!root.value) {
         return null;
@@ -392,9 +396,7 @@ async function onExportResults(exportRequest: ExportRequest): Promise<void> {
                     @clear-all="onClearAll"
                 />
                 <ResultsToolbar
-                    :total-results="
-                        searchResults?.pagination.total_results ?? 0
-                    "
+                    :total-results="resultCount"
                     :sort-value="sortValue"
                     :show-filters="false"
                     :show-map="false"
@@ -463,9 +465,7 @@ async function onExportResults(exportRequest: ExportRequest): Promise<void> {
                     <ExportResultsPanel
                         v-else-if="isExportResultsOpen"
                         :export-state="exportState"
-                        :result-count="
-                            searchResults?.pagination.total_results ?? 0
-                        "
+                        :result-count="resultCount"
                         @export="onExportResults"
                         @close="closeSidePanel()"
                     />
