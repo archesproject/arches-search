@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
 
 import DatePicker from "openvue/datepicker";
+import Message from "openvue/message";
 import Select from "openvue/select";
 
 import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
@@ -57,6 +58,7 @@ const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
 
 const sliderBounds = ref<[Date, Date] | null>(null);
+const boundsError = ref<Error | null>(null);
 const subjectNode = ref<Node | null>(null);
 const widgetRevision = ref(0);
 const sliderOffsets = ref<[number, number] | null>(null);
@@ -108,6 +110,7 @@ watch(
     [subjectGraph, () => clause.subject.node_alias],
     async ([graph, nodeAlias]) => {
         sliderBounds.value = null;
+        boundsError.value = null;
         subjectNode.value = null;
         if (!graph) {
             return;
@@ -119,15 +122,11 @@ watch(
                 getNodesForGraphId(graph.graphid),
             ]);
             if (bounds.min_value !== null && bounds.max_value !== null) {
-                const loadedBounds: [Date, Date] = [
+                sliderBounds.value = [
                     parseSortableDate(bounds.min_value),
                     parseSortableDate(bounds.max_value),
                 ];
-                sliderBounds.value = loadedBounds;
-                sliderOffsets.value = offsetsForOperands(
-                    clause.operands,
-                    loadedBounds,
-                );
+                syncSlider(clause.operands);
             }
             if (isNodeSubject.value) {
                 subjectNode.value =
@@ -138,7 +137,11 @@ watch(
                     ) ?? null;
             }
         } catch (error) {
-            console.error(error);
+            if (error instanceof Error) {
+                boundsError.value = error;
+            } else {
+                boundsError.value = new Error(String(error));
+            }
         }
     },
     { immediate: true },
@@ -178,10 +181,14 @@ function offsetsForOperands(
     ];
 }
 
-function emitOperands(operands: LiteralOperand[]): void {
+function syncSlider(operands: LiteralOperand[]): void {
     if (sliderBounds.value) {
         sliderOffsets.value = offsetsForOperands(operands, sliderBounds.value);
     }
+}
+
+function emitOperands(operands: LiteralOperand[]): void {
+    syncSlider(operands);
     emit(UPDATE_CLAUSE_EVENT, { ...clause, operands });
 }
 
@@ -200,9 +207,7 @@ function onOperatorChange(nextOperator: string | null): void {
     if (nextArity !== valueCount.value) {
         operands = [];
     }
-    if (sliderBounds.value) {
-        sliderOffsets.value = offsetsForOperands(operands, sliderBounds.value);
-    }
+    syncSlider(operands);
     emit(UPDATE_CLAUSE_EVENT, { ...clause, operator: nextOperator, operands });
 }
 
@@ -259,8 +264,15 @@ function onDatePick(operandIndex: number, pickedValue: unknown): void {
 
         <template v-if="valueCount > 0">
             <template v-if="isRange">
+                <Message
+                    v-if="boundsError"
+                    severity="error"
+                    size="small"
+                >
+                    {{ boundsError.message }}
+                </Message>
                 <TimeSlider
-                    v-if="sliderBounds && sliderOffsets"
+                    v-else-if="sliderBounds && sliderOffsets"
                     :model-value="sliderOffsets"
                     :bounds="sliderBounds"
                     @update:model-value="onSliderUpdate"
