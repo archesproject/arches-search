@@ -240,6 +240,7 @@ export function addRelatedGroup(
                 },
                 logic: LogicToken.AND,
                 label: "",
+                targetLabel: "",
                 items: [],
             },
         ],
@@ -462,6 +463,7 @@ function relatedGroupFromPayload(
         relationship,
         logic: innerGroup.logic,
         label: payload.label ?? "",
+        targetLabel: innerGroup.label ?? "",
         items: itemsFromPayload(innerGroup, innerGroup.graph_slug),
     };
 }
@@ -499,15 +501,18 @@ function relatedGroupToPayload(
             logic: LogicToken.AND,
             clauses: [],
             groups: [
-                {
-                    graph_slug: relatedGroup.targetGraphSlug,
-                    scope: GraphScopeToken.RESOURCE,
-                    logic: relatedGroup.logic,
-                    clauses: clausesOf(relatedGroup.items),
-                    groups: groupsOf(relatedGroup.items),
-                    aggregations: [],
-                    relationship: null,
-                },
+                withLabel(
+                    {
+                        graph_slug: relatedGroup.targetGraphSlug,
+                        scope: GraphScopeToken.RESOURCE,
+                        logic: relatedGroup.logic,
+                        clauses: clausesOf(relatedGroup.items),
+                        groups: groupsOf(relatedGroup.items),
+                        aggregations: [],
+                        relationship: null,
+                    },
+                    relatedGroup.targetLabel,
+                ),
             ],
             aggregations: [],
             relationship: relatedGroup.relationship,

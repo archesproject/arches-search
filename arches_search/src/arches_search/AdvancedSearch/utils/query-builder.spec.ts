@@ -268,6 +268,34 @@ describe("loading and saving", () => {
         expect(buildPrunedPayload(root, LOOKUPS)).toEqual(payload);
     });
 
+    it("writes back the label on a related group's records", () => {
+        const payload = group(
+            SAMPLE,
+            LogicToken.AND,
+            [],
+            [
+                group(
+                    SAMPLE,
+                    LogicToken.AND,
+                    [],
+                    [
+                        {
+                            ...group(PERSON, LogicToken.AND, [
+                                NAME_LIKE_FORBES,
+                            ]),
+                            label: "Makers",
+                        },
+                    ],
+                    relationship("creator"),
+                ),
+            ],
+        );
+
+        const root = queryBuilderRootFromPayload(payload);
+
+        expect(buildPrunedPayload(root, LOOKUPS)).toEqual(payload);
+    });
+
     it("keeps what it cannot edit and writes it back unchanged", () => {
         const resourceFieldClause = {
             type: "LITERAL",
