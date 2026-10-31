@@ -10,6 +10,7 @@ import type { RelationshipBlock } from "@/arches_search/AdvancedSearch/types.ts"
 
 const RELATED_BADGE_KIND = "related";
 const RELATED_BADGE_ICON = "pi pi-sitemap";
+const TRAVERSAL_QUANTIFIER_ALL = "ALL";
 const TRAVERSAL_QUANTIFIER_NONE = "NONE";
 
 const { groupId, anchorGraphSlug, targetGraphSlug, relationship } =
@@ -24,6 +25,10 @@ const queryBuilder = useQueryBuilder();
 
 const isNegated = computed<boolean>(
     () => relationship.traversal_quantifier === TRAVERSAL_QUANTIFIER_NONE,
+);
+
+const canNegate = computed<boolean>(
+    () => relationship.traversal_quantifier !== TRAVERSAL_QUANTIFIER_ALL,
 );
 
 function onToggleNot(): void {
@@ -52,6 +57,7 @@ function onUpdateTarget(nextTargetGraphSlug: string): void {
             :badge-icon="RELATED_BADGE_ICON"
             :badge-kind="RELATED_BADGE_KIND"
             :is-negated="isNegated"
+            :can-negate="canNegate"
             @toggle-not="onToggleNot"
         />
         <RelationshipEditor

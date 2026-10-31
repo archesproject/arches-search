@@ -21,6 +21,7 @@ const ATTRIBUTE_BADGE_KIND = "attribute";
 const ATTRIBUTE_BADGE_ICON = "pi pi-tag";
 const TEXT_SEARCH_BADGE_KIND = "text";
 const TEXT_SEARCH_BADGE_ICON = "pi pi-search";
+const QUANTIFIER_ALL = "ALL";
 const QUANTIFIER_NONE = "NONE";
 
 const { rowId, clause } = defineProps<{
@@ -72,6 +73,8 @@ const isNegated = computed<boolean>(
     () => clause.quantifier === QUANTIFIER_NONE,
 );
 
+const canNegate = computed<boolean>(() => clause.quantifier !== QUANTIFIER_ALL);
+
 const isSelected = computed<boolean>(() =>
     selectedItemIds.value.includes(rowId),
 );
@@ -107,6 +110,7 @@ function onRemove(): void {
             :badge-icon="badge.icon"
             :badge-kind="badge.kind"
             :is-negated="isNegated"
+            :can-negate="canNegate"
             @toggle-not="onToggleNot"
         />
         <ClauseBuilder

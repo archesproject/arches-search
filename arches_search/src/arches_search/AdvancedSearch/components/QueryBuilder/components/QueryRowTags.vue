@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject } from "vue";
+import { useGettext } from "vue3-gettext";
 
 import Tag from "openvue/tag";
 import ToggleButton from "openvue/togglebutton";
@@ -9,17 +10,21 @@ import type { GraphModel } from "@/arches_search/AdvancedSearch/types.ts";
 
 const TOGGLE_NOT_EVENT = "toggle-not" as const;
 
-const { graphSlug, badgeLabel, badgeIcon, badgeKind, isNegated } = defineProps<{
-    graphSlug: string;
-    badgeLabel: string;
-    badgeIcon: string;
-    badgeKind: string;
-    isNegated: boolean;
-}>();
+const { graphSlug, badgeLabel, badgeIcon, badgeKind, isNegated, canNegate } =
+    defineProps<{
+        graphSlug: string;
+        badgeLabel: string;
+        badgeIcon: string;
+        badgeKind: string;
+        isNegated: boolean;
+        canNegate: boolean;
+    }>();
 
 const emit = defineEmits<{
     (event: typeof TOGGLE_NOT_EVENT): void;
 }>();
+
+const { $gettext } = useGettext();
 
 const graphs = inject<Ref<GraphModel[]>>("graphs")!;
 
@@ -32,6 +37,13 @@ const graphName = computed<string>(
 const badgeKindClass = computed<string>(
     () => `query-row-tags-badge-${badgeKind}`,
 );
+
+const notTitle = computed<string>(() => {
+    if (canNegate) {
+        return $gettext("Match records where this is not true");
+    }
+    return $gettext("NOT cannot be used while every value must match");
+});
 </script>
 
 <template>
@@ -54,7 +66,8 @@ const badgeKindClass = computed<string>(
             :model-value="isNegated"
             :on-label="$gettext('NOT')"
             :off-label="$gettext('NOT')"
-            :title="$gettext('Match records where this is not true')"
+            :title="notTitle"
+            :disabled="!canNegate"
             @update:model-value="emit(TOGGLE_NOT_EVENT)"
         />
     </span>
