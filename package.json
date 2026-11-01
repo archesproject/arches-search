@@ -21,7 +21,7 @@
     "dependencies": {
         "arches": "archesproject/arches#semver:^v8.2.0-alpha.12",
         "arches-modular-reports": "archesproject/arches-modular-reports#semver:^v2.1.0-alpha.4",
-        "cytoscape": "3.33.1",
+        "cytoscape": "3.34.4",
         "cytoscape-cola": "2.5.1",
         "vue-router": "4.4.3"
     },
