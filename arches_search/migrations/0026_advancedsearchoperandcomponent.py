@@ -35,7 +35,7 @@ def seed_operand_components(apps, schema_editor):
     DDataType = apps.get_model("models", "DDataType")
 
     for datatype in DDataType.objects.filter(
-        datatype__in=OPERAND_COMPONENTS_BY_DATATYPE
+        datatype__in=OPERAND_COMPONENTS_BY_DATATYPE.keys()
     ):
         AdvancedSearchOperandComponent.objects.create(
             datatype=datatype,

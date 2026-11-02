@@ -5195,25 +5195,26 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
 
     # --- OR parent combining sibling subgroups with a relationship subgroup ---
 
+    def _person_age_equals_clause(self, age):
+        return {
+            "type": "LITERAL",
+            "quantifier": "ANY",
+            "subject": {
+                "type": "NODE",
+                "graph_slug": "person",
+                "node_alias": "age",
+                "search_models": [],
+            },
+            "operator": "EQUALS",
+            "operands": [{"type": "LITERAL", "value": age}],
+        }
+
     def _person_age_equals_group(self, age):
         return {
             "graph_slug": "person",
             "scope": "RESOURCE",
             "logic": "AND",
-            "clauses": [
-                {
-                    "type": "LITERAL",
-                    "quantifier": "ANY",
-                    "subject": {
-                        "type": "NODE",
-                        "graph_slug": "person",
-                        "node_alias": "age",
-                        "search_models": [],
-                    },
-                    "operator": "EQUALS",
-                    "operands": [{"type": "LITERAL", "value": age}],
-                }
-            ],
+            "clauses": [self._person_age_equals_clause(age)],
             "groups": [],
             "aggregations": [],
             "relationship": None,
@@ -5272,15 +5273,16 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
         means age=5 AND a friend aged 22, which only Person D (age=5, friend Person A) meets.
         Person B also lists Person A as a friend but is not age 5, so B must not match.
         """
-        age_equals_five_clause = self._person_age_equals_group(5)["clauses"][0]
         result = self._compile(
             {
                 "graph_slug": "person",
                 "scope": "RESOURCE",
                 "logic": "OR",
-                "clauses": self._person_age_equals_group(24)["clauses"],
+                "clauses": [self._person_age_equals_clause(24)],
                 "groups": [
-                    self._friend_aged_group(22, anchor_clauses=[age_equals_five_clause])
+                    self._friend_aged_group(
+                        22, anchor_clauses=[self._person_age_equals_clause(5)]
+                    )
                 ],
                 "aggregations": [],
                 "relationship": None,
