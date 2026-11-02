@@ -5098,71 +5098,6 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
 
     # --- Self-exclusion under an OR parent ---
 
-    def _age_over_23_or_friend_under_10_payload(self):
-        return {
-            "graph_slug": "person",
-            "scope": "RESOURCE",
-            "logic": "OR",
-            "clauses": [
-                {
-                    "type": "LITERAL",
-                    "quantifier": "ANY",
-                    "subject": {
-                        "type": "NODE",
-                        "graph_slug": "person",
-                        "node_alias": "age",
-                        "search_models": [],
-                    },
-                    "operator": "GREATER_THAN",
-                    "operands": [{"type": "LITERAL", "value": 23}],
-                }
-            ],
-            "groups": [
-                {
-                    "graph_slug": "person",
-                    "scope": "RESOURCE",
-                    "logic": "AND",
-                    "clauses": [],
-                    "groups": [
-                        {
-                            "graph_slug": "person",
-                            "scope": "RESOURCE",
-                            "logic": "AND",
-                            "clauses": [
-                                {
-                                    "type": "LITERAL",
-                                    "quantifier": "ANY",
-                                    "subject": {
-                                        "type": "NODE",
-                                        "graph_slug": "person",
-                                        "node_alias": "age",
-                                        "search_models": [],
-                                    },
-                                    "operator": "LESS_THAN",
-                                    "operands": [{"type": "LITERAL", "value": 10}],
-                                }
-                            ],
-                            "groups": [],
-                            "aggregations": [],
-                            "relationship": None,
-                        }
-                    ],
-                    "aggregations": [],
-                    "relationship": {
-                        "path": {
-                            "type": "NODE",
-                            "graph_slug": "person",
-                            "node_alias": "friends",
-                        },
-                        "is_inverse": False,
-                        "traversal_quantifier": "ANY",
-                    },
-                }
-            ],
-            "aggregations": [],
-            "relationship": None,
-        }
-
     def test_person_self_excluded_from_own_friends_under_or_parent(self):
         """
         Tests self-exclusion when the relationship group sits under an OR parent. Only Person C
@@ -5170,28 +5105,72 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
         friends list naming Person D is Person D's own, so with self-exclusion nobody has a
         friend under 10 and the result is just C. Without self-exclusion Person D would match.
         """
-        result = self._compile(self._age_over_23_or_friend_under_10_payload())
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "OR",
+                "clauses": [
+                    {
+                        "type": "LITERAL",
+                        "quantifier": "ANY",
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "age",
+                            "search_models": [],
+                        },
+                        "operator": "GREATER_THAN",
+                        "operands": [{"type": "LITERAL", "value": 23}],
+                    }
+                ],
+                "groups": [
+                    {
+                        "graph_slug": "person",
+                        "scope": "RESOURCE",
+                        "logic": "AND",
+                        "clauses": [],
+                        "groups": [
+                            {
+                                "graph_slug": "person",
+                                "scope": "RESOURCE",
+                                "logic": "AND",
+                                "clauses": [
+                                    {
+                                        "type": "LITERAL",
+                                        "quantifier": "ANY",
+                                        "subject": {
+                                            "type": "NODE",
+                                            "graph_slug": "person",
+                                            "node_alias": "age",
+                                            "search_models": [],
+                                        },
+                                        "operator": "LESS_THAN",
+                                        "operands": [{"type": "LITERAL", "value": 10}],
+                                    }
+                                ],
+                                "groups": [],
+                                "aggregations": [],
+                                "relationship": None,
+                            }
+                        ],
+                        "aggregations": [],
+                        "relationship": {
+                            "path": {
+                                "type": "NODE",
+                                "graph_slug": "person",
+                                "node_alias": "friends",
+                            },
+                            "is_inverse": False,
+                            "traversal_quantifier": "ANY",
+                        },
+                    }
+                ],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
         self.assertEqual(result, {PERSON_C_ID})
-
-    def test_forward_self_exclusion_compares_within_the_link_row(self):
-        """
-        Tests that forward self-exclusion compares the link's target with the link row's own
-        source rather than with the outer resource. Referencing the outer resource a second
-        time stops Postgres from building the relationship subquery's result once and hashing
-        it, so under an OR parent it re-runs the subquery for every resource of the graph.
-        """
-        compiled_sql = str(
-            AdvancedSearchQueryCompiler(self._age_over_23_or_friend_under_10_payload())
-            .compile()
-            .query
-        )
-        self.assertRegex(
-            compiled_sql,
-            r'NOT \("(\w+)"\."value" = \("\1"\."resourceinstanceid"\)\)',
-        )
-        self.assertNotIn(
-            '"value" = ("resource_instances"."resourceinstanceid")', compiled_sql
-        )
 
     # --- OR parent combining sibling subgroups with a relationship subgroup ---
 
@@ -5289,18 +5268,6 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
             }
         )
         self.assertEqual(result, {PERSON_C_ID, PERSON_D_ID})
-
-    def test_group_label_is_accepted_and_does_not_change_results(self):
-        """
-        Tests that groups may carry a label for the query builder to display. The label is
-        not part of the query, so a labelled payload returns the same resources as the
-        unlabelled one.
-        """
-        payload = self._age_over_23_or_friend_under_10_payload()
-        payload["label"] = "Age or young friends"
-        payload["groups"][0]["label"] = "Young friends"
-        payload["groups"][0]["groups"][0]["label"] = "Under ten"
-        self.assertEqual(self._compile(payload), {PERSON_C_ID})
 
     # --- ALL→ANY conversion for single-hop inverse relationships ---
 

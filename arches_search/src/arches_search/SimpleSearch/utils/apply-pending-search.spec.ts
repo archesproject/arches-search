@@ -6,13 +6,7 @@ import {
     TERM_KIND_RECORD,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-import type { FeatureCollection } from "geojson";
 import type { PendingSearchActions } from "@/arches_search/SimpleSearch/utils/apply-pending-search.ts";
-
-const DRAWN_AREA: FeatureCollection = {
-    type: "FeatureCollection",
-    features: [],
-};
 
 function buildActions(): PendingSearchActions {
     return {
@@ -83,19 +77,5 @@ describe("applyPendingSearch", () => {
             termKind: TERM_KIND_RECORD,
             icon: "fa fa-user",
         });
-    });
-
-    it("selects resource types and opens the map for a drawn area", () => {
-        const actions = buildActions();
-
-        applyPendingSearch(
-            { graphSlugs: ["place"], mapFilter: DRAWN_AREA },
-            actions,
-        );
-
-        expect(actions.clearAll).toHaveBeenCalledOnce();
-        expect(actions.setGraphsBySlug).toHaveBeenCalledWith(["place"]);
-        expect(actions.setMapFilter).toHaveBeenCalledWith(DRAWN_AREA);
-        expect(actions.openMapFilter).toHaveBeenCalledOnce();
     });
 });

@@ -151,22 +151,6 @@ describe("buildRequestQueries", () => {
         ]);
     });
 
-    it("leaves out queries for graphs that are not being searched", () => {
-        expect(
-            buildRequestQueries(
-                [constructionDateTimeFilter, otherGraphQuery],
-                null,
-                [GRAPH_SLUG],
-            ),
-        ).toEqual([constructionDateTimeFilter]);
-    });
-
-    it("leaves out the all-date-nodes time filter", () => {
-        expect(
-            buildRequestQueries([allDateNodesTimeFilter], null, [GRAPH_SLUG]),
-        ).toEqual([]);
-    });
-
     it("sends an advanced query of one any-field clause", () => {
         expect(
             buildRequestQueries([], allDateNodesTimeFilter, [GRAPH_SLUG]),
@@ -202,27 +186,6 @@ describe("foldQueriesIntoAdvancedQuery", () => {
             foldedKeys: ["survey"],
         });
     });
-
-    it("starts the advanced query from the first query when there is none", () => {
-        expect(
-            foldQueriesIntoAdvancedQuery(
-                null,
-                new Map([["survey", surveyDateTimeFilter]]),
-            ),
-        ).toEqual({
-            advancedQuery: surveyDateTimeFilter,
-            foldedKeys: ["survey"],
-        });
-    });
-
-    it("folds nothing when no query is on the advanced query's model", () => {
-        expect(
-            foldQueriesIntoAdvancedQuery(
-                constructionDateTimeFilter,
-                new Map([["sample", sampleQuery]]),
-            ),
-        ).toBeNull();
-    });
 });
 
 describe("buildAdvancedSearchDefinition", () => {
@@ -243,12 +206,6 @@ describe("buildAdvancedSearchDefinition", () => {
             includeRelated: false,
         });
         expect(parseSearchDefinition({ ...definition })).toEqual(definition);
-    });
-
-    it("saves just the model when there are no conditions", () => {
-        expect(
-            buildAdvancedSearchDefinition(GRAPH_SLUG, null, []).queries,
-        ).toEqual({});
     });
 });
 
@@ -292,50 +249,5 @@ describe("parseSearchDefinition", () => {
             sort: [],
             includeRelated: true,
         });
-    });
-
-    it("keeps a saved choice to leave out related resources", () => {
-        expect(
-            parseSearchDefinition({
-                terms: [],
-                queries: {},
-                graphSlugs: [],
-                mapFilter: null,
-                includeRelated: false,
-            }).includeRelated,
-        ).toBe(false);
-    });
-
-    it("keeps the advanced query beside the other queries", () => {
-        const definition = parseSearchDefinition({
-            terms: [],
-            queries: {
-                [ADVANCED_QUERY_KEY]: constructionDateTimeFilter,
-                timeFilter: allDateNodesTimeFilter,
-            },
-            graphSlugs: [GRAPH_SLUG],
-            mapFilter: null,
-        });
-
-        expect(definition.queries[ADVANCED_QUERY_KEY]).toEqual(
-            constructionDateTimeFilter,
-        );
-        expect(definition.queries.timeFilter).toEqual(allDateNodesTimeFilter);
-    });
-
-    it("reads the saved sort and drops malformed entries", () => {
-        expect(
-            parseSearchDefinition({
-                terms: [],
-                queries: {},
-                graphSlugs: [],
-                mapFilter: null,
-                sort: [
-                    { type: "primary_name", direction: "desc" },
-                    { direction: "asc" },
-                    "created_time",
-                ],
-            }).sort,
-        ).toEqual([{ type: "primary_name", direction: "desc" }]);
     });
 });

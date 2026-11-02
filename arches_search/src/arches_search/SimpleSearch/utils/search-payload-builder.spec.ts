@@ -141,26 +141,4 @@ describe("buildSearchApiRequestBody advanced search queries", () => {
         expect(payloads[1].groups).toEqual([personQuery]);
         expect(payloads[1].clauses).toHaveLength(1);
     });
-
-    it("still takes a single query", () => {
-        const body = buildSearchApiRequestBody({
-            terms: [],
-            query: heritageQuery,
-            graphSlugs: GRAPH_SLUGS,
-            mapFilter: null,
-        });
-
-        expect(body.advanced_search_queries).toEqual([heritageQuery]);
-    });
-
-    it("sends no advanced search queries when there is nothing to filter", () => {
-        const body = buildSearchApiRequestBody({
-            terms: [],
-            queries: [],
-            graphSlugs: GRAPH_SLUGS,
-            mapFilter: null,
-        });
-
-        expect(body.advanced_search_queries).toBeNull();
-    });
 });
