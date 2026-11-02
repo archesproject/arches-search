@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, inject, ref, watch } from "vue";
+import { computed, defineAsyncComponent, toRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 import SelectButton from "openvue/selectbutton";
 
 import { removeVueExtension } from "@/arches_vue_components/generics/GenericWidget/utils.ts";
+import { useClauseSubjectNode } from "@/arches_search/AdvancedSearch/composables/useClauseSubjectNode.ts";
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import {
     findQueryBuilderItem,
@@ -17,24 +18,16 @@ import {
     QUERY_BUILDER_ITEM_ROW,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-import type { Component, Ref } from "vue";
+import type { Component } from "vue";
 import type {
     AdvancedSearchOperandComponent,
-    GraphModel,
     LiteralClause,
-    Node,
     QueryBuilderRow,
 } from "@/arches_search/AdvancedSearch/types.ts";
-
-const graphs = inject<Ref<GraphModel[]>>("graphs")!;
-const getNodesForGraphId =
-    inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId")!;
 
 const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
 const { root, panelRowId, lookups } = queryBuilder;
-
-const fieldLabel = ref("");
 
 const panelRow = computed<QueryBuilderRow | null>(() => {
     if (!root.value || !panelRowId.value) {
@@ -45,6 +38,25 @@ const panelRow = computed<QueryBuilderRow | null>(() => {
         return null;
     }
     return item;
+});
+
+const { subjectNode } = useClauseSubjectNode(
+    toRef(() => panelRow.value?.clause.subject),
+);
+
+const fieldLabel = computed<string>(() => {
+    const subject = panelRow.value?.clause.subject;
+    if (!subject) {
+        return "";
+    }
+    if (subject.type !== ClauseSubjectTypeToken.NODE) {
+        return $gettext("Any field");
+    }
+    return (
+        subjectNode.value?.card_x_node_x_widget_label ||
+        subjectNode.value?.name ||
+        ""
+    );
 });
 
 const panelOperandComponent = computed<AdvancedSearchOperandComponent | null>(
@@ -82,46 +94,6 @@ const switcherOptions = computed<{ label: string; value: string }[]>(() => {
             value: row.id,
         }));
 });
-
-watch(
-    () => panelRow.value?.clause.subject,
-    async (subject, _previousSubject, onCleanup) => {
-        let isStale = false;
-        onCleanup(() => {
-            isStale = true;
-        });
-        fieldLabel.value = "";
-        if (!subject) {
-            return;
-        }
-        if (subject.type !== ClauseSubjectTypeToken.NODE) {
-            fieldLabel.value = $gettext("Any field");
-            return;
-        }
-        const graph = graphs.value.find(
-            (candidate) => candidate.slug === subject.graph_slug,
-        );
-        if (!graph) {
-            return;
-        }
-        try {
-            const nodes = await getNodesForGraphId(graph.graphid);
-            if (isStale) {
-                return;
-            }
-            const node = nodes.find(
-                (candidate) =>
-                    candidate.alias === subject.node_alias &&
-                    candidate.selectable !== false,
-            );
-            fieldLabel.value =
-                node?.card_x_node_x_widget_label || node?.name || "";
-        } catch (error) {
-            console.error(error);
-        }
-    },
-    { immediate: true },
-);
 
 function onSwitchRow(rowId: string | null): void {
     if (rowId) {

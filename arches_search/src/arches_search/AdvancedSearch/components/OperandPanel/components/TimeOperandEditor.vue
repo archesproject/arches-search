@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from "vue";
+import { computed, inject, ref, toRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import DatePicker from "openvue/datepicker";
@@ -10,6 +10,7 @@ import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/Quer
 import TimeSlider from "@/arches_search/SimpleSearch/components/TimeFilter/components/TimeSlider.vue";
 
 import { getDateBoundsForGraphId } from "@/arches_search/AdvancedSearch/api.ts";
+import { useClauseSubjectNode } from "@/arches_search/AdvancedSearch/composables/useClauseSubjectNode.ts";
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
@@ -26,10 +27,8 @@ import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts"
 import type { Ref } from "vue";
 import type {
     AdvancedSearchFacet,
-    GraphModel,
     LiteralClause,
     LiteralOperand,
-    Node,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const UPDATE_CLAUSE_EVENT = "update:clause" as const;
@@ -49,16 +48,15 @@ const emit = defineEmits<{
 const datatypesToAdvancedSearchFacets = inject<
     Ref<Record<string, AdvancedSearchFacet[]>>
 >("datatypesToAdvancedSearchFacets")!;
-const graphs = inject<Ref<GraphModel[]>>("graphs")!;
-const getNodesForGraphId =
-    inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId")!;
 
 const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
+const { subjectGraph, subjectNode } = useClauseSubjectNode(
+    toRef(() => clause.subject),
+);
 
 const sliderBounds = ref<[Date, Date] | null>(null);
 const boundsError = ref<Error | null>(null);
-const subjectNode = ref<Node | null>(null);
 // The node widgets read their value only when mounted, so a slider change
 // remounts them to show the dates it set.
 const widgetRevision = ref(0);
@@ -66,13 +64,6 @@ const sliderOffsets = ref<[number, number] | null>(null);
 
 const isNodeSubject = computed<boolean>(
     () => clause.subject.type === ClauseSubjectTypeToken.NODE,
-);
-
-const subjectGraph = computed<GraphModel | null>(
-    () =>
-        graphs.value.find(
-            (graph) => graph.slug === clause.subject.graph_slug,
-        ) ?? null,
 );
 
 const operatorOptions = computed<AdvancedSearchFacet[]>(() => {
@@ -116,40 +107,30 @@ watch(
         });
         sliderBounds.value = null;
         boundsError.value = null;
-        subjectNode.value = null;
         if (!graph) {
             return;
         }
         const nodeAliases = nodeAlias ? [nodeAlias] : [];
-        const [boundsResult, nodesResult] = await Promise.allSettled([
-            getDateBoundsForGraphId(graph.graphid, nodeAliases),
-            getNodesForGraphId(graph.graphid),
-        ]);
-        if (isStale) {
-            return;
-        }
-
-        if (boundsResult.status === "rejected") {
-            boundsError.value = toError(boundsResult.reason);
-        } else if (
-            boundsResult.value.min_value !== null &&
-            boundsResult.value.max_value !== null
-        ) {
-            sliderBounds.value = [
-                parseSortableDate(boundsResult.value.min_value),
-                parseSortableDate(boundsResult.value.max_value),
-            ];
-            syncSlider(clause.operands);
-        }
-
-        if (nodesResult.status === "rejected") {
-            console.error(nodesResult.reason);
-        } else if (isNodeSubject.value) {
-            subjectNode.value =
-                nodesResult.value.find(
-                    (node) =>
-                        node.alias === nodeAlias && node.selectable !== false,
-                ) ?? null;
+        try {
+            const bounds = await getDateBoundsForGraphId(
+                graph.graphid,
+                nodeAliases,
+            );
+            if (isStale) {
+                return;
+            }
+            if (bounds.min_value !== null && bounds.max_value !== null) {
+                sliderBounds.value = [
+                    parseSortableDate(bounds.min_value),
+                    parseSortableDate(bounds.max_value),
+                ];
+                syncSlider(clause.operands);
+            }
+        } catch (error) {
+            if (isStale) {
+                return;
+            }
+            boundsError.value = toError(error);
         }
     },
     { immediate: true },

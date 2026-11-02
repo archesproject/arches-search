@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from "vue";
+import { computed, inject, toRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
@@ -9,6 +9,7 @@ import Select from "openvue/select";
 import PathBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/PathBuilder.vue";
 import ClauseOperandBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/ClauseBuilder/components/ClauseOperandBuilder.vue";
 
+import { useClauseSubjectNode } from "@/arches_search/AdvancedSearch/composables/useClauseSubjectNode.ts";
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import {
     getClauseDatatype,
@@ -20,10 +21,8 @@ import type { Ref } from "vue";
 import type {
     AdvancedSearchFacet,
     AdvancedSearchOperandComponent,
-    GraphModel,
     LiteralClause,
     LiteralOperand,
-    Node,
     PathSelection,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
@@ -53,16 +52,11 @@ const datatypesToAdvancedSearchFacets = inject<
     Ref<Record<string, AdvancedSearchFacet[]>>
 >("datatypesToAdvancedSearchFacets")!;
 
-const graphs = inject<Ref<GraphModel[]>>("graphs")!;
-
-const getNodesForGraphId =
-    inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId")!;
-
 const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
-
-const subjectNode = ref<Node | null>(null);
-const subjectGraph = ref<GraphModel | null>(null);
+const { subjectGraph, subjectNode } = useClauseSubjectNode(
+    toRef(() => modelValue.subject),
+);
 
 const clauseQuantifierOptions = computed<
     { label: string; value: LiteralClause["quantifier"] }[]
@@ -154,62 +148,6 @@ const panelButtonLabel = computed<string>(() => {
     }
     return operandSummary.value || $gettext("Edit in side panel");
 });
-
-watch(
-    [
-        () => modelValue.subject.type,
-        () => modelValue.subject.graph_slug,
-        () => modelValue.subject.node_alias,
-    ],
-    async (
-        [subjectType, terminalGraphSlug, terminalNodeAlias],
-        _previousSubject,
-        onCleanup,
-    ) => {
-        let isStale = false;
-        onCleanup(() => {
-            isStale = true;
-        });
-        subjectNode.value = null;
-        subjectGraph.value = null;
-
-        if (
-            subjectType !== ClauseSubjectTypeToken.NODE ||
-            !terminalGraphSlug ||
-            !terminalNodeAlias
-        ) {
-            return;
-        }
-
-        const graphMatchingTerminalSlug = graphs.value.find(
-            (graphModel) => graphModel.slug === terminalGraphSlug,
-        );
-
-        if (!graphMatchingTerminalSlug) {
-            return;
-        }
-
-        subjectGraph.value = graphMatchingTerminalSlug;
-
-        try {
-            const allNodesForGraph = await getNodesForGraphId(
-                graphMatchingTerminalSlug.graphid,
-            );
-            if (isStale) {
-                return;
-            }
-            subjectNode.value =
-                allNodesForGraph.find(
-                    (graphNode) =>
-                        graphNode.alias === terminalNodeAlias &&
-                        graphNode.selectable !== false,
-                ) ?? null;
-        } catch (error) {
-            console.error(error);
-        }
-    },
-    { immediate: true },
-);
 
 function operandText(operand: LiteralOperand | undefined): string | null {
     if (!operand) {
