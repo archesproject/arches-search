@@ -57,6 +57,8 @@ export interface Node {
     ontologyclass: string | null;
     // False for a card heading listed beside its top node, under the same alias.
     selectable?: boolean;
+    card_x_node_x_widget_label?: string;
+    nodegroup_has_cardinality_n?: boolean;
     sortorder: number;
     source_identifier_id: number | null;
     sourcebranchpublication_id: string | null;

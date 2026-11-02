@@ -13,6 +13,7 @@ import TimeSlider from "@/arches_search/SimpleSearch/components/TimeFilter/compo
 import { getDateBoundsForGraphId } from "@/arches_search/AdvancedSearch/api.ts";
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
+import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 import { getClauseDatatype } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 import {
     addDays,
@@ -60,6 +61,8 @@ const queryBuilder = useQueryBuilder();
 const sliderBounds = ref<[Date, Date] | null>(null);
 const boundsError = ref<Error | null>(null);
 const subjectNode = ref<Node | null>(null);
+// The node widgets read their value only when mounted, so a slider change
+// remounts them to show the dates it set.
 const widgetRevision = ref(0);
 const sliderOffsets = ref<[number, number] | null>(null);
 
@@ -108,40 +111,47 @@ const valueLabels = computed<string[]>(() => {
 
 watch(
     [subjectGraph, () => clause.subject.node_alias],
-    async ([graph, nodeAlias]) => {
+    async ([graph, nodeAlias], _previousSources, onCleanup) => {
+        let isStale = false;
+        onCleanup(() => {
+            isStale = true;
+        });
         sliderBounds.value = null;
         boundsError.value = null;
         subjectNode.value = null;
         if (!graph) {
             return;
         }
-        try {
-            const nodeAliases = nodeAlias ? [nodeAlias] : [];
-            const [bounds, nodes] = await Promise.all([
-                getDateBoundsForGraphId(graph.graphid, nodeAliases),
-                getNodesForGraphId(graph.graphid),
-            ]);
-            if (bounds.min_value !== null && bounds.max_value !== null) {
-                sliderBounds.value = [
-                    parseSortableDate(bounds.min_value),
-                    parseSortableDate(bounds.max_value),
-                ];
-                syncSlider(clause.operands);
-            }
-            if (isNodeSubject.value) {
-                subjectNode.value =
-                    nodes.find(
-                        (node) =>
-                            node.alias === nodeAlias &&
-                            node.selectable !== false,
-                    ) ?? null;
-            }
-        } catch (error) {
-            if (error instanceof Error) {
-                boundsError.value = error;
-            } else {
-                boundsError.value = new Error(String(error));
-            }
+        const nodeAliases = nodeAlias ? [nodeAlias] : [];
+        const [boundsResult, nodesResult] = await Promise.allSettled([
+            getDateBoundsForGraphId(graph.graphid, nodeAliases),
+            getNodesForGraphId(graph.graphid),
+        ]);
+        if (isStale) {
+            return;
+        }
+
+        if (boundsResult.status === "rejected") {
+            boundsError.value = toError(boundsResult.reason);
+        } else if (
+            boundsResult.value.min_value !== null &&
+            boundsResult.value.max_value !== null
+        ) {
+            sliderBounds.value = [
+                parseSortableDate(boundsResult.value.min_value),
+                parseSortableDate(boundsResult.value.max_value),
+            ];
+            syncSlider(clause.operands);
+        }
+
+        if (nodesResult.status === "rejected") {
+            console.error(nodesResult.reason);
+        } else if (isNodeSubject.value) {
+            subjectNode.value =
+                nodesResult.value.find(
+                    (node) =>
+                        node.alias === nodeAlias && node.selectable !== false,
+                ) ?? null;
         }
     },
     { immediate: true },
@@ -187,11 +197,6 @@ function syncSlider(operands: LiteralOperand[]): void {
     }
 }
 
-function emitOperands(operands: LiteralOperand[]): void {
-    syncSlider(operands);
-    emit(UPDATE_CLAUSE_EVENT, { ...clause, operands });
-}
-
 function literalOperand(value: string): LiteralOperand {
     return { type: OPERAND_TYPE_LITERAL, value };
 }
@@ -235,7 +240,8 @@ function onOperandUpdate(
 ): void {
     const operands = [...clause.operands];
     operands[operandIndex] = updatedOperand;
-    emitOperands(operands);
+    syncSlider(operands);
+    emit(UPDATE_CLAUSE_EVENT, { ...clause, operands });
 }
 
 function onDatePick(operandIndex: number, pickedValue: unknown): void {
@@ -252,7 +258,6 @@ function onDatePick(operandIndex: number, pickedValue: unknown): void {
 <template>
     <div class="time-operand-editor">
         <Select
-            class="time-operand-editor-operator"
             option-label="label"
             option-value="operator"
             :model-value="clause.operator"
@@ -302,10 +307,7 @@ function onDatePick(operandIndex: number, pickedValue: unknown): void {
                     :model-value="clause.operands[operandIndex] ?? null"
                     :subject-terminal-node="subjectNode"
                     :subject-terminal-graph="subjectGraph"
-                    :operand-type="OPERAND_TYPE_LITERAL"
-                    @update:model-value="
-                        onOperandUpdate(operandIndex, $event as LiteralOperand)
-                    "
+                    @update:model-value="onOperandUpdate(operandIndex, $event)"
                 />
                 <DatePicker
                     v-else-if="!isNodeSubject"

@@ -4,12 +4,13 @@ import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 import InputText from "openvue/inputtext";
-import SelectButton from "openvue/selectbutton";
 
+import QueryLogicSelect from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryLogicSelect.vue";
 import QuerySelectCheckbox from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QuerySelectCheckbox.vue";
 
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
-import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
+
+import type { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { groupId, label, logic, isRelated } = defineProps<{
     groupId: string;
@@ -20,11 +21,6 @@ const { groupId, label, logic, isRelated } = defineProps<{
 
 const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
-
-const logicOptions = computed(() => [
-    { label: $gettext("ALL"), value: LogicToken.AND },
-    { label: $gettext("ANY"), value: LogicToken.OR },
-]);
 
 const iconClass = computed<string>(() => {
     if (isRelated) {
@@ -42,12 +38,6 @@ const labelPlaceholder = computed<string>(() => {
 
 function onLabelChange(nextLabel: string | undefined): void {
     queryBuilder.setGroupLabel(groupId, nextLabel ?? "");
-}
-
-function onLogicChange(nextLogic: LogicToken | null): void {
-    if (nextLogic && nextLogic !== logic) {
-        queryBuilder.toggleGroupLogic(groupId);
-    }
 }
 
 function onRemove(): void {
@@ -74,16 +64,11 @@ function onRemove(): void {
             :aria-label="$gettext('Group label')"
             @update:model-value="onLabelChange"
         />
-        <SelectButton
-            class="query-group-header-logic"
+        <QueryLogicSelect
             size="small"
-            option-label="label"
-            option-value="value"
-            :model-value="logic"
-            :options="logicOptions"
-            :allow-empty="false"
+            :container-id="groupId"
+            :logic="logic"
             :aria-label="$gettext('Match all or any conditions in this group')"
-            @update:model-value="onLogicChange"
         />
         <span class="query-group-header-match">
             {{ $pgettext("Query group: '[ALL/ANY] match'", "match") }}

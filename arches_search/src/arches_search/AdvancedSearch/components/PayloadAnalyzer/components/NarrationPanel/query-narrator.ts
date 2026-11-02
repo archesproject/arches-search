@@ -28,8 +28,6 @@ export type DescribeQueryOptions = {
     resourceNames?: Readonly<Record<string, string>>;
 };
 
-const TRAVERSAL_ALL = "ALL" as const;
-const TRAVERSAL_NONE = "NONE" as const;
 const QUANTIFIER_ALL = "ALL" as const;
 const QUANTIFIER_NONE = "NONE" as const;
 
@@ -528,7 +526,7 @@ export function describeAdvancedSearchQuery(
         const hasInnerConditions = innerConditions.length > 0;
 
         if (relationship.is_inverse) {
-            if (traversalQuantifier === TRAVERSAL_ALL) {
+            if (traversalQuantifier === QUANTIFIER_ALL) {
                 if (hasInnerConditions) {
                     return gettext(
                         "that are the %{field} of all %{graph} instances where %{conditions}",
@@ -547,7 +545,7 @@ export function describeAdvancedSearchQuery(
                     },
                 );
             }
-            if (traversalQuantifier === TRAVERSAL_NONE) {
+            if (traversalQuantifier === QUANTIFIER_NONE) {
                 if (hasInnerConditions) {
                     return gettext(
                         "that are the %{field} of no %{graph} instances where %{conditions}",
@@ -582,7 +580,7 @@ export function describeAdvancedSearchQuery(
             });
         }
 
-        if (traversalQuantifier === TRAVERSAL_ALL) {
+        if (traversalQuantifier === QUANTIFIER_ALL) {
             if (hasInnerConditions) {
                 return gettext("that have only %{field} where %{conditions}", {
                     field: relationshipFieldLabel,
@@ -594,7 +592,7 @@ export function describeAdvancedSearchQuery(
             });
         }
 
-        if (traversalQuantifier === TRAVERSAL_NONE) {
+        if (traversalQuantifier === QUANTIFIER_NONE) {
             if (hasInnerConditions) {
                 return gettext("that have no %{field} where %{conditions}", {
                     field: relationshipFieldLabel,
@@ -639,7 +637,7 @@ function startsWithPredicateFragment(groupPayload: GroupPayload): boolean {
 }
 
 function resolveTraversalQuantifier(quantifier: string) {
-    if (quantifier === TRAVERSAL_ALL || quantifier === TRAVERSAL_NONE) {
+    if (quantifier === QUANTIFIER_ALL || quantifier === QUANTIFIER_NONE) {
         return quantifier;
     }
     return "ANY";

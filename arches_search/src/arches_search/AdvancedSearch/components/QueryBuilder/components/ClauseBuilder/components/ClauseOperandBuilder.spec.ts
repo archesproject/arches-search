@@ -61,7 +61,6 @@ describe("ClauseOperandBuilder hydration", () => {
                     ],
                     display_value: "Amber Specimen",
                 },
-                operandType: "LITERAL",
             },
             global: {
                 stubs: { GenericWidget: GenericWidgetStub },
@@ -84,7 +83,6 @@ describe("ClauseOperandBuilder hydration", () => {
                 subjectTerminalNode,
                 subjectTerminalGraph,
                 modelValue: null,
-                operandType: "LITERAL",
             },
             global: {
                 stubs: { GenericWidget: GenericWidgetStub },
@@ -93,27 +91,6 @@ describe("ClauseOperandBuilder hydration", () => {
 
         const widget = wrapper.findComponent(GenericWidgetStub);
         expect(widget.props("aliasedNodeData")).toBeUndefined();
-    });
-
-    it("has no hydration data for a PATH operand", () => {
-        const wrapper = mount(ClauseOperandBuilder, {
-            props: {
-                subjectTerminalNode,
-                subjectTerminalGraph,
-                modelValue: {
-                    type: "PATH",
-                    value: [["test_graph", "some_alias"]],
-                },
-                operandType: "PATH",
-            },
-            global: {
-                stubs: { GenericWidget: GenericWidgetStub },
-            },
-        });
-
-        const widget = wrapper.findComponent(GenericWidgetStub);
-        expect(widget.props("aliasedNodeData")).toBeUndefined();
-        expect(widget.props("value")).toBeNull();
     });
 
     it("shows a reference saved as labels with its list items", async () => {
@@ -122,7 +99,6 @@ describe("ClauseOperandBuilder hydration", () => {
                 subjectTerminalNode: materialNode,
                 subjectTerminalGraph,
                 modelValue: { type: "LITERAL", value: ["glass"] },
-                operandType: "LITERAL",
             },
             global: {
                 stubs: { GenericWidget: GenericWidgetStub },

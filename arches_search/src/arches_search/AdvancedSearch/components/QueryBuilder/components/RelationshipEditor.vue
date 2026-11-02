@@ -7,6 +7,7 @@ import Select from "openvue/select";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/PathBuilder.vue";
 
+import type { Ref } from "vue";
 import type {
     GraphModel,
     PathSelection,
@@ -15,16 +16,11 @@ import type {
     RelationshipBlock,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-const { $gettext } = useGettext();
-
 const TRAVERSAL_QUANTIFIER_ANY = "ANY";
 const TRAVERSAL_QUANTIFIER_ALL = "ALL";
 const TRAVERSAL_QUANTIFIER_NONE = "NONE";
-
-const emit = defineEmits<{
-    "update:relationship": [RelationshipBlock];
-    "update:innerGraphSlug": [string];
-}>();
+const UPDATE_RELATIONSHIP_EVENT = "update:relationship" as const;
+const UPDATE_INNER_GRAPH_SLUG_EVENT = "update:innerGraphSlug" as const;
 
 const { relationship, anchorGraphSlug, innerGraphSlug } = defineProps<{
     relationship: RelationshipBlock;
@@ -32,7 +28,15 @@ const { relationship, anchorGraphSlug, innerGraphSlug } = defineProps<{
     innerGraphSlug: string;
 }>();
 
-const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs")!;
+const emit = defineEmits<{
+    (
+        event: typeof UPDATE_RELATIONSHIP_EVENT,
+        relationship: RelationshipBlock,
+    ): void;
+    (event: typeof UPDATE_INNER_GRAPH_SLUG_EVENT, innerGraphSlug: string): void;
+}>();
+
+const graphs = inject<Ref<GraphModel[]>>("graphs")!;
 const getRelatableNodesTreeForGraphId = inject<
     (graphId: string) => Promise<RelatableNodesTreeResponse>
 >("getRelatableNodesTreeForGraphId")!;
@@ -43,37 +47,51 @@ const getRelatableNodesTreeForGraphPair = inject<
     ) => Promise<RelatableNodesTreeForGraphPairResponse>
 >("getRelatableNodesTreeForGraphPair")!;
 
+const { $gettext } = useGettext();
+
 const isLoadingRelatableTree = ref(false);
 const relatableTreeError = ref<Error | null>(null);
 
 const relatableNodesTree = ref<RelatableNodesTreeResponse | null>(null);
 
-const isLoadingPairwiseTree = ref(false);
 const pairwiseTreeError = ref<Error | null>(null);
 
 const pairwiseNodesTree = ref<RelatableNodesTreeForGraphPairResponse | null>(
     null,
 );
 
-const anchorGraph = computed(() => {
-    return graphs.value.find(
-        (graphModel) => graphModel.slug === anchorGraphSlug,
-    );
-});
-
-const innerGraph = computed(() => {
-    return graphs.value.find(
-        (graphModel) => graphModel.slug === innerGraphSlug,
-    );
-});
-
-const relatableGraphOptions = computed(() =>
-    (relatableNodesTree.value?.relatable_graphs ?? [])
-        .map((graph) => ({ label: graph.name, value: graph.slug }))
-        .sort((left, right) => left.label.localeCompare(right.label)),
+const anchorGraph = computed<GraphModel | undefined>(() =>
+    graphs.value.find((graphModel) => graphModel.slug === anchorGraphSlug),
 );
 
-const traversalQuantifierOptions = computed(() => [
+const innerGraph = computed<GraphModel | undefined>(() =>
+    graphs.value.find((graphModel) => graphModel.slug === innerGraphSlug),
+);
+
+// A saved target that is no longer offered is still listed, so it shows.
+const relatableGraphOptions = computed<{ label: string; value: string }[]>(
+    () => {
+        const options = (relatableNodesTree.value?.relatable_graphs ?? []).map(
+            (graph) => ({ label: graph.name, value: graph.slug }),
+        );
+        const isTargetOffered = options.some(
+            (option) => option.value === innerGraphSlug,
+        );
+        if (innerGraphSlug && !isTargetOffered) {
+            options.push({
+                label: innerGraph.value?.name ?? innerGraphSlug,
+                value: innerGraphSlug,
+            });
+        }
+        return options.sort((left, right) =>
+            left.label.localeCompare(right.label),
+        );
+    },
+);
+
+const traversalQuantifierOptions = computed<
+    { label: string; value: RelationshipBlock["traversal_quantifier"] }[]
+>(() => [
     {
         label: $gettext("at least one related record matches"),
         value: TRAVERSAL_QUANTIFIER_ANY,
@@ -110,31 +128,7 @@ const selectedRelationshipNode = computed<PathSelection | null>(() => {
     };
 });
 
-watch(
-    () => anchorGraphSlug,
-    async (_next, previousSlug) => {
-        if (previousSlug) {
-            if (innerGraphSlug) {
-                emit("update:innerGraphSlug", "");
-            }
-            if (relationship.path.graph_slug || relationship.path.node_alias) {
-                emitPathReset();
-            }
-        }
-        await loadRelatableTree();
-    },
-    { immediate: true },
-);
-
-watch(
-    () => innerGraphSlug,
-    (_next, previousSlug) => {
-        if (!previousSlug) {
-            return;
-        }
-        emitPathReset();
-    },
-);
+watch(() => anchorGraphSlug, loadRelatableTree, { immediate: true });
 
 watch(
     () => [anchorGraphSlug, innerGraphSlug] as const,
@@ -144,7 +138,9 @@ watch(
     { immediate: true },
 );
 
-async function loadRelatableTree() {
+// A saved target that is not among the related models offered is kept, not
+// cleared: clearing it would also drop every condition on the related records.
+async function loadRelatableTree(): Promise<void> {
     isLoadingRelatableTree.value = true;
     relatableTreeError.value = null;
 
@@ -161,17 +157,8 @@ async function loadRelatableTree() {
             await getRelatableNodesTreeForGraphId(graphId);
 
         const options = relatableGraphOptions.value;
-
-        if (!innerGraphSlug) {
-            if (options.length === 1) {
-                emit("update:innerGraphSlug", options[0]!.value);
-            }
-        } else if (!options.some((option) => option.value === innerGraphSlug)) {
-            emit("update:innerGraphSlug", "");
-
-            if (relationship.path.graph_slug || relationship.path.node_alias) {
-                emitPathReset();
-            }
+        if (!innerGraphSlug && options.length === 1) {
+            emit(UPDATE_INNER_GRAPH_SLUG_EVENT, options[0].value);
         }
     } catch (error) {
         relatableTreeError.value = error as Error;
@@ -182,7 +169,6 @@ async function loadRelatableTree() {
 }
 
 async function loadPairwiseNodesTree(): Promise<void> {
-    isLoadingPairwiseTree.value = true;
     pairwiseTreeError.value = null;
 
     const graphId = anchorGraph.value?.graphid;
@@ -190,25 +176,27 @@ async function loadPairwiseNodesTree(): Promise<void> {
 
     if (!graphId || !otherGraphId) {
         pairwiseNodesTree.value = null;
-        isLoadingPairwiseTree.value = false;
         return;
     }
 
     try {
-        pairwiseNodesTree.value = await getRelatableNodesTreeForGraphPair(
+        const pairwiseTree = await getRelatableNodesTreeForGraphPair(
             graphId,
             otherGraphId,
         );
+        if (innerGraph.value?.graphid === otherGraphId) {
+            pairwiseNodesTree.value = pairwiseTree;
+        }
     } catch (error) {
-        pairwiseTreeError.value = error as Error;
-        pairwiseNodesTree.value = null;
-    } finally {
-        isLoadingPairwiseTree.value = false;
+        if (innerGraph.value?.graphid === otherGraphId) {
+            pairwiseTreeError.value = error as Error;
+            pairwiseNodesTree.value = null;
+        }
     }
 }
 
 function emitPathReset(): void {
-    emit("update:relationship", {
+    emit(UPDATE_RELATIONSHIP_EVENT, {
         ...relationship,
         path: {
             type: relationship.path.type,
@@ -223,7 +211,7 @@ function onUpdateSelectedNode(nextSelectedNode: PathSelection | null): void {
         emitPathReset();
         return;
     }
-    emit("update:relationship", {
+    emit(UPDATE_RELATIONSHIP_EVENT, {
         ...relationship,
         path: {
             type: relationship.path.type,
@@ -237,10 +225,14 @@ function onUpdateSelectedNode(nextSelectedNode: PathSelection | null): void {
 function onChangeTraversalQuantifier(
     nextQuantifier: RelationshipBlock["traversal_quantifier"],
 ): void {
-    emit("update:relationship", {
+    emit(UPDATE_RELATIONSHIP_EVENT, {
         ...relationship,
         traversal_quantifier: nextQuantifier,
     });
+}
+
+function onSelectInnerGraph(nextInnerGraphSlug: string): void {
+    emit(UPDATE_INNER_GRAPH_SLUG_EVENT, nextInnerGraphSlug);
 }
 </script>
 
@@ -257,7 +249,6 @@ function onChangeTraversalQuantifier(
         <template v-else>
             <Select
                 v-if="relatableGraphOptions.length > 0"
-                class="relationship-editor-model"
                 option-label="label"
                 option-value="value"
                 :model-value="innerGraphSlug"
@@ -266,7 +257,7 @@ function onChangeTraversalQuantifier(
                 :disabled="isLoadingRelatableTree"
                 :placeholder="$gettext('Select a model')"
                 :aria-label="$gettext('Related model')"
-                @update:model-value="emit('update:innerGraphSlug', $event)"
+                @update:model-value="onSelectInnerGraph"
             />
 
             <template v-if="innerGraphSlug">
@@ -298,7 +289,6 @@ function onChangeTraversalQuantifier(
 
             <Select
                 v-if="isTraversalQuantifierShown"
-                class="relationship-editor-quantifier"
                 option-label="label"
                 option-value="value"
                 :model-value="relationship.traversal_quantifier"

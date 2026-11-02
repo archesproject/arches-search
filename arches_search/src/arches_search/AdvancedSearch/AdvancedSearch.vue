@@ -29,6 +29,7 @@ import {
 } from "@/arches_search/AdvancedSearch/api.ts";
 import { provideQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import { getFromCache } from "@/arches_search/AdvancedSearch/utils/async-cache.ts";
+import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 import {
     fetchSearchResults,
     startSearchResultsExport,
@@ -46,7 +47,6 @@ import {
 import {
     EXPORT_STATE_IDLE,
     EXPORT_STATE_PENDING,
-    RESULTS_SORT_RELEVANCE,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 import type {
@@ -63,6 +63,7 @@ import type {
     ExportState,
     ResultsSortValue,
     SearchDefinition,
+    SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const FIRST_RESULTS_PAGE = 1;
@@ -111,7 +112,7 @@ const searchResultsInstanceKey = ref(0);
 const isSearching = ref(false);
 const searchError = ref<Error | null>(null);
 const searchedGraphSlug = ref<string | null>(null);
-const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
+const sortSpecs = ref<SortSpec[]>([]);
 const isDescribeVisible = ref(false);
 const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
 
@@ -129,6 +130,10 @@ const { root, prunedPayload, panelRowId, clearQuery, closeRowPanel } =
         getNodesForGraphId,
     });
 
+const sortValue = computed<ResultsSortValue>(() =>
+    sortValueForSpecs(sortSpecs.value),
+);
+
 const resultCount = computed<number>(
     () => searchResults.value?.pagination.total_results ?? 0,
 );
@@ -140,7 +145,7 @@ const definitionToSave = computed<SearchDefinition | null>(() => {
     return buildAdvancedSearchDefinition(
         root.value.graphSlug,
         prunedPayload.value,
-        sortSpecForValue(sortValue.value),
+        sortSpecs.value,
     );
 });
 
@@ -152,24 +157,16 @@ watchEffect(async () => {
             fetchFacets(),
             fetchOperandComponents(),
         ]);
+        // The query applied when the page opens is searched once everything it
+        // needs has loaded, so arriving from Simple Search shows its results
+        // straight away. Filters Simple Search could not show are folded into
+        // it first.
+        foldUnrepresentedQueriesIntoAdvancedQuery();
+        searchAppliedQuery();
     } catch (error) {
         loadError.value = toError(error);
     } finally {
         isLoading.value = false;
-    }
-});
-
-// The query applied when the page opens is searched once everything it needs
-// has loaded, so arriving from Simple Search shows its results straight away.
-// Filters Simple Search could not show are folded into it first.
-watch(isLoading, (loading) => {
-    if (loading) {
-        return;
-    }
-    foldUnrepresentedQueriesIntoAdvancedQuery();
-    if (advancedQuery.value) {
-        searchedGraphSlug.value = advancedQuery.value.graph_slug;
-        void performSearch(FIRST_RESULTS_PAGE);
     }
 });
 
@@ -236,13 +233,6 @@ async function fetchOperandComponents(): Promise<void> {
     operandComponents.value = await getAdvancedSearchOperandComponents();
 }
 
-function toError(error: unknown): Error {
-    if (error instanceof Error) {
-        return error;
-    }
-    return new Error(String(error));
-}
-
 async function performSearch(page: number): Promise<void> {
     if (!searchedGraphSlug.value) {
         return;
@@ -255,7 +245,7 @@ async function performSearch(page: number): Promise<void> {
             queries: advancedQuery.value ? [advancedQuery.value] : [],
             graphSlugs: [searchedGraphSlug.value],
             page,
-            sort: sortSpecForValue(sortValue.value),
+            sort: sortSpecs.value,
         });
 
         if (page > FIRST_RESULTS_PAGE && searchResults.value) {
@@ -277,6 +267,14 @@ async function performSearch(page: number): Promise<void> {
     }
 }
 
+function searchAppliedQuery(): void {
+    if (!advancedQuery.value) {
+        return;
+    }
+    searchedGraphSlug.value = advancedQuery.value.graph_slug;
+    void performSearch(FIRST_RESULTS_PAGE);
+}
+
 function onSearch(): void {
     if (!root.value) {
         return;
@@ -295,7 +293,7 @@ function onClearAll(): void {
 }
 
 function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
-    sortValue.value = nextSortValue;
+    sortSpecs.value = sortSpecForValue(nextSortValue);
     void performSearch(FIRST_RESULTS_PAGE);
 }
 
@@ -314,7 +312,7 @@ async function onRunSavedQuery(
         searchError.value = toError(error);
         return;
     }
-    sortValue.value = sortValueForSpecs(definition.sort ?? []);
+    sortSpecs.value = definition.sort ?? [];
 
     if (!advancedQuery.value) {
         searchedGraphSlug.value = null;
@@ -327,8 +325,7 @@ async function onRunSavedQuery(
         });
         return;
     }
-    searchedGraphSlug.value = advancedQuery.value.graph_slug;
-    void performSearch(FIRST_RESULTS_PAGE);
+    searchAppliedQuery();
 }
 
 async function onExportResults(exportRequest: ExportRequest): Promise<void> {
@@ -398,11 +395,6 @@ async function onExportResults(exportRequest: ExportRequest): Promise<void> {
                 <ResultsToolbar
                     :total-results="resultCount"
                     :sort-value="sortValue"
-                    :show-filters="false"
-                    :show-map="false"
-                    :has-map-filter="false"
-                    :show-time="false"
-                    :has-time-filter="false"
                     :show-saved-searches="isSavedSearchesOpen"
                     :show-export-results="isExportResultsOpen"
                     :hide-filters-button="true"
@@ -475,13 +467,12 @@ async function onExportResults(exportRequest: ExportRequest): Promise<void> {
 
         <PayloadAnalyzer
             v-if="prunedPayload"
+            v-model:visible="isDescribeVisible"
             :datatypes-to-advanced-search-facets="
                 datatypesToAdvancedSearchFacets
             "
             :graphs="graphs"
             :payload="prunedPayload"
-            :visible="isDescribeVisible"
-            @update:visible="isDescribeVisible = $event"
         />
 
         <Toast />

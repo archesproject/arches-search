@@ -11,9 +11,9 @@ import QueryRelatedLink from "@/arches_search/AdvancedSearch/components/QueryBui
 import QueryRow from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryRow.vue";
 
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
+import { isContainer } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 import {
     LogicToken,
-    QUERY_BUILDER_ITEM_GROUP,
     QUERY_BUILDER_ITEM_RELATED_GROUP,
     QUERY_BUILDER_ITEM_ROW,
 } from "@/arches_search/AdvancedSearch/types.ts";
@@ -80,19 +80,16 @@ const groupDepthClass = computed<string>(
     () => `query-group-depth-${depth % GROUP_DEPTH_COLOR_COUNT}`,
 );
 
-function isGroupItem(
-    item: QueryBuilderItem,
-): item is QueryBuilderGroup | QueryBuilderRelatedGroup {
-    return (
-        item.itemType === QUERY_BUILDER_ITEM_GROUP ||
-        item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP
-    );
+function isRelatedGroup(
+    item: QueryBuilderGroup | QueryBuilderRelatedGroup,
+): item is QueryBuilderRelatedGroup {
+    return item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP;
 }
 
 function groupClasses(
     item: QueryBuilderGroup | QueryBuilderRelatedGroup,
 ): Record<string, boolean> {
-    const isRelated = item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP;
+    const isRelated = isRelatedGroup(item);
     return {
         [groupDepthClass.value]: !isRelated,
         "query-group-related": isRelated,
@@ -100,27 +97,22 @@ function groupClasses(
     };
 }
 
-function relatedEmptyHint(relatedGroup: QueryBuilderRelatedGroup): string {
-    if (!relatedGroup.targetGraphSlug) {
+function groupEmptyMessage(
+    item: QueryBuilderGroup | QueryBuilderRelatedGroup,
+): string {
+    if (!isRelatedGroup(item)) {
+        return "";
+    }
+    if (!item.targetGraphSlug) {
         return $gettext("Choose the related model and how it is linked.");
     }
     const targetGraphName =
-        graphs.value.find(
-            (graph) => graph.slug === relatedGroup.targetGraphSlug,
-        )?.name ?? relatedGroup.targetGraphSlug;
+        graphs.value.find((graph) => graph.slug === item.targetGraphSlug)
+            ?.name ?? item.targetGraphSlug;
     return $gettext(
         "Any related %{model} record counts. Add conditions to narrow it down.",
         { model: targetGraphName },
     );
-}
-
-function groupEmptyMessage(
-    item: QueryBuilderGroup | QueryBuilderRelatedGroup,
-): string {
-    if (item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP) {
-        return relatedEmptyHint(item);
-    }
-    return "";
 }
 
 function onToggleLogic(): void {
@@ -168,7 +160,7 @@ function onToggleLogic(): void {
                 :clause="item.clause"
             />
             <div
-                v-else-if="isGroupItem(item)"
+                v-else-if="isContainer(item)"
                 class="query-group"
                 :class="groupClasses(item)"
             >
@@ -176,15 +168,11 @@ function onToggleLogic(): void {
                     :group-id="item.id"
                     :label="item.label"
                     :logic="item.logic"
-                    :is-related="
-                        item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP
-                    "
+                    :is-related="isRelatedGroup(item)"
                 />
                 <div class="query-group-body">
                     <QueryRelatedLink
-                        v-if="
-                            item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP
-                        "
+                        v-if="isRelatedGroup(item)"
                         :group-id="item.id"
                         :anchor-graph-slug="item.anchorGraphSlug"
                         :target-graph-slug="item.targetGraphSlug"

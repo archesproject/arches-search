@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch, useId } from "vue";
+import { computed, inject, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
@@ -27,15 +27,12 @@ import type {
     PathSelection,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-type NodeWithCardinality = Node & {
-    nodegroup_has_cardinality_n?: boolean;
-};
-
 const CLAUSE_QUANTIFIER_ANY = "ANY" as const;
 const CLAUSE_QUANTIFIER_ALL = "ALL" as const;
 const CLAUSE_QUANTIFIER_NONE = "NONE" as const;
 
 const OPERAND_TYPE_LITERAL = "LITERAL" as const;
+const UPDATE_MODEL_VALUE_EVENT = "update:modelValue" as const;
 const OPEN_PANEL_EVENT = "open-panel" as const;
 
 const { modelValue, operandComponent, isEditingInPanel } = defineProps<{
@@ -45,7 +42,10 @@ const { modelValue, operandComponent, isEditingInPanel } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: "update:modelValue", updatedClause: LiteralClause): void;
+    (
+        event: typeof UPDATE_MODEL_VALUE_EVENT,
+        updatedClause: LiteralClause,
+    ): void;
     (event: typeof OPEN_PANEL_EVENT): void;
 }>();
 
@@ -53,21 +53,20 @@ const datatypesToAdvancedSearchFacets = inject<
     Ref<Record<string, AdvancedSearchFacet[]>>
 >("datatypesToAdvancedSearchFacets")!;
 
-const graphs = inject<Readonly<{ value: GraphModel[] }>>("graphs")!;
+const graphs = inject<Ref<GraphModel[]>>("graphs")!;
 
 const getNodesForGraphId =
-    inject<(graphId: string) => Promise<NodeWithCardinality[]>>(
-        "getNodesForGraphId",
-    )!;
+    inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId")!;
 
 const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
 
-const subjectNode = ref<NodeWithCardinality | null>(null);
+const subjectNode = ref<Node | null>(null);
 const subjectGraph = ref<GraphModel | null>(null);
-const operandKeysByIndex = ref<string[]>([]);
 
-const clauseQuantifierOptions = computed(() => [
+const clauseQuantifierOptions = computed<
+    { label: string; value: LiteralClause["quantifier"] }[]
+>(() => [
     { label: $gettext("any value"), value: CLAUSE_QUANTIFIER_ANY },
     { label: $gettext("every value"), value: CLAUSE_QUANTIFIER_ALL },
 ]);
@@ -76,11 +75,16 @@ const isNodeSubject = computed<boolean>(
     () => modelValue.subject.type === ClauseSubjectTypeToken.NODE,
 );
 
-const isQuantifierShown = computed<boolean>(
-    () =>
+// A saved "every value" stays visible, so it can be changed back.
+const isQuantifierShown = computed<boolean>(() => {
+    if (modelValue.quantifier === CLAUSE_QUANTIFIER_ALL) {
+        return true;
+    }
+    return (
         subjectNode.value?.nodegroup_has_cardinality_n === true &&
-        modelValue.quantifier !== CLAUSE_QUANTIFIER_NONE,
-);
+        modelValue.quantifier !== CLAUSE_QUANTIFIER_NONE
+    );
+});
 
 const selectedSubjectNode = computed<PathSelection | null>(() => {
     if (!isNodeSubject.value || !modelValue.subject.node_alias) {
@@ -92,12 +96,9 @@ const selectedSubjectNode = computed<PathSelection | null>(() => {
     };
 });
 
-const clauseDatatype = computed<string | undefined>(() => {
-    if (isNodeSubject.value) {
-        return subjectNode.value?.datatype;
-    }
-    return getClauseDatatype(modelValue, queryBuilder.lookups);
-});
+const clauseDatatype = computed<string | undefined>(() =>
+    getClauseDatatype(modelValue, queryBuilder.lookups),
+);
 
 const availableOperatorOptions = computed<AdvancedSearchFacet[]>(() => {
     if (!clauseDatatype.value) {
@@ -162,7 +163,15 @@ watch(
         () => modelValue.subject.graph_slug,
         () => modelValue.subject.node_alias,
     ],
-    async ([subjectType, terminalGraphSlug, terminalNodeAlias]) => {
+    async (
+        [subjectType, terminalGraphSlug, terminalNodeAlias],
+        _previousSubject,
+        onCleanup,
+    ) => {
+        let isStale = false;
+        onCleanup(() => {
+            isStale = true;
+        });
         subjectNode.value = null;
         subjectGraph.value = null;
 
@@ -184,28 +193,21 @@ watch(
 
         subjectGraph.value = graphMatchingTerminalSlug;
 
-        const allNodesForGraph = await getNodesForGraphId(
-            graphMatchingTerminalSlug.graphid,
-        );
-
-        subjectNode.value =
-            allNodesForGraph.find(
-                (graphNode) =>
-                    graphNode.alias === terminalNodeAlias &&
-                    graphNode.selectable !== false,
-            ) ?? null;
-    },
-    { immediate: true },
-);
-
-watch(
-    () => subjectNode.value?.nodegroup_has_cardinality_n,
-    (nodegroupHasCardinalityN) => {
-        if (
-            nodegroupHasCardinalityN === false &&
-            modelValue.quantifier === CLAUSE_QUANTIFIER_ALL
-        ) {
-            patchClause({ quantifier: CLAUSE_QUANTIFIER_ANY });
+        try {
+            const allNodesForGraph = await getNodesForGraphId(
+                graphMatchingTerminalSlug.graphid,
+            );
+            if (isStale) {
+                return;
+            }
+            subjectNode.value =
+                allNodesForGraph.find(
+                    (graphNode) =>
+                        graphNode.alias === terminalNodeAlias &&
+                        graphNode.selectable !== false,
+                ) ?? null;
+        } catch (error) {
+            console.error(error);
         }
     },
     { immediate: true },
@@ -228,14 +230,7 @@ function operandText(operand: LiteralOperand | undefined): string | null {
 }
 
 function patchClause(partialClause: Partial<LiteralClause>): void {
-    emit("update:modelValue", { ...modelValue, ...partialClause });
-}
-
-function ensureOperandKey(parameterIndex: number): string {
-    if (!operandKeysByIndex.value[parameterIndex]) {
-        operandKeysByIndex.value[parameterIndex] = useId();
-    }
-    return operandKeysByIndex.value[parameterIndex];
+    emit(UPDATE_MODEL_VALUE_EVENT, { ...modelValue, ...partialClause });
 }
 
 function handleSubjectUpdate(updatedSubject: PathSelection | null): void {
@@ -272,13 +267,10 @@ function onTextOperandUpdate(
 
 function handleOperandUpdate(
     parameterIndex: number,
-    updatedOperand: LiteralOperand | null,
+    updatedOperand: LiteralOperand,
 ): void {
     const updatedOperands = [...modelValue.operands];
-    updatedOperands[parameterIndex] = updatedOperand ?? {
-        type: OPERAND_TYPE_LITERAL,
-        value: null,
-    };
+    updatedOperands[parameterIndex] = updatedOperand;
     patchClause({ operands: updatedOperands });
 }
 
@@ -328,7 +320,6 @@ function handleQuantifierChange(
 
         <Select
             v-if="isQuantifierShown"
-            class="clause-builder-quantifier"
             option-label="label"
             option-value="value"
             :model-value="modelValue.quantifier"
@@ -339,7 +330,6 @@ function handleQuantifierChange(
 
         <Select
             v-if="!isOperatorSetInPanel"
-            class="clause-builder-operator"
             option-label="label"
             option-value="operator"
             :model-value="modelValue.operator"
@@ -368,18 +358,14 @@ function handleQuantifierChange(
             >
                 <ClauseOperandBuilder
                     v-for="parameterIndex in operandCount"
-                    :key="ensureOperandKey(parameterIndex - 1)"
+                    :key="parameterIndex"
                     :model-value="
                         modelValue.operands[parameterIndex - 1] ?? null
                     "
                     :subject-terminal-node="subjectNode"
                     :subject-terminal-graph="subjectGraph"
-                    :operand-type="OPERAND_TYPE_LITERAL"
                     @update:model-value="
-                        handleOperandUpdate(
-                            parameterIndex - 1,
-                            $event as LiteralOperand,
-                        )
+                        handleOperandUpdate(parameterIndex - 1, $event)
                     "
                 />
             </div>

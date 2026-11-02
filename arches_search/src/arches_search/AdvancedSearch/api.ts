@@ -1,5 +1,8 @@
 import Cookies from "js-cookie";
-import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
+import type {
+    AdvancedSearchOperandComponent,
+    GroupPayload,
+} from "@/arches_search/AdvancedSearch/types.ts";
 import { generateArchesURL } from "@/arches_vue_components/application";
 
 export async function getSearchSQL(searchQuery: GroupPayload) {
@@ -140,7 +143,9 @@ export async function getAdvancedSearchFacets() {
     return parsed;
 }
 
-export async function getAdvancedSearchOperandComponents() {
+export async function getAdvancedSearchOperandComponents(): Promise<
+    AdvancedSearchOperandComponent[]
+> {
     const response = await fetch(
         generateArchesURL("arches_search:advanced_search_operand_components"),
         {
@@ -152,7 +157,9 @@ export async function getAdvancedSearchOperandComponents() {
     );
 
     const parsed = await response.json();
-    if (!response.ok) throw new Error(parsed.message || response.statusText);
+    if (!response.ok) {
+        throw new Error(parsed.message || response.statusText);
+    }
 
     return parsed;
 }

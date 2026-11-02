@@ -22,21 +22,13 @@ import type {
     AdvancedSearchOperandComponent,
     GraphModel,
     LiteralClause,
+    Node,
     QueryBuilderRow,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-type NodeWithLabel = {
-    alias: string;
-    name: string;
-    card_x_node_x_widget_label?: string;
-    selectable?: boolean;
-};
-
 const graphs = inject<Ref<GraphModel[]>>("graphs")!;
 const getNodesForGraphId =
-    inject<(graphId: string) => Promise<NodeWithLabel[]>>(
-        "getNodesForGraphId",
-    )!;
+    inject<(graphId: string) => Promise<Node[]>>("getNodesForGraphId")!;
 
 const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
@@ -64,12 +56,8 @@ const panelOperandComponent = computed<AdvancedSearchOperandComponent | null>(
     },
 );
 
-const operandEditorPath = computed<string>(
-    () => panelOperandComponent.value?.component ?? "",
-);
-
 const operandEditor = computed<Component | null>(() => {
-    const componentPath = operandEditorPath.value;
+    const componentPath = panelOperandComponent.value?.component;
     if (!componentPath) {
         return null;
     }
@@ -78,7 +66,7 @@ const operandEditor = computed<Component | null>(() => {
     );
 });
 
-const switcherOptions = computed(() => {
+const switcherOptions = computed<{ label: string; value: string }[]>(() => {
     const panelSlug = panelOperandComponent.value?.slug;
     if (!root.value || !panelSlug) {
         return [];
@@ -97,7 +85,11 @@ const switcherOptions = computed(() => {
 
 watch(
     () => panelRow.value?.clause.subject,
-    async (subject) => {
+    async (subject, _previousSubject, onCleanup) => {
+        let isStale = false;
+        onCleanup(() => {
+            isStale = true;
+        });
         fieldLabel.value = "";
         if (!subject) {
             return;
@@ -114,6 +106,9 @@ watch(
         }
         try {
             const nodes = await getNodesForGraphId(graph.graphid);
+            if (isStale) {
+                return;
+            }
             const node = nodes.find(
                 (candidate) =>
                     candidate.alias === subject.node_alias &&

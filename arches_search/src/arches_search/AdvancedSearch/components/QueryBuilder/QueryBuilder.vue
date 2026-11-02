@@ -5,15 +5,14 @@ import { useGettext } from "vue3-gettext";
 import Button from "openvue/button";
 import Message from "openvue/message";
 import Select from "openvue/select";
-import SelectButton from "openvue/selectbutton";
 import Tag from "openvue/tag";
 
 import QueryAddButtons from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryAddButtons.vue";
 import QueryItemList from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryItemList.vue";
+import QueryLogicSelect from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/QueryLogicSelect.vue";
 
 import { useQueryDescription } from "@/arches_search/AdvancedSearch/composables/useQueryDescription.ts";
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
-import { LogicToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Ref } from "vue";
 import type {
@@ -55,16 +54,11 @@ const hasConditions = computed<boolean>(
     () => (root.value?.items.length ?? 0) > 0,
 );
 
-const resourceModelOptions = computed(() =>
+const resourceModelOptions = computed<{ label: string; value: string }[]>(() =>
     graphs.value
         .filter((graph) => graph.isresource && graph.is_active)
         .map((graph) => ({ label: graph.name, value: graph.slug })),
 );
-
-const logicOptions = computed(() => [
-    { label: $gettext("ALL"), value: LogicToken.AND },
-    { label: $gettext("ANY"), value: LogicToken.OR },
-]);
 
 const inlineDescription = computed<string>(
     () =>
@@ -100,12 +94,6 @@ function onConfirmGraphChange(): void {
 function onCancelGraphChange(): void {
     pendingGraphSlug.value = null;
 }
-
-function onRootLogicChange(nextLogic: LogicToken | null): void {
-    if (root.value && nextLogic && nextLogic !== root.value.logic) {
-        queryBuilder.toggleGroupLogic(root.value.id);
-    }
-}
 </script>
 
 <template>
@@ -139,14 +127,10 @@ function onRootLogicChange(nextLogic: LogicToken | null): void {
                         )
                     }}
                 </span>
-                <SelectButton
-                    option-label="label"
-                    option-value="value"
-                    :model-value="root.logic"
-                    :options="logicOptions"
-                    :allow-empty="false"
+                <QueryLogicSelect
+                    :container-id="root.id"
+                    :logic="root.logic"
                     :aria-label="$gettext('Match all or any conditions')"
-                    @update:model-value="onRootLogicChange"
                 />
                 <span class="query-builder-word">
                     {{
