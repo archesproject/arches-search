@@ -345,7 +345,7 @@ async function onRunSavedQuery(
         searchError.value = toError(error);
         return;
     }
-    sortSpecs.value = definition.sort ?? [];
+    sortSpecs.value = definition.sort;
 
     if (!advancedQuery.value) {
         searchedGraphSlug.value = null;

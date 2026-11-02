@@ -172,7 +172,6 @@ export type QueryBuilderRelatedGroup = {
     relationship: RelationshipBlock;
     logic: LogicToken;
     label: string;
-    targetLabel: string;
     items: QueryBuilderItem[];
 };
 

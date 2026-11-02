@@ -83,7 +83,7 @@ interface SearchFilters {
     sort: Ref<SortSpec[]>;
     applySearchDefinition(
         definition: SearchDefinition,
-        searchName?: string | null,
+        searchName: string | null,
     ): Promise<void>;
     applyAdvancedQuery(payload: GroupPayload | null): void;
     foldUnrepresentedQueriesIntoAdvancedQuery(): void;
@@ -643,7 +643,7 @@ function createSearchFilters(): SearchFilters {
 
     async function applySearchDefinition(
         definition: SearchDefinition,
-        searchName: string | null = null,
+        searchName: string | null,
     ): Promise<void> {
         await loadAvailableGraphs();
 
@@ -651,12 +651,12 @@ function createSearchFilters(): SearchFilters {
         const { [ADVANCED_QUERY_KEY]: savedAdvancedQuery, ...keyedQueries } =
             definition.queries;
 
-        terms.value = definition.terms.map((term) => ({ ...term }));
+        terms.value = definition.terms;
         queries.value = new Map(Object.entries(keyedQueries));
         advancedQuery.value = savedAdvancedQuery ?? null;
         mapFilter.value = definition.mapFilter;
         activeGraphs.value = findSavedGraphSelection(definition.graphSlugs);
-        sort.value = definition.sort ?? DEFAULT_SORT;
+        sort.value = definition.sort;
         includeRelated.value = definition.includeRelated;
         savedSearchName.value = searchName;
         search();

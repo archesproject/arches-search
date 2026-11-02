@@ -195,20 +195,16 @@ async function loadPairwiseNodesTree(): Promise<void> {
     }
 }
 
-function emitPathReset(): void {
-    emit(UPDATE_RELATIONSHIP_EVENT, {
-        ...relationship,
-        path: {
-            type: relationship.path.type,
-            graph_slug: "",
-            node_alias: "",
-        },
-    });
-}
-
 function onUpdateSelectedNode(nextSelectedNode: PathSelection | null): void {
     if (!nextSelectedNode) {
-        emitPathReset();
+        emit(UPDATE_RELATIONSHIP_EVENT, {
+            ...relationship,
+            path: {
+                type: relationship.path.type,
+                graph_slug: "",
+                node_alias: "",
+            },
+        });
         return;
     }
     emit(UPDATE_RELATIONSHIP_EVENT, {

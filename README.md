@@ -1321,7 +1321,8 @@ A saved search's `query_definition` is the search as the interface built it:
     },
     "graphSlugs": ["reference_and_sample_collection_item"],
     "mapFilter": null,
-    "sort": [{ "type": "primary_name", "direction": "asc" }]
+    "sort": [{ "type": "primary_name", "direction": "asc" }],
+    "includeRelated": true
 }
 ```
 

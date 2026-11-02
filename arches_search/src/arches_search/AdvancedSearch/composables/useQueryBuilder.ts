@@ -206,17 +206,15 @@ function createQueryBuilder({
     }
 
     function addRowToContainer(containerId: string): void {
-        updateRoot((currentRoot) => addRow(currentRoot, containerId).root);
+        updateRoot((currentRoot) => addRow(currentRoot, containerId));
     }
 
     function addGroupToContainer(containerId: string): void {
-        updateRoot((currentRoot) => addGroup(currentRoot, containerId).root);
+        updateRoot((currentRoot) => addGroup(currentRoot, containerId));
     }
 
     function addRelatedGroupToContainer(containerId: string): void {
-        updateRoot(
-            (currentRoot) => addRelatedGroup(currentRoot, containerId).root,
-        );
+        updateRoot((currentRoot) => addRelatedGroup(currentRoot, containerId));
     }
 
     function startSelecting(): void {
@@ -242,14 +240,14 @@ function createQueryBuilder({
         if (!root.value) {
             return;
         }
-        const result = groupQueryBuilderItems(
+        const nextRoot = groupQueryBuilderItems(
             root.value,
             selectedItemIdList.value,
         );
-        if (!result) {
+        if (!nextRoot) {
             return;
         }
-        setAdvancedQueryDraft(result.root);
+        setAdvancedQueryDraft(nextRoot);
         stopSelecting();
     }
 

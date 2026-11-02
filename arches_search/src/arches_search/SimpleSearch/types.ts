@@ -17,7 +17,7 @@ export interface SearchDefinition {
     queries: Record<string, GroupPayload>;
     graphSlugs: string[];
     mapFilter: FeatureCollection | null;
-    sort?: SortSpec[];
+    sort: SortSpec[];
     includeRelated: boolean;
 }
 

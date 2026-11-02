@@ -136,13 +136,21 @@ export function isClauseComplete(
 }
 
 export function findQueryBuilderItem(
-    root: QueryBuilderGroup,
+    container: QueryBuilderContainer,
     itemId: string,
 ): QueryBuilderItem | null {
-    if (root.id === itemId) {
-        return root;
+    for (const item of container.items) {
+        if (item.id === itemId) {
+            return item;
+        }
+        if (isContainer(item)) {
+            const found = findQueryBuilderItem(item, itemId);
+            if (found) {
+                return found;
+            }
+        }
     }
-    return findInContainer(root, itemId);
+    return null;
 }
 
 export function isContainer(
@@ -185,20 +193,18 @@ export function listQueryBuilderRows(
 export function addRow(
     root: QueryBuilderGroup,
     containerId: string,
-): { root: QueryBuilderGroup; rowId: string } {
-    const rowId = crypto.randomUUID();
-    const nextRoot = updateContainer(root, containerId, (container) => ({
+): QueryBuilderGroup {
+    return updateContainer(root, containerId, (container) => ({
         ...container,
         items: [
             ...container.items,
             {
-                id: rowId,
+                id: crypto.randomUUID(),
                 itemType: QUERY_BUILDER_ITEM_ROW,
                 clause: emptyClause(itemsGraphSlug(container)),
             },
         ],
     }));
-    return { root: nextRoot, rowId };
 }
 
 // A subgroup with the same ALL/ANY as its parent changes nothing, so a new one
@@ -206,14 +212,13 @@ export function addRow(
 export function addGroup(
     root: QueryBuilderGroup,
     containerId: string,
-): { root: QueryBuilderGroup; groupId: string } {
-    const groupId = crypto.randomUUID();
-    const nextRoot = updateContainer(root, containerId, (container) => ({
+): QueryBuilderGroup {
+    return updateContainer(root, containerId, (container) => ({
         ...container,
         items: [
             ...container.items,
             {
-                id: groupId,
+                id: crypto.randomUUID(),
                 itemType: QUERY_BUILDER_ITEM_GROUP,
                 graphSlug: itemsGraphSlug(container),
                 logic: oppositeLogic(container.logic),
@@ -222,20 +227,18 @@ export function addGroup(
             },
         ],
     }));
-    return { root: nextRoot, groupId };
 }
 
 export function addRelatedGroup(
     root: QueryBuilderGroup,
     containerId: string,
-): { root: QueryBuilderGroup; groupId: string } {
-    const groupId = crypto.randomUUID();
-    const nextRoot = updateContainer(root, containerId, (container) => ({
+): QueryBuilderGroup {
+    return updateContainer(root, containerId, (container) => ({
         ...container,
         items: [
             ...container.items,
             {
-                id: groupId,
+                id: crypto.randomUUID(),
                 itemType: QUERY_BUILDER_ITEM_RELATED_GROUP,
                 anchorGraphSlug: itemsGraphSlug(container),
                 targetGraphSlug: "",
@@ -250,12 +253,10 @@ export function addRelatedGroup(
                 },
                 logic: LogicToken.AND,
                 label: "",
-                targetLabel: "",
                 items: [],
             },
         ],
     }));
-    return { root: nextRoot, groupId };
 }
 
 export function removeQueryBuilderItem(
@@ -376,17 +377,16 @@ export function canGroupQueryBuilderItems(
 export function groupQueryBuilderItems(
     root: QueryBuilderGroup,
     itemIds: string[],
-): { root: QueryBuilderGroup; groupId: string } | null {
+): QueryBuilderGroup | null {
     const selectedIds = new Set(itemIds);
     const parent = findGroupableParent(root, selectedIds);
     if (!parent) {
         return null;
     }
 
-    const groupId = crypto.randomUUID();
-    const nextRoot = updateContainer(root, parent.id, (container) => {
+    return updateContainer(root, parent.id, (container) => {
         const newGroup: QueryBuilderGroup = {
-            id: groupId,
+            id: crypto.randomUUID(),
             itemType: QUERY_BUILDER_ITEM_GROUP,
             graphSlug: itemsGraphSlug(container),
             logic: oppositeLogic(container.logic),
@@ -409,7 +409,6 @@ export function groupQueryBuilderItems(
             }),
         };
     });
-    return { root: nextRoot, groupId };
 }
 
 function plainGroupFromPayload(payload: GroupPayload): QueryBuilderGroup {
@@ -419,14 +418,11 @@ function plainGroupFromPayload(payload: GroupPayload): QueryBuilderGroup {
         graphSlug: payload.graph_slug,
         logic: payload.logic,
         label: payload.label ?? "",
-        items: itemsFromPayload(payload, payload.graph_slug),
+        items: itemsFromPayload(payload),
     };
 }
 
-function itemsFromPayload(
-    payload: GroupPayload,
-    graphSlug: string,
-): QueryBuilderItem[] {
+function itemsFromPayload(payload: GroupPayload): QueryBuilderItem[] {
     const clauseItems: QueryBuilderItem[] = payload.clauses.map((clause) => {
         if (isEditableClause(clause)) {
             return {
@@ -443,12 +439,12 @@ function itemsFromPayload(
     });
 
     const groupItems: QueryBuilderItem[] = payload.groups.map((subgroup) => {
-        if (isEditablePlainGroup(subgroup, graphSlug)) {
+        if (isEditablePlainGroup(subgroup, payload.graph_slug)) {
             return plainGroupFromPayload(subgroup);
         }
         if (
             subgroup.relationship &&
-            isEditableRelatedGroup(subgroup, graphSlug)
+            isEditableRelatedGroup(subgroup, payload.graph_slug)
         ) {
             return relatedGroupFromPayload(subgroup, subgroup.relationship);
         }
@@ -471,8 +467,7 @@ function relatedGroupFromPayload(
         relationship,
         logic: innerGroup.logic,
         label: payload.label ?? "",
-        targetLabel: innerGroup.label ?? "",
-        items: itemsFromPayload(innerGroup, innerGroup.graph_slug),
+        items: itemsFromPayload(innerGroup),
     };
 }
 
@@ -509,18 +504,15 @@ function relatedGroupToPayload(
             logic: LogicToken.AND,
             clauses: [],
             groups: [
-                withLabel(
-                    {
-                        graph_slug: relatedGroup.targetGraphSlug,
-                        scope: GraphScopeToken.RESOURCE,
-                        logic: relatedGroup.logic,
-                        clauses: clausesOf(relatedGroup.items),
-                        groups: groupsOf(relatedGroup.items),
-                        aggregations: [],
-                        relationship: null,
-                    },
-                    relatedGroup.targetLabel,
-                ),
+                {
+                    graph_slug: relatedGroup.targetGraphSlug,
+                    scope: GraphScopeToken.RESOURCE,
+                    logic: relatedGroup.logic,
+                    clauses: clausesOf(relatedGroup.items),
+                    groups: groupsOf(relatedGroup.items),
+                    aggregations: [],
+                    relationship: null,
+                },
             ],
             aggregations: [],
             relationship: relatedGroup.relationship,
@@ -694,7 +686,11 @@ function isEditableRelatedGroup(
         return false;
     }
     const innerGroup = payload.groups[0];
-    return innerGroup.relationship === null && isEditableGroupShape(innerGroup);
+    return (
+        innerGroup.relationship === null &&
+        !innerGroup.label &&
+        isEditableGroupShape(innerGroup)
+    );
 }
 
 function emptyClause(graphSlug: string): LiteralClause {
@@ -724,24 +720,6 @@ function itemsGraphSlug(container: QueryBuilderContainer): string {
         return container.targetGraphSlug;
     }
     return container.graphSlug;
-}
-
-function findInContainer(
-    container: QueryBuilderContainer,
-    itemId: string,
-): QueryBuilderItem | null {
-    for (const item of container.items) {
-        if (item.id === itemId) {
-            return item;
-        }
-        if (isContainer(item)) {
-            const found = findInContainer(item, itemId);
-            if (found) {
-                return found;
-            }
-        }
-    }
-    return null;
 }
 
 function findGroupableParent(
