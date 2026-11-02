@@ -4,7 +4,7 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import { buildNodeDateSearchClause } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
+import { buildTimeFilterClause } from "@/arches_search/SimpleSearch/components/TimeFilter/time-filter-clauses.ts";
 import { buildSearchApiRequestBody } from "@/arches_search/SimpleSearch/utils/search-payload-builder.ts";
 import { TERM_KIND_CONTROLLED_TERM } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -19,10 +19,9 @@ function buildQueryForGraph(graphSlug: string): GroupPayload {
         scope: GraphScopeToken.RESOURCE,
         logic: LogicToken.AND,
         clauses: [
-            buildNodeDateSearchClause(
+            buildTimeFilterClause(
                 graphSlug,
                 "construction_date",
-                "BETWEEN",
                 "1900-01-01",
                 "1950-12-31",
             ),

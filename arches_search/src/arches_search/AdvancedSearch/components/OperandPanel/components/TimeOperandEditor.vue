@@ -12,7 +12,6 @@ import TimeSlider from "@/arches_search/SimpleSearch/components/TimeFilter/compo
 import { getDateBoundsForGraphId } from "@/arches_search/AdvancedSearch/api.ts";
 import { useClauseSubjectNode } from "@/arches_search/AdvancedSearch/composables/useClauseSubjectNode.ts";
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
-import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
 import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 import { getClauseDatatype } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 import {
@@ -20,6 +19,7 @@ import {
     clamp,
     countDaysBetween,
     parseSortableDate,
+    parseStoredDate,
     toLocalISODateString,
 } from "@/arches_search/SimpleSearch/components/TimeFilter/date-utils.ts";
 import {

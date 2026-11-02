@@ -56,7 +56,7 @@ import {
 } from "@/arches_search/SimpleSearch/utils/results-sort.ts";
 import { parseSearchDefinition } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
-import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
+import { parseStoredDate } from "@/arches_search/SimpleSearch/components/TimeFilter/date-utils.ts";
 import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 
 import type { FeatureCollection } from "geojson";

@@ -19,14 +19,11 @@ import {
     endOfYear,
     normalizeRange,
     parseSortableDate,
+    parseStoredDate,
     startOfYear,
     toLocalISODateString,
 } from "@/arches_search/SimpleSearch/components/TimeFilter/date-utils.ts";
-import {
-    buildDateSearchClause,
-    buildNodeDateSearchClause,
-    parseStoredDate,
-} from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
+import { buildTimeFilterClause } from "@/arches_search/SimpleSearch/components/TimeFilter/time-filter-clauses.ts";
 import {
     getDateBoundsForGraphId,
     getNodesForGraphId,
@@ -236,10 +233,10 @@ function buildClauses(): LiteralClause[] {
     const nodeAliases = selectedNodeAliases.value;
 
     if (nodeAliases.length === 0) {
-        return [buildDateSearchClause(graphSlug, "BETWEEN", from, to)];
+        return [buildTimeFilterClause(graphSlug, null, from, to)];
     }
     return nodeAliases.map((alias) =>
-        buildNodeDateSearchClause(graphSlug, alias, "BETWEEN", from, to),
+        buildTimeFilterClause(graphSlug, alias, from, to),
     );
 }
 

@@ -4,10 +4,7 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import {
-    buildDateSearchClause,
-    buildNodeDateSearchClause,
-} from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
+import { buildTimeFilterClause } from "@/arches_search/SimpleSearch/components/TimeFilter/time-filter-clauses.ts";
 import {
     buildAdvancedSearchDefinition,
     buildRequestDateRange,
@@ -39,22 +36,20 @@ function buildTimeFilterGroup(clauses: LiteralClause[]): GroupPayload {
 }
 
 const allDateNodesTimeFilter = buildTimeFilterGroup([
-    buildDateSearchClause(GRAPH_SLUG, "BETWEEN", "1900-01-01", "1950-12-31"),
+    buildTimeFilterClause(GRAPH_SLUG, null, "1900-01-01", "1950-12-31"),
 ]);
 const constructionDateTimeFilter = buildTimeFilterGroup([
-    buildNodeDateSearchClause(
+    buildTimeFilterClause(
         GRAPH_SLUG,
         "construction_date",
-        "BETWEEN",
         "1900-01-01",
         "1950-12-31",
     ),
 ]);
 const surveyDateTimeFilter = buildTimeFilterGroup([
-    buildNodeDateSearchClause(
+    buildTimeFilterClause(
         GRAPH_SLUG,
         "survey_date",
-        "BETWEEN",
         "2000-01-01",
         "2010-12-31",
     ),
@@ -109,8 +104,14 @@ describe("buildRequestDateRange", () => {
     });
 
     it("treats a single-date filter as a one-day range", () => {
+        const rangeClause = buildTimeFilterClause(
+            GRAPH_SLUG,
+            null,
+            "1900-01-01",
+            "1900-01-01",
+        );
         const singleDateTimeFilter = buildTimeFilterGroup([
-            buildDateSearchClause(GRAPH_SLUG, "BETWEEN", "1900-01-01"),
+            { ...rangeClause, operands: rangeClause.operands.slice(0, 1) },
         ]);
 
         expect(buildRequestDateRange([singleDateTimeFilter])).toEqual({
