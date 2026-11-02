@@ -449,11 +449,11 @@ function createSearchFilters(): SearchFilters {
     }
 
     function getRequestQueries(requestGraphSlugs: string[]): GroupPayload[] {
-        const candidateQueries = [...queries.value.values()];
-        if (advancedQuery.value) {
-            candidateQueries.push(advancedQuery.value);
-        }
-        return buildRequestQueries(candidateQueries, requestGraphSlugs);
+        return buildRequestQueries(
+            [...queries.value.values()],
+            advancedQuery.value,
+            requestGraphSlugs,
+        );
     }
 
     function setGraphs(graphs: ResourceType[]): void {
@@ -471,11 +471,12 @@ function createSearchFilters(): SearchFilters {
     }
 
     // "All" is saved as every resource model by name, which reads back as each
-    // one selected individually; selecting every one is "All".
+    // one selected individually; selecting every one is "All". With only one
+    // model, keeping it selected keeps its time and attribute filters.
     function findSavedGraphSelection(graphSlugs: string[]): ResourceType[] {
         const savedGraphs = findAvailableGraphs(graphSlugs);
         if (
-            availableGraphs.value.length > 0 &&
+            availableGraphs.value.length > 1 &&
             savedGraphs.length === availableGraphs.value.length
         ) {
             return [];

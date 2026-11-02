@@ -134,6 +134,7 @@ describe("buildRequestQueries", () => {
                     surveyDateTimeFilter,
                     otherGraphQuery,
                 ],
+                null,
                 [GRAPH_SLUG, "person"],
             ),
         ).toEqual([
@@ -154,6 +155,7 @@ describe("buildRequestQueries", () => {
         expect(
             buildRequestQueries(
                 [constructionDateTimeFilter, otherGraphQuery],
+                null,
                 [GRAPH_SLUG],
             ),
         ).toEqual([constructionDateTimeFilter]);
@@ -161,8 +163,14 @@ describe("buildRequestQueries", () => {
 
     it("leaves out the all-date-nodes time filter", () => {
         expect(
-            buildRequestQueries([allDateNodesTimeFilter], [GRAPH_SLUG]),
+            buildRequestQueries([allDateNodesTimeFilter], null, [GRAPH_SLUG]),
         ).toEqual([]);
+    });
+
+    it("sends an advanced query of one any-field clause", () => {
+        expect(
+            buildRequestQueries([], allDateNodesTimeFilter, [GRAPH_SLUG]),
+        ).toEqual([allDateNodesTimeFilter]);
     });
 });
 

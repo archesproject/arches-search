@@ -1,3 +1,5 @@
+import { groupBy } from "es-toolkit";
+
 import {
     ClauseSubjectTypeToken,
     LogicToken,
@@ -75,28 +77,29 @@ export function buildRequestQuery(
 
 // The API takes one payload per graph, so queries are grouped by the graph
 // they filter and each group is AND-combined. A query for a graph that is not
-// being searched is left out rather than sent to be ignored.
+// being searched is left out rather than sent to be ignored. Only a keyed
+// query can be the all-date-nodes time filter; an advanced query of one
+// any-field clause has the same shape but is always sent.
 export function buildRequestQueries(
-    queries: GroupPayload[],
+    keyedQueries: GroupPayload[],
+    advancedQuery: GroupPayload | null,
     requestedGraphSlugs: string[],
 ): GroupPayload[] {
     const requestedGraphSlugSet = new Set(requestedGraphSlugs);
-    const queriesByGraphSlug = new Map<string, GroupPayload[]>();
-
-    for (const payload of queries) {
-        if (
-            isNodeAgnosticDateQuery(payload) ||
-            !requestedGraphSlugSet.has(payload.graph_slug)
-        ) {
-            continue;
-        }
-        queriesByGraphSlug.set(payload.graph_slug, [
-            ...(queriesByGraphSlug.get(payload.graph_slug) ?? []),
-            payload,
-        ]);
+    const candidateQueries = keyedQueries.filter(
+        (payload) => !isNodeAgnosticDateQuery(payload),
+    );
+    if (advancedQuery) {
+        candidateQueries.push(advancedQuery);
     }
-
-    return [...queriesByGraphSlug.values()].map(mergeQueries);
+    const searchedQueries = candidateQueries.filter((payload) =>
+        requestedGraphSlugSet.has(payload.graph_slug),
+    );
+    const queriesByGraphSlug = groupBy(
+        searchedQueries,
+        (payload) => payload.graph_slug,
+    );
+    return Object.values(queriesByGraphSlug).map(mergeQueries);
 }
 
 function mergeQueries(queries: GroupPayload[]): GroupPayload {
