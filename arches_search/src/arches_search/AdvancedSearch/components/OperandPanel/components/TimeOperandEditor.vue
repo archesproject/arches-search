@@ -12,7 +12,6 @@ import TimeSlider from "@/arches_search/SimpleSearch/components/TimeFilter/compo
 import { getDateBoundsForGraphId } from "@/arches_search/AdvancedSearch/api.ts";
 import { useClauseSubjectNode } from "@/arches_search/AdvancedSearch/composables/useClauseSubjectNode.ts";
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
-import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 import { getClauseDatatype } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 import {
     addDays,
@@ -180,7 +179,7 @@ async function loadBounds(
             };
         }
     } catch (error) {
-        result = { sliderBounds: null, error: toError(error) };
+        result = { sliderBounds: null, error: error as Error };
     }
     boundsByKey.value = { ...boundsByKey.value, [key]: result };
 }

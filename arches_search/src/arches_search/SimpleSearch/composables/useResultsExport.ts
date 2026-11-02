@@ -3,7 +3,6 @@ import { useGettext } from "vue3-gettext";
 
 import { useToast } from "openvue/usetoast";
 
-import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 import { startSearchResultsExport } from "@/arches_search/SimpleSearch/api.ts";
 import {
     EXPORT_STATE_IDLE,
@@ -45,7 +44,7 @@ export function useResultsExport(): {
                 severity: "error",
                 life: 5000,
                 summary: $gettext("Export could not be started."),
-                detail: toError(error).message,
+                detail: (error as Error).message,
             });
         } finally {
             exportState.value = EXPORT_STATE_IDLE;

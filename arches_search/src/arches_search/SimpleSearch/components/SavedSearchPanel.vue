@@ -8,7 +8,6 @@ import Select from "openvue/select";
 import Textarea from "openvue/textarea";
 
 import { useToast } from "openvue/usetoast";
-import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 import {
     createSavedSearch,
     getSavedSearches,
@@ -123,7 +122,7 @@ async function onSaveSearch(): Promise<void> {
             severity: "error",
             life: 5000,
             summary: $gettext("Failed to save search"),
-            detail: toError(error).message,
+            detail: (error as Error).message,
         });
     } finally {
         isSaving.value = false;
@@ -184,7 +183,7 @@ async function onDelete(search: SavedSearch): Promise<void> {
             severity: "error",
             life: 5000,
             summary: $gettext("Failed to delete search"),
-            detail: toError(error).message,
+            detail: (error as Error).message,
         });
     }
 }

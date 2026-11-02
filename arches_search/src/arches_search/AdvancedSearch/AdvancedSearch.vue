@@ -35,7 +35,6 @@ import {
 } from "@/arches_search/AdvancedSearch/api.ts";
 import { provideQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import { getFromCache } from "@/arches_search/AdvancedSearch/utils/async-cache.ts";
-import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 import { fetchSearchResults } from "@/arches_search/SimpleSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useResultsExport } from "@/arches_search/SimpleSearch/composables/useResultsExport.ts";
@@ -177,7 +176,7 @@ watchEffect(async () => {
         foldUnrepresentedQueriesIntoAdvancedQuery();
         searchAppliedQuery();
     } catch (error) {
-        loadError.value = toError(error);
+        loadError.value = error as Error;
     } finally {
         isLoading.value = false;
     }
@@ -274,7 +273,7 @@ async function performSearch(page: number): Promise<void> {
             searchResults.value = results;
         }
     } catch (error) {
-        searchError.value = toError(error);
+        searchError.value = error as Error;
     } finally {
         isSearching.value = false;
     }
@@ -335,7 +334,7 @@ async function onRunSavedQuery(
     try {
         await applySearchDefinition(definition, searchName);
     } catch (error) {
-        searchError.value = toError(error);
+        searchError.value = error as Error;
         return;
     }
     sortSpecs.value = definition.sort;

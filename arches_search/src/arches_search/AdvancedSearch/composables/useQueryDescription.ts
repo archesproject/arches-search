@@ -6,7 +6,6 @@ import {
     getResourceNamesForPayload,
 } from "@/arches_search/AdvancedSearch/api.ts";
 import { describeAdvancedSearchQuery } from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/NarrationPanel/query-narrator.ts";
-import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 
 import type { ComputedRef, Ref } from "vue";
 import type {
@@ -118,7 +117,7 @@ export function useQueryDescription({
                 ...fetchedResourceNames,
             };
         } catch (error) {
-            loadError = toError(error);
+            loadError = error as Error;
         }
         loadErrorByPayloadKey.value = {
             ...loadErrorByPayloadKey.value,
