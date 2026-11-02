@@ -34,7 +34,6 @@ import {
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import { routeNames } from "@/arches_search/routes.ts";
-import { startSearchResultsExport } from "@/arches_search/SimpleSearch/api.ts";
 import { formatAttributeFilterValue } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import {
@@ -44,10 +43,10 @@ import {
     ACTIVE_FILTER_KIND_TIME,
     ADVANCED_QUERY_KEY,
     EXPORT_STATE_IDLE,
-    EXPORT_STATE_PENDING,
     TERM_FILTER_KEY,
     TIME_FILTER_QUERY_KEY,
 } from "@/arches_search/SimpleSearch/types.ts";
+import { useResultsExport } from "@/arches_search/SimpleSearch/composables/useResultsExport.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 import { applyPendingSearch } from "@/arches_search/SimpleSearch/utils/apply-pending-search.ts";
 import {
@@ -68,7 +67,6 @@ import type {
 import type {
     ActiveFilter,
     ExportRequest,
-    ExportState,
     NodeFilterConfigNode,
     ResultsSortDirection,
     ResultsSortField,
@@ -155,8 +153,8 @@ const {
     onSplitterResize,
     onSplitterResizeEnd,
 } = useSidePanel();
+const { exportState, exportResults } = useResultsExport();
 
-const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
 const graphModels = ref<GraphModel[]>([]);
 
 const searchDefinition = computed<SearchDefinition>(() =>
@@ -407,33 +405,8 @@ onMounted(() => {
     }
 });
 
-// The export runs in the background; the user hears about its completion
-// through an Arches notification, so this only reports whether it started.
-async function onExportResults(exportRequest: ExportRequest): Promise<void> {
-    exportState.value = EXPORT_STATE_PENDING;
-    try {
-        await startSearchResultsExport({
-            ...getExportPayload(),
-            exportRequest,
-        });
-        toast.add({
-            severity: "success",
-            life: 3000,
-            summary: $gettext("Your export has started."),
-            detail: $gettext(
-                "You will be notified when it is ready to download.",
-            ),
-        });
-    } catch (error) {
-        toast.add({
-            severity: "error",
-            life: 5000,
-            summary: $gettext("Export could not be started."),
-            detail: error instanceof Error ? error.message : undefined,
-        });
-    } finally {
-        exportState.value = EXPORT_STATE_IDLE;
-    }
+function onExportResults(exportRequest: ExportRequest): void {
+    void exportResults({ ...getExportPayload(), exportRequest });
 }
 
 async function initializeSearch(): Promise<void> {

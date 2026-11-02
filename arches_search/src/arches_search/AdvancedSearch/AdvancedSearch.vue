@@ -36,11 +36,9 @@ import {
 import { provideQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import { getFromCache } from "@/arches_search/AdvancedSearch/utils/async-cache.ts";
 import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
-import {
-    fetchSearchResults,
-    startSearchResultsExport,
-} from "@/arches_search/SimpleSearch/api.ts";
+import { fetchSearchResults } from "@/arches_search/SimpleSearch/api.ts";
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+import { useResultsExport } from "@/arches_search/SimpleSearch/composables/useResultsExport.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 import {
     sortDirectionForSpecs,
@@ -51,10 +49,6 @@ import {
     buildAdvancedSearchDefinition,
     parseSearchDefinition,
 } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
-import {
-    EXPORT_STATE_IDLE,
-    EXPORT_STATE_PENDING,
-} from "@/arches_search/SimpleSearch/types.ts";
 
 import type {
     AdvancedSearchFacet,
@@ -67,7 +61,6 @@ import type {
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     ExportRequest,
-    ExportState,
     ResultsSortDirection,
     ResultsSortField,
     SearchDefinition,
@@ -112,6 +105,7 @@ const {
     onSplitterResize,
     onSplitterResizeEnd,
 } = useSidePanel();
+const { exportState, exportResults } = useResultsExport();
 
 const isLoading = ref(true);
 const loadError = ref<Error | null>(null);
@@ -130,7 +124,6 @@ const searchError = ref<Error | null>(null);
 const searchedGraphSlug = ref<string | null>(null);
 const sortSpecs = ref<SortSpec[]>([]);
 const isDescribeVisible = ref(false);
-const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
 
 provide("datatypesToAdvancedSearchFacets", datatypesToAdvancedSearchFacets);
 provide("graphs", graphs);
@@ -361,35 +354,15 @@ async function onRunSavedQuery(
     searchAppliedQuery();
 }
 
-async function onExportResults(exportRequest: ExportRequest): Promise<void> {
+function onExportResults(exportRequest: ExportRequest): void {
     if (!searchedGraphSlug.value) {
         return;
     }
-    exportState.value = EXPORT_STATE_PENDING;
-    try {
-        await startSearchResultsExport({
-            queries: advancedQuery.value ? [advancedQuery.value] : [],
-            graphSlugs: [searchedGraphSlug.value],
-            exportRequest,
-        });
-        toast.add({
-            severity: "success",
-            life: 3000,
-            summary: $gettext("Your export has started."),
-            detail: $gettext(
-                "You will be notified when it is ready to download.",
-            ),
-        });
-    } catch (error) {
-        toast.add({
-            severity: "error",
-            life: 5000,
-            summary: $gettext("Export could not be started."),
-            detail: toError(error).message,
-        });
-    } finally {
-        exportState.value = EXPORT_STATE_IDLE;
-    }
+    void exportResults({
+        queries: advancedQuery.value ? [advancedQuery.value] : [],
+        graphSlugs: [searchedGraphSlug.value],
+        exportRequest,
+    });
 }
 </script>
 
