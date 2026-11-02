@@ -90,8 +90,7 @@ function onRemove(): void {
     align-items: center;
     gap: 0.8rem;
     padding: 0.8rem 1.2rem;
-    border-block-end: 0.1rem solid var(--query-group-border);
-    background: var(--query-group-header);
+    border-block-end: 0.1rem solid;
 }
 
 .query-group-header .query-group-header-icon {

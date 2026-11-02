@@ -1,9 +1,9 @@
 import Cookies from "js-cookie";
+import { generateArchesURL } from "@/arches_vue_components/application";
 import type {
     AdvancedSearchOperandComponent,
     GroupPayload,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import { generateArchesURL } from "@/arches_vue_components/application";
 
 export async function getSearchSQL(searchQuery: GroupPayload) {
     const response = await fetch(

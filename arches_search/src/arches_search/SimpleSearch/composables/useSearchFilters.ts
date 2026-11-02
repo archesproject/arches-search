@@ -21,13 +21,6 @@ import {
 } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import { TERM_SEARCH_MAX_HOPS } from "@/arches_search/SimpleSearch/utils/search-payload-builder.ts";
 
-import type { ComputedRef, InjectionKey, Ref } from "vue";
-import type {
-    GraphModel,
-    GroupPayload,
-    QueryBuilderGroup,
-    SearchResults,
-} from "@/arches_search/AdvancedSearch/types.ts";
 import {
     ACTIVE_FILTER_KIND_TERM,
     ADVANCED_QUERY_KEY,
@@ -35,6 +28,14 @@ import {
     TERM_KIND_RECORD,
     TIME_FILTER_QUERY_KEY,
 } from "@/arches_search/SimpleSearch/types.ts";
+
+import type { ComputedRef, InjectionKey, Ref } from "vue";
+import type {
+    GraphModel,
+    GroupPayload,
+    QueryBuilderGroup,
+    SearchResults,
+} from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     ActiveFilter,
     DateRangeFilter,

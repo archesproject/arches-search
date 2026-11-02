@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
-import { useToast } from "openvue/usetoast";
 
 import Button from "openvue/button";
 import InputText from "openvue/inputtext";
 import Select from "openvue/select";
 import Textarea from "openvue/textarea";
 
+import { useToast } from "openvue/usetoast";
 import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 import {
     createSavedSearch,
@@ -51,11 +51,11 @@ const {
 
 const emit = defineEmits<{
     (
-        event: "run-query",
+        event: typeof RUN_QUERY_EVENT,
         queryDefinition: Record<string, unknown>,
         searchName: string,
     ): void;
-    (event: "close"): void;
+    (event: typeof CLOSE_EVENT): void;
 }>();
 
 const { $gettext } = useGettext();

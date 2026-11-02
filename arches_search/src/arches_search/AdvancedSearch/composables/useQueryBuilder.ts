@@ -22,7 +22,10 @@ import {
     toggleRelatedNot,
     toggleRowNot,
 } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
-import { QUERY_BUILDER_ITEM_RELATED_GROUP } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    QUERY_BUILDER_ITEM_RELATED_GROUP,
+    QUERY_BUILDER_ITEM_ROW,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
 import type {
@@ -35,6 +38,7 @@ import type {
     QueryBuilderGroup,
     QueryBuilderItem,
     QueryBuilderLookups,
+    QueryBuilderRow,
     RelationshipBlock,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
@@ -45,6 +49,7 @@ interface QueryBuilderContext {
     hasUnsearchedChanges: ComputedRef<boolean>;
     isSelecting: ComputedRef<boolean>;
     panelRowId: ComputedRef<string | null>;
+    panelRow: ComputedRef<QueryBuilderRow | null>;
     selectedItemIds: ComputedRef<string[]>;
     canGroupSelection: ComputedRef<boolean>;
     startQuery(graphSlug: string): void;
@@ -129,6 +134,16 @@ function createQueryBuilder({
     const selectedItemIds = computed<string[]>(() => selectedItemIdList.value);
 
     const panelRowId = computed<string | null>(() => panelRowIdState.value);
+    const panelRow = computed<QueryBuilderRow | null>(() => {
+        if (!root.value || !panelRowIdState.value) {
+            return null;
+        }
+        const item = findQueryBuilderItem(root.value, panelRowIdState.value);
+        if (item?.itemType !== QUERY_BUILDER_ITEM_ROW) {
+            return null;
+        }
+        return item;
+    });
 
     const canGroupSelection = computed<boolean>(() => {
         if (!root.value) {
@@ -326,6 +341,7 @@ function createQueryBuilder({
         selectedItemIds,
         canGroupSelection,
         panelRowId,
+        panelRow,
         startQuery,
         clearQuery,
         addRow: addRowToContainer,

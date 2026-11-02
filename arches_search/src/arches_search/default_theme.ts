@@ -5,7 +5,7 @@ import Aura from "@openvue/themes/aura";
 
 import { compileGlobalCss } from "@/arches_modular_reports/utils.ts";
 
-const archesSearchTeal = "#0d9488";
+const ARCHES_SEARCH_TEAL = "#0d9488";
 
 const cssOverrides = {
     ":root": {
@@ -61,6 +61,7 @@ const cssOverrides = {
         "--arches-search-card-shadow-hover": "0 0.6rem 2rem rgba(0, 0, 0, 0.1)",
         "--arches-search-item-hover-shadow":
             "0 0.1rem 0.3rem rgba(0, 0, 0, 0.08)",
+        "--arches-search-chip-hover-shadow": "0 0 0 0.2rem rgba(0, 0, 0, 0.08)",
         "--arches-search-overlay-shadow":
             "0 0.8rem 2.4rem rgba(0, 0, 0, 0.12), 0 0.2rem 0.6rem rgba(0, 0, 0, 0.07)",
         "--arches-search-floating-header-shadow":
@@ -190,6 +191,7 @@ const cssOverrides = {
         "--arches-search-card-shadow-hover": "0 0.6rem 2rem rgba(0, 0, 0, 0.5)",
         "--arches-search-item-hover-shadow":
             "0 0.1rem 0.3rem rgba(0, 0, 0, 0.4)",
+        "--arches-search-chip-hover-shadow": "0 0 0 0.2rem rgba(0, 0, 0, 0.4)",
         "--arches-search-overlay-shadow":
             "0 0.8rem 2.4rem rgba(0, 0, 0, 0.6), 0 0.2rem 0.6rem rgba(0, 0, 0, 0.35)",
         "--arches-search-primary-muted-bg": "rgba(13, 148, 136, 0.14)",
@@ -252,7 +254,7 @@ const ArchesSearchPreset = definePreset(Aura, {
         },
     },
     semantic: {
-        primary: palette(archesSearchTeal),
+        primary: palette(ARCHES_SEARCH_TEAL),
     },
     css: compileGlobalCss(cssOverrides),
     components: {},

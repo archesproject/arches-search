@@ -37,6 +37,8 @@ type PathNode = {
 
 const DATATYPE_SEMANTIC = "semantic";
 
+const UPDATE_SELECTED_NODE_EVENT = "update:selectedNode" as const;
+
 const {
     graphSlugs,
     selectedNode = null,
@@ -52,7 +54,12 @@ const {
     graphOptionsTree?: RelatableGraphOption[];
 }>();
 
-const emit = defineEmits<{ "update:selectedNode": [PathSelection | null] }>();
+const emit = defineEmits<{
+    (
+        event: typeof UPDATE_SELECTED_NODE_EVENT,
+        selectedNode: PathSelection | null,
+    ): void;
+}>();
 
 const getNodesForGraphId =
     inject<(graphId: string) => Promise<NodeSummary[]>>("getNodesForGraphId")!;
@@ -127,12 +134,12 @@ const selectedKeys = computed({
             });
         }
         if (!matchingNode || matchingNode.selectable === false) {
-            emit("update:selectedNode", null);
+            emit(UPDATE_SELECTED_NODE_EVENT, null);
 
             return;
         }
 
-        emit("update:selectedNode", {
+        emit(UPDATE_SELECTED_NODE_EVENT, {
             graph_slug: matchingNode.data.graph_slug!,
             node_alias: matchingNode.data.alias,
             is_inverse: matchingNode.data.is_inverse,
@@ -396,7 +403,7 @@ function getGraphLabelPrefix(treeSelectValue: unknown): string {
             selection-mode="single"
             style="font-size: 1.2rem"
             :disabled="!hasSelectableNodes"
-            filter
+            :filter="true"
             :filter-placeholder="$gettext('Search nodes...')"
             :loading="isLoading"
             :placeholder="$gettext('Select node...')"

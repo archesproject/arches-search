@@ -14,7 +14,6 @@ import { useGettext } from "vue3-gettext";
 import Splitter from "openvue/splitter";
 import SplitterPanel from "openvue/splitterpanel";
 import Toast from "openvue/toast";
-import { useToast } from "openvue/usetoast";
 
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
@@ -28,6 +27,7 @@ import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter/TermF
 import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
 
+import { useToast } from "openvue/usetoast";
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
     GraphScopeToken,

@@ -14,7 +14,6 @@ import Skeleton from "openvue/skeleton";
 import Splitter from "openvue/splitter";
 import SplitterPanel from "openvue/splitterpanel";
 import Toast from "openvue/toast";
-import { useToast } from "openvue/usetoast";
 
 import AdvancedSearchHelp from "@/arches_search/AdvancedSearch/components/AdvancedSearchHelp.vue";
 import OperandPanel from "@/arches_search/AdvancedSearch/components/OperandPanel/OperandPanel.vue";
@@ -25,6 +24,7 @@ import ExportResultsPanel from "@/arches_search/SimpleSearch/components/ExportRe
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
 
+import { useToast } from "openvue/usetoast";
 import {
     getAdvancedSearchFacets,
     getAdvancedSearchOperandComponents,

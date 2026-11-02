@@ -15,13 +15,18 @@ import type { ReferenceSelectNodeValue } from "@/arches_controlled_lists/datatyp
 import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts";
 import type { ReferenceFilterValue } from "@/arches_search/SimpleSearch/components/attribute-filters/types.ts";
 
+const UPDATE_MODEL_VALUE_EVENT = "update:modelValue" as const;
+
 const { node, modelValue } = defineProps<{
     node: NodeFilterConfigNode;
     modelValue: ReferenceFilterValue | null;
 }>();
 
 const emit = defineEmits<{
-    (event: "update:modelValue", value: ReferenceSelectNodeValue[]): void;
+    (
+        event: typeof UPDATE_MODEL_VALUE_EVENT,
+        value: ReferenceSelectNodeValue[],
+    ): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -66,7 +71,7 @@ watch(
 );
 
 function onSelectionChange(value: ReferenceSelectNodeValue[]): void {
-    emit("update:modelValue", value);
+    emit(UPDATE_MODEL_VALUE_EVENT, value);
 }
 </script>
 

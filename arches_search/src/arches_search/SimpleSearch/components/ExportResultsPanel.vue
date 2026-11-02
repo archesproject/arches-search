@@ -36,8 +36,8 @@ const {
 }>();
 
 const emit = defineEmits<{
-    (event: "export", request: ExportRequest): void;
-    (event: "close"): void;
+    (event: typeof EXPORT_EVENT, request: ExportRequest): void;
+    (event: typeof CLOSE_EVENT): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -60,6 +60,13 @@ const formatOptions = computed(() => [
 const isExporting = computed<boolean>(
     () => exportState === EXPORT_STATE_PENDING,
 );
+
+const exportButtonLabel = computed<string>(() => {
+    if (isExporting.value) {
+        return $gettext("Exporting...");
+    }
+    return $gettext("Export");
+});
 
 const canExport = computed<boolean>(
     () =>
@@ -141,8 +148,8 @@ function onExport(): void {
                 <label
                     v-for="option in formatOptions"
                     :key="option.value"
-                    :for="`export-format-${option.value}`"
                     class="format-option"
+                    :for="`export-format-${option.value}`"
                     :class="{ selected: selectedFormat === option.value }"
                 >
                     <span class="format-option-header">
@@ -213,11 +220,7 @@ function onExport(): void {
             <div class="export-actions">
                 <Button
                     icon="pi pi-download"
-                    :label="
-                        isExporting
-                            ? $gettext('Exporting...')
-                            : $gettext('Export')
-                    "
+                    :label="exportButtonLabel"
                     :loading="isExporting"
                     :disabled="!canExport"
                     @click="onExport"

@@ -256,34 +256,49 @@ function onToggleLogic(): void {
     flex-direction: column;
     min-inline-size: 0;
     overflow: hidden;
-    border: 0.2rem solid var(--query-group-border);
+    border: 0.2rem solid;
     border-radius: 1rem;
-    background: var(--query-group-bg);
     transition: box-shadow 0.15s;
 }
 
 .query-item-list .query-group.query-group-depth-0 {
-    --query-group-bg: var(--arches-search-query-group-0-bg);
-    --query-group-border: var(--arches-search-query-group-0-border);
-    --query-group-header: var(--arches-search-query-group-0-header);
+    border-color: var(--arches-search-query-group-0-border);
+    background: var(--arches-search-query-group-0-bg);
+}
+
+.query-item-list .query-group.query-group-depth-0 > .query-group-header {
+    border-block-end-color: var(--arches-search-query-group-0-border);
+    background: var(--arches-search-query-group-0-header);
 }
 
 .query-item-list .query-group.query-group-depth-1 {
-    --query-group-bg: var(--arches-search-query-group-1-bg);
-    --query-group-border: var(--arches-search-query-group-1-border);
-    --query-group-header: var(--arches-search-query-group-1-header);
+    border-color: var(--arches-search-query-group-1-border);
+    background: var(--arches-search-query-group-1-bg);
+}
+
+.query-item-list .query-group.query-group-depth-1 > .query-group-header {
+    border-block-end-color: var(--arches-search-query-group-1-border);
+    background: var(--arches-search-query-group-1-header);
 }
 
 .query-item-list .query-group.query-group-depth-2 {
-    --query-group-bg: var(--arches-search-query-group-2-bg);
-    --query-group-border: var(--arches-search-query-group-2-border);
-    --query-group-header: var(--arches-search-query-group-2-header);
+    border-color: var(--arches-search-query-group-2-border);
+    background: var(--arches-search-query-group-2-bg);
+}
+
+.query-item-list .query-group.query-group-depth-2 > .query-group-header {
+    border-block-end-color: var(--arches-search-query-group-2-border);
+    background: var(--arches-search-query-group-2-header);
 }
 
 .query-item-list .query-group.query-group-related {
-    --query-group-bg: var(--arches-search-query-related-bg);
-    --query-group-border: var(--arches-search-query-related-border);
-    --query-group-header: var(--arches-search-query-related-header);
+    border-color: var(--arches-search-query-related-border);
+    background: var(--arches-search-query-related-bg);
+}
+
+.query-item-list .query-group.query-group-related > .query-group-header {
+    border-block-end-color: var(--arches-search-query-related-border);
+    background: var(--arches-search-query-related-header);
 }
 
 .query-item-list .query-group.query-group-selected {

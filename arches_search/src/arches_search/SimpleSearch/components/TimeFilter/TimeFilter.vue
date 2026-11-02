@@ -38,6 +38,10 @@ import { HISTORICAL_CUTOFF_YEAR } from "@/arches_search/SimpleSearch/components/
 import type { TimeFilterNodeSummary } from "@/arches_search/SimpleSearch/components/TimeFilter/types.ts";
 import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
 
+const UPDATE_MODEL_VALUE_EVENT = "update:modelValue" as const;
+const REMOVE_EVENT = "remove" as const;
+const CLOSE_EVENT = "close" as const;
+
 const { graphSlug, graphId, graphLabel, modelValue } = defineProps<{
     graphSlug: string | null;
     graphId: string | null;
@@ -46,9 +50,9 @@ const { graphSlug, graphId, graphLabel, modelValue } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: "update:modelValue", clauses: LiteralClause[]): void;
-    (event: "remove"): void;
-    (event: "close"): void;
+    (event: typeof UPDATE_MODEL_VALUE_EVENT, clauses: LiteralClause[]): void;
+    (event: typeof REMOVE_EVENT): void;
+    (event: typeof CLOSE_EVENT): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -246,7 +250,7 @@ function nodeAliasesFromClauses(clauses: LiteralClause[]): string[] {
 }
 
 function emitClauses(): void {
-    emit("update:modelValue", buildClauses());
+    emit(UPDATE_MODEL_VALUE_EVENT, buildClauses());
 }
 
 function onDateFromChange(value: unknown): void {
@@ -305,12 +309,12 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                 {{ $gettext("Time Filter") }}
             </h3>
             <Button
-                :label="$gettext('Close')"
                 icon="pi pi-times"
                 icon-pos="left"
-                :text="true"
                 class="time-filter-close-btn"
-                @click="emit('close')"
+                :label="$gettext('Close')"
+                :text="true"
+                @click="emit(CLOSE_EVENT)"
             />
         </div>
 
@@ -339,8 +343,8 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
             <Message
                 v-if="noBoundsData"
                 severity="warn"
-                :closable="false"
                 class="time-filter-no-data-message"
+                :closable="false"
             >
                 {{ noBoundsDataMessage }}
             </Message>
@@ -362,8 +366,8 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                     <div class="time-filter-calendar-row">
                         <InputNumber
                             v-if="isHistoricalFrom"
-                            :model-value="fromYear"
                             class="time-filter-year-input"
+                            :model-value="fromYear"
                             :placeholder="$gettext('From year...')"
                             :use-grouping="false"
                             :disabled="isSingleDay"
@@ -371,20 +375,20 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                         />
                         <DatePicker
                             v-else
-                            :model-value="sortedRange[0]"
                             class="time-filter-date-picker"
-                            :placeholder="$gettext('From...')"
-                            :show-icon="true"
                             icon-display="input"
                             date-format="M d, yy"
+                            :model-value="sortedRange[0]"
+                            :placeholder="$gettext('From...')"
+                            :show-icon="true"
                             :disabled="isSingleDay"
                             @update:model-value="onDateFromChange"
                         />
 
                         <InputNumber
                             v-if="isHistoricalTo"
-                            :model-value="toYear"
                             class="time-filter-year-input"
+                            :model-value="toYear"
                             :placeholder="$gettext('To year...')"
                             :use-grouping="false"
                             :disabled="isSingleDay"
@@ -392,12 +396,12 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                         />
                         <DatePicker
                             v-else
-                            :model-value="sortedRange[1]"
                             class="time-filter-date-picker"
-                            :placeholder="$gettext('To...')"
-                            :show-icon="true"
                             icon-display="input"
                             date-format="M d, yy"
+                            :model-value="sortedRange[1]"
+                            :placeholder="$gettext('To...')"
+                            :show-icon="true"
                             :disabled="isSingleDay"
                             @update:model-value="onDateToChange"
                         />
@@ -424,8 +428,8 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 0.75rem;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    padding-block-end: 0.75rem;
+    border-block-end: 0.125rem solid var(--p-content-border-color);
 }
 
 .time-filter-title {
@@ -462,8 +466,8 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
 
 .time-filter-section-heading {
     margin: 0;
-    padding-bottom: 0.5rem;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    padding-block-end: 0.5rem;
+    border-block-end: 0.125rem solid var(--p-content-border-color);
     font-weight: 600;
     font-size: 1.25rem;
     color: var(--p-text-color);

@@ -9,37 +9,20 @@ import { removeVueExtension } from "@/arches_vue_components/generics/GenericWidg
 import { useClauseSubjectNode } from "@/arches_search/AdvancedSearch/composables/useClauseSubjectNode.ts";
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import {
-    findQueryBuilderItem,
     getClauseOperandComponent,
     listQueryBuilderRows,
 } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
-import {
-    ClauseSubjectTypeToken,
-    QUERY_BUILDER_ITEM_ROW,
-} from "@/arches_search/AdvancedSearch/types.ts";
+import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Component } from "vue";
 import type {
     AdvancedSearchOperandComponent,
     LiteralClause,
-    QueryBuilderRow,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const { $gettext } = useGettext();
 const queryBuilder = useQueryBuilder();
-const { root, panelRowId, lookups } = queryBuilder;
-
-const panelRow = computed<QueryBuilderRow | null>(() => {
-    if (!root.value || !panelRowId.value) {
-        return null;
-    }
-    const item = findQueryBuilderItem(root.value, panelRowId.value);
-    if (item?.itemType !== QUERY_BUILDER_ITEM_ROW) {
-        return null;
-    }
-    return item;
-});
-
+const { root, panelRowId, panelRow, lookups } = queryBuilder;
 const { subjectNode } = useClauseSubjectNode(
     toRef(() => panelRow.value?.clause.subject),
 );

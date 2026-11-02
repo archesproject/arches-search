@@ -157,11 +157,11 @@ function submitSearch(): void {
             </AutoComplete>
         </span>
         <Button
-            :label="$gettext('Search')"
             icon="pi pi-search"
             icon-pos="left"
             class="search-button"
             type="button"
+            :label="$gettext('Search')"
             @click="submitSearch"
         />
     </div>
