@@ -8,7 +8,6 @@ TIME_FILTER = {
     "label": {"en": "Time filter"},
     "icon": "pi pi-calendar",
     "component": "arches_search/AdvancedSearch/components/OperandPanel/components/TimeOperandEditor.vue",
-    "opens_in_panel": True,
     "sets_operator": True,
 }
 
@@ -17,7 +16,6 @@ MAP_FILTER = {
     "label": {"en": "Map filter"},
     "icon": "pi pi-map-marker",
     "component": "arches_search/AdvancedSearch/components/OperandPanel/components/MapOperandEditor.vue",
-    "opens_in_panel": True,
     "sets_operator": False,
 }
 
@@ -75,17 +73,9 @@ class Migration(migrations.Migration):
                 (
                     "component",
                     models.CharField(
-                        help_text="Path of the Vue component that edits the value, relative to the frontend source root.",
+                        help_text="Path of the Vue component that edits the value in the side panel, relative to the frontend source root.",
                         max_length=255,
                         verbose_name="Component",
-                    ),
-                ),
-                (
-                    "opens_in_panel",
-                    models.BooleanField(
-                        default=False,
-                        help_text="Whether the component opens in the side panel instead of inline.",
-                        verbose_name="Opens in panel",
                     ),
                 ),
                 (

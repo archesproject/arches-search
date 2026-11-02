@@ -160,14 +160,9 @@ class AdvancedSearchOperandComponent(models.Model):
         max_length=255,
         verbose_name=_("Component"),
         help_text=_(
-            "Path of the Vue component that edits the value, relative to the "
-            "frontend source root."
+            "Path of the Vue component that edits the value in the side "
+            "panel, relative to the frontend source root."
         ),
-    )
-    opens_in_panel = models.BooleanField(
-        default=False,
-        verbose_name=_("Opens in panel"),
-        help_text=_("Whether the component opens in the side panel instead of inline."),
     )
     sets_operator = models.BooleanField(
         default=False,
@@ -185,7 +180,6 @@ class AdvancedSearchOperandComponent(models.Model):
             "label": self.label,
             "icon": self.icon,
             "component": self.component,
-            "opens_in_panel": self.opens_in_panel,
             "sets_operator": self.sets_operator,
         }
 

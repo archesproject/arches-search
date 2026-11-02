@@ -391,14 +391,13 @@ node's widget. A datatype whose value does not fit in a row, like a date range
 or an area on a map, can name its own Vue component instead, with an
 `AdvancedSearchOperandComponent` row added via a migration:
 
-| Field            | Meaning                                                                                                                                  |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `datatype`       | The datatype it edits (one row per datatype).                                                                                            |
-| `slug`           | Shared by datatypes edited the same way (`date` and `edtf` are both `time`). The builder lets you switch between conditions of one slug. |
-| `label`, `icon`  | The badge shown on the condition.                                                                                                        |
-| `component`      | Path of the Vue component, relative to the frontend source root.                                                                         |
-| `opens_in_panel` | Edit the value in the side panel instead of inline.                                                                                      |
-| `sets_operator`  | The component chooses the operator itself, so the condition does not show its own operator select.                                       |
+| Field           | Meaning                                                                                                                                  |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `datatype`      | The datatype it edits (one row per datatype).                                                                                            |
+| `slug`          | Shared by datatypes edited the same way (`date` and `edtf` are both `time`). The builder lets you switch between conditions of one slug. |
+| `label`, `icon` | The badge shown on the condition.                                                                                                        |
+| `component`     | Path of the Vue component that opens in the side panel, relative to the frontend source root.                                            |
+| `sets_operator` | The component chooses the operator itself, so the condition does not show its own operator select.                                       |
 
 The component takes the condition as a `clause` prop and emits
 `update:clause` with the edited clause. Arches Search registers its own time

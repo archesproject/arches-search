@@ -203,7 +203,6 @@ export interface AdvancedSearchOperandComponent {
     label: string;
     icon: string;
     component: string;
-    opens_in_panel: boolean;
     sets_operator: boolean;
 }
 

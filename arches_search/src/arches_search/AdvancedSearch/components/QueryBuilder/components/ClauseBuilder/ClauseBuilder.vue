@@ -119,13 +119,11 @@ const operandCount = computed<number>(
 );
 
 const isOperatorSetInPanel = computed<boolean>(
-    () =>
-        operandComponent?.opens_in_panel === true &&
-        operandComponent.sets_operator,
+    () => operandComponent?.sets_operator === true,
 );
 
 const isPanelButtonShown = computed<boolean>(() => {
-    if (operandComponent?.opens_in_panel !== true) {
+    if (!operandComponent) {
         return false;
     }
     return isOperatorSetInPanel.value || operandCount.value > 0;
