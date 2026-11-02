@@ -49,6 +49,7 @@ describe("applyPendingSearch", () => {
                 graphSlugs: ["person"],
                 mapFilter: null,
                 sort: [],
+                includeRelated: true,
             },
             "People",
         );

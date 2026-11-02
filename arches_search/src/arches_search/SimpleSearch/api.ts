@@ -31,6 +31,7 @@ export async function createSearchMVTContext(params: {
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
+    maxHops?: number;
 }): Promise<{ context_id: string }> {
     const requestPayload = buildSearchApiRequestBody({
         terms: params.terms ?? [],
@@ -39,6 +40,7 @@ export async function createSearchMVTContext(params: {
         mapFilter: params.mapFilter ?? null,
         dateRange: params.dateRange ?? null,
         resourceFieldFilters: params.resourceFieldFilters ?? null,
+        maxHops: params.maxHops,
     });
 
     const url = generateArchesURL("arches_search:search_mvt_context");
@@ -63,6 +65,7 @@ export async function fetchSearchResults({
     mapFilter = null,
     dateRange = null,
     resourceFieldFilters = null,
+    maxHops,
     page = 1,
     sort,
 }: {
@@ -72,6 +75,7 @@ export async function fetchSearchResults({
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
+    maxHops?: number;
     page?: number;
     sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
@@ -82,6 +86,7 @@ export async function fetchSearchResults({
         mapFilter,
         dateRange,
         resourceFieldFilters,
+        maxHops,
         page,
         sort,
     });
@@ -227,6 +232,7 @@ export async function exportSearchResults({
     graphSlugs = [],
     dateRange = null,
     resourceFieldFilters = null,
+    maxHops,
     filename = "search_export",
     allDescriptors = false,
 }: {
@@ -235,6 +241,7 @@ export async function exportSearchResults({
     graphSlugs?: string[];
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
+    maxHops?: number;
     filename?: string;
     allDescriptors?: boolean;
 }): Promise<void> {
@@ -245,6 +252,7 @@ export async function exportSearchResults({
         mapFilter: null,
         dateRange,
         resourceFieldFilters,
+        maxHops,
     });
     requestPayload.filename = filename;
     requestPayload.allDescriptors = allDescriptors;

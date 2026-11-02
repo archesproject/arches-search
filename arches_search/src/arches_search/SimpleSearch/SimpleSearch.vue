@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, watchEffect } from "vue";
+import {
+    computed,
+    defineAsyncComponent,
+    onMounted,
+    ref,
+    watch,
+    watchEffect,
+} from "vue";
 import dayjs from "dayjs";
 import { useRouter } from "vue-router";
 import { useGettext } from "vue3-gettext";
@@ -14,7 +21,6 @@ import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters
 import AttributeFilters from "@/arches_search/SimpleSearch/components/attribute-filters/AttributeFilters.vue";
 import ExportResultsPanel from "@/arches_search/SimpleSearch/components/ExportResultsPanel.vue";
 import IdleInfoTiles from "@/arches_search/SimpleSearch/components/IdleInfoTiles.vue";
-import RelatedResourcesPanel from "@/arches_search/SimpleSearch/components/RelatedResourcesPanel.vue";
 import ResourceTypeFilter from "@/arches_search/SimpleSearch/components/ResourceTypeFilter.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
@@ -45,8 +51,9 @@ import {
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 import { applyPendingSearch } from "@/arches_search/SimpleSearch/utils/apply-pending-search.ts";
 import {
-    sortSpecForValue,
-    sortValueForSpecs,
+    sortDirectionForSpecs,
+    sortFieldForSpecs,
+    sortSpecForField,
 } from "@/arches_search/SimpleSearch/utils/results-sort.ts";
 import { parseSearchDefinition } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
@@ -61,9 +68,17 @@ import type {
     ActiveFilter,
     ExportRequest,
     ExportState,
-    ResultsSortValue,
+    NodeFilterConfigNode,
+    ResultsSortDirection,
+    ResultsSortField,
     SearchDefinition,
 } from "@/arches_search/SimpleSearch/types.ts";
+
+// Kept out of the search page's own code, as most visits never open it and it
+// brings a graph library with it
+const RelationshipGraph = defineAsyncComponent(
+    () => import("@/arches_search/RelationshipGraph/RelationshipGraph.vue"),
+);
 
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
@@ -118,13 +133,15 @@ const {
     isTimeFilterActive,
     isTimeFilterOpen,
     isRelatedResourcesOpen,
-    relatedResource,
+    relatedResources,
     resultsPanelSize,
     visibleSidePanelSize,
     sidePanelMinSize,
     sidePanelContentClass,
     sidePanelStyle,
     closeSidePanel,
+    removeRelatedResource,
+    setRelatedResourcesGraphVisible,
     onToggleAttributeFilters,
     onToggleMapFilter,
     onToggleSavedSearches,
@@ -145,8 +162,12 @@ const searchDefinition = computed<SearchDefinition>(() =>
     getSearchDefinition(),
 );
 
-const sortValue = computed<ResultsSortValue>(() =>
-    sortValueForSpecs(sort.value),
+const sortField = computed<ResultsSortField>(() =>
+    sortFieldForSpecs(sort.value),
+);
+
+const sortDirection = computed<ResultsSortDirection>(() =>
+    sortDirectionForSpecs(sort.value),
 );
 
 const isSingleGraphSelected = computed<boolean>(
@@ -159,6 +180,18 @@ const activeGraphId = computed<string | null>(
 
 const activeGraphLabel = computed<string | null>(
     () => singleActiveGraph.value?.label ?? null,
+);
+
+const filterableNodeFilterConfigNodes = computed<NodeFilterConfigNode[]>(() =>
+    nodeFilterConfigNodes.value.filter(
+        (node: NodeFilterConfigNode) => node.filterable,
+    ),
+);
+
+const sortableNodeFilterConfigNodes = computed<NodeFilterConfigNode[]>(() =>
+    nodeFilterConfigNodes.value.filter(
+        (node: NodeFilterConfigNode) => node.sortable,
+    ),
 );
 
 const activeGraphSlug = computed<string | null>(
@@ -423,8 +456,16 @@ function onRequestPage(page: number): void {
     search(page);
 }
 
-function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
-    setSort(sortSpecForValue(nextSortValue));
+function onSortFieldUpdate(nextField: ResultsSortField | null): void {
+    setSort(
+        sortSpecForField(nextField, sortDirection.value, activeGraphSlug.value),
+    );
+}
+
+function onSortDirectionUpdate(nextDirection: ResultsSortDirection): void {
+    setSort(
+        sortSpecForField(sortField.value, nextDirection, activeGraphSlug.value),
+    );
 }
 
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {
@@ -527,7 +568,9 @@ async function applySavedSearch(
                 >
                     <ResultsToolbar
                         :total-results="searchResults.pagination.total_results"
-                        :sort-value="sortValue"
+                        :sort-field="sortField"
+                        :sort-direction="sortDirection"
+                        :sortable-nodes="sortableNodeFilterConfigNodes"
                         :show-filters="isAttributeFiltersOpen"
                         :show-map="isMapFilterOpen"
                         :has-map-filter="mapFilter !== null"
@@ -537,7 +580,8 @@ async function applySavedSearch(
                         :show-export-results="isExportResultsOpen"
                         :hide-filters-button="!isSingleGraphSelected"
                         :hide-time-button="!isSingleGraphSelected"
-                        @update:sort-value="onSortValueUpdate"
+                        @update:sort-field="onSortFieldUpdate"
+                        @update:sort-direction="onSortDirectionUpdate"
                         @toggle-filters="onToggleAttributeFilters"
                         @toggle-map="onToggleMapFilter"
                         @toggle-time="onToggleTimeFilter"
@@ -569,9 +613,13 @@ async function applySavedSearch(
                             @remove="onRemoveMapFilter"
                             @close="closeSidePanel()"
                         />
-                        <RelatedResourcesPanel
+                        <RelationshipGraph
                             v-if="isRelatedResourcesOpen"
-                            :resource-title="relatedResource!.title"
+                            :resources="relatedResources"
+                            @remove-resource="removeRelatedResource"
+                            @graph-visibility-change="
+                                setRelatedResourcesGraphVisible
+                            "
                             @close="closeSidePanel()"
                         />
                         <TimeFilter
@@ -586,7 +634,7 @@ async function applySavedSearch(
                         />
                         <AttributeFilters
                             v-else-if="isAttributeFiltersActive"
-                            :nodes="nodeFilterConfigNodes"
+                            :nodes="filterableNodeFilterConfigNodes"
                             :values="attributeFilterValues"
                             @update:value="setAttributeFilter"
                             @close="closeSidePanel()"

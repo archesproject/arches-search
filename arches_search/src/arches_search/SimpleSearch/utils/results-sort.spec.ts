@@ -1,48 +1,68 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    sortSpecForValue,
-    sortValueForSpecs,
+    sortDirectionForSpecs,
+    sortFieldForSpecs,
+    sortSpecForField,
 } from "@/arches_search/SimpleSearch/utils/results-sort.ts";
 import {
-    RESULTS_SORT_A_TO_Z,
-    RESULTS_SORT_NEWEST,
-    RESULTS_SORT_OLDEST,
+    RESULTS_SORT_CREATED_TIME,
+    RESULTS_SORT_NAME,
+    RESULTS_SORT_NODE_PREFIX,
     RESULTS_SORT_RELEVANCE,
-    RESULTS_SORT_Z_TO_A,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-import type { ResultsSortValue } from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    ResultsSortDirection,
+    ResultsSortField,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 describe("results sort", () => {
-    it("maps each sort choice to its sort spec and back", () => {
-        const sortValues: ResultsSortValue[] = [
-            RESULTS_SORT_A_TO_Z,
-            RESULTS_SORT_Z_TO_A,
-            RESULTS_SORT_NEWEST,
-            RESULTS_SORT_OLDEST,
+    it("maps each sort field and direction to its sort spec and back", () => {
+        const sortFields: ResultsSortField[] = [
+            RESULTS_SORT_NAME,
+            RESULTS_SORT_CREATED_TIME,
+            `${RESULTS_SORT_NODE_PREFIX}name`,
         ];
-        for (const value of sortValues) {
-            expect(sortValueForSpecs(sortSpecForValue(value))).toBe(value);
+        const sortDirections: ResultsSortDirection[] = ["asc", "desc"];
+        for (const field of sortFields) {
+            for (const direction of sortDirections) {
+                const specs = sortSpecForField(field, direction, "person");
+                expect(sortFieldForSpecs(specs)).toBe(field);
+                expect(sortDirectionForSpecs(specs)).toBe(direction);
+            }
         }
     });
 
-    it("treats no sort spec as relevance", () => {
-        expect(sortSpecForValue(RESULTS_SORT_RELEVANCE)).toEqual([]);
-        expect(sortSpecForValue(null)).toEqual([]);
-        expect(sortValueForSpecs([])).toBe(RESULTS_SORT_RELEVANCE);
+    it("sorts on a node within the given resource model", () => {
+        expect(
+            sortSpecForField(
+                `${RESULTS_SORT_NODE_PREFIX}name`,
+                "desc",
+                "person",
+            ),
+        ).toEqual([
+            {
+                type: "NODE",
+                graph_slug: "person",
+                node_alias: "name",
+                direction: "desc",
+            },
+        ]);
     });
 
-    it("treats a sort spec it does not offer as relevance", () => {
+    it("drops a node sort when no resource model is given", () => {
         expect(
-            sortValueForSpecs([
-                {
-                    type: "NODE",
-                    graph_slug: "person",
-                    node_alias: "name",
-                    direction: "asc",
-                },
-            ]),
-        ).toBe(RESULTS_SORT_RELEVANCE);
+            sortSpecForField(`${RESULTS_SORT_NODE_PREFIX}name`, "asc", null),
+        ).toEqual([]);
+    });
+
+    it("treats no sort spec as relevance", () => {
+        expect(sortSpecForField(RESULTS_SORT_RELEVANCE, "asc", null)).toEqual(
+            [],
+        );
+        expect(sortSpecForField(null, "asc", null)).toEqual([]);
+        expect(sortFieldForSpecs([])).toBe(RESULTS_SORT_RELEVANCE);
+        expect(sortDirectionForSpecs([])).toBe("asc");
     });
 });

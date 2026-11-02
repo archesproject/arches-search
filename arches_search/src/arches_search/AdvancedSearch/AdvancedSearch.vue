@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, provide, ref, watch, watchEffect } from "vue";
+import {
+    computed,
+    defineAsyncComponent,
+    provide,
+    ref,
+    watch,
+    watchEffect,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Message from "openvue/message";
@@ -15,7 +22,6 @@ import PayloadAnalyzer from "@/arches_search/AdvancedSearch/components/PayloadAn
 import QueryBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/QueryBuilder.vue";
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ExportResultsPanel from "@/arches_search/SimpleSearch/components/ExportResultsPanel.vue";
-import RelatedResourcesPanel from "@/arches_search/SimpleSearch/components/RelatedResourcesPanel.vue";
 import ResultsToolbar from "@/arches_search/SimpleSearch/components/ResultsToolbar.vue";
 import SavedSearchPanel from "@/arches_search/SimpleSearch/components/SavedSearchPanel.vue";
 
@@ -37,8 +43,9 @@ import {
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 import {
-    sortSpecForValue,
-    sortValueForSpecs,
+    sortDirectionForSpecs,
+    sortFieldForSpecs,
+    sortSpecForField,
 } from "@/arches_search/SimpleSearch/utils/results-sort.ts";
 import {
     buildAdvancedSearchDefinition,
@@ -61,10 +68,17 @@ import type {
 import type {
     ExportRequest,
     ExportState,
-    ResultsSortValue,
+    ResultsSortDirection,
+    ResultsSortField,
     SearchDefinition,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
+
+// Kept out of the search page's own code, as most visits never open it and it
+// brings a graph library with it
+const RelationshipGraph = defineAsyncComponent(
+    () => import("@/arches_search/RelationshipGraph/RelationshipGraph.vue"),
+);
 
 const FIRST_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
@@ -82,7 +96,7 @@ const {
     isOperandPanelOpen,
     isRelatedResourcesOpen,
     isSavedSearchesOpen,
-    relatedResource,
+    relatedResources,
     resultsPanelSize,
     visibleSidePanelSize,
     sidePanelMinSize,
@@ -90,6 +104,8 @@ const {
     sidePanelStyle,
     closeSidePanel,
     openOperandPanel,
+    removeRelatedResource,
+    setRelatedResourcesGraphVisible,
     onToggleExportResults,
     onToggleSavedSearches,
     onSplitterResizeStart,
@@ -130,8 +146,12 @@ const { root, prunedPayload, panelRowId, clearQuery, closeRowPanel } =
         getNodesForGraphId,
     });
 
-const sortValue = computed<ResultsSortValue>(() =>
-    sortValueForSpecs(sortSpecs.value),
+const sortField = computed<ResultsSortField>(() =>
+    sortFieldForSpecs(sortSpecs.value),
+);
+
+const sortDirection = computed<ResultsSortDirection>(() =>
+    sortDirectionForSpecs(sortSpecs.value),
 );
 
 const resultCount = computed<number>(
@@ -292,8 +312,21 @@ function onClearAll(): void {
     searchError.value = null;
 }
 
-function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
-    sortSpecs.value = sortSpecForValue(nextSortValue);
+function onSortFieldUpdate(nextField: ResultsSortField | null): void {
+    sortSpecs.value = sortSpecForField(
+        nextField,
+        sortDirection.value,
+        searchedGraphSlug.value,
+    );
+    void performSearch(FIRST_RESULTS_PAGE);
+}
+
+function onSortDirectionUpdate(nextDirection: ResultsSortDirection): void {
+    sortSpecs.value = sortSpecForField(
+        sortField.value,
+        nextDirection,
+        searchedGraphSlug.value,
+    );
     void performSearch(FIRST_RESULTS_PAGE);
 }
 
@@ -394,13 +427,16 @@ async function onExportResults(exportRequest: ExportRequest): Promise<void> {
                 />
                 <ResultsToolbar
                     :total-results="resultCount"
-                    :sort-value="sortValue"
+                    :sort-field="sortField"
+                    :sort-direction="sortDirection"
                     :show-saved-searches="isSavedSearchesOpen"
                     :show-export-results="isExportResultsOpen"
                     :hide-filters-button="true"
                     :hide-time-button="true"
                     :hide-map-button="true"
-                    @update:sort-value="onSortValueUpdate"
+                    :hide-include-related="true"
+                    @update:sort-field="onSortFieldUpdate"
+                    @update:sort-direction="onSortDirectionUpdate"
                     @toggle-saved-searches="onToggleSavedSearches"
                     @toggle-export-results="onToggleExportResults"
                 />
@@ -442,9 +478,13 @@ async function onExportResults(exportRequest: ExportRequest): Promise<void> {
                     :class="sidePanelContentClass"
                 >
                     <OperandPanel v-if="isOperandPanelOpen" />
-                    <RelatedResourcesPanel
-                        v-else-if="isRelatedResourcesOpen && relatedResource"
-                        :resource-title="relatedResource.title"
+                    <RelationshipGraph
+                        v-else-if="isRelatedResourcesOpen"
+                        :resources="relatedResources"
+                        @remove-resource="removeRelatedResource"
+                        @graph-visibility-change="
+                            setRelatedResourcesGraphVisible
+                        "
                         @close="closeSidePanel()"
                     />
                     <SavedSearchPanel

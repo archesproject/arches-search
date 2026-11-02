@@ -10,6 +10,7 @@ import type {
 
 export async function fetchResourceDescriptors(
     ids: string[],
+    { includeCanEdit = false }: { includeCanEdit?: boolean } = {},
 ): Promise<Record<string, ResourceDescriptorData>> {
     if (ids.length === 0) {
         return {};
@@ -18,6 +19,9 @@ export async function fetchResourceDescriptors(
     const params = new URLSearchParams();
     for (const id of ids) {
         params.append("ids", id);
+    }
+    if (includeCanEdit) {
+        params.append("include_can_edit", "true");
     }
 
     const url =

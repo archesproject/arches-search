@@ -52,6 +52,8 @@ function buildNode(datatype: string): NodeFilterConfigNode {
         datatype,
         config: null,
         sortorder: 0,
+        filterable: true,
+        sortable: false,
     };
 }
 

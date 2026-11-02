@@ -307,6 +307,8 @@ BYPASS_REQUIRED_VALUE_TILE_VALIDATION = False
 # tiles are read and bulk-inserted in chunks of this size by each worker.
 INDEX_BATCH_SIZE = 2000
 
+TERM_SEARCH_MAX_HOPS = 2
+
 DATE_IMPORT_EXPORT_FORMAT = (
     "%Y-%m-%d"  # Custom date format for dates imported from and exported to csv
 )

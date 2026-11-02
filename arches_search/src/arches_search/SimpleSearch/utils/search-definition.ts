@@ -172,7 +172,17 @@ export function parseSearchDefinition(
         sort = raw.sort.filter(isSortSpec);
     }
 
-    return { terms, queries: queriesIn, graphSlugs, mapFilter, sort };
+    // Searches saved before the switch existed included related resources.
+    const includeRelated = raw.includeRelated !== false;
+
+    return {
+        terms,
+        queries: queriesIn,
+        graphSlugs,
+        mapFilter,
+        sort,
+        includeRelated,
+    };
 }
 
 function isSortSpec(value: unknown): value is SortSpec {
@@ -202,6 +212,7 @@ export function buildAdvancedSearchDefinition(
         graphSlugs: [graphSlug],
         mapFilter: null,
         sort,
+        includeRelated: false,
     };
 }
 

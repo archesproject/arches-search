@@ -5,21 +5,28 @@ import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 import Select from "openvue/select";
+import ToggleSwitch from "openvue/toggleswitch";
+
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import {
-    RESULTS_SORT_A_TO_Z,
-    RESULTS_SORT_NEWEST,
-    RESULTS_SORT_OLDEST,
+    RESULTS_SORT_CREATED_TIME,
+    RESULTS_SORT_NAME,
+    RESULTS_SORT_NODE_PREFIX,
     RESULTS_SORT_RELEVANCE,
-    RESULTS_SORT_Z_TO_A,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type {
-    ResultsSortValue,
+    NodeFilterConfigNode,
+    ResultsSortDirection,
+    ResultsSortField,
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const {
     totalResults,
+    sortField,
+    sortDirection,
+    sortableNodes = [],
     showFilters = false,
     showMap = false,
     hasMapFilter = false,
@@ -27,7 +34,9 @@ const {
     hasTimeFilter = false,
 } = defineProps<{
     totalResults: number;
-    sortValue: ResultsSortValue | null;
+    sortField: ResultsSortField | null;
+    sortDirection: ResultsSortDirection;
+    sortableNodes?: NodeFilterConfigNode[];
     showFilters?: boolean;
     showMap?: boolean;
     hasMapFilter?: boolean;
@@ -38,10 +47,12 @@ const {
     hideFiltersButton?: boolean;
     hideTimeButton?: boolean;
     hideMapButton?: boolean;
+    hideIncludeRelated?: boolean;
 }>();
 
 defineEmits<{
-    (event: "update:sortValue", value: ResultsSortValue | null): void;
+    (event: "update:sortField", value: ResultsSortField | null): void;
+    (event: "update:sortDirection", value: ResultsSortDirection): void;
     (event: "toggle-filters"): void;
     (event: "toggle-map"): void;
     (event: "toggle-time"): void;
@@ -50,18 +61,46 @@ defineEmits<{
 }>();
 
 const { $gettext } = useGettext();
+const { includeRelated, setIncludeRelated } = useSearchFilters();
 
 const resultsLabelText = computed<string>(() =>
     $gettext("%{count} results", { count: String(totalResults) }),
 );
 
-const sortOptions = computed<SortOption[]>(() => [
-    { label: $gettext("Relevance"), value: RESULTS_SORT_RELEVANCE },
-    { label: $gettext("Name A to Z"), value: RESULTS_SORT_A_TO_Z },
-    { label: $gettext("Name Z to A"), value: RESULTS_SORT_Z_TO_A },
-    { label: $gettext("Newest first"), value: RESULTS_SORT_NEWEST },
-    { label: $gettext("Oldest first"), value: RESULTS_SORT_OLDEST },
-]);
+const sortFieldOptions = computed<SortOption[]>(() => {
+    const options: SortOption[] = [
+        { label: $gettext("Relevance"), value: RESULTS_SORT_RELEVANCE },
+        { label: $gettext("Title"), value: RESULTS_SORT_NAME },
+        { label: $gettext("Date created"), value: RESULTS_SORT_CREATED_TIME },
+    ];
+
+    for (const node of sortableNodes) {
+        options.push({
+            label: node.label,
+            value: `${RESULTS_SORT_NODE_PREFIX}${node.node_alias}`,
+        });
+    }
+
+    return options;
+});
+
+const directionIcon = computed<string>(() => {
+    if (sortDirection === "asc") {
+        return "pi pi-sort-amount-down-alt";
+    }
+    return "pi pi-sort-amount-up-alt";
+});
+
+const directionLabel = computed<string>(() => {
+    if (sortDirection === "asc") {
+        return $gettext("Sort ascending");
+    }
+    return $gettext("Sort descending");
+});
+
+const showDirectionToggle = computed<boolean>(
+    () => sortField !== null && sortField !== RESULTS_SORT_RELEVANCE,
+);
 </script>
 
 <template>
@@ -69,16 +108,43 @@ const sortOptions = computed<SortOption[]>(() => [
         <div class="toolbar-left">
             <span class="results-label">{{ resultsLabelText }}</span>
             <Select
-                :model-value="sortValue"
-                :options="sortOptions"
+                :model-value="sortField"
+                :options="sortFieldOptions"
                 option-label="label"
                 option-value="value"
                 :placeholder="$gettext('Sort by...')"
                 :show-clear="true"
                 class="sort-select"
                 overlay-class="sort-select-overlay"
-                @update:model-value="$emit('update:sortValue', $event)"
+                @update:model-value="$emit('update:sortField', $event)"
             />
+            <Button
+                v-if="showDirectionToggle"
+                text
+                rounded
+                class="sort-direction-btn"
+                :icon="directionIcon"
+                :aria-label="directionLabel"
+                @click="
+                    $emit(
+                        'update:sortDirection',
+                        sortDirection === 'asc' ? 'desc' : 'asc',
+                    )
+                "
+            />
+            <div
+                v-if="!hideIncludeRelated"
+                class="include-related"
+            >
+                <ToggleSwitch
+                    :model-value="includeRelated"
+                    input-id="include-related-toggle"
+                    @update:model-value="setIncludeRelated"
+                />
+                <label for="include-related-toggle">
+                    {{ $gettext("Include Related") }}
+                </label>
+            </div>
         </div>
 
         <div class="toolbar-right">
@@ -170,6 +236,25 @@ const sortOptions = computed<SortOption[]>(() => [
 
 :deep(.sort-select .p-select) {
     padding: 0.4rem 0.8rem;
+}
+
+.include-related {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8rem;
+    color: var(--p-text-muted-color);
+    font-size: 1.2rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.include-related label {
+    margin: 0;
+    line-height: 1;
+}
+
+.sort-direction-btn :deep(.p-button-icon) {
+    font-size: 2rem;
 }
 
 .toolbar-right {

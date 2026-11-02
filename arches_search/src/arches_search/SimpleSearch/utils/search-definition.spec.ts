@@ -240,6 +240,7 @@ describe("buildAdvancedSearchDefinition", () => {
             graphSlugs: [GRAPH_SLUG],
             mapFilter: null,
             sort,
+            includeRelated: false,
         });
         expect(parseSearchDefinition({ ...definition })).toEqual(definition);
     });
@@ -252,7 +253,7 @@ describe("buildAdvancedSearchDefinition", () => {
 });
 
 describe("parseSearchDefinition", () => {
-    it("reads a saved search written before sort or the advanced query existed", () => {
+    it("reads a saved search written before sort, related resources or the advanced query existed", () => {
         const materialQuery = {
             logic: "AND",
             scope: "RESOURCE",
@@ -289,7 +290,20 @@ describe("parseSearchDefinition", () => {
             graphSlugs: [GRAPH_SLUG],
             mapFilter: null,
             sort: [],
+            includeRelated: true,
         });
+    });
+
+    it("keeps a saved choice to leave out related resources", () => {
+        expect(
+            parseSearchDefinition({
+                terms: [],
+                queries: {},
+                graphSlugs: [],
+                mapFilter: null,
+                includeRelated: false,
+            }).includeRelated,
+        ).toBe(false);
     });
 
     it("keeps the advanced query beside the other queries", () => {
