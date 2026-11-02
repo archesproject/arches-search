@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { computed, ref, watch } from "vue";
 import dayjs from "dayjs";
 import { isEqual } from "es-toolkit";
-import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
@@ -128,9 +128,7 @@ watch(
         isUserInitiated.value = clauses.length > 0;
 
         const restoredNodeAliases = nodeAliasesFromClauses(clauses);
-        if (
-            !nodeAliasListsMatch(restoredNodeAliases, selectedNodeAliases.value)
-        ) {
+        if (!isEqual(restoredNodeAliases, selectedNodeAliases.value)) {
             selectedNodeAliases.value = restoredNodeAliases;
         }
 
@@ -249,13 +247,6 @@ function nodeAliasesFromClauses(clauses: LiteralClause[]): string[] {
     return clauses
         .filter((clause) => clause.subject.type === ClauseSubjectTypeToken.NODE)
         .map((clause) => clause.subject.node_alias);
-}
-
-function nodeAliasListsMatch(left: string[], right: string[]): boolean {
-    return (
-        left.length === right.length &&
-        left.every((nodeAlias, index) => nodeAlias === right[index])
-    );
 }
 
 function emitClauses(): void {

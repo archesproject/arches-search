@@ -1,3 +1,5 @@
+import { isEqual } from "es-toolkit";
+
 import {
     RESULTS_SORT_A_TO_Z,
     RESULTS_SORT_NEWEST,
@@ -35,11 +37,7 @@ export function sortSpecForValue(value: ResultsSortValue | null): SortSpec[] {
 
 export function sortValueForSpecs(specs: SortSpec[]): ResultsSortValue {
     const matchingValue = SORT_VALUES_WITH_SPECS.find((candidate) =>
-        sortSpecsMatch(sortSpecForValue(candidate), specs),
+        isEqual(sortSpecForValue(candidate), specs),
     );
     return matchingValue ?? RESULTS_SORT_RELEVANCE;
-}
-
-export function sortSpecsMatch(left: SortSpec[], right: SortSpec[]): boolean {
-    return JSON.stringify(left) === JSON.stringify(right);
 }

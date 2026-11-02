@@ -18,14 +18,21 @@ import type {
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-const { totalResults } = defineProps<{
+const {
+    totalResults,
+    showFilters = false,
+    showMap = false,
+    hasMapFilter = false,
+    showTime = false,
+    hasTimeFilter = false,
+} = defineProps<{
     totalResults: number;
     sortValue: ResultsSortValue | null;
-    showFilters: boolean;
-    showMap: boolean;
-    hasMapFilter: boolean;
-    showTime: boolean;
-    hasTimeFilter: boolean;
+    showFilters?: boolean;
+    showMap?: boolean;
+    hasMapFilter?: boolean;
+    showTime?: boolean;
+    hasTimeFilter?: boolean;
     showSavedSearches: boolean;
     showExportResults: boolean;
     hideFiltersButton?: boolean;
@@ -33,9 +40,18 @@ const { totalResults } = defineProps<{
     hideMapButton?: boolean;
 }>();
 
+defineEmits<{
+    (event: "update:sortValue", value: ResultsSortValue | null): void;
+    (event: "toggle-filters"): void;
+    (event: "toggle-map"): void;
+    (event: "toggle-time"): void;
+    (event: "toggle-saved-searches"): void;
+    (event: "toggle-export-results"): void;
+}>();
+
 const { $gettext } = useGettext();
 
-const resultsLabelText = computed(() =>
+const resultsLabelText = computed<string>(() =>
     $gettext("%{count} results", { count: String(totalResults) }),
 );
 
@@ -46,15 +62,6 @@ const sortOptions = computed<SortOption[]>(() => [
     { label: $gettext("Newest first"), value: RESULTS_SORT_NEWEST },
     { label: $gettext("Oldest first"), value: RESULTS_SORT_OLDEST },
 ]);
-
-defineEmits<{
-    (event: "update:sortValue", value: ResultsSortValue | null): void;
-    (event: "toggle-filters"): void;
-    (event: "toggle-map"): void;
-    (event: "toggle-time"): void;
-    (event: "toggle-saved-searches"): void;
-    (event: "toggle-export-results"): void;
-}>();
 </script>
 
 <template>

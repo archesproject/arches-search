@@ -63,7 +63,7 @@ function buildQuery(node: NodeFilterConfigNode, value: unknown): GroupPayload {
     return query;
 }
 
-describe("parseAttributeFilterValue", () => {
+describe("attribute filter values", () => {
     it("saves reference selections as list items and restores them", () => {
         const node = buildNode("reference");
         const query = buildQuery(node, [GLASS, WOOD]);
@@ -75,7 +75,7 @@ describe("parseAttributeFilterValue", () => {
         );
     });
 
-    it("restores a reference query saved before parsing existed", () => {
+    it("restores a reference query saved as plain labels", () => {
         const node = buildNode("reference");
         const savedQuery: GroupPayload = {
             graph_slug: GRAPH_SLUG,

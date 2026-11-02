@@ -13,7 +13,6 @@ import {
     getSavedSearches,
     deleteSavedSearch,
 } from "@/arches_search/SimpleSearch/api.ts";
-import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import type {
     SavedSearch,
@@ -42,11 +41,10 @@ type SavedSearchSortValue =
 const {
     shouldShowHeader = true,
     shouldShowSaveTab = true,
-    definitionToSave,
+    definitionToSave = null,
 } = defineProps<{
     shouldShowHeader?: boolean;
     shouldShowSaveTab?: boolean;
-    // Left out, the current Simple Search is saved; null means nothing to save.
     definitionToSave?: SearchDefinition | null;
 }>();
 
@@ -61,7 +59,6 @@ const emit = defineEmits<{
 
 const { $gettext } = useGettext();
 const toast = useToast();
-const searchFilters = shouldShowSaveTab ? useSearchFilters() : null;
 
 const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
     shouldShowSaveTab ? SAVE_TAB : MINE_TAB,
@@ -75,18 +72,11 @@ const saveSearchName = ref("");
 const saveSearchDescription = ref("");
 const isSaving = ref(false);
 
-const savableDefinition = computed<SearchDefinition | null>(() => {
-    if (definitionToSave !== undefined) {
-        return definitionToSave;
-    }
-    return searchFilters?.getSearchDefinition() ?? null;
-});
-
 const isSaveDisabled = computed<boolean>(
     () =>
         isSaving.value ||
         saveSearchName.value.trim() === "" ||
-        savableDefinition.value === null,
+        definitionToSave === null,
 );
 
 const sortOptions: SortOption[] = [
@@ -106,8 +96,7 @@ watch(sortValue, () => {
 
 async function onSaveSearch(): Promise<void> {
     const name = saveSearchName.value.trim();
-    const definition = savableDefinition.value;
-    if (!name || !definition) {
+    if (!name || !definitionToSave) {
         return;
     }
 
@@ -116,7 +105,7 @@ async function onSaveSearch(): Promise<void> {
         await createSavedSearch(
             name,
             saveSearchDescription.value.trim(),
-            definition as unknown as Record<string, unknown>,
+            definitionToSave as unknown as Record<string, unknown>,
         );
         saveSearchName.value = "";
         saveSearchDescription.value = "";

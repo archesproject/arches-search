@@ -375,7 +375,8 @@ function createSearchFilters(): SearchFilters {
             nextQueries.delete(foldedKey);
         }
         queries.value = nextQueries;
-        setAdvancedQuery(folded.advancedQuery);
+        advancedQuery.value = folded.advancedQuery;
+        advancedQueryDraft.value = null;
     }
 
     // Advanced Search runs its own search over the query alone; Simple Search

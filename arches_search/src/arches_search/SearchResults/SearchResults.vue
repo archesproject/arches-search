@@ -4,8 +4,6 @@ import { useGettext } from "vue3-gettext";
 
 import Skeleton from "openvue/skeleton";
 
-import arches from "arches";
-
 import SearchResultCard from "@/arches_search/SearchResults/SearchResultCard.vue";
 
 import {
@@ -29,10 +27,9 @@ const { $gettext } = useGettext();
 
 const SCROLL_THRESHOLD_PIXELS = 72;
 
-const { results, isSearching, filterText, graphModels } = defineProps<{
+const { results, isSearching, graphModels } = defineProps<{
     results: SearchResults;
     isSearching: boolean;
-    filterText: string;
     graphModels: GraphModel[];
 }>();
 
@@ -71,17 +68,6 @@ onMounted(async () => {
             error,
         );
     }
-});
-
-const visibleResources = computed<ResourceData[]>(() => {
-    if (!filterText) return results.resources;
-    const needle = filterText.toLowerCase();
-    return results.resources.filter((resource: ResourceData) => {
-        const name =
-            descriptorsByResourceId.value[resource.resourceinstanceid]
-                ?.descriptors?.[arches.activeLanguage]?.name ?? "";
-        return name.toLowerCase().includes(needle);
-    });
 });
 
 watch(
@@ -205,7 +191,7 @@ const endOfResultsText = computed(() =>
             @scroll.passive="handleScroll"
         >
             <SearchResultCard
-                v-for="resource in visibleResources"
+                v-for="resource in results.resources"
                 :key="resource.resourceinstanceid"
                 :result="resource"
                 :descriptor-data="

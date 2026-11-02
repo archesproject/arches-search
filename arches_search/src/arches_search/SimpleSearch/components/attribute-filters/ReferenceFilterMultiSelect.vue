@@ -15,8 +15,6 @@ import type { ReferenceSelectNodeValue } from "@/arches_controlled_lists/datatyp
 import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts";
 import type { ReferenceFilterValue } from "@/arches_search/SimpleSearch/components/attribute-filters/types.ts";
 
-const { $gettext } = useGettext();
-
 const { node, modelValue } = defineProps<{
     node: NodeFilterConfigNode;
     modelValue: ReferenceFilterValue | null;
@@ -26,6 +24,8 @@ const emit = defineEmits<{
     (event: "update:modelValue", value: ReferenceSelectNodeValue[]): void;
 }>();
 
+const { $gettext } = useGettext();
+
 const options = ref<ReferenceSelectNodeValue[]>([]);
 const isLoading = ref(false);
 
@@ -34,6 +34,7 @@ const controlledListId = computed<string | null>(() => {
     return typeof listId === "string" ? listId : null;
 });
 
+// A search saved before the filter kept list items holds only their labels.
 const selectedReferenceValues = computed<ReferenceSelectNodeValue[]>(() => {
     if (isLabelList(modelValue)) {
         return referenceValuesWithLabels(options.value, modelValue);

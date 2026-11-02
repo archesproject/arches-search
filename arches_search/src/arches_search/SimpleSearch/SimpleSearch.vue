@@ -39,7 +39,6 @@ import {
     ADVANCED_QUERY_KEY,
     EXPORT_STATE_IDLE,
     EXPORT_STATE_PENDING,
-    RESULTS_SORT_RELEVANCE,
     TERM_FILTER_KEY,
     TIME_FILTER_QUERY_KEY,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -47,7 +46,6 @@ import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePa
 import { applyPendingSearch } from "@/arches_search/SimpleSearch/utils/apply-pending-search.ts";
 import {
     sortSpecForValue,
-    sortSpecsMatch,
     sortValueForSpecs,
 } from "@/arches_search/SimpleSearch/utils/results-sort.ts";
 import { parseSearchDefinition } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
@@ -64,6 +62,7 @@ import type {
     ExportRequest,
     ExportState,
     ResultsSortValue,
+    SearchDefinition,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const INITIAL_RESULTS_PAGE = 1;
@@ -85,6 +84,7 @@ const {
     clearMapFilter,
     clearQuery,
     getExportPayload,
+    getSearchDefinition,
     isSearching,
     mapFilter,
     nodeFilterConfigNodes,
@@ -138,9 +138,16 @@ const {
     onSplitterResizeEnd,
 } = useSidePanel();
 
-const sortValue = ref<ResultsSortValue | null>(RESULTS_SORT_RELEVANCE);
 const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
 const graphModels = ref<GraphModel[]>([]);
+
+const searchDefinition = computed<SearchDefinition>(() =>
+    getSearchDefinition(),
+);
+
+const sortValue = computed<ResultsSortValue>(() =>
+    sortValueForSpecs(sort.value),
+);
 
 const isSingleGraphSelected = computed<boolean>(
     () => singleActiveGraph.value !== null,
@@ -270,7 +277,7 @@ const unrepresentedQueriesActiveFilter = computed<ActiveFilter | null>(() => {
         text: savedSearchName.value ?? $gettext("Saved filters"),
         clear: () => {
             for (const filterKey of unrepresentedQueryKeys.value) {
-                clearAttributeFilter(filterKey);
+                clearQuery(filterKey);
             }
         },
         inverted: false,
@@ -317,19 +324,19 @@ const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
     };
 });
 
-const allActiveFilters = computed<ActiveFilter[]>(() => [
-    ...activeFilters.value,
-    ...resourceTypeActiveFilters.value,
-    ...(timeActiveFilter.value ? [timeActiveFilter.value] : []),
-    ...(mapActiveFilter.value ? [mapActiveFilter.value] : []),
-    ...attributeActiveFilters.value,
-    ...(unrepresentedQueriesActiveFilter.value
-        ? [unrepresentedQueriesActiveFilter.value]
-        : []),
-    ...(advancedQueryActiveFilter.value
-        ? [advancedQueryActiveFilter.value]
-        : []),
-]);
+const allActiveFilters = computed<ActiveFilter[]>(() =>
+    [
+        ...activeFilters.value,
+        ...resourceTypeActiveFilters.value,
+        timeActiveFilter.value,
+        mapActiveFilter.value,
+        ...attributeActiveFilters.value,
+        unrepresentedQueriesActiveFilter.value,
+        advancedQueryActiveFilter.value,
+    ].filter(
+        (activeFilter): activeFilter is ActiveFilter => activeFilter !== null,
+    ),
+);
 
 watch(isExportResultsOpen, (isOpen) => {
     if (!isOpen) {
@@ -348,12 +355,6 @@ watch(singleActiveGraph, (graph) => {
     }
 });
 
-watch(sort, (nextSort) => {
-    if (!sortSpecsMatch(sortSpecForValue(sortValue.value), nextSort)) {
-        sortValue.value = sortValueForSpecs(nextSort);
-    }
-});
-
 watchEffect(() => {
     void initializeSearch();
 });
@@ -362,7 +363,7 @@ onMounted(() => {
     const pendingSearch = usePendingSearchStore().consume();
     if (pendingSearch) {
         applyPendingSearch(pendingSearch, {
-            applySearchDefinition,
+            applySearchDefinition: applySavedSearch,
             clearAll,
             openMapFilter,
             setGraphsBySlug,
@@ -423,7 +424,6 @@ function onRequestPage(page: number): void {
 }
 
 function onSortValueUpdate(nextSortValue: ResultsSortValue | null): void {
-    sortValue.value = nextSortValue;
     setSort(sortSpecForValue(nextSortValue));
 }
 
@@ -474,10 +474,6 @@ function formatTimeFilterLabel(clause: LiteralClause): string {
     return `${fromText} – ${dayjs(to).format("MMM D, YYYY")}`;
 }
 
-function onClearAll(): void {
-    clearAll();
-}
-
 function openAdvancedSearch(): void {
     void router.push({ name: routeNames.advancedSearch });
 }
@@ -486,10 +482,23 @@ async function onRunSavedQuery(
     queryDefinition: Record<string, unknown>,
     searchName: string,
 ): Promise<void> {
-    await applySearchDefinition(
-        parseSearchDefinition(queryDefinition),
-        searchName,
-    );
+    await applySavedSearch(parseSearchDefinition(queryDefinition), searchName);
+}
+
+async function applySavedSearch(
+    definition: SearchDefinition,
+    searchName: string | null,
+): Promise<void> {
+    try {
+        await applySearchDefinition(definition, searchName);
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("The saved search could not be opened."),
+            detail: error instanceof Error ? error.message : undefined,
+        });
+    }
 }
 </script>
 
@@ -501,7 +510,7 @@ async function onRunSavedQuery(
 
         <ActiveFilters
             :active-filters="allActiveFilters"
-            @clear-all="onClearAll"
+            @clear-all="clearAll"
         />
 
         <div class="body">
@@ -538,7 +547,6 @@ async function onRunSavedQuery(
                     <SearchResults
                         :results="searchResults"
                         :is-searching="isSearching"
-                        :filter-text="''"
                         :graph-models="graphModels"
                         @request-page="onRequestPage"
                     />
@@ -585,6 +593,7 @@ async function onRunSavedQuery(
                         />
                         <SavedSearchPanel
                             v-else-if="isSavedSearchesActive"
+                            :definition-to-save="searchDefinition"
                             @run-query="onRunSavedQuery"
                             @close="closeSidePanel()"
                         />
@@ -592,6 +601,9 @@ async function onRunSavedQuery(
                             v-else-if="isExportResultsActive"
                             :has-single-graph="isSingleGraphSelected"
                             :export-state="exportState"
+                            :result-count="
+                                searchResults.pagination.total_results
+                            "
                             @export="onExportResults"
                             @close="closeSidePanel()"
                         />

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
     sortSpecForValue,
-    sortSpecsMatch,
     sortValueForSpecs,
 } from "@/arches_search/SimpleSearch/utils/results-sort.ts";
 import {
@@ -45,19 +44,5 @@ describe("results sort", () => {
                 },
             ]),
         ).toBe(RESULTS_SORT_RELEVANCE);
-    });
-
-    it("compares sort specs by value", () => {
-        expect(
-            sortSpecsMatch(sortSpecForValue(RESULTS_SORT_A_TO_Z), [
-                { type: "primary_name", direction: "asc" },
-            ]),
-        ).toBe(true);
-        expect(
-            sortSpecsMatch(
-                sortSpecForValue(RESULTS_SORT_A_TO_Z),
-                sortSpecForValue(RESULTS_SORT_Z_TO_A),
-            ),
-        ).toBe(false);
     });
 });

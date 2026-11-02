@@ -424,7 +424,6 @@ async function onExportResults(exportRequest: ExportRequest): Promise<void> {
                     :key="searchResultsInstanceKey"
                     :results="searchResults"
                     :is-searching="isSearching"
-                    :filter-text="''"
                     :graph-models="graphs"
                     @request-page="onRequestPage"
                 />

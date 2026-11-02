@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 import Card from "openvue/card";
@@ -11,6 +12,7 @@ import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchSt
 
 const router = useRouter();
 const route = useRoute();
+const { $gettext } = useGettext();
 
 provideSearchFilters();
 
@@ -22,6 +24,20 @@ router.afterEach((to, _from, failure) => {
 
 const isSearchLanding = computed(() => route.name === routeNames.searchLanding);
 const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
+
+const headerTitle = computed<string>(() => {
+    if (isSimpleSearch.value) {
+        return $gettext("Search the Collection");
+    }
+    return $gettext("Advanced Search");
+});
+
+const headerIcon = computed<string>(() => {
+    if (isSimpleSearch.value) {
+        return "pi pi-search";
+    }
+    return "pi pi-sliders-h";
+});
 </script>
 
 <template>
@@ -34,22 +50,12 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
         <template #header>
             <header
                 v-if="!isSearchLanding"
-                class="simple-search-header"
-                :class="{ 'advanced-search-header': !isSimpleSearch }"
+                class="search-header"
+                :class="{ 'search-header-advanced': !isSimpleSearch }"
             >
-                <h1
-                    v-if="isSimpleSearch"
-                    class="search-title"
-                >
-                    <i class="pi pi-search" />
-                    {{ $gettext("Search the Collection") }}
-                </h1>
-                <h1
-                    v-else
-                    class="search-title"
-                >
-                    <i class="pi pi-sliders-h" />
-                    {{ $gettext("Advanced Search") }}
+                <h1 class="search-title">
+                    <i :class="headerIcon" />
+                    {{ headerTitle }}
                 </h1>
                 <nav
                     v-if="isSimpleSearch"
@@ -108,7 +114,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     background-color: var(--arches-search-page-bg);
 }
 
-.simple-search-header {
+.search-header {
     display: flex;
     flex-shrink: 0;
     flex-wrap: wrap;
@@ -119,7 +125,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     background-color: var(--arches-search-card-bg);
 }
 
-.simple-search-header.advanced-search-header {
+.search-header.search-header-advanced {
     padding: 1.4rem 2.4rem;
     border-block-end: 0.1rem solid var(--p-content-border-color);
 }

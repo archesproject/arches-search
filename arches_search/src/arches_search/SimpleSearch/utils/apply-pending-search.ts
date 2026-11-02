@@ -36,15 +36,18 @@ export function applyPendingSearch(
     actions.clearAll();
 
     if (pendingSearch.term !== undefined) {
-        actions.setTermFilter({
+        const term: SerializedTerm = {
             id: `${TERM_FILTER_KEY}:${pendingSearch.term}`,
             text: pendingSearch.term,
             inverted: false,
-            ...(pendingSearch.termKind
-                ? { termKind: pendingSearch.termKind }
-                : {}),
-            ...(pendingSearch.termIcon ? { icon: pendingSearch.termIcon } : {}),
-        });
+        };
+        if (pendingSearch.termKind) {
+            term.termKind = pendingSearch.termKind;
+        }
+        if (pendingSearch.termIcon) {
+            term.icon = pendingSearch.termIcon;
+        }
+        actions.setTermFilter(term);
     }
 
     if (pendingSearch.graphSlugs !== undefined) {

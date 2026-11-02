@@ -6,8 +6,6 @@ import Button from "openvue/button";
 import InputText from "openvue/inputtext";
 import RadioButton from "openvue/radiobutton";
 
-import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
-
 import {
     EXPORT_CONCEPTS_AS_LABELS,
     EXPORT_CONCEPTS_AS_UUIDS,
@@ -29,13 +27,12 @@ const EXPORT_EVENT = "export" as const;
 const {
     hasSingleGraph = true,
     exportState = EXPORT_STATE_IDLE,
-    resultCount = null,
+    resultCount,
 } = defineProps<{
     // Both Bulk Data Manager exporters operate on a single resource model.
     hasSingleGraph?: boolean;
     exportState?: ExportState;
-    // Left out, the count of the current Simple Search results is used.
-    resultCount?: number | null;
+    resultCount: number;
 }>();
 
 const emit = defineEmits<{
@@ -44,15 +41,10 @@ const emit = defineEmits<{
 }>();
 
 const { $gettext } = useGettext();
-const { searchResults } = useSearchFilters();
 
 const selectedFormat = ref<ExportFormat>(EXPORT_FORMAT_BRANCH_EXCEL);
 const exportConceptsAs = ref<ExportConceptsAs>(EXPORT_CONCEPTS_AS_LABELS);
 const filename = ref("search_export");
-
-const totalResults = computed<number>(
-    () => resultCount ?? searchResults.value.pagination?.total_results ?? 0,
-);
 
 const formatOptions = computed(() => [
     {
@@ -73,7 +65,7 @@ const canExport = computed<boolean>(
     () =>
         hasSingleGraph &&
         !isExporting.value &&
-        totalResults.value > 0 &&
+        resultCount > 0 &&
         filename.value.trim() !== "",
 );
 
@@ -119,7 +111,7 @@ function onExport(): void {
                 <span>
                     {{
                         $gettext("%{count} results will be exported", {
-                            count: String(totalResults),
+                            count: String(resultCount),
                         })
                     }}
                 </span>
