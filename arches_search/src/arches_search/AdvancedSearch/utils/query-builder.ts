@@ -1,5 +1,3 @@
-import { isEqual } from "es-toolkit";
-
 import {
     ClauseSubjectTypeToken,
     GraphScopeToken,
@@ -31,6 +29,7 @@ import type {
 type QueryBuilderContainer = QueryBuilderGroup | QueryBuilderRelatedGroup;
 
 const CLAUSE_TYPE_LITERAL = "LITERAL";
+const OPERAND_TYPE_LITERAL = "LITERAL";
 const QUANTIFIER_ANY = "ANY";
 const QUANTIFIER_NONE = "NONE";
 const MINIMUM_ITEMS_TO_GROUP = 2;
@@ -72,18 +71,6 @@ export function buildPrunedPayload(
         return null;
     }
     return plainGroupToPayload({ ...root, items: prunedItems });
-}
-
-export function draftDiffersFromApplied(
-    draft: QueryBuilderGroup | null,
-    applied: GroupPayload | null,
-    lookups: QueryBuilderLookups,
-): boolean {
-    let draftPayload: GroupPayload | null = null;
-    if (draft) {
-        draftPayload = buildPrunedPayload(draft, lookups);
-    }
-    return !isEqual(draftPayload, applied);
 }
 
 // A clause on any date, location or text has no node, so its datatype comes
@@ -131,6 +118,8 @@ export function isClauseComplete(
 
     const datatype = getClauseDatatype(clause, lookups);
 
+    // Until the node's datatype has loaded, the operands a saved clause already
+    // has are taken as all it needs, so loading never prunes it.
     let requiredOperandCount = clause.operands.length;
     if (datatype) {
         requiredOperandCount =
@@ -154,6 +143,15 @@ export function findQueryBuilderItem(
         return root;
     }
     return findInContainer(root, itemId);
+}
+
+export function isContainer(
+    item: QueryBuilderItem,
+): item is QueryBuilderContainer {
+    return (
+        item.itemType === QUERY_BUILDER_ITEM_GROUP ||
+        item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP
+    );
 }
 
 export function isFeatureCollection(
@@ -387,30 +385,28 @@ export function groupQueryBuilderItems(
 
     const groupId = crypto.randomUUID();
     const nextRoot = updateContainer(root, parent.id, (container) => {
-        const selectedItems = container.items.filter((item) =>
-            selectedIds.has(item.id),
-        );
-        const firstSelectedIndex = container.items.findIndex((item) =>
-            selectedIds.has(item.id),
-        );
-        const remainingItems = container.items.filter(
-            (item) => !selectedIds.has(item.id),
-        );
         const newGroup: QueryBuilderGroup = {
             id: groupId,
             itemType: QUERY_BUILDER_ITEM_GROUP,
             graphSlug: itemsGraphSlug(container),
             logic: oppositeLogic(container.logic),
             label: "",
-            items: selectedItems,
+            items: container.items.filter((item) => selectedIds.has(item.id)),
         };
+        const firstSelectedIndex = container.items.findIndex((item) =>
+            selectedIds.has(item.id),
+        );
         return {
             ...container,
-            items: [
-                ...remainingItems.slice(0, firstSelectedIndex),
-                newGroup,
-                ...remainingItems.slice(firstSelectedIndex),
-            ],
+            items: container.items.flatMap((item, itemIndex) => {
+                if (!selectedIds.has(item.id)) {
+                    return [item];
+                }
+                if (itemIndex === firstSelectedIndex) {
+                    return [newGroup];
+                }
+                return [];
+            }),
         };
     });
     return { root: nextRoot, groupId };
@@ -635,9 +631,18 @@ function searchModelsDatatype(searchModels: string[]): string | undefined {
     return undefined;
 }
 
+// A clause comparing against another node (PATH) or a bare geometry
+// (GEO_LITERAL) has no widget here, so it is kept as it is.
 function isEditableClause(clause: LiteralClause): boolean {
     const clauseType: string = clause.type;
     if (clauseType !== CLAUSE_TYPE_LITERAL) {
+        return false;
+    }
+    const hasOnlyLiteralOperands = clause.operands.every((operand) => {
+        const operandType: string = operand.type;
+        return operandType === OPERAND_TYPE_LITERAL;
+    });
+    if (!hasOnlyLiteralOperands) {
         return false;
     }
     const subjectType: string = clause.subject.type;
@@ -712,13 +717,6 @@ function oppositeLogic(logic: LogicToken): LogicToken {
         return LogicToken.OR;
     }
     return LogicToken.AND;
-}
-
-function isContainer(item: QueryBuilderItem): item is QueryBuilderContainer {
-    return (
-        item.itemType === QUERY_BUILDER_ITEM_GROUP ||
-        item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP
-    );
 }
 
 function itemsGraphSlug(container: QueryBuilderContainer): string {

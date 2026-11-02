@@ -4,7 +4,6 @@ import {
     ClauseSubjectTypeToken,
     GraphScopeToken,
     LogicToken,
-    QUERY_BUILDER_ITEM_GROUP,
     QUERY_BUILDER_ITEM_LOCKED_CLAUSE,
     QUERY_BUILDER_ITEM_LOCKED_GROUP,
     QUERY_BUILDER_ITEM_RELATED_GROUP,
@@ -17,11 +16,11 @@ import {
     buildPrunedPayload,
     canGroupQueryBuilderItems,
     createQueryBuilderRoot,
-    draftDiffersFromApplied,
     findQueryBuilderItem,
     getClauseDatatype,
     groupQueryBuilderItems,
     isClauseComplete,
+    isContainer,
     listQueryBuilderRows,
     queryBuilderRootFromPayload,
     removeQueryBuilderItem,
@@ -202,11 +201,7 @@ function groupById(
     groupId: string,
 ): QueryBuilderGroup | QueryBuilderRelatedGroup {
     const item = findQueryBuilderItem(root, groupId);
-    if (
-        !item ||
-        (item.itemType !== QUERY_BUILDER_ITEM_GROUP &&
-            item.itemType !== QUERY_BUILDER_ITEM_RELATED_GROUP)
-    ) {
+    if (!item || !isContainer(item)) {
         throw new Error(`Expected a group with id ${groupId}.`);
     }
     return item;
@@ -223,14 +218,8 @@ describe("loading and saving", () => {
 
     it("reads a related group's ALL/ANY from the rows it holds", () => {
         const root = queryBuilderRootFromPayload(BUILDER_SHAPED_PAYLOAD);
-        const relatedGroup = root.items.find(
-            (item): item is QueryBuilderRelatedGroup =>
-                item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP,
-        );
+        const relatedGroup = groupById(root, root.items[2].id);
 
-        if (!relatedGroup) {
-            throw new Error("Expected a related group.");
-        }
         expect(relatedGroup).toMatchObject({
             anchorGraphSlug: SAMPLE,
             targetGraphSlug: PERSON,
@@ -304,6 +293,15 @@ describe("loading and saving", () => {
             operator: "IS_CURRENT_USER",
             operands: [],
         } as unknown as LiteralClause;
+        const pathOperandClause = {
+            ...WEIGHT_IS_TEN,
+            operands: [
+                {
+                    type: "PATH",
+                    value: [{ graph_slug: SAMPLE, node_alias: "weight" }],
+                },
+            ],
+        } as unknown as LiteralClause;
         const tileScopeGroup: GroupPayload = {
             ...group(SAMPLE, LogicToken.AND, [MATERIAL_IS_GLASS]),
             scope: GraphScopeToken.TILE,
@@ -318,7 +316,7 @@ describe("loading and saving", () => {
         const payload = group(
             SAMPLE,
             LogicToken.AND,
-            [MATERIAL_IS_GLASS, resourceFieldClause],
+            [MATERIAL_IS_GLASS, resourceFieldClause, pathOperandClause],
             [tileScopeGroup, relationshipWithAnchorClause],
         );
 
@@ -326,6 +324,7 @@ describe("loading and saving", () => {
 
         expect(root.items.map((item) => item.itemType)).toEqual([
             QUERY_BUILDER_ITEM_ROW,
+            QUERY_BUILDER_ITEM_LOCKED_CLAUSE,
             QUERY_BUILDER_ITEM_LOCKED_CLAUSE,
             QUERY_BUILDER_ITEM_LOCKED_GROUP,
             QUERY_BUILDER_ITEM_LOCKED_GROUP,
@@ -400,17 +399,7 @@ describe("editing", () => {
     it("toggles NOT on a row between ANY and NONE", () => {
         let root = createQueryBuilderRoot(SAMPLE);
         const { root: withRow, rowId } = addRow(root, root.id);
-        root = setRowClause(
-            withRow,
-            rowId,
-            nodeClause(
-                SAMPLE,
-                "material",
-                "REFERENCES_ANY",
-                [["glass"]],
-                "ALL",
-            ),
-        );
+        root = setRowClause(withRow, rowId, MATERIAL_IS_GLASS);
 
         const negated = toggleRowNot(root, rowId);
         expect(rowsOf(negated)[0].clause.quantifier).toBe("NONE");
@@ -704,33 +693,5 @@ describe("buildPrunedPayload", () => {
         expect(
             buildPrunedPayload(addRow(root, root.id).root, LOOKUPS),
         ).toBeNull();
-    });
-});
-
-describe("draftDiffersFromApplied", () => {
-    it("ignores rows still being filled in", () => {
-        const root = queryBuilderRootFromPayload(BUILDER_SHAPED_PAYLOAD);
-        const withUnfinishedRow = addRow(root, root.id).root;
-
-        expect(
-            draftDiffersFromApplied(
-                withUnfinishedRow,
-                BUILDER_SHAPED_PAYLOAD,
-                LOOKUPS,
-            ),
-        ).toBe(false);
-    });
-
-    it("notices an edit that would change the search", () => {
-        const root = queryBuilderRootFromPayload(BUILDER_SHAPED_PAYLOAD);
-
-        expect(
-            draftDiffersFromApplied(
-                toggleGroupLogic(root, root.id),
-                BUILDER_SHAPED_PAYLOAD,
-                LOOKUPS,
-            ),
-        ).toBe(true);
-        expect(draftDiffersFromApplied(null, null, LOOKUPS)).toBe(false);
     });
 });

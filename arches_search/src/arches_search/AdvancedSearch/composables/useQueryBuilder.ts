@@ -1,4 +1,5 @@
 import { computed, inject, provide, ref, watch } from "vue";
+import { isEqual } from "es-toolkit";
 
 import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import {
@@ -8,9 +9,9 @@ import {
     buildPrunedPayload,
     canGroupQueryBuilderItems,
     createQueryBuilderRoot,
-    draftDiffersFromApplied,
     findQueryBuilderItem,
     groupQueryBuilderItems,
+    isContainer,
     queryBuilderRootFromPayload,
     removeQueryBuilderItem,
     setGroupLabel,
@@ -119,8 +120,8 @@ function createQueryBuilder({
         return buildPrunedPayload(root.value, lookups);
     });
 
-    const hasUnsearchedChanges = computed<boolean>(() =>
-        draftDiffersFromApplied(root.value, advancedQuery.value, lookups),
+    const hasUnsearchedChanges = computed<boolean>(
+        () => !isEqual(prunedPayload.value, advancedQuery.value),
     );
 
     const isSelecting = computed<boolean>(() => isSelectingItems.value);
@@ -354,12 +355,13 @@ function graphSlugsIn(root: QueryBuilderGroup): Set<string> {
 
     function visit(items: QueryBuilderItem[]): void {
         for (const item of items) {
-            if (item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP) {
-                if (item.targetGraphSlug) {
-                    graphSlugs.add(item.targetGraphSlug);
-                }
-                visit(item.items);
-            } else if ("items" in item) {
+            if (
+                item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP &&
+                item.targetGraphSlug
+            ) {
+                graphSlugs.add(item.targetGraphSlug);
+            }
+            if (isContainer(item)) {
                 visit(item.items);
             }
         }
