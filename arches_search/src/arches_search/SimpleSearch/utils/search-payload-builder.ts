@@ -1,3 +1,7 @@
+import {
+    SEARCH_MODEL_GEOMETRY,
+    SEARCH_MODELS_DATE,
+} from "@/arches_search/AdvancedSearch/types.ts";
 import { SUGGESTION_DATATYPE_REFERENCE } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
 import { TERM_KIND_CONTROLLED_TERM } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -84,7 +88,7 @@ function buildSearchModelClauses(
                 type: "SEARCH_MODELS",
                 graph_slug: graphSlug,
                 node_alias: "",
-                search_models: ["GeometrySearch"],
+                search_models: [SEARCH_MODEL_GEOMETRY],
             },
             operator: "GEO_INTERSECTS",
             operands: [{ type: "GEO_LITERAL", value: mapFilter }],
@@ -101,7 +105,7 @@ function buildSearchModelClauses(
                 type: "SEARCH_MODELS",
                 graph_slug: graphSlug,
                 node_alias: "",
-                search_models: ["DateSearch", "DateRangeSearch"],
+                search_models: [...SEARCH_MODELS_DATE],
             },
             operator: "BETWEEN",
             operands: [

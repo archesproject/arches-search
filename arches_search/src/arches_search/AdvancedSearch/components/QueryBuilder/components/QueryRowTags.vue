@@ -24,9 +24,9 @@ const emit = defineEmits<{
     (event: typeof TOGGLE_NOT_EVENT): void;
 }>();
 
-const { $gettext } = useGettext();
-
 const graphs = inject<Ref<GraphModel[]>>("graphs")!;
+
+const { $gettext } = useGettext();
 
 const graphName = computed<string>(
     () =>

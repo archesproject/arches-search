@@ -153,6 +153,17 @@ export function findQueryBuilderItem(
     return null;
 }
 
+export function isRelationshipComplete(
+    targetGraphSlug: string,
+    relationship: RelationshipBlock,
+): boolean {
+    return Boolean(
+        targetGraphSlug &&
+            relationship.path.graph_slug &&
+            relationship.path.node_alias,
+    );
+}
+
 export function isContainer(
     item: QueryBuilderItem,
 ): item is QueryBuilderContainer {
@@ -574,23 +585,15 @@ function pruneItems(
             return [{ ...item, items: prunedItems }];
         }
         if (item.itemType === QUERY_BUILDER_ITEM_RELATED_GROUP) {
-            if (!isRelationshipComplete(item)) {
+            if (
+                !isRelationshipComplete(item.targetGraphSlug, item.relationship)
+            ) {
                 return [];
             }
             return [{ ...item, items: pruneItems(item.items, lookups) }];
         }
         return [item];
     });
-}
-
-function isRelationshipComplete(
-    relatedGroup: QueryBuilderRelatedGroup,
-): boolean {
-    return Boolean(
-        relatedGroup.targetGraphSlug &&
-            relatedGroup.relationship.path.graph_slug &&
-            relatedGroup.relationship.path.node_alias,
-    );
 }
 
 function isEmptyOperand(operand: LiteralOperand | undefined): boolean {

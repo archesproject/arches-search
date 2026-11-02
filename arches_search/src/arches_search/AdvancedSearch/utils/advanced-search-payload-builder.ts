@@ -4,11 +4,11 @@ import {
     type LiteralClause,
     type LiteralOperand,
     ClauseSubjectTypeToken,
+    SEARCH_MODELS_DATE,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const CLAUSE_TYPE_LITERAL = "LITERAL";
 const QUANTIFIER_ANY = "ANY";
-const SEARCH_MODELS_DATE = ["DateSearch", "DateRangeSearch"] as const;
 
 export function parseStoredDate(value: unknown): Date | null {
     if (!value) return null;

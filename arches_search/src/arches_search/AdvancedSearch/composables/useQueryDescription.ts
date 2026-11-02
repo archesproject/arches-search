@@ -6,6 +6,7 @@ import {
     getResourceNamesForPayload,
 } from "@/arches_search/AdvancedSearch/api.ts";
 import { describeAdvancedSearchQuery } from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/NarrationPanel/query-narrator.ts";
+import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 
 import type { ComputedRef, Ref } from "vue";
 import type {
@@ -105,15 +106,7 @@ export function useQueryDescription({
             if (requestNumber !== latestRequestNumber) {
                 return;
             }
-            if (error instanceof Error) {
-                fetchError.value = error;
-            } else {
-                fetchError.value = new Error(
-                    gettext.$gettext(
-                        "An unknown error occurred while fetching node metadata.",
-                    ),
-                );
-            }
+            fetchError.value = toError(error);
         } finally {
             if (requestNumber === latestRequestNumber) {
                 isLoading.value = false;

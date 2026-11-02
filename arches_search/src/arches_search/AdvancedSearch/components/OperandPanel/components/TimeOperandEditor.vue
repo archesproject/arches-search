@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch } from "vue";
-import dayjs from "dayjs";
 import { useGettext } from "vue3-gettext";
 
 import DatePicker from "openvue/datepicker";
@@ -38,7 +37,6 @@ const OPERAND_TYPE_LITERAL = "LITERAL" as const;
 const OPERATOR_BETWEEN = "BETWEEN";
 const RANGE_VALUE_COUNT = 2;
 const PICKER_DATE_FORMAT = "yy-mm-dd";
-const STORED_DATE_FORMAT = "YYYY-MM-DD";
 
 const { clause } = defineProps<{
     clause: LiteralClause;
@@ -250,7 +248,7 @@ function onDatePick(operandIndex: number, pickedValue: unknown): void {
     }
     onOperandUpdate(
         operandIndex,
-        literalOperand(dayjs(pickedValue).format(STORED_DATE_FORMAT)),
+        literalOperand(toLocalISODateString(pickedValue)),
     );
 }
 </script>

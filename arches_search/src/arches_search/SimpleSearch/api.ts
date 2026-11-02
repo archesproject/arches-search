@@ -19,6 +19,7 @@ import type {
     ResourceFieldFilter,
     ResourceFieldMetadata,
     SavedSearch,
+    SearchDefinition,
     SearchRequestTerm,
     SortSpec,
     TermSuggestion,
@@ -188,7 +189,7 @@ export async function getSavedSearches(
 export async function createSavedSearch(
     name: string,
     description: string,
-    queryDefinition: Record<string, unknown>,
+    queryDefinition: SearchDefinition,
 ): Promise<SavedSearch> {
     const response = await fetch(
         generateArchesURL("arches_search:saved_searches"),

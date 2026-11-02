@@ -6,6 +6,8 @@ import Message from "openvue/message";
 import Select from "openvue/select";
 
 import PathBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/components/PathBuilder.vue";
+import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
+import { isRelationshipComplete } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 
 import type { Ref } from "vue";
 import type {
@@ -103,11 +105,7 @@ const traversalQuantifierOptions = computed<
 ]);
 
 const hasChosenLink = computed<boolean>(() =>
-    Boolean(
-        innerGraphSlug &&
-            relationship.path.graph_slug &&
-            relationship.path.node_alias,
-    ),
+    isRelationshipComplete(innerGraphSlug, relationship),
 );
 
 const isTraversalQuantifierShown = computed<boolean>(
@@ -161,7 +159,7 @@ async function loadRelatableTree(): Promise<void> {
             emit(UPDATE_INNER_GRAPH_SLUG_EVENT, options[0].value);
         }
     } catch (error) {
-        relatableTreeError.value = error as Error;
+        relatableTreeError.value = toError(error);
         relatableNodesTree.value = null;
     } finally {
         isLoadingRelatableTree.value = false;
@@ -189,7 +187,7 @@ async function loadPairwiseNodesTree(): Promise<void> {
         }
     } catch (error) {
         if (innerGraph.value?.graphid === otherGraphId) {
-            pairwiseTreeError.value = error as Error;
+            pairwiseTreeError.value = toError(error);
             pairwiseNodesTree.value = null;
         }
     }

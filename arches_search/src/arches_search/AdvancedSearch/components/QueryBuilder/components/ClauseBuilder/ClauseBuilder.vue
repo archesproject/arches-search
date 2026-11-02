@@ -253,7 +253,7 @@ function textOperandValue(parameterIndex: number): string {
     return "";
 }
 
-function onTextOperandUpdate(
+function handleTextOperandUpdate(
     parameterIndex: number,
     nextText: string | undefined,
 ): void {
@@ -379,7 +379,7 @@ function handleQuantifierChange(
                     :placeholder="$gettext('Search text')"
                     :aria-label="$gettext('Search text')"
                     @update:model-value="
-                        onTextOperandUpdate(parameterIndex - 1, $event)
+                        handleTextOperandUpdate(parameterIndex - 1, $event)
                     "
                 />
             </div>

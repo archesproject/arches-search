@@ -58,6 +58,7 @@ import {
 import { parseSearchDefinition } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
 import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
+import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 
 import type { FeatureCollection } from "geojson";
 import type {
@@ -537,7 +538,7 @@ async function applySavedSearch(
             severity: "error",
             life: 5000,
             summary: $gettext("The saved search could not be opened."),
-            detail: error instanceof Error ? error.message : undefined,
+            detail: toError(error).message,
         });
     }
 }
