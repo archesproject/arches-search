@@ -32,18 +32,36 @@ export function useQueryDescription({
     >;
 }): {
     description: ComputedRef<string>;
-    isLoading: Ref<boolean>;
-    fetchError: Ref<Error | null>;
+    isLoading: ComputedRef<boolean>;
+    fetchError: ComputedRef<Error | null>;
 } {
     const gettext = useGettext();
 
     const nodeMetadata = ref<NodeMetadataMap>({});
     const resourceNames = ref<Record<string, string>>({});
-    const isLoading = ref(false);
-    const fetchError = ref<Error | null>(null);
+    const loadErrorByPayloadKey = ref<Record<string, Error | null>>({});
 
     let fetchTimeout: ReturnType<typeof setTimeout> | null = null;
-    let latestRequestNumber = 0;
+
+    const payloadKey = computed<string | null>(() => {
+        if (!payload.value) {
+            return null;
+        }
+        return JSON.stringify(payload.value);
+    });
+
+    const isLoading = computed<boolean>(
+        () =>
+            payloadKey.value !== null &&
+            !(payloadKey.value in loadErrorByPayloadKey.value),
+    );
+
+    const fetchError = computed<Error | null>(() => {
+        if (!payloadKey.value) {
+            return null;
+        }
+        return loadErrorByPayloadKey.value[payloadKey.value] ?? null;
+    });
 
     const description = computed<string>(() => {
         if (!payload.value) {
@@ -62,18 +80,17 @@ export function useQueryDescription({
     });
 
     watch(
-        payload,
-        (currentPayload) => {
+        payloadKey,
+        (currentPayloadKey) => {
             if (fetchTimeout) {
                 clearTimeout(fetchTimeout);
             }
-            if (!currentPayload) {
-                isLoading.value = false;
+            const currentPayload = payload.value;
+            if (!currentPayloadKey || !currentPayload) {
                 return;
             }
-            isLoading.value = true;
             fetchTimeout = setTimeout(() => {
-                void loadDescriptionData(currentPayload);
+                void loadDescriptionData(currentPayloadKey, currentPayload);
             }, DESCRIPTION_DATA_DEBOUNCE_MS);
         },
         { immediate: true },
@@ -86,32 +103,27 @@ export function useQueryDescription({
     });
 
     async function loadDescriptionData(
+        currentPayloadKey: string,
         currentPayload: GroupPayload,
     ): Promise<void> {
-        latestRequestNumber += 1;
-        const requestNumber = latestRequestNumber;
-        fetchError.value = null;
-
+        let loadError: Error | null = null;
         try {
             const [fetchedMetadata, fetchedResourceNames] = await Promise.all([
                 getNodeMetadataForPayload(currentPayload),
                 getResourceNamesForPayload(currentPayload),
             ]);
-            if (requestNumber !== latestRequestNumber) {
-                return;
-            }
-            nodeMetadata.value = fetchedMetadata ?? {};
-            resourceNames.value = fetchedResourceNames ?? {};
+            nodeMetadata.value = { ...nodeMetadata.value, ...fetchedMetadata };
+            resourceNames.value = {
+                ...resourceNames.value,
+                ...fetchedResourceNames,
+            };
         } catch (error) {
-            if (requestNumber !== latestRequestNumber) {
-                return;
-            }
-            fetchError.value = toError(error);
-        } finally {
-            if (requestNumber === latestRequestNumber) {
-                isLoading.value = false;
-            }
+            loadError = toError(error);
         }
+        loadErrorByPayloadKey.value = {
+            ...loadErrorByPayloadKey.value,
+            [currentPayloadKey]: loadError,
+        };
     }
 
     return { description, isLoading, fetchError };

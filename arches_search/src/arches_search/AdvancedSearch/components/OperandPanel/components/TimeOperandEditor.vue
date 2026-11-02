@@ -37,6 +37,11 @@ const OPERATOR_BETWEEN = "BETWEEN";
 const RANGE_VALUE_COUNT = 2;
 const PICKER_DATE_FORMAT = "yy-mm-dd";
 
+type DateBoundsResult = {
+    sliderBounds: [Date, Date] | null;
+    error: Error | null;
+};
+
 const { clause } = defineProps<{
     clause: LiteralClause;
 }>();
@@ -55,8 +60,7 @@ const { subjectGraph, subjectNode } = useClauseSubjectNode(
     toRef(() => clause.subject),
 );
 
-const sliderBounds = ref<[Date, Date] | null>(null);
-const boundsError = ref<Error | null>(null);
+const boundsByKey = ref<Record<string, DateBoundsResult>>({});
 // The node widgets read their value only when mounted, so a slider change
 // remounts them to show the dates it set.
 const widgetRevision = ref(0);
@@ -64,6 +68,28 @@ const sliderOffsets = ref<[number, number] | null>(null);
 
 const isNodeSubject = computed<boolean>(
     () => clause.subject.type === ClauseSubjectTypeToken.NODE,
+);
+
+const boundsKey = computed<string | null>(() => {
+    if (!subjectGraph.value) {
+        return null;
+    }
+    return `${subjectGraph.value.graphid}:${clause.subject.node_alias}`;
+});
+
+const boundsResult = computed<DateBoundsResult | null>(() => {
+    if (!boundsKey.value) {
+        return null;
+    }
+    return boundsByKey.value[boundsKey.value] ?? null;
+});
+
+const sliderBounds = computed<[Date, Date] | null>(
+    () => boundsResult.value?.sliderBounds ?? null,
+);
+
+const boundsError = computed<Error | null>(
+    () => boundsResult.value?.error ?? null,
 );
 
 const operatorOptions = computed<AdvancedSearchFacet[]>(() => {
@@ -99,42 +125,22 @@ const valueLabels = computed<string[]>(() => {
 });
 
 watch(
-    [subjectGraph, () => clause.subject.node_alias],
-    async ([graph, nodeAlias], _previousSources, onCleanup) => {
-        let isStale = false;
-        onCleanup(() => {
-            isStale = true;
-        });
-        sliderBounds.value = null;
-        boundsError.value = null;
-        if (!graph) {
-            return;
-        }
-        const nodeAliases = nodeAlias ? [nodeAlias] : [];
-        try {
-            const bounds = await getDateBoundsForGraphId(
-                graph.graphid,
-                nodeAliases,
+    boundsKey,
+    (key) => {
+        if (key && subjectGraph.value) {
+            void loadBounds(
+                key,
+                subjectGraph.value.graphid,
+                clause.subject.node_alias,
             );
-            if (isStale) {
-                return;
-            }
-            if (bounds.min_value !== null && bounds.max_value !== null) {
-                sliderBounds.value = [
-                    parseSortableDate(bounds.min_value),
-                    parseSortableDate(bounds.max_value),
-                ];
-                syncSlider(clause.operands);
-            }
-        } catch (error) {
-            if (isStale) {
-                return;
-            }
-            boundsError.value = toError(error);
         }
     },
     { immediate: true },
 );
+
+watch(sliderBounds, () => {
+    syncSlider(clause.operands);
+});
 
 watch(
     operatorOptions,
@@ -152,6 +158,30 @@ watch(
     },
     { immediate: true },
 );
+
+async function loadBounds(
+    key: string,
+    graphId: string,
+    nodeAlias: string,
+): Promise<void> {
+    let result: DateBoundsResult = { sliderBounds: null, error: null };
+    try {
+        const nodeAliases = nodeAlias ? [nodeAlias] : [];
+        const bounds = await getDateBoundsForGraphId(graphId, nodeAliases);
+        if (bounds.min_value !== null && bounds.max_value !== null) {
+            result = {
+                sliderBounds: [
+                    parseSortableDate(bounds.min_value),
+                    parseSortableDate(bounds.max_value),
+                ],
+                error: null,
+            };
+        }
+    } catch (error) {
+        result = { sliderBounds: null, error: toError(error) };
+    }
+    boundsByKey.value = { ...boundsByKey.value, [key]: result };
+}
 
 function storedDate(operandIndex: number): Date | null {
     return parseStoredDate(clause.operands[operandIndex]?.value);

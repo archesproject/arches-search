@@ -62,9 +62,6 @@ const noBoundsData = ref(false);
 const hasGraphDateData = ref(true);
 const isUserInitiated = ref(modelValue.length > 0);
 const sliderBounds = ref<[Date, Date]>([new Date(), new Date()]);
-// What this filter last sent; the same clauses coming back through modelValue
-// are its own echo, not a change to apply.
-let lastEmittedClauses: LiteralClause[] | null = null;
 
 const isLoading = computed<boolean>(
     () => isLoadingNodes.value || isLoadingBounds.value,
@@ -116,13 +113,12 @@ const noBoundsDataMessage = computed<string>(() => {
 
 // Only the user's own edits are emitted. Echoing a change that arrived through
 // modelValue back out would re-create a filter the parent had just cleared.
+// Clauses the current selection already builds, such as those edits coming
+// back, have nothing to restore.
 watch(
     () => modelValue,
     (clauses) => {
-        if (
-            lastEmittedClauses !== null &&
-            isEqual(clauses, lastEmittedClauses)
-        ) {
+        if (isEqual(clauses, buildClauses())) {
             return;
         }
         isUserInitiated.value = clauses.length > 0;
@@ -250,8 +246,7 @@ function nodeAliasesFromClauses(clauses: LiteralClause[]): string[] {
 }
 
 function emitClauses(): void {
-    lastEmittedClauses = buildClauses();
-    emit("update:modelValue", lastEmittedClauses);
+    emit("update:modelValue", buildClauses());
 }
 
 function onDateFromChange(value: unknown): void {

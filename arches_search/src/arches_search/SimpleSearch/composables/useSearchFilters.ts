@@ -72,7 +72,7 @@ interface SearchFilters {
     includeRelated: Ref<boolean>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
-    nodeFilterConfigNodes: Ref<NodeFilterConfigNode[]>;
+    nodeFilterConfigNodes: ComputedRef<NodeFilterConfigNode[]>;
     resourceFieldFilters: Ref<Map<string, ResourceFieldFilter>>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
@@ -142,8 +142,9 @@ function createSearchFilters(): SearchFilters {
     // Every searchable resource model.
     const availableGraphs = ref<ResourceType[]>([]);
     let availableGraphsRequest: Promise<void> | null = null;
-    const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
-    let nodeFilterConfigRequestGraphId: string | null = null;
+    const nodeFilterConfigNodesByGraphId = ref<
+        Record<string, NodeFilterConfigNode[]>
+    >({});
     const storedAttributeFilterValues = ref<Record<string, unknown>>({});
     const savedSearchName = ref<string | null>(null);
     const resultsGraphs = ref<ResourceType[]>([]);
@@ -189,6 +190,10 @@ function createSearchFilters(): SearchFilters {
         return activeGraphs.value[0];
     });
 
+    const nodeFilterConfigNodes = computed<NodeFilterConfigNode[]>(() =>
+        nodeFilterConfigNodesFor(activeGraphs.value),
+    );
+
     // A value the widget emitted wins over one parsed back out of its query:
     // re-parsing while the user types would rewrite their input.
     const attributeFilterValues = computed<Record<string, unknown>>(() => {
@@ -224,8 +229,8 @@ function createSearchFilters(): SearchFilters {
         );
     });
 
-    watch(activeGraphs, (graphs) => {
-        dropFiltersForOtherGraphs(graphs);
+    watch(activeGraphs, (graphs, previousGraphs) => {
+        dropFiltersForOtherGraphs(graphs, previousGraphs);
         void loadNodeFilterConfig(singleActiveGraph.value);
     });
 
@@ -251,11 +256,16 @@ function createSearchFilters(): SearchFilters {
 
     // Time and attribute filters only exist while exactly one resource model is
     // selected, and filter that model; switching models leaves them behind.
-    function dropFiltersForOtherGraphs(graphs: ResourceType[]): void {
+    function dropFiltersForOtherGraphs(
+        graphs: ResourceType[],
+        previousGraphs: ResourceType[],
+    ): void {
         const nextGraphSlug = graphs.length === 1 ? graphs[0].slug : null;
         const singleGraphFilterKeys = [
             TIME_FILTER_QUERY_KEY,
-            ...nodeFilterConfigNodes.value.map((node) => node.node_alias),
+            ...nodeFilterConfigNodesFor(previousGraphs).map(
+                (node) => node.node_alias,
+            ),
         ];
 
         const nextQueries = new Map(queries.value);
@@ -269,26 +279,32 @@ function createSearchFilters(): SearchFilters {
         storedAttributeFilterValues.value = {};
     }
 
+    function nodeFilterConfigNodesFor(
+        graphs: ResourceType[],
+    ): NodeFilterConfigNode[] {
+        const graphId = graphs.length === 1 ? graphs[0].id : null;
+        if (!graphId) {
+            return [];
+        }
+        return nodeFilterConfigNodesByGraphId.value[graphId] ?? [];
+    }
+
     async function loadNodeFilterConfig(
         graph: ResourceType | null,
     ): Promise<void> {
-        const graphId = graph?.id ?? null;
-        nodeFilterConfigRequestGraphId = graphId;
+        const graphId = graph?.id;
         if (!graphId) {
-            nodeFilterConfigNodes.value = [];
             return;
         }
 
         try {
             const config = await fetchNodeFilterConfig(graphId);
-            if (nodeFilterConfigRequestGraphId === graphId) {
-                nodeFilterConfigNodes.value = config.nodes;
-            }
+            nodeFilterConfigNodesByGraphId.value = {
+                ...nodeFilterConfigNodesByGraphId.value,
+                [graphId]: config.nodes,
+            };
         } catch (error) {
             console.error(error);
-            if (nodeFilterConfigRequestGraphId === graphId) {
-                nodeFilterConfigNodes.value = [];
-            }
         }
     }
 
