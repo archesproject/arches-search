@@ -6,12 +6,15 @@ import RelationshipEditor from "@/arches_search/AdvancedSearch/components/QueryB
 
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 
+import {
+    QUANTIFIER_ALL,
+    QUANTIFIER_NONE,
+} from "@/arches_search/AdvancedSearch/types.ts";
+
 import type { RelationshipBlock } from "@/arches_search/AdvancedSearch/types.ts";
 
 const RELATED_BADGE_KIND = "related";
 const RELATED_BADGE_ICON = "pi pi-sitemap";
-const TRAVERSAL_QUANTIFIER_ALL = "ALL";
-const TRAVERSAL_QUANTIFIER_NONE = "NONE";
 
 const { groupId, anchorGraphSlug, targetGraphSlug, relationship } =
     defineProps<{
@@ -24,11 +27,11 @@ const { groupId, anchorGraphSlug, targetGraphSlug, relationship } =
 const queryBuilder = useQueryBuilder();
 
 const isNegated = computed<boolean>(
-    () => relationship.traversal_quantifier === TRAVERSAL_QUANTIFIER_NONE,
+    () => relationship.traversal_quantifier === QUANTIFIER_NONE,
 );
 
 const canNegate = computed<boolean>(
-    () => relationship.traversal_quantifier !== TRAVERSAL_QUANTIFIER_ALL,
+    () => relationship.traversal_quantifier !== QUANTIFIER_ALL,
 );
 
 function onToggleNot(): void {

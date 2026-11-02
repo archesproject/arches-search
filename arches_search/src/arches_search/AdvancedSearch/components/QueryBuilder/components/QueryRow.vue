@@ -10,7 +10,11 @@ import QuerySelectCheckbox from "@/arches_search/AdvancedSearch/components/Query
 
 import { useQueryBuilder } from "@/arches_search/AdvancedSearch/composables/useQueryBuilder.ts";
 import { getClauseOperandComponent } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
-import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    ClauseSubjectTypeToken,
+    QUANTIFIER_ALL,
+    QUANTIFIER_NONE,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 import type {
     AdvancedSearchOperandComponent,
@@ -21,8 +25,6 @@ const ATTRIBUTE_BADGE_KIND = "attribute";
 const ATTRIBUTE_BADGE_ICON = "pi pi-tag";
 const TEXT_SEARCH_BADGE_KIND = "text";
 const TEXT_SEARCH_BADGE_ICON = "pi pi-search";
-const QUANTIFIER_ALL = "ALL";
-const QUANTIFIER_NONE = "NONE";
 
 const { rowId, clause } = defineProps<{
     rowId: string;

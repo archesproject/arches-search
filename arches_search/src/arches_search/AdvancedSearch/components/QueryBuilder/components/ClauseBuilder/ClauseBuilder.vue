@@ -15,7 +15,13 @@ import {
     getClauseDatatype,
     isClauseComplete,
 } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
-import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    ClauseSubjectTypeToken,
+    OPERAND_TYPE_LITERAL,
+    QUANTIFIER_ALL,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Ref } from "vue";
 import type {
@@ -26,11 +32,6 @@ import type {
     PathSelection,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-const CLAUSE_QUANTIFIER_ANY = "ANY" as const;
-const CLAUSE_QUANTIFIER_ALL = "ALL" as const;
-const CLAUSE_QUANTIFIER_NONE = "NONE" as const;
-
-const OPERAND_TYPE_LITERAL = "LITERAL" as const;
 const UPDATE_MODEL_VALUE_EVENT = "update:modelValue" as const;
 const OPEN_PANEL_EVENT = "open-panel" as const;
 
@@ -61,8 +62,8 @@ const { subjectGraph, subjectNode } = useClauseSubjectNode(
 const clauseQuantifierOptions = computed<
     { label: string; value: LiteralClause["quantifier"] }[]
 >(() => [
-    { label: $gettext("any value"), value: CLAUSE_QUANTIFIER_ANY },
-    { label: $gettext("every value"), value: CLAUSE_QUANTIFIER_ALL },
+    { label: $gettext("any value"), value: QUANTIFIER_ANY },
+    { label: $gettext("every value"), value: QUANTIFIER_ALL },
 ]);
 
 const isNodeSubject = computed<boolean>(
@@ -71,12 +72,12 @@ const isNodeSubject = computed<boolean>(
 
 // A saved "every value" stays visible, so it can be changed back.
 const isQuantifierShown = computed<boolean>(() => {
-    if (modelValue.quantifier === CLAUSE_QUANTIFIER_ALL) {
+    if (modelValue.quantifier === QUANTIFIER_ALL) {
         return true;
     }
     return (
         subjectNode.value?.nodegroup_has_cardinality_n === true &&
-        modelValue.quantifier !== CLAUSE_QUANTIFIER_NONE
+        modelValue.quantifier !== QUANTIFIER_NONE
     );
 });
 

@@ -2,9 +2,12 @@ import { isFeatureCollection } from "@/arches_search/AdvancedSearch/utils/query-
 import {
     ClauseSubjectTypeToken,
     LogicToken,
+    QUANTIFIER_ALL,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
+    SEARCH_MODELS_DATE,
     SEARCH_MODEL_GEOMETRY,
     SEARCH_MODEL_TERM,
-    SEARCH_MODELS_DATE,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     AdvancedSearchFacet,
@@ -27,9 +30,6 @@ export type DescribeQueryOptions = {
     nodeMetadata?: NodeMetadataMap;
     resourceNames?: Readonly<Record<string, string>>;
 };
-
-const QUANTIFIER_ALL = "ALL" as const;
-const QUANTIFIER_NONE = "NONE" as const;
 
 export function describeAdvancedSearchQuery(
     options: DescribeQueryOptions,
@@ -640,5 +640,5 @@ function resolveTraversalQuantifier(quantifier: string) {
     if (quantifier === QUANTIFIER_ALL || quantifier === QUANTIFIER_NONE) {
         return quantifier;
     }
-    return "ANY";
+    return QUANTIFIER_ANY;
 }

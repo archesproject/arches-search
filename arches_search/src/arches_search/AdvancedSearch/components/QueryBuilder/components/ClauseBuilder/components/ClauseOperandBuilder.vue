@@ -8,6 +8,8 @@ import {
     referenceValuesForLabels,
 } from "@/arches_search/AdvancedSearch/utils/reference-labels.ts";
 
+import { OPERAND_TYPE_LITERAL } from "@/arches_search/AdvancedSearch/types.ts";
+
 import type { AliasedNodeData } from "@/arches_vue_components/types.ts";
 import type {
     GraphModel,
@@ -15,7 +17,6 @@ import type {
     Node,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-const OPERAND_TYPE_LITERAL = "LITERAL" as const;
 const DATATYPE_REFERENCE = "reference";
 const UPDATE_MODEL_VALUE = "update:modelValue" as const;
 

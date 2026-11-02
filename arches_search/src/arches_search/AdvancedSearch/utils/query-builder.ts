@@ -1,15 +1,19 @@
 import {
+    CLAUSE_TYPE_LITERAL,
     ClauseSubjectTypeToken,
     GraphScopeToken,
     LogicToken,
+    OPERAND_TYPE_LITERAL,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
     QUERY_BUILDER_ITEM_GROUP,
     QUERY_BUILDER_ITEM_LOCKED_CLAUSE,
     QUERY_BUILDER_ITEM_LOCKED_GROUP,
     QUERY_BUILDER_ITEM_RELATED_GROUP,
     QUERY_BUILDER_ITEM_ROW,
+    SEARCH_MODELS_DATE,
     SEARCH_MODEL_GEOMETRY,
     SEARCH_MODEL_TERM,
-    SEARCH_MODELS_DATE,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { FeatureCollection } from "geojson";
@@ -28,10 +32,6 @@ import type {
 
 type QueryBuilderContainer = QueryBuilderGroup | QueryBuilderRelatedGroup;
 
-const CLAUSE_TYPE_LITERAL = "LITERAL";
-const OPERAND_TYPE_LITERAL = "LITERAL";
-const QUANTIFIER_ANY = "ANY";
-const QUANTIFIER_NONE = "NONE";
 const MINIMUM_ITEMS_TO_GROUP = 2;
 const DATATYPE_DATE = "date";
 const DATATYPE_GEOJSON = "geojson-feature-collection";

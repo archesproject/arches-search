@@ -79,8 +79,18 @@ export enum ClauseSubjectTypeToken {
     SEARCH_MODELS = "SEARCH_MODELS",
 }
 
-type ClauseTypeToken = "LITERAL";
-type QuantifierToken = "ANY" | "ALL" | "NONE";
+export const CLAUSE_TYPE_LITERAL = "LITERAL";
+export const OPERAND_TYPE_LITERAL = "LITERAL";
+export const OPERAND_TYPE_GEO_LITERAL = "GEO_LITERAL";
+export const QUANTIFIER_ANY = "ANY";
+export const QUANTIFIER_ALL = "ALL";
+export const QUANTIFIER_NONE = "NONE";
+
+type ClauseTypeToken = typeof CLAUSE_TYPE_LITERAL;
+type QuantifierToken =
+    | typeof QUANTIFIER_ANY
+    | typeof QUANTIFIER_ALL
+    | typeof QUANTIFIER_NONE;
 
 export type OperatorString = string;
 
@@ -105,7 +115,7 @@ export type RelationshipPath = {
 };
 
 export type LiteralOperand = {
-    type: "LITERAL";
+    type: typeof OPERAND_TYPE_LITERAL;
     value: unknown;
     display_value?: string;
 };

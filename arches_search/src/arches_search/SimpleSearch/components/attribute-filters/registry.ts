@@ -2,9 +2,12 @@ import NumericFilter from "@/arches_search/SimpleSearch/components/attribute-fil
 import ReferenceFilterMultiSelect from "@/arches_search/SimpleSearch/components/attribute-filters/ReferenceFilterMultiSelect.vue";
 
 import {
+    CLAUSE_TYPE_LITERAL,
     ClauseSubjectTypeToken,
     GraphScopeToken,
     LogicToken,
+    OPERAND_TYPE_LITERAL,
+    QUANTIFIER_ANY,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import {
     isLabelList,
@@ -55,13 +58,13 @@ function buildReferenceQuery(
         logic: LogicToken.AND,
         clauses: [
             {
-                type: "LITERAL",
-                quantifier: "ANY",
+                type: CLAUSE_TYPE_LITERAL,
+                quantifier: QUANTIFIER_ANY,
                 subject: nodeSubject(node, graphSlug),
                 operator: "REFERENCES_ANY",
                 operands: [
                     {
-                        type: "LITERAL",
+                        type: OPERAND_TYPE_LITERAL,
                         value: selected,
                     },
                 ],
@@ -89,22 +92,22 @@ function buildNumericQuery(
     const clauses: LiteralClause[] = tokens.map((token) => {
         if (token.kind === "range") {
             return {
-                type: "LITERAL",
-                quantifier: "ANY",
+                type: CLAUSE_TYPE_LITERAL,
+                quantifier: QUANTIFIER_ANY,
                 subject,
                 operator: "BETWEEN",
                 operands: [
-                    { type: "LITERAL", value: token.min },
-                    { type: "LITERAL", value: token.max },
+                    { type: OPERAND_TYPE_LITERAL, value: token.min },
+                    { type: OPERAND_TYPE_LITERAL, value: token.max },
                 ],
             };
         }
         return {
-            type: "LITERAL",
-            quantifier: "ANY",
+            type: CLAUSE_TYPE_LITERAL,
+            quantifier: QUANTIFIER_ANY,
             subject,
             operator: "EQUALS",
-            operands: [{ type: "LITERAL", value: token.value }],
+            operands: [{ type: OPERAND_TYPE_LITERAL, value: token.value }],
         };
     });
 

@@ -7,11 +7,12 @@ import MapToolsPanel from "@/arches_vue_components/components/MapComponent/compo
 import { useDefaultMapInteractionTools } from "@/arches_vue_components/components/MapComponent/composables/useDefaultMapInteractionTools.ts";
 import { isFeatureCollection } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 
+import { OPERAND_TYPE_LITERAL } from "@/arches_search/AdvancedSearch/types.ts";
+
 import type { FeatureCollection } from "geojson";
 import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
 
 const UPDATE_CLAUSE_EVENT = "update:clause" as const;
-const OPERAND_TYPE_LITERAL = "LITERAL" as const;
 
 const { clause } = defineProps<{
     clause: LiteralClause;

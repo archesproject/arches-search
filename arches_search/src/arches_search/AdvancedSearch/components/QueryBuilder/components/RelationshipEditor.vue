@@ -9,6 +9,12 @@ import PathBuilder from "@/arches_search/AdvancedSearch/components/QueryBuilder/
 import { toError } from "@/arches_search/AdvancedSearch/utils/errors.ts";
 import { isRelationshipComplete } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 
+import {
+    QUANTIFIER_ALL,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
+} from "@/arches_search/AdvancedSearch/types.ts";
+
 import type { Ref } from "vue";
 import type {
     GraphModel,
@@ -18,9 +24,6 @@ import type {
     RelationshipBlock,
 } from "@/arches_search/AdvancedSearch/types.ts";
 
-const TRAVERSAL_QUANTIFIER_ANY = "ANY";
-const TRAVERSAL_QUANTIFIER_ALL = "ALL";
-const TRAVERSAL_QUANTIFIER_NONE = "NONE";
 const UPDATE_RELATIONSHIP_EVENT = "update:relationship" as const;
 const UPDATE_INNER_GRAPH_SLUG_EVENT = "update:innerGraphSlug" as const;
 
@@ -96,11 +99,11 @@ const traversalQuantifierOptions = computed<
 >(() => [
     {
         label: $gettext("at least one related record matches"),
-        value: TRAVERSAL_QUANTIFIER_ANY,
+        value: QUANTIFIER_ANY,
     },
     {
         label: $gettext("every related record matches"),
-        value: TRAVERSAL_QUANTIFIER_ALL,
+        value: QUANTIFIER_ALL,
     },
 ]);
 
@@ -111,7 +114,7 @@ const hasChosenLink = computed<boolean>(() =>
 const isTraversalQuantifierShown = computed<boolean>(
     () =>
         hasChosenLink.value &&
-        relationship.traversal_quantifier !== TRAVERSAL_QUANTIFIER_NONE,
+        relationship.traversal_quantifier !== QUANTIFIER_NONE,
 );
 
 const selectedRelationshipNode = computed<PathSelection | null>(() => {

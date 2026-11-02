@@ -1,6 +1,10 @@
 import {
-    SEARCH_MODEL_GEOMETRY,
+    CLAUSE_TYPE_LITERAL,
+    OPERAND_TYPE_GEO_LITERAL,
+    OPERAND_TYPE_LITERAL,
+    QUANTIFIER_ANY,
     SEARCH_MODELS_DATE,
+    SEARCH_MODEL_GEOMETRY,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import { SUGGESTION_DATATYPE_REFERENCE } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
 import { TERM_KIND_CONTROLLED_TERM } from "@/arches_search/SimpleSearch/types.ts";
@@ -27,13 +31,13 @@ interface TermSearch {
 }
 
 interface ClauseOperand {
-    type: "LITERAL" | "GEO_LITERAL";
+    type: typeof OPERAND_TYPE_LITERAL | typeof OPERAND_TYPE_GEO_LITERAL;
     value: unknown;
 }
 
 interface SearchClause {
-    type: "LITERAL";
-    quantifier: "ANY";
+    type: typeof CLAUSE_TYPE_LITERAL;
+    quantifier: typeof QUANTIFIER_ANY;
     subject:
         | { type: "RESOURCE_FIELD"; field: string }
         | {
@@ -82,8 +86,8 @@ function buildSearchModelClauses(
 
     if (hasDrawnArea(mapFilter)) {
         clauses.push({
-            type: "LITERAL",
-            quantifier: "ANY",
+            type: CLAUSE_TYPE_LITERAL,
+            quantifier: QUANTIFIER_ANY,
             subject: {
                 type: "SEARCH_MODELS",
                 graph_slug: graphSlug,
@@ -91,7 +95,7 @@ function buildSearchModelClauses(
                 search_models: [SEARCH_MODEL_GEOMETRY],
             },
             operator: "GEO_INTERSECTS",
-            operands: [{ type: "GEO_LITERAL", value: mapFilter }],
+            operands: [{ type: OPERAND_TYPE_GEO_LITERAL, value: mapFilter }],
         });
     }
 
@@ -99,8 +103,8 @@ function buildSearchModelClauses(
         // Both models, so a stored range overlapping the window qualifies and
         // not just a single date sitting inside it.
         clauses.push({
-            type: "LITERAL",
-            quantifier: "ANY",
+            type: CLAUSE_TYPE_LITERAL,
+            quantifier: QUANTIFIER_ANY,
             subject: {
                 type: "SEARCH_MODELS",
                 graph_slug: graphSlug,
@@ -109,8 +113,8 @@ function buildSearchModelClauses(
             },
             operator: "BETWEEN",
             operands: [
-                { type: "LITERAL", value: dateRange.from },
-                { type: "LITERAL", value: dateRange.to },
+                { type: OPERAND_TYPE_LITERAL, value: dateRange.from },
+                { type: OPERAND_TYPE_LITERAL, value: dateRange.to },
             ],
         });
     }
@@ -128,12 +132,12 @@ function buildAdvancedSearchQueries(
     const resourceFieldClauses: SearchClause[] = (
         resourceFieldFilters ?? []
     ).map((filter) => ({
-        type: "LITERAL",
-        quantifier: "ANY",
+        type: CLAUSE_TYPE_LITERAL,
+        quantifier: QUANTIFIER_ANY,
         subject: { type: "RESOURCE_FIELD", field: filter.field },
         operator: filter.operator,
         operands: (filter.operands ?? []).map((value) => ({
-            type: "LITERAL",
+            type: OPERAND_TYPE_LITERAL,
             value,
         })),
     }));

@@ -22,7 +22,10 @@ import {
     parseSortableDate,
     toLocalISODateString,
 } from "@/arches_search/SimpleSearch/components/TimeFilter/date-utils.ts";
-import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    ClauseSubjectTypeToken,
+    OPERAND_TYPE_LITERAL,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { Ref } from "vue";
 import type {
@@ -32,7 +35,6 @@ import type {
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 const UPDATE_CLAUSE_EVENT = "update:clause" as const;
-const OPERAND_TYPE_LITERAL = "LITERAL" as const;
 const OPERATOR_BETWEEN = "BETWEEN";
 const RANGE_VALUE_COUNT = 2;
 const PICKER_DATE_FORMAT = "yy-mm-dd";

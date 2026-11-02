@@ -3,12 +3,11 @@ import dayjs from "dayjs";
 import {
     type LiteralClause,
     type LiteralOperand,
+    CLAUSE_TYPE_LITERAL,
     ClauseSubjectTypeToken,
+    QUANTIFIER_ANY,
     SEARCH_MODELS_DATE,
 } from "@/arches_search/AdvancedSearch/types.ts";
-
-const CLAUSE_TYPE_LITERAL = "LITERAL";
-const QUANTIFIER_ANY = "ANY";
 
 export function parseStoredDate(value: unknown): Date | null {
     if (!value) return null;
