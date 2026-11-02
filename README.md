@@ -1313,7 +1313,10 @@ A saved search's `query_definition` is the search as the interface built it:
 Each entry in `queries` is a group payload (see [Clause Subjects](#clause-subjects)):
 the time filter under `timeFilter`, each attribute filter under its node
 alias, and the Advanced Search query under `advancedQuery`. A search is
-built from all of them, ANDed, keeping only those on a selected model.
+built from all of them, ANDed, keeping only those on a selected model. A
+reference node's value is the list items chosen, as the reference widget saves
+them (`list_id`, `uri` and `labels`); a list of plain labels, as earlier
+searches saved, is still read.
 
 Simple Search saves all of its filters, the Advanced Search query included.
 Advanced Search saves its query alone, on its model. A query whose model is not

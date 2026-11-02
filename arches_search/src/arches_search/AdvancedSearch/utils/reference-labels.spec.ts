@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
     isLabelList,
+    isReferenceValueList,
     referenceValuesForLabels,
 } from "@/arches_search/AdvancedSearch/utils/reference-labels.ts";
 
@@ -54,6 +55,20 @@ describe("referenceValuesForLabels", () => {
                 labels: STONE.list_item_values,
             },
         ]);
+    });
+});
+
+describe("isReferenceValueList", () => {
+    it("is true only for a list of list items", () => {
+        const glassValue = {
+            list_id: "materials",
+            uri: GLASS.uri,
+            labels: GLASS.list_item_values,
+        };
+        expect(isReferenceValueList([glassValue])).toBe(true);
+        expect(isReferenceValueList(["glass"])).toBe(false);
+        expect(isReferenceValueList([glassValue, "glass"])).toBe(false);
+        expect(isReferenceValueList("glass")).toBe(false);
     });
 });
 

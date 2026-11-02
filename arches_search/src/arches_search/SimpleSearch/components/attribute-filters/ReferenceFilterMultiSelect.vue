@@ -2,26 +2,20 @@
 import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import arches from "arches";
 import MultiSelect from "openvue/multiselect";
 
-import { fetchControlledListItems } from "@/arches_search/SimpleSearch/api.ts";
+import { fetchControlledListReferenceValues } from "@/arches_search/SimpleSearch/api.ts";
+import {
+    isLabelList,
+    referenceValueLabel,
+    referenceValuesWithLabels,
+} from "@/arches_search/AdvancedSearch/utils/reference-labels.ts";
 
-import type { Language } from "@/arches_controlled_lists/types.ts";
+import type { ReferenceSelectNodeValue } from "@/arches_controlled_lists/datatypes/reference-select/types.ts";
 import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts";
-import type {
-    ReferenceFilterOption,
-    ReferenceFilterValue,
-} from "@/arches_search/SimpleSearch/components/attribute-filters/types.ts";
-
-const DEFAULT_LANGUAGE_CODE = "en";
+import type { ReferenceFilterValue } from "@/arches_search/SimpleSearch/components/attribute-filters/types.ts";
 
 const { $gettext } = useGettext();
-
-const language = arches.activeLanguage;
-const systemLanguage =
-    arches.languages.find((lang: Language) => lang.isdefault)?.code ??
-    DEFAULT_LANGUAGE_CODE;
 
 const { node, modelValue } = defineProps<{
     node: NodeFilterConfigNode;
@@ -29,15 +23,22 @@ const { node, modelValue } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: "update:modelValue", value: ReferenceFilterValue): void;
+    (event: "update:modelValue", value: ReferenceSelectNodeValue[]): void;
 }>();
 
-const options = ref<ReferenceFilterOption[]>([]);
+const options = ref<ReferenceSelectNodeValue[]>([]);
 const isLoading = ref(false);
 
 const controlledListId = computed<string | null>(() => {
     const listId = node.config?.controlledList;
     return typeof listId === "string" ? listId : null;
+});
+
+const selectedReferenceValues = computed<ReferenceSelectNodeValue[]>(() => {
+    if (isLabelList(modelValue)) {
+        return referenceValuesWithLabels(options.value, modelValue);
+    }
+    return modelValue ?? [];
 });
 
 watch(
@@ -49,15 +50,7 @@ watch(
         }
         isLoading.value = true;
         try {
-            const items = await fetchControlledListItems(
-                listId,
-                language,
-                systemLanguage,
-            );
-            options.value = items.map((item) => ({
-                id: item.uri,
-                label: item.label,
-            }));
+            options.value = await fetchControlledListReferenceValues(listId);
         } catch (error) {
             console.error(
                 "[ReferenceFilterMultiSelect] failed to load controlled list items:",
@@ -71,7 +64,7 @@ watch(
     { immediate: true },
 );
 
-function onSelectionChange(value: ReferenceFilterValue): void {
+function onSelectionChange(value: ReferenceSelectNodeValue[]): void {
     emit("update:modelValue", value);
 }
 </script>
@@ -80,11 +73,11 @@ function onSelectionChange(value: ReferenceFilterValue): void {
     <div class="reference-filter">
         <MultiSelect
             class="reference-filter-select"
-            data-key="label"
+            data-key="uri"
             :input-id="node.node_alias"
-            :model-value="modelValue ?? []"
+            :model-value="selectedReferenceValues"
             :options="options"
-            option-label="label"
+            :option-label="referenceValueLabel"
             :loading="isLoading"
             :filter="true"
             :filter-placeholder="$gettext('Search options...')"

@@ -1,12 +1,13 @@
 import Cookies from "js-cookie";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
-import { getItemLabel } from "@/arches_controlled_lists/utils.ts";
+import { ALT_LABEL, PREF_LABEL } from "@/arches_controlled_lists/constants.ts";
 import { buildSearchApiRequestBody } from "@/arches_search/SimpleSearch/utils/search-payload-builder.ts";
 
 import type { FeatureCollection } from "geojson";
 
 import type { ControlledListItem } from "@/arches_controlled_lists/types.ts";
+import type { ReferenceSelectNodeValue } from "@/arches_controlled_lists/datatypes/reference-select/types.ts";
 import type {
     GroupPayload,
     SearchResults,
@@ -118,13 +119,9 @@ export async function fetchNodeFilterConfig(
     return response.json();
 }
 
-export async function fetchControlledListItems(
+export async function fetchControlledListReferenceValues(
     listId: string,
-    language: string,
-    systemLanguage: string,
-): Promise<
-    Array<{ id: string; label: string; uri: string; sortorder: number }>
-> {
+): Promise<ReferenceSelectNodeValue[]> {
     const response = await fetch(
         generateArchesURL(
             "arches:controlled_list",
@@ -138,14 +135,13 @@ export async function fetchControlledListItems(
     const data = await response.json();
     return (data.items as ControlledListItem[])
         .filter((item) => !item.guide)
-        .map((item) => {
-            return {
-                id: item.id,
-                label: getItemLabel(item, language, systemLanguage).value,
-                uri: item.uri,
-                sortorder: item.sortorder,
-            };
-        });
+        .map((item) => ({
+            list_id: item.list_id,
+            uri: item.uri,
+            labels: item.values.filter((value) =>
+                [PREF_LABEL, ALT_LABEL].includes(value.valuetype_id),
+            ),
+        }));
 }
 
 export async function fetchSearchTermSuggestions(

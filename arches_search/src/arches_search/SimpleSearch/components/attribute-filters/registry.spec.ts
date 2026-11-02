@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
     ClauseSubjectTypeToken,
@@ -11,10 +11,37 @@ import {
     parseAttributeFilterValue,
 } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
 
+import type { ReferenceSelectNodeValue } from "@/arches_controlled_lists/datatypes/reference-select/types.ts";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts";
 
+vi.mock("arches", () => ({
+    default: {
+        activeLanguage: "en",
+        languages: [{ code: "en", isdefault: true }],
+    },
+}));
+
 const GRAPH_SLUG = "reference_and_sample_collection_item";
+
+function referenceValue(label: string): ReferenceSelectNodeValue {
+    return {
+        list_id: "materials",
+        uri: `http://example.org/${label}`,
+        labels: [
+            {
+                id: `${label}-label`,
+                language_id: "en",
+                list_item_id: `${label}-item`,
+                value: label,
+                valuetype_id: "prefLabel",
+            },
+        ],
+    };
+}
+
+const GLASS = referenceValue("glass");
+const WOOD = referenceValue("wood");
 
 function buildNode(datatype: string): NodeFilterConfigNode {
     return {
@@ -37,17 +64,15 @@ function buildQuery(node: NodeFilterConfigNode, value: unknown): GroupPayload {
 }
 
 describe("parseAttributeFilterValue", () => {
-    it("restores reference selections keyed by label", () => {
+    it("saves reference selections as list items and restores them", () => {
         const node = buildNode("reference");
-        const query = buildQuery(node, [
-            { id: "http://example.org/glass", label: "glass" },
-            { id: "http://example.org/wood", label: "wood" },
-        ]);
+        const query = buildQuery(node, [GLASS, WOOD]);
 
-        expect(parseAttributeFilterValue(node, query)).toEqual([
-            { id: "glass", label: "glass" },
-            { id: "wood", label: "wood" },
-        ]);
+        expect(query.clauses[0].operands[0].value).toEqual([GLASS, WOOD]);
+        expect(parseAttributeFilterValue(node, query)).toEqual([GLASS, WOOD]);
+        expect(formatAttributeFilterValue(node, [GLASS, WOOD])).toBe(
+            "glass, wood",
+        );
     });
 
     it("restores a reference query saved before parsing existed", () => {
@@ -79,9 +104,7 @@ describe("parseAttributeFilterValue", () => {
 
         const restoredValue = parseAttributeFilterValue(node, savedQuery);
 
-        expect(restoredValue).toEqual([
-            { id: "paint, oil-based", label: "paint, oil-based" },
-        ]);
+        expect(restoredValue).toEqual(["paint, oil-based"]);
         expect(formatAttributeFilterValue(node, restoredValue)).toBe(
             "paint, oil-based",
         );
@@ -110,9 +133,7 @@ describe("parseAttributeFilterValue", () => {
     });
 
     it("returns null for a datatype with no filter widget", () => {
-        const query = buildQuery(buildNode("reference"), [
-            { id: "glass", label: "glass" },
-        ]);
+        const query = buildQuery(buildNode("reference"), [GLASS]);
 
         expect(
             parseAttributeFilterValue(buildNode("string"), query),

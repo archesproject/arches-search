@@ -1,9 +1,15 @@
+import arches from "arches";
+
+import { getItemLabel } from "@/arches_controlled_lists/utils.ts";
 import { useReferenceSelectOptionsStore } from "@/arches_controlled_lists/stores/useReferenceSelectOptionsStore.ts";
 
+import type { Language } from "@/arches_controlled_lists/types.ts";
 import type {
     ReferenceSelectLabel,
     ReferenceSelectNodeValue,
 } from "@/arches_controlled_lists/datatypes/reference-select/types.ts";
+
+const DEFAULT_LANGUAGE_CODE = "en";
 
 type ReferenceOption = {
     uri: string;
@@ -19,8 +25,36 @@ export function isLabelList(value: unknown): value is string[] {
     );
 }
 
-// Simple Search saves a reference filter as the labels it matched, but the
-// reference widget shows list items, so each label is found in the node's list.
+export function isReferenceValueList(
+    value: unknown,
+): value is ReferenceSelectNodeValue[] {
+    return (
+        Array.isArray(value) &&
+        value.every(
+            (item) =>
+                typeof item === "object" &&
+                item !== null &&
+                "uri" in item &&
+                "labels" in item,
+        )
+    );
+}
+
+export function referenceValueLabel(
+    referenceValue: ReferenceSelectNodeValue,
+): string {
+    const systemLanguageCode =
+        arches.languages.find((language: Language) => language.isdefault)
+            ?.code ?? DEFAULT_LANGUAGE_CODE;
+    return getItemLabel(
+        referenceValue,
+        arches.activeLanguage,
+        systemLanguageCode,
+    ).value;
+}
+
+// A reference value saved as plain labels, as Simple Search once saved its
+// filters, is shown as list items by finding each label in the node's list.
 export async function referenceValuesForLabels(
     graphSlug: string,
     nodeAlias: string,
@@ -33,24 +67,28 @@ export async function referenceValuesForLabels(
         graphSlug,
         nodeAlias,
     )) as unknown as ReferenceOption[];
-    const allOptions = flattenOptions(options);
+    const referenceValues = flattenOptions(options).map((option) => ({
+        list_id: listId,
+        uri: option.uri,
+        labels: option.list_item_values,
+    }));
+    return referenceValuesWithLabels(referenceValues, labels);
+}
 
+export function referenceValuesWithLabels(
+    referenceValues: ReferenceSelectNodeValue[],
+    labels: string[],
+): ReferenceSelectNodeValue[] {
     return labels.flatMap((label) => {
-        const matchingOption = allOptions.find((option) =>
-            option.list_item_values.some(
+        const matchingReferenceValue = referenceValues.find((referenceValue) =>
+            referenceValue.labels.some(
                 (itemLabel) => itemLabel.value === label,
             ),
         );
-        if (!matchingOption) {
+        if (!matchingReferenceValue) {
             return [];
         }
-        return [
-            {
-                list_id: listId,
-                uri: matchingOption.uri,
-                labels: matchingOption.list_item_values,
-            },
-        ];
+        return [matchingReferenceValue];
     });
 }
 

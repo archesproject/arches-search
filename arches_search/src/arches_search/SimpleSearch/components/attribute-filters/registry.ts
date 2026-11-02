@@ -6,6 +6,11 @@ import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    isLabelList,
+    isReferenceValueList,
+    referenceValueLabel,
+} from "@/arches_search/AdvancedSearch/utils/reference-labels.ts";
 
 import type {
     ClauseSubject,
@@ -32,8 +37,8 @@ function nodeSubject(
     };
 }
 
-// Reference: a single REFERENCES_ANY clause whose operand is the list of
-// selected labels. Matches the original hardcoded behavior in SimpleSearch.
+// Reference: a single REFERENCES_ANY clause whose operand is the list items
+// selected.
 function buildReferenceQuery(
     node: NodeFilterConfigNode,
     value: unknown,
@@ -57,7 +62,7 @@ function buildReferenceQuery(
                 operands: [
                     {
                         type: "LITERAL",
-                        value: selected.map((option) => option.label),
+                        value: selected,
                     },
                 ],
             },
@@ -116,23 +121,22 @@ function buildNumericQuery(
 
 function formatReferenceValue(value: unknown): string {
     const selected = (value as ReferenceFilterValue | null) ?? [];
-    return selected.map((option) => option.label).join(", ");
+    if (isLabelList(selected)) {
+        return selected.join(", ");
+    }
+    return selected.map(referenceValueLabel).join(", ");
 }
 
 function formatNumericValue(value: unknown): string {
     return (value as NumericFilterValue | null)?.text ?? "";
 }
 
-// A saved query holds only the labels, so the restored options are keyed by
-// label — which is also what the widget matches its options on.
 function parseReferenceValue(query: GroupPayload): ReferenceFilterValue {
-    const labels = query.clauses[0]?.operands[0]?.value;
-    if (!Array.isArray(labels)) {
-        return [];
+    const value = query.clauses[0]?.operands[0]?.value;
+    if (isLabelList(value) || isReferenceValueList(value)) {
+        return value;
     }
-    return labels
-        .filter((label): label is string => typeof label === "string")
-        .map((label) => ({ id: label, label }));
+    return [];
 }
 
 function parseNumericValue(query: GroupPayload): NumericFilterValue {
