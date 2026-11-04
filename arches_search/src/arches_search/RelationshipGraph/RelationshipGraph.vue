@@ -203,6 +203,7 @@ const truncatedNotice = computed<string>(() =>
                     :to-title="resources[1].title"
                     :path-state="pathState"
                     :is-path-shown="isPathShown"
+                    :is-graph-visible="isGraphVisible"
                     @toggle-path="togglePath"
                     @retry="loadPath()"
                 />

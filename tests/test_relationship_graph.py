@@ -1,5 +1,6 @@
 import json
 import uuid
+from dataclasses import replace
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group, User
@@ -98,7 +99,7 @@ class RelationshipGraphInputTest(SimpleTestCase):
         for values in (
             "bad",
             ["bad"],
-            [str(uuid.uuid4())] * (graph_api.MAX_PATH_HOPS + 1),
+            [str(uuid.uuid4())] * (graph_api.MAX_PATH_RELATIONSHIPS + 1),
         ):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 graph_api._parse_path_relationship_ids(
@@ -420,21 +421,59 @@ class RelationshipGraphTest(TestCase):
         self.assertEqual(related_counts[self.seed.pk], sum(counts.values()))
         self.assertEqual(related_counts[self.seed.pk], 8)
 
-    def test_shortest_path_in_both_directions(self):
-        for source, target, expected in (
-            (self.seed, self.target, 2),
-            (self.target, self.seed, 2),
-            (self.seed, self.related, 1),
+    def paths(self, source, target):
+        return graph_api._shortest_path(
+            self.member, ReadableNodes(self.member), source.pk, target.pk
+        )
+
+    def test_every_shortest_path_in_both_directions(self):
+        # The five readable relationships between seed and related are five
+        # equally short ways from one to the other
+        parallel = {
+            relation.pk
+            for relation in (
+                self.forward,
+                self.inverse,
+                self.fallback,
+                self.blank,
+                self.empty,
+            )
+        }
+        for source, target, hops, ids in (
+            (self.seed, self.target, 2, parallel | {self.second_hop.pk}),
+            (self.target, self.seed, 2, parallel | {self.second_hop.pk}),
+            (self.seed, self.related, 1, parallel),
         ):
-            path, limited = graph_api._shortest_path(
-                self.member, ReadableNodes(self.member), source.pk, target.pk
-            )
-            self.assertFalse(limited)
-            self.assertEqual(len(path), expected)
-            self.assertFalse(
-                set(path)
-                & {self.hidden.pk, self.restricted_out.pk, self.restricted_in.pk}
-            )
+            with self.subTest(source=source.pk, target=target.pk):
+                paths = self.paths(source, target)
+                self.assertEqual(set(paths.relationship_ids), ids)
+                self.assertEqual(paths.hops, hops)
+                self.assertEqual(paths.path_count, 5)
+                self.assertFalse(paths.truncated)
+                self.assertFalse(paths.limit_reached)
+
+    def test_paths_through_different_resources_are_all_found(self):
+        # A second way from seed to target, through other, is as short as the
+        # ones through related, and a longer one through owned is not kept
+        to_target = self.make_relation(self.other, self.target, "next")
+        longer = self.make_relation(self.owned, self.other, "detour")
+        paths = self.paths(self.seed, self.target)
+        self.assertEqual(paths.hops, 2)
+        self.assertEqual(paths.path_count, 5 + 1)
+        self.assertIn(self.other_link.pk, paths.relationship_ids)
+        self.assertIn(to_target.pk, paths.relationship_ids)
+        self.assertIn(self.second_hop.pk, paths.relationship_ids)
+        self.assertNotIn(longer.pk, paths.relationship_ids)
+        self.assertNotIn(self.owned_link.pk, paths.relationship_ids)
+
+    def test_too_many_paths_keep_whole_paths(self):
+        with patch.object(graph_api, "MAX_PATH_RELATIONSHIPS", 3):
+            paths = self.paths(self.seed, self.target)
+        self.assertTrue(paths.truncated)
+        self.assertEqual(paths.path_count, 5)
+        # One whole chain is kept: one of the parallel links, then the next hop
+        self.assertEqual(len(paths.relationship_ids), 2)
+        self.assertIn(self.second_hop.pk, paths.relationship_ids)
 
     def test_hidden_and_denied_bridges_do_not_provide_a_path(self):
         isolated = ResourceInstance(
@@ -446,32 +485,25 @@ class RelationshipGraphTest(TestCase):
         assign_perm("view_resourceinstance", self.group, isolated)
         self.make_relation(self.denied, isolated)
         self.make_relation(self.related, isolated, node=self.hidden_node)
-        path, limited = graph_api._shortest_path(
-            self.member, ReadableNodes(self.member), self.seed.pk, isolated.pk
-        )
-        self.assertEqual(path, [])
-        self.assertFalse(limited)
+        paths = self.paths(self.seed, isolated)
+        self.assertEqual(paths, graph_api.NO_PATHS)
 
     def test_hub_expansion_is_sql_bounded_and_reports_incomplete(self):
         with (
             patch.object(graph_api, "MAX_PATH_SEARCH_NODES", 3),
             CaptureQueriesContext(connection) as queries,
         ):
-            path, limited = graph_api._shortest_path(
+            paths = graph_api._shortest_path(
                 self.admin, ReadableNodes(None), self.seed.pk, self.target.pk
             )
-        self.assertEqual(path, [])
-        self.assertTrue(limited)
+        self.assertEqual(paths, replace(graph_api.NO_PATHS, limit_reached=True))
         self.assertEqual(len(queries), 1)
         self.assertIn("LIMIT 2", queries[0]["sql"])
 
     def test_path_hop_limit_is_not_a_size_limit(self):
         with patch.object(graph_api, "MAX_PATH_HOPS", 1):
-            path, limited = graph_api._shortest_path(
-                self.member, ReadableNodes(self.member), self.seed.pk, self.target.pk
-            )
-        self.assertEqual(path, [])
-        self.assertFalse(limited)
+            paths = self.paths(self.seed, self.target)
+        self.assertEqual(paths, graph_api.NO_PATHS)
 
     def test_direct_relationships_are_bounded_and_marked(self):
         with (

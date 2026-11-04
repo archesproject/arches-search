@@ -84,8 +84,9 @@ export interface RelationshipPath {
     direct_relationships_truncated: boolean;
     // Null when no chain of at most max_hops relationships was found
     hops: number | null;
-    // The relationships of the shortest chain, in order from the first resource
     relationship_ids: string[];
+    path_count: number;
+    paths_truncated: boolean;
     max_hops: number;
     // The search gave up on its size rather than on the distance
     limit_reached: boolean;
