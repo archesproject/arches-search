@@ -352,6 +352,7 @@ function fitToGraph(): void {
                 :model-name="selectedNode.model.name"
                 :model-color="colorFor(selectedNode.model)"
                 :related-count="selectedNode.related_count"
+                :is-seed="selectedNode.is_seed"
             />
             <EdgeDetailsPopup
                 v-else-if="selectedEdge"
