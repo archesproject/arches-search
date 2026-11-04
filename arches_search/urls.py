@@ -45,6 +45,7 @@ from arches_search.views.api.search import SearchAPI
 from arches_search.views.api.relationship_graph import (
     RelationshipGraphAPI,
     RelationshipGraphPathAPI,
+    RelationshipGraphRelatedResourcesAPI,
     RelationshipGraphSummaryAPI,
 )
 
@@ -179,6 +180,11 @@ urlpatterns = [
         "api/relationship-graph/path",
         RelationshipGraphPathAPI.as_view(),
         name="relationship_graph_path",
+    ),
+    path(
+        "api/relationship-graph/related-resources",
+        RelationshipGraphRelatedResourcesAPI.as_view(),
+        name="relationship_graph_related_resources",
     ),
 ]
 

@@ -39,6 +39,10 @@ const resourceModel = computed(() =>
         : null,
 );
 
+const resourceId = computed<string>(() =>
+    summaryState?.status === LOADED ? summaryState.summary.resource_id : "",
+);
+
 const rows = computed(() =>
     summaryState?.status === LOADED ? summaryState.summary.rows : [],
 );
@@ -113,6 +117,7 @@ const removeLabel = computed<string>(() =>
             <RelationshipSummaryRow
                 v-for="row in rows"
                 :key="row.id"
+                :resource-id="resourceId"
                 :row="row"
                 :selected="!deselectedRowIds.includes(row.id)"
                 @toggle="emit('toggle-row', row.id)"

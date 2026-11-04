@@ -21,6 +21,7 @@ from arches_search.utils.advanced_search.metadata.resource_names_for_payload imp
     resolve_resource_display_name,
 )
 from arches_search.utils.readable_nodes import ReadableNodes
+from arches_search.utils.search.sorting import SORT_TYPE_PRIMARY_NAME, SortResolver
 
 OUTGOING = "outgoing"
 INCOMING = "incoming"
@@ -35,6 +36,10 @@ MAX_GRAPH_EDGES = 1000
 # how many resources the search may visit before it gives up
 MAX_PATH_HOPS = 6
 MAX_PATH_SEARCH_NODES = 5000
+# How many related resources one page of a summary row lists
+DEFAULT_RELATED_RESOURCES_PAGE = 50
+MAX_RELATED_RESOURCES_PAGE = 200
+MAX_RELATED_RESOURCES_TERM_LENGTH = 200
 
 # What a relationship is described by, wherever one is returned
 RELATION_FIELDS = (
@@ -462,6 +467,131 @@ def _incoming_row_filter(relationship_type_id, graph_id):
             "relationshiptype"
         )
     return type_filter & Q(from_resource_graph_id=graph_id)
+
+
+def _row_relations(user, readable_nodes, resource_id, row):
+    """The relationships one summary row of a resource counted, and the field
+    that holds the resource on their far end. Filters as the summary does."""
+    direction, relationship_type_id, graph_id = row
+    relations = _readable_relations(readable_nodes)
+    if direction == OUTGOING:
+        relations = relations.filter(
+            _outgoing_row_filter(relationship_type_id, graph_id),
+            from_resource_id=resource_id,
+            to_resource_graph__isresource=True,
+        )
+        far_field = "to_resource_id"
+    else:
+        relations = relations.filter(
+            _incoming_row_filter(relationship_type_id, graph_id),
+            to_resource_id=resource_id,
+            from_resource_graph__isresource=True,
+        ).exclude(from_resource_id=resource_id)
+        far_field = "from_resource_id"
+    return (
+        filter_resource_queryset(user, relations, resourceinstance_field=far_field),
+        far_field,
+    )
+
+
+class RelationshipGraphRelatedResourcesAPI(APIBase):
+    """The resources behind one summary row, a page at a time, sorted as the
+    search results' primary name sort sorts them.
+
+    GET /arches_search/api/relationship-graph/related-resources
+        ?resource_id=<uuid>&row_id=<summary row id>&offset=0&limit=50&term=<text>
+
+    Response shape:
+    {
+        "resources": [
+            {
+                "relationship_id": "<resourcexid>",
+                "resource_id": "<uuid>",
+                "name": "..."
+            },
+            ...
+        ],
+        "next_offset": 50 | null
+    }
+
+    The row already names the relationship, so each resource does not.
+    `next_offset` is null on the last page. A resource appears once for each
+    relationship, and only readable relationships to readable resources are
+    listed, so without a term the resources add up to the row's count. A term
+    keeps the resources whose name, in the current or the default language,
+    contains it, ignoring case.
+    """
+
+    def get(self, request):
+        try:
+            resource_id = uuid.UUID(request.GET.get("resource_id", ""))
+            row = _parse_row_id(request.GET.get("row_id"))
+            offset = int(request.GET.get("offset", 0))
+            limit = int(request.GET.get("limit", DEFAULT_RELATED_RESOURCES_PAGE))
+        except (TypeError, ValueError):
+            return JSONErrorResponse(_("Invalid request"), status=400)
+        term = request.GET.get("term", "").strip()
+        if (
+            offset < 0
+            or not 0 < limit <= MAX_RELATED_RESOURCES_PAGE
+            or len(term) > MAX_RELATED_RESOURCES_TERM_LENGTH
+        ):
+            return JSONErrorResponse(_("Invalid request"), status=400)
+
+        resource = ResourceInstance.objects.filter(
+            pk=resource_id, graph__isresource=True
+        ).first()
+        # A resource the user cannot read looks the same as one that is missing
+        if resource is None or not user_can_read_resource(
+            request.user, resource=resource
+        ):
+            return JSONErrorResponse(_("Resource not found"), status=404)
+
+        relations, far_field = _row_relations(
+            request.user, ReadableNodes(request.user), resource_id, row
+        )
+        # The far-end resources, joined once to each of the row's relationships,
+        # so the search's own sort can order them
+        reverse_relation = (
+            "to_resxres" if far_field == "to_resource_id" else "from_resxres"
+        )
+        resources = ResourceInstance.objects.filter(
+            **{f"{reverse_relation}__in": relations}
+        ).annotate(relationship_id=F(f"{reverse_relation}__resourcexid"))
+        if term:
+            resources = resources.filter(_name_contains(term))
+        ordered = SortResolver([{"type": SORT_TYPE_PRIMARY_NAME}]).apply(resources)
+        # A resource related twice ties on its id, so the relationship breaks it
+        page = list(
+            ordered.order_by(*ordered.query.order_by, "relationship_id").only(
+                "descriptors", "name"
+            )[offset : offset + limit + 1]
+        )
+        has_more = len(page) > limit
+        page = page[:limit]
+
+        return JSONResponse(
+            {
+                "resources": [
+                    {
+                        "relationship_id": str(resource.relationship_id),
+                        "resource_id": str(resource.pk),
+                        "name": _display_name(resource),
+                    }
+                    for resource in page
+                ],
+                "next_offset": offset + limit if has_more else None,
+            }
+        )
+
+
+def _name_contains(term):
+    """Whether a resource's name, as shown in the current or the default
+    language, contains the term, ignoring case."""
+    condition = Q()
+    for language in {get_language() or settings.LANGUAGE_CODE, settings.LANGUAGE_CODE}:
+        condition |= Q(**{f"descriptors__{language}__name__icontains": term})
+    return condition
 
 
 def _selected_relations(user, readable_nodes, selections):

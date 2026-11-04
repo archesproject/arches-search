@@ -6,6 +6,7 @@ import type {
     RelationshipGraphData,
     RelationshipPath,
     RelationshipSummary,
+    RelatedResourcesPage,
     RowSelection,
 } from "@/arches_search/RelationshipGraph/types.ts";
 
@@ -37,6 +38,30 @@ export async function fetchRelationshipPath(
     });
     const url =
         generateArchesURL("arches_search:relationship_graph_path") +
+        "?" +
+        params.toString();
+
+    return parseResponse(await fetch(url));
+}
+
+export async function fetchRelatedResources(
+    resourceId: string,
+    rowId: string,
+    offset: number,
+    limit: number,
+    term = "",
+): Promise<RelatedResourcesPage> {
+    const params = new URLSearchParams({
+        resource_id: resourceId,
+        row_id: rowId,
+        offset: String(offset),
+        limit: String(limit),
+    });
+    if (term) params.set("term", term);
+    const url =
+        generateArchesURL(
+            "arches_search:relationship_graph_related_resources",
+        ) +
         "?" +
         params.toString();
 

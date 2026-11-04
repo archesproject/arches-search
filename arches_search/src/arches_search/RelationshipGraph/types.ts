@@ -90,3 +90,16 @@ export interface RelationshipPath {
     // The search gave up on its size rather than on the distance
     limit_reached: boolean;
 }
+
+// A resource on the far end of a relationship that a summary row counted
+export interface RelatedResource {
+    relationship_id: string;
+    resource_id: string;
+    name: string;
+}
+
+export interface RelatedResourcesPage {
+    resources: RelatedResource[];
+    // Where the next page starts, or null on the last page
+    next_offset: number | null;
+}
