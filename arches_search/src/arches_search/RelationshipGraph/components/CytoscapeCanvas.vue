@@ -353,6 +353,7 @@ function fitToGraph(): void {
                 :model-color="colorFor(selectedNode.model)"
                 :related-count="selectedNode.related_count"
                 :is-seed="selectedNode.is_seed"
+                @close="closePopup"
             />
             <EdgeDetailsPopup
                 v-else-if="selectedEdge"

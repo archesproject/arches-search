@@ -21,6 +21,11 @@ const { resourceId, name, modelName, modelColor, relatedCount, isSeed } =
         isSeed: boolean;
     }>();
 
+// Either action is the end of looking at this resource here
+const emit = defineEmits<{
+    (event: "close"): void;
+}>();
+
 const { $gettext, $ngettext } = useGettext();
 
 const { description, isLoading, hasFailed } = useResourceDescription(
@@ -38,6 +43,7 @@ const focusLabel = computed<string>(() =>
 
 function focusOnResource(): void {
     viewRelatedResource?.({ id: resourceId, title: name });
+    emit("close");
 }
 
 const relatedCountLabel = computed<string>(() =>
@@ -93,6 +99,7 @@ const reportLink = computed<string>(() =>
                 variant="link"
                 :href="reportLink"
                 :label="$gettext('View Report')"
+                @click="emit('close')"
             />
             <Button
                 v-if="viewRelatedResource && !isSeed"

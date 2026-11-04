@@ -66,6 +66,20 @@ describe("node details popup", () => {
             id: PROPS.resourceId,
             title: PROPS.name,
         });
+        expect(wrapper.emitted("close")).toHaveLength(1);
+        wrapper.unmount();
+    });
+
+    it("closes once the report is opened", async () => {
+        vi.mocked(fetchResourceDescriptors).mockResolvedValue({});
+        const wrapper = mountPopup();
+        const report = wrapper.find("a");
+        // Opening the report is the browser's job, not the test's
+        report.element.addEventListener("click", (event) =>
+            event.preventDefault(),
+        );
+        await report.trigger("click");
+        expect(wrapper.emitted("close")).toHaveLength(1);
         wrapper.unmount();
     });
 
