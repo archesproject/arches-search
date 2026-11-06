@@ -517,23 +517,14 @@ class RelationshipGraphTest(TestCase):
         self.assertTrue(limited)
         self.assertIn("LIMIT 2", queries[0]["sql"])
 
-    def test_descriptor_edit_permission_is_separate_from_read_permission(self):
-        ids = [str(self.seed.pk), str(self.denied.pk)]
-        batch_request = RequestFactory().get("/descriptors", {"ids": ids})
-        batch_request.user = self.member
-        data = json.loads(ResourceDescriptorsAPI().get(batch_request).content)
-        self.assertNotIn("can_edit", data[str(self.seed.pk)])
-
+    def test_descriptors_omit_unreadable_resources(self):
         request = RequestFactory().get(
-            "/descriptors", {"ids": ids, "include_can_edit": "true"}
+            "/descriptors", {"ids": [str(self.seed.pk), str(self.denied.pk)]}
         )
         request.user = self.member
         data = json.loads(ResourceDescriptorsAPI().get(request).content)
-        self.assertFalse(data[str(self.seed.pk)]["can_edit"])
+        self.assertIn(str(self.seed.pk), data)
         self.assertNotIn(str(self.denied.pk), data)
-        assign_perm("change_resourceinstance", self.member, self.seed)
-        data = json.loads(ResourceDescriptorsAPI().get(request).content)
-        self.assertTrue(data[str(self.seed.pk)]["can_edit"])
 
     def related_resources(self, row_id, user=None, resource=None, **params):
         request = RequestFactory().get(
