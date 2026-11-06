@@ -51,14 +51,16 @@ const hopsMessage = computed<string>(() => {
             path.value.hops,
             { count: String(path.value.hops) },
         );
-        if (path.value.path_count <= 1) return hops;
+        if (path.value.path_count <= 1) {
+            return hops;
+        }
         const paths = $ngettext(
             "%{count} path",
             "%{count} paths",
             path.value.path_count,
             { count: String(path.value.path_count) },
         );
-        return `${hops} · ${paths}`;
+        return $gettext("%{hops} · %{paths}", { hops, paths }, true);
     }
     if (path.value.limit_reached) {
         return $gettext(
@@ -74,18 +76,21 @@ const hopsMessage = computed<string>(() => {
 });
 
 const togglePathLabel = computed<string>(() => {
-    const count = path.value?.path_count ?? 1;
-    return isPathShown
-        ? $ngettext(
-              "Hide the path from the graph",
-              "Hide the paths from the graph",
-              count,
-          )
-        : $ngettext(
-              "Show the path in the graph",
-              "Show the paths in the graph",
-              count,
-          );
+    if (!path.value) {
+        return "";
+    }
+    if (isPathShown) {
+        return $ngettext(
+            "Hide the path from the graph",
+            "Hide the paths from the graph",
+            path.value.path_count,
+        );
+    }
+    return $ngettext(
+        "Show the path in the graph",
+        "Show the paths in the graph",
+        path.value.path_count,
+    );
 });
 </script>
 
