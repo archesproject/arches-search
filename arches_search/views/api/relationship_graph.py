@@ -475,8 +475,8 @@ def _incoming_row_filter(relationship_type_id, graph_id):
 
 
 def _row_relations(user, readable_nodes, resource_id, row):
-    """The relationships one summary row of a resource counted, and the field
-    that holds the resource on their far end. Filters as the summary does."""
+    """The relationships one summary row of a resource counted, and the name a
+    resource on their far end reaches them by. Filters as the summary does."""
     direction, relationship_type_id, graph_id = row
     relations = _readable_relations(readable_nodes)
     if direction == OUTGOING:
@@ -485,17 +485,17 @@ def _row_relations(user, readable_nodes, resource_id, row):
             from_resource_id=resource_id,
             to_resource_graph__isresource=True,
         )
-        far_field = "to_resource_id"
+        far_field, reverse_relation = "to_resource_id", "to_resxres"
     else:
         relations = relations.filter(
             _incoming_row_filter(relationship_type_id, graph_id),
             to_resource_id=resource_id,
             from_resource_graph__isresource=True,
         ).exclude(from_resource_id=resource_id)
-        far_field = "from_resource_id"
+        far_field, reverse_relation = "from_resource_id", "from_resxres"
     return (
         filter_resource_queryset(user, relations, resourceinstance_field=far_field),
-        far_field,
+        reverse_relation,
     )
 
 
@@ -552,26 +552,21 @@ class RelationshipGraphRelatedResourcesAPI(APIBase):
         ):
             return JSONErrorResponse(_("Resource not found"), status=404)
 
-        relations, far_field = _row_relations(
+        relations, reverse_relation = _row_relations(
             request.user, ReadableNodes(request.user), resource_id, row
         )
         # The far-end resources, joined once to each of the row's relationships,
         # so the search's own sort can order them
-        reverse_relation = (
-            "to_resxres" if far_field == "to_resource_id" else "from_resxres"
-        )
         resources = ResourceInstance.objects.filter(
             **{f"{reverse_relation}__in": relations}
         ).annotate(relationship_id=F(f"{reverse_relation}__resourcexid"))
         if term:
             resources = resources.filter(_name_contains(term))
-        ordered = SortResolver([{"type": SORT_TYPE_PRIMARY_NAME}]).apply(resources)
         # A resource related twice ties on its id, so the relationship breaks it
-        page = list(
-            ordered.order_by(*ordered.query.order_by, "relationship_id").only(
-                "descriptors", "name"
-            )[offset : offset + limit + 1]
+        ordered = SortResolver([{"type": SORT_TYPE_PRIMARY_NAME}]).apply(
+            resources, tie_breakers=[F("relationship_id").asc()]
         )
+        page = list(ordered.only("descriptors", "name")[offset : offset + limit + 1])
         has_more = len(page) > limit
         page = page[:limit]
 

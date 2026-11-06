@@ -210,6 +210,7 @@ const truncatedNotice = computed<string>(() =>
                 <ResourceRelationshipSummary
                     v-for="resource in resources"
                     :key="resource.id"
+                    :resource-id="resource.id"
                     :title="resource.title"
                     :summary-state="summaryStates[resource.id]"
                     :deselected-row-ids="deselectedRowIds[resource.id] ?? []"

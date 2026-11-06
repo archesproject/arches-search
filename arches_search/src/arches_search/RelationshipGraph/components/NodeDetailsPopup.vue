@@ -26,25 +26,20 @@ const emit = defineEmits<{
     (event: "close"): void;
 }>();
 
+// Not provided outside the search page
+const viewRelatedResource = inject<
+    ((resource: SelectedResource) => void) | null
+>("viewRelatedResource", null);
+
 const { $gettext, $ngettext } = useGettext();
 
 const { description, isLoading, hasFailed } = useResourceDescription(
     () => resourceId,
 );
 
-// Not provided outside the search page
-const viewRelatedResource = inject<
-    ((resource: SelectedResource) => void) | null
->("viewRelatedResource", null);
-
 const focusLabel = computed<string>(() =>
-    $gettext("Show the relationships of %{name} in the panel", { name }),
+    $gettext("Show the relationships of %{name} in the panel", { name }, true),
 );
-
-function focusOnResource(): void {
-    viewRelatedResource?.({ id: resourceId, title: name });
-    emit("close");
-}
 
 const relatedCountLabel = computed<string>(() =>
     $ngettext("%{count} relationship", "%{count} relationships", relatedCount, {
@@ -55,6 +50,11 @@ const relatedCountLabel = computed<string>(() =>
 const reportLink = computed<string>(() =>
     generateArchesURL("arches:resource_report", { resourceid: resourceId }),
 );
+
+function focusOnResource(): void {
+    viewRelatedResource?.({ id: resourceId, title: name });
+    emit("close");
+}
 </script>
 
 <template>

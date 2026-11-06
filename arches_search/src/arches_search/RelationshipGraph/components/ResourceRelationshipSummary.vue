@@ -18,7 +18,8 @@ import type { SummaryState } from "@/arches_search/RelationshipGraph/composables
 
 const LOADING_PLACEHOLDER_COUNT = 3;
 
-const { title, summaryState, deselectedRowIds } = defineProps<{
+const { resourceId, title, summaryState, deselectedRowIds } = defineProps<{
+    resourceId: string;
     title: string;
     summaryState: SummaryState | undefined;
     deselectedRowIds: string[];
@@ -37,10 +38,6 @@ const resourceModel = computed(() =>
     summaryState?.status === LOADED
         ? summaryState.summary.resource_model
         : null,
-);
-
-const resourceId = computed<string>(() =>
-    summaryState?.status === LOADED ? summaryState.summary.resource_id : "",
 );
 
 const rows = computed(() =>

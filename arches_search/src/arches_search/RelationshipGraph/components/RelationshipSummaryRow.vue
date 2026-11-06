@@ -22,24 +22,32 @@ const emit = defineEmits<{
 const { $gettext } = useGettext();
 const { colorFor } = useGraphColors();
 
+const isExpanded = ref(false);
+
 const swatchColor = computed<string>(() => colorFor(row.related_model));
 
 const typeLabel = computed<string>(
     () => row.relationship_type_label || $gettext("Unspecified relationship"),
 );
 
-const isExpanded = ref(false);
-const listId = computed<string>(() => `related-resources-${row.id}`);
-
-const expandLabel = computed<string>(() =>
-    isExpanded.value
-        ? $gettext("Hide the related %{model} resources", {
-              model: row.related_model.name,
-          })
-        : $gettext("Show the related %{model} resources", {
-              model: row.related_model.name,
-          }),
+const listId = computed<string>(
+    () => `related-resources-${resourceId}-${row.id}`,
 );
+
+const expandLabel = computed<string>(() => {
+    if (isExpanded.value) {
+        return $gettext(
+            "Hide the related %{model} resources",
+            { model: row.related_model.name },
+            true,
+        );
+    }
+    return $gettext(
+        "Show the related %{model} resources",
+        { model: row.related_model.name },
+        true,
+    );
+});
 
 const isOutgoing = computed<boolean>(() => row.direction === "outgoing");
 
@@ -66,12 +74,11 @@ const toggleLabel = computed<string>(() =>
             class="summary"
             :class="{ 'summary-off': !selected }"
         >
-            <button
-                type="button"
+            <Button
                 class="expand"
+                variant="text"
                 :aria-expanded="isExpanded"
                 :aria-controls="isExpanded ? listId : undefined"
-                :aria-label="expandLabel"
                 :title="expandLabel"
                 @click="isExpanded = !isExpanded"
             >
@@ -103,7 +110,7 @@ const toggleLabel = computed<string>(() =>
                     </span>
                 </span>
                 <span class="count">{{ row.count }}</span>
-            </button>
+            </Button>
             <Button
                 class="toggle"
                 variant="text"
@@ -133,7 +140,7 @@ const toggleLabel = computed<string>(() =>
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.8rem 0;
+    padding-block: 0.8rem;
     transition: opacity 0.15s ease;
 }
 
@@ -141,30 +148,18 @@ const toggleLabel = computed<string>(() =>
     opacity: 0.5;
 }
 
-.relationship-summary-row .expand {
+.relationship-summary-row .expand.p-button {
     display: flex;
     flex: 1;
-    align-items: center;
+    justify-content: flex-start;
     gap: 1rem;
     min-inline-size: 0;
-    margin: 0;
     padding: 0;
-    border: none;
-    border-radius: var(--p-border-radius-sm);
-    background: none;
-    color: inherit;
-    font: inherit;
     text-align: start;
-    cursor: pointer;
 }
 
 .relationship-summary-row .expand:hover .model-name {
     text-decoration: underline;
-}
-
-.relationship-summary-row .expand:focus-visible {
-    outline: 0.125rem solid var(--p-focus-ring-color);
-    outline-offset: 0.2rem;
 }
 
 .relationship-summary-row .expand .chevron {
