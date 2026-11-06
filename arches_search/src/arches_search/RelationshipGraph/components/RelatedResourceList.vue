@@ -1,20 +1,13 @@
 <script setup lang="ts">
-import { computed, inject } from "vue";
+import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Button from "openvue/button";
 import InputText from "openvue/inputtext";
 import Skeleton from "openvue/skeleton";
 
-import { generateArchesURL } from "@/arches_vue_components/application";
-
 import LoadFailedMessage from "@/arches_search/RelationshipGraph/components/LoadFailedMessage.vue";
+import RelatedResourceRow from "@/arches_search/RelationshipGraph/components/RelatedResourceRow.vue";
 import { useRelatedResources } from "@/arches_search/RelationshipGraph/composables/useRelatedResources.ts";
-
-import type {
-    RelatedResource,
-    SelectedResource,
-} from "@/arches_search/RelationshipGraph/types.ts";
 
 const LOADING_PLACEHOLDER_COUNT = 3;
 const SCROLL_THRESHOLD_PIXELS = 72;
@@ -23,10 +16,6 @@ const { resourceId, rowId } = defineProps<{
     resourceId: string;
     rowId: string;
 }>();
-
-const viewRelatedResource = inject<
-    ((resource: SelectedResource) => void) | null
->("viewRelatedResource", null);
 
 const { $gettext } = useGettext();
 const {
@@ -50,28 +39,6 @@ const emptyMessage = computed<string>(() => {
     }
     return $gettext("No related resources to show.");
 });
-
-function reportLink(relatedResourceId: string): string {
-    return generateArchesURL("arches:resource_report", {
-        resourceid: relatedResourceId,
-    });
-}
-
-function reportLinkLabel(name: string): string {
-    return $gettext("View the report of %{name}", { name }, true);
-}
-
-function addToPanelLabel(name: string): string {
-    return $gettext(
-        "Show the relationships of %{name} in the panel",
-        { name },
-        true,
-    );
-}
-
-function addToPanel(resource: RelatedResource): void {
-    viewRelatedResource?.({ id: resource.resource_id, title: resource.name });
-}
 
 function onScroll(event: Event): void {
     const results = event.currentTarget as HTMLElement;
@@ -104,39 +71,12 @@ function onScroll(event: Event): void {
                 v-if="resources.length > 0"
                 class="resources"
             >
-                <li
+                <RelatedResourceRow
                     v-for="resource in resources"
                     :key="resource.relationship_id"
-                    class="resource"
-                >
-                    <Button
-                        v-if="viewRelatedResource"
-                        class="name"
-                        variant="link"
-                        :label="resource.name"
-                        :aria-label="addToPanelLabel(resource.name)"
-                        :title="addToPanelLabel(resource.name)"
-                        @click="addToPanel(resource)"
-                    />
-                    <span
-                        v-else
-                        class="name"
-                        :title="resource.name"
-                    >
-                        {{ resource.name }}
-                    </span>
-                    <Button
-                        as="a"
-                        class="report"
-                        icon="pi pi-external-link"
-                        rel="noopener noreferrer"
-                        target="_blank"
-                        variant="link"
-                        :href="reportLink(resource.resource_id)"
-                        :aria-label="reportLinkLabel(resource.name)"
-                        :title="reportLinkLabel(resource.name)"
-                    />
-                </li>
+                    :resource-id="resource.resource_id"
+                    :name="resource.name"
+                />
             </ul>
 
             <div
@@ -193,56 +133,6 @@ function onScroll(event: Event): void {
     margin: 0;
     padding: 0;
     list-style: none;
-}
-
-.related-resource-list .resource {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    min-inline-size: 0;
-    padding-block: 0.2rem;
-    font-size: 1.3rem;
-    border-block-end: 0.0625rem solid var(--p-content-border-color);
-}
-
-.related-resource-list .resource:last-child {
-    border-block-end: none;
-}
-
-.related-resource-list .resource .name {
-    flex: 1;
-    min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.related-resource-list .resource span.name {
-    color: var(--p-text-color);
-}
-
-.related-resource-list .resource .name.p-button {
-    justify-content: flex-start;
-    padding: 0;
-    font-size: inherit;
-}
-
-.related-resource-list .resource .name.p-button :deep(.p-button-label) {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* A little larger than a small button, so it reads next to the name */
-.related-resource-list .resource .report.p-button {
-    flex-shrink: 0;
-    inline-size: 2.6rem;
-    block-size: 2.6rem;
-}
-
-/* The icon takes its size from the theme, not from the button */
-.related-resource-list .resource .report.p-button :deep(.p-button-icon) {
-    font-size: 1.2rem;
 }
 
 .related-resource-list .loading {
