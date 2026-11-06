@@ -49,7 +49,7 @@ export async function fetchRelatedResources(
     rowId: string,
     offset: number,
     limit: number,
-    term = "",
+    term: string,
 ): Promise<RelatedResourcesPage> {
     const params = new URLSearchParams({
         resource_id: resourceId,
