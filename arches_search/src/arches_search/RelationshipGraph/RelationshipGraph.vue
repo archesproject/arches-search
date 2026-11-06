@@ -62,13 +62,16 @@ const {
     loadGraph,
 } = useRelationshipGraph(selections, isGraphVisible, shownPathRelationshipIds);
 
-const panelTitle = computed<string>(() =>
-    resources.length === 1
-        ? $gettext("%{title}: related resources", {
-              title: resources[0].title,
-          })
-        : $gettext("Related resources"),
-);
+const panelTitle = computed<string>(() => {
+    if (resources.length === 1) {
+        return $gettext(
+            "%{title}: related resources",
+            { title: resources[0].title },
+            true,
+        );
+    }
+    return $gettext("Related resources");
+});
 
 const showRelationshipsLabel = computed<string>(() =>
     selectedRelationshipCount.value > 0

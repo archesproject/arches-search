@@ -55,17 +55,24 @@ const directionLabel = computed<string>(() =>
     isOutgoing.value ? $gettext("Outgoing") : $gettext("Incoming"),
 );
 
-const toggleLabel = computed<string>(() =>
-    selected
-        ? $gettext("Hide %{type} relationships to %{model} from the graph", {
-              type: typeLabel.value,
-              model: row.related_model.name,
-          })
-        : $gettext("Show %{type} relationships to %{model} in the graph", {
-              type: typeLabel.value,
-              model: row.related_model.name,
-          }),
-);
+const toggleLabel = computed<string>(() => {
+    const labelParameters = {
+        type: typeLabel.value,
+        model: row.related_model.name,
+    };
+    if (selected) {
+        return $gettext(
+            "Hide %{type} relationships to %{model} from the graph",
+            labelParameters,
+            true,
+        );
+    }
+    return $gettext(
+        "Show %{type} relationships to %{model} in the graph",
+        labelParameters,
+        true,
+    );
+});
 </script>
 
 <template>

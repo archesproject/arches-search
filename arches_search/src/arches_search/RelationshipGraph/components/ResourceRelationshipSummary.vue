@@ -51,7 +51,7 @@ const isLoading = computed<boolean>(
 const hasFailed = computed<boolean>(() => summaryState?.status === FAILED);
 
 const removeLabel = computed<string>(() =>
-    $gettext("Remove %{title} from the panel", { title }),
+    $gettext("Remove %{title} from the panel", { title }, true),
 );
 </script>
 
