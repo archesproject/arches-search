@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from django.core.exceptions import ValidationError
 from django.db.models import (
@@ -104,6 +104,8 @@ class SortResolver:
     needs: "field" for RESOURCE_FIELD, "graph_slug"/"node_alias" for NODE.
 
     A tie-break on resourceinstanceid is always appended, so paging is stable.
+    A queryset that can hold a resource more than once passes tie_breakers to
+    order those rows as well.
     """
 
     def __init__(self, sort_specs: Optional[List[Dict[str, Any]]] = None) -> None:
@@ -132,6 +134,7 @@ class SortResolver:
         self,
         queryset: QuerySet,
         sort_nodes: Optional[Dict[Any, Node]] = None,
+        tie_breakers: Sequence[Ordering] = (),
     ) -> QuerySet:
         sort_nodes = sort_nodes or {}
         order_expressions: List[Ordering] = []
@@ -151,6 +154,7 @@ class SortResolver:
                 order_expressions.append(ordering)
 
         order_expressions.append(F("resourceinstanceid").asc())
+        order_expressions.extend(tie_breakers)
         return queryset.order_by(*order_expressions)
 
     def _primary_name(
