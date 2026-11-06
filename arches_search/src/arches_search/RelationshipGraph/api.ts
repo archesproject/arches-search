@@ -19,11 +19,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
 export async function fetchRelationshipSummary(
     resourceId: string,
 ): Promise<RelationshipSummary> {
-    const params = new URLSearchParams({ resource_id: resourceId });
-    const url =
-        generateArchesURL("arches_search:relationship_graph_summary") +
-        "?" +
-        params.toString();
+    const url = generateArchesURL(
+        "arches_search:relationship_graph_summary",
+        {},
+        { resource_id: resourceId },
+    );
 
     return parseResponse(await fetch(url));
 }
@@ -32,14 +32,11 @@ export async function fetchRelationshipPath(
     fromResourceId: string,
     toResourceId: string,
 ): Promise<RelationshipPath> {
-    const params = new URLSearchParams({
-        from: fromResourceId,
-        to: toResourceId,
-    });
-    const url =
-        generateArchesURL("arches_search:relationship_graph_path") +
-        "?" +
-        params.toString();
+    const url = generateArchesURL(
+        "arches_search:relationship_graph_path",
+        {},
+        { from: fromResourceId, to: toResourceId },
+    );
 
     return parseResponse(await fetch(url));
 }
@@ -51,19 +48,11 @@ export async function fetchRelatedResources(
     limit: number,
     term: string,
 ): Promise<RelatedResourcesPage> {
-    const params = new URLSearchParams({
-        resource_id: resourceId,
-        row_id: rowId,
-        offset: String(offset),
-        limit: String(limit),
-    });
-    if (term) params.set("term", term);
-    const url =
-        generateArchesURL(
-            "arches_search:relationship_graph_related_resources",
-        ) +
-        "?" +
-        params.toString();
+    const url = generateArchesURL(
+        "arches_search:relationship_graph_related_resources",
+        {},
+        { resource_id: resourceId, row_id: rowId, offset, limit, term },
+    );
 
     return parseResponse(await fetch(url));
 }
