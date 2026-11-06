@@ -1,37 +1,50 @@
-import { computed, inject, provide, ref } from "vue";
+import { computed, inject, provide, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
     createSearchMVTContext,
+    fetchNodeFilterConfig,
     fetchSearchResults,
 } from "@/arches_search/SimpleSearch/api.ts";
 import {
+    buildAttributeFilterQuery,
+    formatAttributeFilterValue,
+    parseAttributeFilterValue,
+} from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
+import {
     buildRequestDateRange,
-    buildRequestQuery,
+    buildRequestQueries,
     buildRequestTerms,
+    foldQueriesIntoAdvancedQuery,
 } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import { TERM_SEARCH_MAX_HOPS } from "@/arches_search/SimpleSearch/utils/search-payload-builder.ts";
+
+import {
+    ACTIVE_FILTER_KIND_TERM,
+    ADVANCED_QUERY_KEY,
+    TERM_KIND_CONTROLLED_TERM,
+    TERM_KIND_RECORD,
+    TIME_FILTER_QUERY_KEY,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 import type { ComputedRef, InjectionKey, Ref } from "vue";
 import type {
     GraphModel,
     GroupPayload,
+    QueryBuilderGroup,
     SearchResults,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import {
-    ACTIVE_FILTER_KIND_TERM,
-    TERM_KIND_CONTROLLED_TERM,
-    TERM_KIND_RECORD,
-} from "@/arches_search/SimpleSearch/types.ts";
 import type {
     ActiveFilter,
     DateRangeFilter,
+    NodeFilterConfigNode,
     ResourceFieldFilter,
     ResourceType,
     SearchDefinition,
     SearchRequestTerm,
+    SerializedTerm,
     SortSpec,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -39,7 +52,7 @@ import type { FeatureCollection } from "geojson";
 
 interface ExportPayload {
     terms: SearchRequestTerm[];
-    query: GroupPayload | undefined;
+    queries: GroupPayload[];
     graphSlugs: string[];
     mapFilter: FeatureCollection | null;
     dateRange: DateRangeFilter | null;
@@ -50,26 +63,42 @@ interface ExportPayload {
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
     activeGraphs: Ref<ResourceType[]>;
+    advancedQuery: Ref<GroupPayload | null>;
+    advancedQueryDraft: Ref<QueryBuilderGroup | null>;
+    attributeFilterValues: ComputedRef<Record<string, unknown>>;
+    unrepresentedQueryKeys: ComputedRef<string[]>;
     availableGraphs: Ref<ResourceType[]>;
     loadAvailableGraphs(): Promise<void>;
     currentPage: Ref<number>;
     includeRelated: Ref<boolean>;
     isSearching: Ref<boolean>;
     mapFilter: Ref<FeatureCollection | null>;
+    nodeFilterConfigNodes: ComputedRef<NodeFilterConfigNode[]>;
     resourceFieldFilters: Ref<Map<string, ResourceFieldFilter>>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
     resultsGraphs: Ref<ResourceType[]>;
+    savedSearchName: Ref<string | null>;
     searchResults: Ref<SearchResults>;
+    singleActiveGraph: ComputedRef<ResourceType | null>;
     sort: Ref<SortSpec[]>;
-    applySearchDefinition(definition: SearchDefinition): Promise<void>;
+    applySearchDefinition(
+        definition: SearchDefinition,
+        searchName: string | null,
+    ): Promise<void>;
+    applyAdvancedQuery(payload: GroupPayload | null): void;
+    foldUnrepresentedQueriesIntoAdvancedQuery(): void;
     clearAll(): void;
+    clearAttributeFilter(nodeAlias: string): void;
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
-    clearTermFilter(key: string): void;
+    clearTermFilter(id: string): void;
     getExportPayload(): ExportPayload;
     getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
+    setAdvancedQuery(payload: GroupPayload | null): void;
+    setAdvancedQueryDraft(root: QueryBuilderGroup | null): void;
+    setAttributeFilter(nodeAlias: string, value: unknown): void;
     setGraphsBySlug(graphSlugs: string[]): Promise<void>;
     setIncludeRelated(include: boolean): void;
     setMapFilter(featureCollection: FeatureCollection): void;
@@ -80,14 +109,7 @@ interface SearchFilters {
     ): void;
     clearResourceFieldFilters(): void;
     setSort(next: SortSpec[]): void;
-    setTermFilter(
-        key: string,
-        text: string,
-        clear: () => void,
-        options?: Record<string, unknown>,
-        termKind?: TermKind,
-        icon?: string,
-    ): void;
+    setTermFilter(term: SerializedTerm): void;
     toggleGraph(resourceType: ResourceType): void;
 }
 
@@ -101,8 +123,10 @@ const DEFAULT_SORT: SortSpec[] = [];
 
 function createSearchFilters(): SearchFilters {
     const { $gettext } = useGettext();
-    const terms = ref<Map<string, ActiveFilter>>(new Map());
+    const terms = ref<SerializedTerm[]>([]);
     const queries = ref<Map<string, GroupPayload>>(new Map());
+    const advancedQuery = ref<GroupPayload | null>(null);
+    const advancedQueryDraft = ref<QueryBuilderGroup | null>(null);
     const mapFilter = ref<FeatureCollection | null>(null);
     // Whether term matches also bring in resources related to the matches.
     const includeRelated = ref(false);
@@ -119,6 +143,11 @@ function createSearchFilters(): SearchFilters {
     // Every searchable resource model.
     const availableGraphs = ref<ResourceType[]>([]);
     let availableGraphsRequest: Promise<void> | null = null;
+    const nodeFilterConfigNodesByGraphId = ref<
+        Record<string, NodeFilterConfigNode[]>
+    >({});
+    const storedAttributeFilterValues = ref<Record<string, unknown>>({});
+    const savedSearchName = ref<string | null>(null);
     const resultsGraphs = ref<ResourceType[]>([]);
     const searchResults = ref<SearchResults>(createEmptySearchResults());
     const isSearching = ref(false);
@@ -139,12 +168,72 @@ function createSearchFilters(): SearchFilters {
     });
 
     const activeFilters = computed<ActiveFilter[]>(() => {
-        return [...terms.value.values()];
+        return terms.value.map((term) => ({
+            id: term.id,
+            text: term.text,
+            clear: () => clearTermFilter(term.id),
+            inverted: term.inverted,
+            kind: term.termKind ?? ACTIVE_FILTER_KIND_TERM,
+            category: getTermFilterCategory(term.termKind),
+            icon: term.icon || getTermFilterIcon(term.termKind),
+            options: term.options,
+        }));
     });
 
     const queriesView = computed<ReadonlyMap<string, GroupPayload>>(
         () => queries.value,
     );
+
+    const singleActiveGraph = computed<ResourceType | null>(() => {
+        if (activeGraphs.value.length !== 1) {
+            return null;
+        }
+        return activeGraphs.value[0];
+    });
+
+    const nodeFilterConfigNodes = computed<NodeFilterConfigNode[]>(() =>
+        nodeFilterConfigNodesFor(activeGraphs.value),
+    );
+
+    // A value the widget emitted wins over one parsed back out of its query:
+    // re-parsing while the user types would rewrite their input.
+    const attributeFilterValues = computed<Record<string, unknown>>(() => {
+        return Object.fromEntries(
+            nodeFilterConfigNodes.value.flatMap((node) => {
+                const query = queries.value.get(node.node_alias);
+                if (!query) {
+                    return [];
+                }
+                const value =
+                    storedAttributeFilterValues.value[node.node_alias] ??
+                    parseAttributeFilterValue(node, query);
+                return [[node.node_alias, value]];
+            }),
+        );
+    });
+
+    // Keyed queries the filters cannot show, like those of searches saved
+    // before a node had a filter.
+    const unrepresentedQueryKeys = computed<string[]>(() => {
+        const representedKeys = new Set<string>([TIME_FILTER_QUERY_KEY]);
+        for (const node of nodeFilterConfigNodes.value) {
+            const formattedValue = formatAttributeFilterValue(
+                node,
+                attributeFilterValues.value[node.node_alias],
+            );
+            if (queries.value.has(node.node_alias) && formattedValue) {
+                representedKeys.add(node.node_alias);
+            }
+        }
+        return [...queries.value.keys()].filter(
+            (filterKey) => !representedKeys.has(filterKey),
+        );
+    });
+
+    watch(activeGraphs, (graphs, previousGraphs) => {
+        dropFiltersForOtherGraphs(graphs, previousGraphs);
+        void loadNodeFilterConfig(singleActiveGraph.value);
+    });
 
     function getTermFilterCategory(termKind?: TermKind): string {
         if (termKind === TERM_KIND_CONTROLLED_TERM) {
@@ -166,52 +255,77 @@ function createSearchFilters(): SearchFilters {
         return "pi pi-search";
     }
 
-    function toRequestTerms(
-        activeFilterTerms: ActiveFilter[],
-    ): SearchRequestTerm[] {
-        return buildRequestTerms(
-            activeFilterTerms.map((term) => {
-                let termKind: TermKind | undefined;
-                if (term.kind === TERM_KIND_CONTROLLED_TERM) {
-                    termKind = term.kind;
-                }
-                return {
-                    text: term.text,
-                    inverted: term.inverted,
-                    termKind,
-                };
-            }),
-        );
+    // Time and attribute filters only exist while exactly one resource model is
+    // selected, and filter that model; switching models leaves them behind.
+    function dropFiltersForOtherGraphs(
+        graphs: ResourceType[],
+        previousGraphs: ResourceType[],
+    ): void {
+        const nextGraphSlug = graphs.length === 1 ? graphs[0].slug : null;
+        const singleGraphFilterKeys = [
+            TIME_FILTER_QUERY_KEY,
+            ...nodeFilterConfigNodesFor(previousGraphs).map(
+                (node) => node.node_alias,
+            ),
+        ];
+
+        const nextQueries = new Map(queries.value);
+        for (const filterKey of singleGraphFilterKeys) {
+            const query = nextQueries.get(filterKey);
+            if (query && query.graph_slug !== nextGraphSlug) {
+                nextQueries.delete(filterKey);
+            }
+        }
+        queries.value = nextQueries;
+        storedAttributeFilterValues.value = {};
     }
 
-    function setTermFilter(
-        key: string,
-        text: string,
-        clear: () => void,
-        options?: Record<string, unknown>,
-        termKind?: TermKind,
-        icon?: string,
-    ): void {
-        const next = new Map(terms.value);
-        next.set(key, {
-            id: key,
-            text,
-            clear,
-            inverted: false,
-            kind: termKind ?? ACTIVE_FILTER_KIND_TERM,
-            category: getTermFilterCategory(termKind),
-            icon: icon || getTermFilterIcon(termKind),
-            options,
-        });
-        terms.value = next;
+    function nodeFilterConfigNodesFor(
+        graphs: ResourceType[],
+    ): NodeFilterConfigNode[] {
+        const graphId = graphs.length === 1 ? graphs[0].id : null;
+        if (!graphId) {
+            return [];
+        }
+        return nodeFilterConfigNodesByGraphId.value[graphId] ?? [];
+    }
+
+    async function loadNodeFilterConfig(
+        graph: ResourceType | null,
+    ): Promise<void> {
+        const graphId = graph?.id;
+        if (!graphId) {
+            return;
+        }
+
+        try {
+            const config = await fetchNodeFilterConfig(graphId);
+            nodeFilterConfigNodesByGraphId.value = {
+                ...nodeFilterConfigNodesByGraphId.value,
+                [graphId]: config.nodes,
+            };
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    function setTermFilter(term: SerializedTerm): void {
+        const existingIndex = terms.value.findIndex(
+            (existingTerm) => existingTerm.id === term.id,
+        );
+        const nextTerms = [...terms.value];
+        if (existingIndex === -1) {
+            nextTerms.push(term);
+        } else {
+            nextTerms[existingIndex] = term;
+        }
+        terms.value = nextTerms;
         currentPage.value = FIRST_SEARCH_PAGE;
         search();
     }
 
-    function clearTermFilter(key: string): void {
-        const next = new Map(terms.value);
-        next.delete(key);
-        terms.value = next;
+    function clearTermFilter(id: string): void {
+        terms.value = terms.value.filter((term) => term.id !== id);
         currentPage.value = FIRST_SEARCH_PAGE;
         search();
     }
@@ -231,6 +345,77 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    // Each attribute-filter widget emits a datatype-specific value; the registry
+    // turns it into a query (or null to clear). Query-shape logic lives in the
+    // per-datatype builders, so this handler stays datatype-agnostic.
+    function setAttributeFilter(nodeAlias: string, value: unknown): void {
+        storedAttributeFilterValues.value = {
+            ...storedAttributeFilterValues.value,
+            [nodeAlias]: value,
+        };
+
+        const node = nodeFilterConfigNodes.value.find(
+            (candidate) => candidate.node_alias === nodeAlias,
+        );
+        const graphSlug = singleActiveGraph.value?.slug;
+        if (!node || !graphSlug) {
+            return;
+        }
+
+        const query = buildAttributeFilterQuery(node, value, graphSlug);
+        if (query) {
+            setQuery(nodeAlias, query);
+        } else {
+            clearQuery(nodeAlias);
+        }
+    }
+
+    function clearAttributeFilter(nodeAlias: string): void {
+        const { [nodeAlias]: _removedValue, ...remainingValues } =
+            storedAttributeFilterValues.value;
+        storedAttributeFilterValues.value = remainingValues;
+        clearQuery(nodeAlias);
+    }
+
+    function setAdvancedQuery(payload: GroupPayload | null): void {
+        advancedQuery.value = payload;
+        advancedQueryDraft.value = null;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
+    function foldUnrepresentedQueriesIntoAdvancedQuery(): void {
+        const unrepresentedQueries = new Map(
+            [...queries.value].filter(([filterKey]) =>
+                unrepresentedQueryKeys.value.includes(filterKey),
+            ),
+        );
+        const folded = foldQueriesIntoAdvancedQuery(
+            advancedQuery.value,
+            unrepresentedQueries,
+        );
+        if (!folded) {
+            return;
+        }
+        const nextQueries = new Map(queries.value);
+        for (const foldedKey of folded.foldedKeys) {
+            nextQueries.delete(foldedKey);
+        }
+        queries.value = nextQueries;
+        advancedQuery.value = folded.advancedQuery;
+        advancedQueryDraft.value = null;
+    }
+
+    // Advanced Search runs its own search over the query alone; Simple Search
+    // searches again with it when next opened.
+    function applyAdvancedQuery(payload: GroupPayload | null): void {
+        advancedQuery.value = payload;
+    }
+
+    function setAdvancedQueryDraft(root: QueryBuilderGroup | null): void {
+        advancedQueryDraft.value = root;
+    }
+
     function setMapFilter(featureCollection: FeatureCollection): void {
         mapFilter.value = featureCollection;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -242,13 +427,21 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
-    function clearAll(): void {
-        terms.value = new Map();
+    function resetFilters(): void {
+        terms.value = [];
         queries.value = new Map();
+        advancedQuery.value = null;
+        advancedQueryDraft.value = null;
+        storedAttributeFilterValues.value = {};
         mapFilter.value = null;
         resourceFieldFilters.value = new Map();
         activeGraphs.value = [];
+        savedSearchName.value = null;
         currentPage.value = FIRST_SEARCH_PAGE;
+    }
+
+    function clearAll(): void {
+        resetFilters();
         search();
     }
 
@@ -283,6 +476,14 @@ function createSearchFilters(): SearchFilters {
         return availableGraphs.value;
     }
 
+    function getRequestQueries(requestGraphSlugs: string[]): GroupPayload[] {
+        return buildRequestQueries(
+            [...queries.value.values()],
+            advancedQuery.value,
+            requestGraphSlugs,
+        );
+    }
+
     function setGraphs(graphs: ResourceType[]): void {
         activeGraphs.value = graphs;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -295,6 +496,20 @@ function createSearchFilters(): SearchFilters {
                 availableGraphs.value.find((graph) => graph.slug === slug),
             )
             .filter((graph): graph is ResourceType => graph !== undefined);
+    }
+
+    // "All" is saved as every resource model by name, which reads back as each
+    // one selected individually; selecting every one is "All". With only one
+    // model, keeping it selected keeps its time and attribute filters.
+    function findSavedGraphSelection(graphSlugs: string[]): ResourceType[] {
+        const savedGraphs = findAvailableGraphs(graphSlugs);
+        if (
+            availableGraphs.value.length > 1 &&
+            savedGraphs.length === availableGraphs.value.length
+        ) {
+            return [];
+        }
+        return savedGraphs;
     }
 
     async function setGraphsBySlug(graphSlugs: string[]): Promise<void> {
@@ -348,13 +563,17 @@ function createSearchFilters(): SearchFilters {
             try {
                 await loadAvailableGraphs();
                 const requestGraphs = getRequestGraphs();
-                const requestQueries = [...queries.value.values()];
+                const requestGraphSlugs = requestGraphs.map(
+                    (graph) => graph.slug,
+                );
                 const searchParams = {
-                    terms: toRequestTerms([...terms.value.values()]),
-                    query: buildRequestQuery(requestQueries),
-                    dateRange: buildRequestDateRange(requestQueries),
+                    terms: buildRequestTerms(terms.value),
+                    queries: getRequestQueries(requestGraphSlugs),
+                    dateRange: buildRequestDateRange([
+                        ...queries.value.values(),
+                    ]),
                     page,
-                    graphSlugs: requestGraphs.map((graph) => graph.slug),
+                    graphSlugs: requestGraphSlugs,
                     mapFilter: mapFilter.value,
                     resourceFieldFilters: getRequestResourceFieldFilters(),
                     maxHops: requestMaxHops.value,
@@ -420,85 +639,54 @@ function createSearchFilters(): SearchFilters {
     }
 
     function getSearchDefinition(): SearchDefinition {
-        // Strip the `clear` closure off each ActiveFilter — closures aren't
-        // serializable, and the restore path rebuilds them from `id`.
-        const serializedTerms = [...terms.value.values()].map(
-            ({ id, text, inverted, kind, icon, options }) => {
-                let termKindFields: { termKind?: TermKind } = {};
-                if (
-                    kind === TERM_KIND_CONTROLLED_TERM ||
-                    kind === TERM_KIND_RECORD
-                ) {
-                    termKindFields = { termKind: kind };
-                }
+        const serializedTerms = terms.value.map(serializeTerm);
 
-                return {
-                    id,
-                    text,
-                    inverted,
-                    ...termKindFields,
-                    ...(kind === TERM_KIND_RECORD ? { icon } : {}),
-                    ...(options !== undefined ? { options } : {}),
-                };
-            },
+        const savedQueries: Record<string, GroupPayload> = Object.fromEntries(
+            queries.value,
         );
+        if (advancedQuery.value) {
+            savedQueries[ADVANCED_QUERY_KEY] = advancedQuery.value;
+        }
+
         return {
             terms: serializedTerms,
-            queries: Object.fromEntries(queries.value),
+            queries: savedQueries,
             graphSlugs: getRequestGraphs().map((graph) => graph.slug),
             mapFilter: mapFilter.value,
+            sort: sort.value,
             includeRelated: includeRelated.value,
         };
     }
 
     async function applySearchDefinition(
         definition: SearchDefinition,
+        searchName: string | null,
     ): Promise<void> {
         await loadAvailableGraphs();
 
-        // Clear current state first. Each setter triggers a debounced search,
-        // so the cascade collapses to a single fetch on the trailing edge.
-        for (const id of [...terms.value.keys()]) {
-            clearTermFilter(id);
-        }
-        for (const filterKey of [...queries.value.keys()]) {
-            clearQuery(filterKey);
-        }
+        resetFilters();
+        const { [ADVANCED_QUERY_KEY]: savedAdvancedQuery, ...keyedQueries } =
+            definition.queries;
 
-        // Set directly: the setters below trigger the search.
+        terms.value = definition.terms;
+        queries.value = new Map(Object.entries(keyedQueries));
+        advancedQuery.value = savedAdvancedQuery ?? null;
+        mapFilter.value = definition.mapFilter;
+        activeGraphs.value = findSavedGraphSelection(definition.graphSlugs);
+        sort.value = definition.sort;
         includeRelated.value = definition.includeRelated;
-
-        setGraphs(findAvailableGraphs(definition.graphSlugs));
-
-        if (definition.mapFilter) {
-            setMapFilter(definition.mapFilter);
-        } else {
-            clearMapFilter();
-        }
-
-        for (const term of definition.terms) {
-            setTermFilter(
-                term.id,
-                term.text,
-                () => clearTermFilter(term.id),
-                term.options,
-                term.termKind,
-                term.icon,
-            );
-        }
-        for (const [filterKey, payload] of Object.entries(definition.queries)) {
-            setQuery(filterKey, payload);
-        }
+        savedSearchName.value = searchName;
+        search();
     }
 
     function getExportPayload(): ExportPayload {
-        const requestQueries = [...queries.value.values()];
+        const requestGraphSlugs = getRequestGraphs().map((graph) => graph.slug);
         return {
-            terms: toRequestTerms([...terms.value.values()]),
-            query: buildRequestQuery(requestQueries),
-            graphSlugs: getRequestGraphs().map((graph) => graph.slug),
+            terms: buildRequestTerms(terms.value),
+            queries: getRequestQueries(requestGraphSlugs),
+            graphSlugs: requestGraphSlugs,
             mapFilter: mapFilter.value,
-            dateRange: buildRequestDateRange(requestQueries),
+            dateRange: buildRequestDateRange([...queries.value.values()]),
             resourceFieldFilters: getRequestResourceFieldFilters(),
             maxHops: requestMaxHops.value,
         };
@@ -507,10 +695,17 @@ function createSearchFilters(): SearchFilters {
     return {
         activeFilters,
         activeGraphs,
+        advancedQuery,
+        advancedQueryDraft,
+        attributeFilterValues,
+        unrepresentedQueryKeys,
         availableGraphs,
         loadAvailableGraphs,
+        applyAdvancedQuery,
+        foldUnrepresentedQueriesIntoAdvancedQuery,
         applySearchDefinition,
         clearAll,
+        clearAttributeFilter,
         clearMapFilter,
         clearQuery,
         clearTermFilter,
@@ -520,11 +715,16 @@ function createSearchFilters(): SearchFilters {
         includeRelated,
         isSearching,
         mapFilter,
+        nodeFilterConfigNodes,
         queries: queriesView,
         resourceFieldFilters,
         resultsTileUrl,
         resultsGraphs,
+        savedSearchName,
         search,
+        setAdvancedQuery,
+        setAdvancedQueryDraft,
+        setAttributeFilter,
         setResourceFieldFilter,
         clearResourceFieldFilters,
         searchResults,
@@ -534,9 +734,28 @@ function createSearchFilters(): SearchFilters {
         setQuery,
         setSort,
         setTermFilter,
+        singleActiveGraph,
         sort,
         toggleGraph,
     };
+}
+
+function serializeTerm(term: SerializedTerm): SerializedTerm {
+    const serializedTerm: SerializedTerm = {
+        id: term.id,
+        text: term.text,
+        inverted: term.inverted,
+    };
+    if (term.termKind) {
+        serializedTerm.termKind = term.termKind;
+    }
+    if (term.termKind === TERM_KIND_RECORD && term.icon) {
+        serializedTerm.icon = term.icon;
+    }
+    if (term.options !== undefined) {
+        serializedTerm.options = term.options;
+    }
+    return serializedTerm;
 }
 
 function createEmptySearchResults(): SearchResults {

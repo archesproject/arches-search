@@ -1,26 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, watchEffect } from "vue";
-import { useGettext } from "vue3-gettext";
+import { toRef } from "vue";
 
 import Message from "openvue/message";
 import Skeleton from "openvue/skeleton";
 import Textarea from "openvue/textarea";
 
-import { describeAdvancedSearchQuery } from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/NarrationPanel/query-narrator.ts";
-import {
-    getNodeMetadataForPayload,
-    getResourceNamesForPayload,
-} from "@/arches_search/AdvancedSearch/api.ts";
+import { useQueryDescription } from "@/arches_search/AdvancedSearch/composables/useQueryDescription.ts";
 
 import type {
     AdvancedSearchFacet,
     GraphModel,
     GroupPayload,
-    NodeMetadataMap,
 } from "@/arches_search/AdvancedSearch/types.ts";
-
-const gettext = useGettext();
-const { $gettext } = gettext;
 
 const { payload, graphs, datatypesToAdvancedSearchFacets } = defineProps<{
     payload: GroupPayload;
@@ -28,58 +19,13 @@ const { payload, graphs, datatypesToAdvancedSearchFacets } = defineProps<{
     datatypesToAdvancedSearchFacets: Record<string, AdvancedSearchFacet[]>;
 }>();
 
-const nodeMetadata = ref<NodeMetadataMap>({});
-const resourceNames = ref<Record<string, string>>({});
-const isLoading = ref(false);
-const fetchError = ref<Error | null>(null);
-
-const narration = computed(() =>
-    describeAdvancedSearchQuery({
-        payload,
-        graphs,
-        datatypesToAdvancedSearchFacets,
-        gettext: $gettext,
-        currentLanguage: gettext.current,
-        nodeMetadata: nodeMetadata.value,
-        resourceNames: resourceNames.value,
-    }),
-);
-
-watchEffect(() => {
-    void fetchNarrationData(payload);
+const { description, isLoading, fetchError } = useQueryDescription({
+    payload: toRef(() => payload),
+    graphs: toRef(() => graphs),
+    datatypesToAdvancedSearchFacets: toRef(
+        () => datatypesToAdvancedSearchFacets,
+    ),
 });
-
-async function fetchNarrationData(currentPayload: GroupPayload) {
-    isLoading.value = true;
-    fetchError.value = null;
-
-    try {
-        const [fetchedMetadata, fetchedResourceNames] = await Promise.all([
-            getNodeMetadataForPayload(currentPayload),
-            getResourceNamesForPayload(currentPayload),
-        ]);
-
-        nodeMetadata.value = (fetchedMetadata ?? {}) as NodeMetadataMap;
-        resourceNames.value = (fetchedResourceNames ?? {}) as Record<
-            string,
-            string
-        >;
-    } catch (error) {
-        if (error instanceof Error) {
-            fetchError.value = error;
-        } else {
-            fetchError.value = new Error(
-                $gettext(
-                    "An unknown error occurred while fetching node metadata.",
-                ),
-            );
-        }
-        nodeMetadata.value = {};
-        resourceNames.value = {};
-    } finally {
-        isLoading.value = false;
-    }
-}
 </script>
 
 <template>
@@ -98,8 +44,8 @@ async function fetchNarrationData(currentPayload: GroupPayload) {
     <Textarea
         v-else
         class="payload-analyzer-textarea"
-        :model-value="narration"
         rows="38"
-        readonly
+        :model-value="description"
+        :readonly="true"
     />
 </template>

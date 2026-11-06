@@ -1,7 +1,7 @@
 import logging
 from http import HTTPStatus
 
-from django.db.models import Max, Min
+from django.db.models import Exists, Max, Min, OuterRef
 from django.utils.translation import gettext as _
 
 from arches.app.models import models as arches_models
@@ -12,6 +12,8 @@ from arches_search.models.models import DateRangeSearch, DateSearch
 from arches_search.utils.readable_nodes import ReadableNodes
 
 logger = logging.getLogger(__name__)
+
+UNKNOWN_YEAR_SORTABLE_DATE = 99990101
 
 
 class NodeDateBoundsForGraphAPI(APIBase):
@@ -51,17 +53,35 @@ class NodeDateBoundsForGraphAPI(APIBase):
             "node_alias__in": date_node_aliases,
         }
 
-        date_search_bounds = DateSearch.objects.filter(**node_alias_filter).aggregate(
-            min_value=Min("value"), max_value=Max("value")
+        # A value with an unknown year, like "uuuu-uu-12", is indexed as
+        # running from year 0 to year 9999. No real date is that late, so such
+        # values are left out rather than stretching the timeline to fit them.
+        has_unknown_year = DateSearch.objects.filter(
+            tileid=OuterRef("tileid"),
+            node_alias=OuterRef("node_alias"),
+            value__gte=UNKNOWN_YEAR_SORTABLE_DATE,
         )
-        date_range_search_bounds = DateRangeSearch.objects.filter(
-            **node_alias_filter
-        ).aggregate(min_start_value=Min("start_value"), max_end_value=Max("end_value"))
+        # Read off the index from each end, so only the few values skipped
+        # there are checked, rather than aggregating every value of the node.
+        known_date_values = (
+            DateSearch.objects.filter(**node_alias_filter)
+            .exclude(Exists(has_unknown_year))
+            .values_list("value", flat=True)
+        )
+        earliest_date_value = known_date_values.order_by("value").first()
+        latest_date_value = known_date_values.order_by("-value").first()
+        date_range_search_bounds = (
+            DateRangeSearch.objects.filter(**node_alias_filter)
+            .exclude(end_value__gte=UNKNOWN_YEAR_SORTABLE_DATE)
+            .aggregate(
+                min_start_value=Min("start_value"), max_end_value=Max("end_value")
+            )
+        )
 
         min_candidates = [
             candidate
             for candidate in [
-                date_search_bounds["min_value"],
+                earliest_date_value,
                 date_range_search_bounds["min_start_value"],
             ]
             if candidate is not None
@@ -69,7 +89,7 @@ class NodeDateBoundsForGraphAPI(APIBase):
         max_candidates = [
             candidate
             for candidate in [
-                date_search_bounds["max_value"],
+                latest_date_value,
                 date_range_search_bounds["max_end_value"],
             ]
             if candidate is not None

@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Skeleton from "openvue/skeleton";
-
-import arches from "arches";
 
 import SearchResultCard from "@/arches_search/SearchResults/SearchResultCard.vue";
 
@@ -25,27 +23,21 @@ import type {
     SearchReportConfig,
 } from "@/arches_search/SearchResults/types.ts";
 
-const { $gettext } = useGettext();
+const REQUEST_PAGE_EVENT = "request-page" as const;
 
 const SCROLL_THRESHOLD_PIXELS = 72;
 
-const { results, isSearching, filterText, graphModels } = defineProps<{
+const { results, isSearching, graphModels } = defineProps<{
     results: SearchResults;
     isSearching: boolean;
-    filterText: string;
     graphModels: GraphModel[];
 }>();
 
-const graphModelsByGraphId = computed<Map<string, GraphModel>>(
-    () =>
-        new Map(
-            graphModels.map((graphModel) => [graphModel.graphid, graphModel]),
-        ),
-);
-
 const emit = defineEmits<{
-    (event: "request-page", page: number): void;
+    (event: typeof REQUEST_PAGE_EVENT, page: number): void;
 }>();
+
+const { $gettext } = useGettext();
 
 const descriptorsByResourceId = ref<Record<string, ResourceDescriptorData>>({});
 const configsByGraphId = ref<Map<string, SearchReportConfig | null>>(new Map());
@@ -56,7 +48,20 @@ const isPageRequestInFlight = ref(false);
 
 const requestedDescriptorIds = new Set<string>();
 
-onMounted(async () => {
+const graphModelsByGraphId = computed<Map<string, GraphModel>>(
+    () =>
+        new Map(
+            graphModels.map((graphModel) => [graphModel.graphid, graphModel]),
+        ),
+);
+
+const endOfResultsText = computed<string>(() =>
+    $gettext("%{count} results", {
+        count: String(results.pagination.total_results),
+    }),
+);
+
+watchEffect(async () => {
     try {
         const lifecycleStates = await fetchResourceInstanceLifecycleStates();
         lifecycleStatesById.value = new Map(
@@ -71,17 +76,6 @@ onMounted(async () => {
             error,
         );
     }
-});
-
-const visibleResources = computed<ResourceData[]>(() => {
-    if (!filterText) return results.resources;
-    const needle = filterText.toLowerCase();
-    return results.resources.filter((resource: ResourceData) => {
-        const name =
-            descriptorsByResourceId.value[resource.resourceinstanceid]
-                ?.descriptors?.[arches.activeLanguage]?.name ?? "";
-        return name.toLowerCase().includes(needle);
-    });
 });
 
 watch(
@@ -164,7 +158,7 @@ function requestNextPage(): void {
     if (!results.pagination.has_next) return;
 
     isPageRequestInFlight.value = true;
-    emit("request-page", results.pagination.page + 1);
+    emit(REQUEST_PAGE_EVENT, results.pagination.page + 1);
 }
 
 function handleScroll(event: Event): void {
@@ -177,12 +171,6 @@ function handleScroll(event: Event): void {
 
     requestNextPage();
 }
-
-const endOfResultsText = computed(() =>
-    $gettext("%{count} results", {
-        count: String(results.pagination.total_results),
-    }),
-);
 </script>
 
 <template>
@@ -205,7 +193,7 @@ const endOfResultsText = computed(() =>
             @scroll.passive="handleScroll"
         >
             <SearchResultCard
-                v-for="resource in visibleResources"
+                v-for="resource in results.resources"
                 :key="resource.resourceinstanceid"
                 :result="resource"
                 :descriptor-data="

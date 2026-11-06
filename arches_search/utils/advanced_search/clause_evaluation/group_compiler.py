@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, F, OuterRef, Q
 
 from arches.app.models import models as arches_models
 from arches_search.utils.advanced_search.clause_evaluation.clause_reducer import (
@@ -124,18 +124,17 @@ class GroupCompiler:
         if not group_has_any_relationship:
             return parent_q, []
 
+        if group_logic_token == LOGIC_OR:
+            combined_or_q = parent_q
+            for subgroup_payload in group_payload["groups"]:
+                combined_or_q = combined_or_q | self._compile_subgroup_predicate(
+                    subgroup_payload
+                )
+            return combined_or_q, []
+
         children_q, children_existence_predicates = self._compile_children(
             subgroups=group_payload["groups"],
         )
-
-        if group_logic_token == LOGIC_OR:
-            combined_or_q = parent_q
-            if children_q is not None:
-                combined_or_q = combined_or_q | children_q
-            for existence_expression in children_existence_predicates:
-                combined_or_q = combined_or_q | Q(existence_expression)
-            return combined_or_q, []
-
         combined_and_q = parent_q & (children_q or Q())
         return combined_and_q, children_existence_predicates
 
@@ -194,14 +193,13 @@ class GroupCompiler:
             relationship_block
         )
         child_id_field_name = traversal_context["child_id_field"]
+        anchor_id_field_name = traversal_context["anchor_id_field"]
         is_inverse_relationship = traversal_context.get("is_inverse", False)
 
         child_row_set_excluding_anchor = (
             child_row_set
             if is_inverse_relationship
-            else child_row_set.exclude(
-                **{child_id_field_name: OuterRef("resourceinstanceid")}
-            )
+            else child_row_set.exclude(**{child_id_field_name: F(anchor_id_field_name)})
         )
 
         group_payload_for_reducer: Dict[str, Any] = {
@@ -374,3 +372,11 @@ class GroupCompiler:
             accumulated_existence_predicates.extend(subgroup_existence_predicates)
 
         return combined_children_q, accumulated_existence_predicates
+
+    def _compile_subgroup_predicate(self, subgroup_payload: Dict[str, Any]) -> Q:
+        subgroup_q, subgroup_existence_predicates = self.compile(
+            group_payload=subgroup_payload,
+        )
+        for existence_expression in subgroup_existence_predicates:
+            subgroup_q = subgroup_q & Q(existence_expression)
+        return subgroup_q

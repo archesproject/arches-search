@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import dayjs from "dayjs";
 import { computed, ref, watch } from "vue";
+import dayjs from "dayjs";
+import { isEqual } from "es-toolkit";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
@@ -18,47 +19,49 @@ import {
     endOfYear,
     normalizeRange,
     parseSortableDate,
+    parseStoredDate,
     startOfYear,
     toLocalISODateString,
 } from "@/arches_search/SimpleSearch/components/TimeFilter/date-utils.ts";
-import {
-    buildDateSearchClause,
-    buildNodeDateSearchClause,
-    parseStoredDate,
-} from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
+import { buildTimeFilterClause } from "@/arches_search/SimpleSearch/components/TimeFilter/time-filter-clauses.ts";
 import {
     getDateBoundsForGraphId,
     getNodesForGraphId,
 } from "@/arches_search/AdvancedSearch/api.ts";
+import { ClauseSubjectTypeToken } from "@/arches_search/AdvancedSearch/types.ts";
 
 import { HISTORICAL_CUTOFF_YEAR } from "@/arches_search/SimpleSearch/components/TimeFilter/constants.ts";
 
 import type { TimeFilterNodeSummary } from "@/arches_search/SimpleSearch/components/TimeFilter/types.ts";
 import type { LiteralClause } from "@/arches_search/AdvancedSearch/types.ts";
 
+const UPDATE_MODEL_VALUE_EVENT = "update:modelValue" as const;
+const REMOVE_EVENT = "remove" as const;
+const CLOSE_EVENT = "close" as const;
+
 const { graphSlug, graphId, graphLabel, modelValue } = defineProps<{
     graphSlug: string | null;
     graphId: string | null;
     graphLabel: string | null;
-    modelValue: LiteralClause | null;
+    modelValue: LiteralClause[];
 }>();
 
 const emit = defineEmits<{
-    (event: "update:modelValue", clauses: LiteralClause[]): void;
-    (event: "remove"): void;
-    (event: "close"): void;
+    (event: typeof UPDATE_MODEL_VALUE_EVENT, clauses: LiteralClause[]): void;
+    (event: typeof REMOVE_EVENT): void;
+    (event: typeof CLOSE_EVENT): void;
 }>();
 
 const { $gettext } = useGettext();
 
 const selectedRange = ref<[Date, Date]>([new Date(), new Date()]);
-const selectedNodeAliases = ref<string[]>([]);
+const selectedNodeAliases = ref<string[]>(nodeAliasesFromClauses(modelValue));
 const graphNodes = ref<TimeFilterNodeSummary[]>([]);
 const isLoadingNodes = ref(false);
 const isLoadingBounds = ref(false);
 const noBoundsData = ref(false);
 const hasGraphDateData = ref(true);
-const isUserInitiated = ref(false);
+const isUserInitiated = ref(modelValue.length > 0);
 const sliderBounds = ref<[Date, Date]>([new Date(), new Date()]);
 
 const isLoading = computed<boolean>(
@@ -86,8 +89,13 @@ const isSingleDay = computed<boolean>(() =>
     dayjs(sliderBounds.value[0]).isSame(sliderBounds.value[1], "day"),
 );
 
-const fromYear = computed<number>(() => selectedRange.value[0].getFullYear());
-const toYear = computed<number>(() => selectedRange.value[1].getFullYear());
+// The slider's handles may be dragged past each other; dates read in order.
+const sortedRange = computed<[Date, Date]>(() =>
+    normalizeRange(selectedRange.value[0], selectedRange.value[1]),
+);
+
+const fromYear = computed<number>(() => sortedRange.value[0].getFullYear());
+const toYear = computed<number>(() => sortedRange.value[1].getFullYear());
 const isHistoricalFrom = computed<boolean>(
     () => fromYear.value < HISTORICAL_CUTOFF_YEAR,
 );
@@ -104,25 +112,33 @@ const noBoundsDataMessage = computed<string>(() => {
     return $gettext("This resource type has no date data.");
 });
 
-watch(
-    [() => graphSlug, selectedRange, selectedNodeAliases, isUserInitiated],
-    () => emit("update:modelValue", buildClauses()),
-    { immediate: true },
-);
-
+// Only the user's own edits are emitted. Echoing a change that arrived through
+// modelValue back out would re-create a filter the parent had just cleared.
+// Clauses the current selection already builds, such as those edits coming
+// back, have nothing to restore.
 watch(
     () => modelValue,
-    (clause) => {
-        if (clause) isUserInitiated.value = true;
+    (clauses) => {
+        if (isEqual(clauses, buildClauses())) {
+            return;
+        }
+        isUserInitiated.value = clauses.length > 0;
+
+        const restoredNodeAliases = nodeAliasesFromClauses(clauses);
+        if (!isEqual(restoredNodeAliases, selectedNodeAliases.value)) {
+            selectedNodeAliases.value = restoredNodeAliases;
+        }
 
         const [boundsStart, boundsEnd] = sliderBounds.value;
+        const firstClause = clauses[0];
 
         let from: Date;
         let to: Date;
 
-        if (clause) {
-            from = parseStoredDate(clause.operands[0]?.value) ?? boundsStart;
-            to = parseStoredDate(clause.operands[1]?.value) ?? from;
+        if (firstClause) {
+            from =
+                parseStoredDate(firstClause.operands[0]?.value) ?? boundsStart;
+            to = parseStoredDate(firstClause.operands[1]?.value) ?? from;
         } else {
             from = boundsStart;
             to = boundsEnd;
@@ -142,8 +158,10 @@ watch(
 watch(
     () => graphId,
     async (incomingGraphId, previousGraphId) => {
-        selectedNodeAliases.value = [];
-        isUserInitiated.value = false;
+        if (previousGraphId) {
+            selectedNodeAliases.value = [];
+            isUserInitiated.value = false;
+        }
 
         if (!incomingGraphId) {
             graphNodes.value = [];
@@ -161,8 +179,8 @@ watch(
             getNodesForGraphId(incomingGraphId),
             loadBoundsForAliases(
                 incomingGraphId,
-                [],
-                Boolean(previousGraphId) || !modelValue,
+                selectedNodeAliases.value,
+                Boolean(previousGraphId) || modelValue.length === 0,
             ),
         ]);
 
@@ -215,23 +233,35 @@ function buildClauses(): LiteralClause[] {
     const nodeAliases = selectedNodeAliases.value;
 
     if (nodeAliases.length === 0) {
-        return [buildDateSearchClause(graphSlug, "BETWEEN", from, to)];
+        return [buildTimeFilterClause(graphSlug, null, from, to)];
     }
     return nodeAliases.map((alias) =>
-        buildNodeDateSearchClause(graphSlug, alias, "BETWEEN", from, to),
+        buildTimeFilterClause(graphSlug, alias, from, to),
     );
+}
+
+function nodeAliasesFromClauses(clauses: LiteralClause[]): string[] {
+    return clauses
+        .filter((clause) => clause.subject.type === ClauseSubjectTypeToken.NODE)
+        .map((clause) => clause.subject.node_alias);
+}
+
+function emitClauses(): void {
+    emit(UPDATE_MODEL_VALUE_EVENT, buildClauses());
 }
 
 function onDateFromChange(value: unknown): void {
     if (!(value instanceof Date)) return;
     isUserInitiated.value = true;
-    selectedRange.value = normalizeRange(value, selectedRange.value[1]);
+    selectedRange.value = normalizeRange(value, sortedRange.value[1]);
+    emitClauses();
 }
 
 function onDateToChange(value: unknown): void {
     if (!(value instanceof Date)) return;
     isUserInitiated.value = true;
-    selectedRange.value = normalizeRange(selectedRange.value[0], value);
+    selectedRange.value = normalizeRange(sortedRange.value[0], value);
+    emitClauses();
 }
 
 function onYearFromChange(year: number | null): void {
@@ -239,17 +269,16 @@ function onYearFromChange(year: number | null): void {
     isUserInitiated.value = true;
     selectedRange.value = normalizeRange(
         startOfYear(year),
-        selectedRange.value[1],
+        sortedRange.value[1],
     );
+    emitClauses();
 }
 
 function onYearToChange(year: number | null): void {
     if (year === null) return;
     isUserInitiated.value = true;
-    selectedRange.value = normalizeRange(
-        selectedRange.value[0],
-        endOfYear(year),
-    );
+    selectedRange.value = normalizeRange(sortedRange.value[0], endOfYear(year));
+    emitClauses();
 }
 
 function onSliderUpdate(offsets: [number, number]): void {
@@ -258,12 +287,14 @@ function onSliderUpdate(offsets: [number, number]): void {
         addDays(sliderBounds.value[0], offsets[0]),
         addDays(sliderBounds.value[0], offsets[1]),
     ];
+    emitClauses();
 }
 
 async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
     isUserInitiated.value = true;
     selectedNodeAliases.value = aliases;
     if (graphId) await loadBoundsForAliases(graphId, aliases, true);
+    emitClauses();
 }
 </script>
 
@@ -275,12 +306,12 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                 {{ $gettext("Time Filter") }}
             </h3>
             <Button
-                :label="$gettext('Close')"
                 icon="pi pi-times"
                 icon-pos="left"
-                :text="true"
                 class="time-filter-close-btn"
-                @click="emit('close')"
+                :label="$gettext('Close')"
+                :text="true"
+                @click="emit(CLOSE_EVENT)"
             />
         </div>
 
@@ -309,8 +340,8 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
             <Message
                 v-if="noBoundsData"
                 severity="warn"
-                :closable="false"
                 class="time-filter-no-data-message"
+                :closable="false"
             >
                 {{ noBoundsDataMessage }}
             </Message>
@@ -332,8 +363,8 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                     <div class="time-filter-calendar-row">
                         <InputNumber
                             v-if="isHistoricalFrom"
-                            :model-value="fromYear"
                             class="time-filter-year-input"
+                            :model-value="fromYear"
                             :placeholder="$gettext('From year...')"
                             :use-grouping="false"
                             :disabled="isSingleDay"
@@ -341,20 +372,20 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                         />
                         <DatePicker
                             v-else
-                            :model-value="selectedRange[0]"
                             class="time-filter-date-picker"
-                            :placeholder="$gettext('From...')"
-                            :show-icon="true"
                             icon-display="input"
                             date-format="M d, yy"
+                            :model-value="sortedRange[0]"
+                            :placeholder="$gettext('From...')"
+                            :show-icon="true"
                             :disabled="isSingleDay"
                             @update:model-value="onDateFromChange"
                         />
 
                         <InputNumber
                             v-if="isHistoricalTo"
-                            :model-value="toYear"
                             class="time-filter-year-input"
+                            :model-value="toYear"
                             :placeholder="$gettext('To year...')"
                             :use-grouping="false"
                             :disabled="isSingleDay"
@@ -362,12 +393,12 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
                         />
                         <DatePicker
                             v-else
-                            :model-value="selectedRange[1]"
                             class="time-filter-date-picker"
-                            :placeholder="$gettext('To...')"
-                            :show-icon="true"
                             icon-display="input"
                             date-format="M d, yy"
+                            :model-value="sortedRange[1]"
+                            :placeholder="$gettext('To...')"
+                            :show-icon="true"
                             :disabled="isSingleDay"
                             @update:model-value="onDateToChange"
                         />
@@ -394,8 +425,8 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 0.75rem;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    padding-block-end: 0.75rem;
+    border-block-end: 0.125rem solid var(--p-content-border-color);
 }
 
 .time-filter-title {
@@ -432,8 +463,8 @@ async function onNodeSelectionUpdate(aliases: string[]): Promise<void> {
 
 .time-filter-section-heading {
     margin: 0;
-    padding-bottom: 0.5rem;
-    border-bottom: 0.125rem solid var(--p-content-border-color);
+    padding-block-end: 0.5rem;
+    border-block-end: 0.125rem solid var(--p-content-border-color);
     font-weight: 600;
     font-size: 1.25rem;
     color: var(--p-text-color);

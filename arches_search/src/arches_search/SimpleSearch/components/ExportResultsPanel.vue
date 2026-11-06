@@ -6,8 +6,6 @@ import Button from "openvue/button";
 import InputText from "openvue/inputtext";
 import RadioButton from "openvue/radiobutton";
 
-import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
-
 import {
     EXPORT_CONCEPTS_AS_LABELS,
     EXPORT_CONCEPTS_AS_UUIDS,
@@ -26,27 +24,27 @@ import type {
 const CLOSE_EVENT = "close" as const;
 const EXPORT_EVENT = "export" as const;
 
-const { hasSingleGraph = true, exportState = EXPORT_STATE_IDLE } = defineProps<{
+const {
+    hasSingleGraph = true,
+    exportState = EXPORT_STATE_IDLE,
+    resultCount,
+} = defineProps<{
     // Both Bulk Data Manager exporters operate on a single resource model.
     hasSingleGraph?: boolean;
     exportState?: ExportState;
+    resultCount: number;
 }>();
 
 const emit = defineEmits<{
-    (event: "export", request: ExportRequest): void;
-    (event: "close"): void;
+    (event: typeof EXPORT_EVENT, request: ExportRequest): void;
+    (event: typeof CLOSE_EVENT): void;
 }>();
 
 const { $gettext } = useGettext();
-const { searchResults } = useSearchFilters();
 
 const selectedFormat = ref<ExportFormat>(EXPORT_FORMAT_BRANCH_EXCEL);
 const exportConceptsAs = ref<ExportConceptsAs>(EXPORT_CONCEPTS_AS_LABELS);
 const filename = ref("search_export");
-
-const totalResults = computed<number>(
-    () => searchResults.value.pagination?.total_results ?? 0,
-);
 
 const formatOptions = computed(() => [
     {
@@ -63,11 +61,18 @@ const isExporting = computed<boolean>(
     () => exportState === EXPORT_STATE_PENDING,
 );
 
+const exportButtonLabel = computed<string>(() => {
+    if (isExporting.value) {
+        return $gettext("Exporting...");
+    }
+    return $gettext("Export");
+});
+
 const canExport = computed<boolean>(
     () =>
         hasSingleGraph &&
         !isExporting.value &&
-        totalResults.value > 0 &&
+        resultCount > 0 &&
         filename.value.trim() !== "",
 );
 
@@ -113,7 +118,7 @@ function onExport(): void {
                 <span>
                     {{
                         $gettext("%{count} results will be exported", {
-                            count: String(totalResults),
+                            count: String(resultCount),
                         })
                     }}
                 </span>
@@ -143,8 +148,8 @@ function onExport(): void {
                 <label
                     v-for="option in formatOptions"
                     :key="option.value"
-                    :for="`export-format-${option.value}`"
                     class="format-option"
+                    :for="`export-format-${option.value}`"
                     :class="{ selected: selectedFormat === option.value }"
                 >
                     <span class="format-option-header">
@@ -215,11 +220,7 @@ function onExport(): void {
             <div class="export-actions">
                 <Button
                     icon="pi pi-download"
-                    :label="
-                        isExporting
-                            ? $gettext('Exporting...')
-                            : $gettext('Export')
-                    "
+                    :label="exportButtonLabel"
                     :loading="isExporting"
                     :disabled="!canExport"
                     @click="onExport"

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import AutoComplete from "openvue/autocomplete";
@@ -15,7 +14,10 @@ import { useTermSuggestions } from "@/arches_search/SimpleSearch/composables/use
 import { getTermKind } from "@/arches_search/SimpleSearch/components/TermFilter/suggestion-utils.ts";
 
 import { TERM_KIND_RECORD } from "@/arches_search/SimpleSearch/types.ts";
-import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    SerializedTerm,
+    TermSuggestion,
+} from "@/arches_search/SimpleSearch/types.ts";
 
 interface TermSuggestionSelectEvent {
     value: TermSuggestion;
@@ -44,54 +46,36 @@ const {
     markSuggestionHandled,
 } = useTermSuggestions();
 
-const selectedTerms = ref<Array<TermSuggestion>>([]);
-
-watch(
-    selectedTerms,
-    (selectedTermValues, previousSelectedTerms) => {
-        const previousTermTexts = new Set(
-            previousSelectedTerms.map((term) => term.text),
-        );
-        const selectedTermTexts = new Set(
-            selectedTermValues.map((term) => term.text),
-        );
-
-        for (const previousTerm of previousSelectedTerms) {
-            if (!selectedTermTexts.has(previousTerm.text)) {
-                searchFilters.clearTermFilter(termKey(previousTerm.text));
-            }
-        }
-
-        for (const selectedTerm of selectedTermValues) {
-            if (!previousTermTexts.has(selectedTerm.text)) {
-                const termKind = getTermKind(selectedTerm);
-                const isRecordTerm = termKind === TERM_KIND_RECORD;
-                searchFilters.setTermFilter(
-                    termKey(selectedTerm.text),
-                    selectedTerm.text,
-                    () => removeTerm(selectedTerm.text),
-                    undefined,
-                    termKind,
-                    isRecordTerm ? selectedTerm.graph_icon : undefined,
-                );
-            }
-        }
-    },
-    { deep: true },
-);
-
 function termKey(termValue: string): string {
     return `${filterKey}:${termValue}`;
 }
 
-function removeTerm(termValue: string): void {
-    selectedTerms.value = selectedTerms.value.filter(
-        (term) => term.text !== termValue,
+function addTerm(suggestion: TermSuggestion): void {
+    const id = termKey(suggestion.text);
+    const isAlreadySelected = searchFilters.activeFilters.value.some(
+        (activeFilter) => activeFilter.id === id,
     );
+    if (isAlreadySelected) {
+        return;
+    }
+
+    const term: SerializedTerm = {
+        id,
+        text: suggestion.text,
+        inverted: false,
+    };
+    const termKind = getTermKind(suggestion);
+    if (termKind) {
+        term.termKind = termKind;
+    }
+    if (termKind === TERM_KIND_RECORD && suggestion.graph_icon) {
+        term.icon = suggestion.graph_icon;
+    }
+    searchFilters.setTermFilter(term);
 }
 
 function onSelect(event: TermSuggestionSelectEvent): void {
-    selectedTerms.value = [...selectedTerms.value, event.value];
+    addTerm(event.value);
     inputText.value = "";
     markSuggestionHandled();
 }
@@ -173,11 +157,11 @@ function submitSearch(): void {
             </AutoComplete>
         </span>
         <Button
-            :label="$gettext('Search')"
             icon="pi pi-search"
             icon-pos="left"
             class="search-button"
             type="button"
+            :label="$gettext('Search')"
             @click="submitSearch"
         />
     </div>

@@ -1,5 +1,16 @@
 import dayjs from "dayjs";
 
+export function parseStoredDate(value: unknown): Date | null {
+    if (!value) {
+        return null;
+    }
+    const parsed = dayjs(String(value));
+    if (!parsed.isValid()) {
+        return null;
+    }
+    return parsed.toDate();
+}
+
 export function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
 }

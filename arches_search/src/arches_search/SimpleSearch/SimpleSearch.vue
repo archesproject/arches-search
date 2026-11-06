@@ -8,12 +8,12 @@ import {
     watchEffect,
 } from "vue";
 import dayjs from "dayjs";
+import { useRouter } from "vue-router";
 import { useGettext } from "vue3-gettext";
 
 import Splitter from "openvue/splitter";
 import SplitterPanel from "openvue/splitterpanel";
 import Toast from "openvue/toast";
-import { useToast } from "openvue/usetoast";
 
 import SearchResults from "@/arches_search/SearchResults/SearchResults.vue";
 import ActiveFilters from "@/arches_search/SimpleSearch/components/ActiveFilters.vue";
@@ -27,38 +27,36 @@ import TermFilter from "@/arches_search/SimpleSearch/components/TermFilter/TermF
 import MapFilterPanel from "@/arches_search/SimpleSearch/components/MapFilterPanel.vue";
 import TimeFilter from "@/arches_search/SimpleSearch/components/TimeFilter/TimeFilter.vue";
 
+import { useToast } from "openvue/usetoast";
 import { getGraphs } from "@/arches_search/AdvancedSearch/api.ts";
 import {
     GraphScopeToken,
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
-import {
-    fetchNodeFilterConfig,
-    startSearchResultsExport,
-} from "@/arches_search/SimpleSearch/api.ts";
-import {
-    buildAttributeFilterQuery,
-    formatAttributeFilterValue,
-} from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
-import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
+import { routeNames } from "@/arches_search/routes.ts";
+import { formatAttributeFilterValue } from "@/arches_search/SimpleSearch/components/attribute-filters/registry.ts";
+import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import {
     ACTIVE_FILTER_KIND_ATTRIBUTE,
     ACTIVE_FILTER_KIND_MAP,
     ACTIVE_FILTER_KIND_RESOURCE_TYPE,
     ACTIVE_FILTER_KIND_TIME,
+    ADVANCED_QUERY_KEY,
     EXPORT_STATE_IDLE,
-    EXPORT_STATE_PENDING,
-    RESULTS_SORT_CREATED_TIME,
-    RESULTS_SORT_NAME,
-    RESULTS_SORT_NODE_PREFIX,
-    RESULTS_SORT_RELEVANCE,
     TERM_FILTER_KEY,
+    TIME_FILTER_QUERY_KEY,
 } from "@/arches_search/SimpleSearch/types.ts";
+import { useResultsExport } from "@/arches_search/SimpleSearch/composables/useResultsExport.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 import { applyPendingSearch } from "@/arches_search/SimpleSearch/utils/apply-pending-search.ts";
+import {
+    sortDirectionForSpecs,
+    sortFieldForSpecs,
+    sortSpecForField,
+} from "@/arches_search/SimpleSearch/utils/results-sort.ts";
 import { parseSearchDefinition } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
-import { parseStoredDate } from "@/arches_search/AdvancedSearch/utils/advanced-search-payload-builder.ts";
+import { parseStoredDate } from "@/arches_search/SimpleSearch/components/TimeFilter/date-utils.ts";
 
 import type { FeatureCollection } from "geojson";
 import type {
@@ -68,12 +66,10 @@ import type {
 import type {
     ActiveFilter,
     ExportRequest,
-    ExportState,
     NodeFilterConfigNode,
-    ResourceType,
     ResultsSortDirection,
     ResultsSortField,
-    SortSpec,
+    SearchDefinition,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 // Kept out of the search page's own code, as most visits never open it and it
@@ -82,34 +78,45 @@ const RelationshipGraph = defineAsyncComponent(
     () => import("@/arches_search/RelationshipGraph/RelationshipGraph.vue"),
 );
 
-const TIME_FILTER_QUERY_KEY = "timeFilter";
 const INITIAL_RESULTS_PAGE = 1;
 const RESULTS_PANEL_MIN_SIZE = 20;
+const UNREPRESENTED_QUERIES_FILTER_ID = "unrepresentedQueries";
 
 const { $gettext } = useGettext();
 const toast = useToast();
+const router = useRouter();
 
 const {
     activeFilters,
     activeGraphs,
+    advancedQuery,
     applySearchDefinition,
+    attributeFilterValues,
     clearAll,
+    clearAttributeFilter,
     clearMapFilter,
     clearQuery,
-    clearTermFilter,
     getExportPayload,
+    getSearchDefinition,
     isSearching,
     mapFilter,
+    nodeFilterConfigNodes,
     queries,
+    savedSearchName,
     search,
     searchResults,
+    setAdvancedQuery,
+    setAttributeFilter,
     setGraphsBySlug,
     setMapFilter,
     setQuery,
     setSort,
     setTermFilter,
+    singleActiveGraph,
+    sort,
     toggleGraph,
-} = provideSearchFilters();
+    unrepresentedQueryKeys,
+} = useSearchFilters();
 
 const {
     isIdle,
@@ -145,56 +152,24 @@ const {
     onSplitterResize,
     onSplitterResizeEnd,
 } = useSidePanel();
+const { exportState, exportResults } = useResultsExport();
 
-const sortField = ref<ResultsSortField | null>(RESULTS_SORT_RELEVANCE);
-const sortDirection = ref<ResultsSortDirection>("asc");
-const exportState = ref<ExportState>(EXPORT_STATE_IDLE);
-
-// The export runs in the background; the user hears about its completion
-// through an Arches notification, so this only reports whether it started.
-async function onExportResults(exportRequest: ExportRequest): Promise<void> {
-    exportState.value = EXPORT_STATE_PENDING;
-    try {
-        await startSearchResultsExport({
-            ...getExportPayload(),
-            exportRequest,
-        });
-        toast.add({
-            severity: "success",
-            life: 3000,
-            summary: $gettext("Your export has started."),
-            detail: $gettext(
-                "You will be notified when it is ready to download.",
-            ),
-        });
-    } catch (error) {
-        toast.add({
-            severity: "error",
-            life: 5000,
-            summary: $gettext("Export could not be started."),
-            detail: error instanceof Error ? error.message : undefined,
-        });
-    } finally {
-        exportState.value = EXPORT_STATE_IDLE;
-    }
-}
-
-watch(isExportResultsOpen, (isOpen) => {
-    if (!isOpen) {
-        exportState.value = EXPORT_STATE_IDLE;
-    }
-});
 const graphModels = ref<GraphModel[]>([]);
-const filterValues = ref<Record<string, unknown>>({});
-const nodeFilterConfigNodes = ref<NodeFilterConfigNode[]>([]);
-const savedSearchName = ref<string | null>(null);
 
-const isSingleGraphSelected = computed<boolean>(
-    () => activeGraphs.value.length === 1,
+const searchDefinition = computed<SearchDefinition>(() =>
+    getSearchDefinition(),
 );
 
-const singleActiveGraph = computed<ResourceType | null>(() =>
-    isSingleGraphSelected.value ? activeGraphs.value[0] : null,
+const sortField = computed<ResultsSortField>(() =>
+    sortFieldForSpecs(sort.value),
+);
+
+const sortDirection = computed<ResultsSortDirection>(() =>
+    sortDirectionForSpecs(sort.value),
+);
+
+const isSingleGraphSelected = computed<boolean>(
+    () => singleActiveGraph.value !== null,
 );
 
 const activeGraphId = computed<string | null>(
@@ -217,28 +192,20 @@ const sortableNodeFilterConfigNodes = computed<NodeFilterConfigNode[]>(() =>
     ),
 );
 
-const activeGraphSlug = computed<string | null>(() => {
-    if (!activeGraphId.value) {
-        return null;
-    }
-
-    const matchingGraph = graphModels.value.find((graphModel) => {
-        return graphModel.graphid === activeGraphId.value;
-    });
-
-    return matchingGraph?.slug ?? null;
-});
+const activeGraphSlug = computed<string | null>(
+    () => singleActiveGraph.value?.slug ?? null,
+);
 
 const timeFilterQuery = computed(
     () => queries.value.get(TIME_FILTER_QUERY_KEY) ?? null,
 );
 
-const hasTimeFilter = computed<boolean>(
-    () => (timeFilterQuery.value?.clauses.length ?? 0) > 0,
+const timeFilterClauses = computed<LiteralClause[]>(
+    () => timeFilterQuery.value?.clauses ?? [],
 );
 
-const selectedTimeFilterClause = computed<LiteralClause | null>(
-    () => timeFilterQuery.value?.clauses[0] ?? null,
+const hasTimeFilter = computed<boolean>(
+    () => timeFilterClauses.value.length > 0,
 );
 
 // The chip row surfaces every active filter, but only term/resource-type
@@ -265,8 +232,8 @@ const resourceTypeActiveFilters = computed<ActiveFilter[]>(() =>
 );
 
 const timeActiveFilter = computed<ActiveFilter | null>(() => {
-    const clause = selectedTimeFilterClause.value;
-    if (!hasTimeFilter.value || !clause) {
+    const clause = timeFilterClauses.value[0];
+    if (!clause) {
         return null;
     }
 
@@ -310,7 +277,7 @@ const attributeActiveFilters = computed<ActiveFilter[]>(() => {
 
         const text = formatAttributeFilterValue(
             node,
-            filterValues.value[node.node_alias],
+            attributeFilterValues.value[node.node_alias],
         );
         if (!text) {
             return [];
@@ -331,28 +298,17 @@ const attributeActiveFilters = computed<ActiveFilter[]>(() => {
     });
 });
 
-const unrepresentedQueryKeys = computed<string[]>(() => {
-    const representedKeys = new Set<string>([
-        TIME_FILTER_QUERY_KEY,
-        ...attributeActiveFilters.value.map((filter) => filter.id),
-    ]);
-
-    return [...queries.value.keys()].filter(
-        (filterKey) => !representedKeys.has(filterKey),
-    );
-});
-
-const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
+const unrepresentedQueriesActiveFilter = computed<ActiveFilter | null>(() => {
     if (unrepresentedQueryKeys.value.length === 0) {
         return null;
     }
 
     return {
-        id: "advancedQuery",
-        text: savedSearchName.value ?? $gettext("Advanced query"),
+        id: UNREPRESENTED_QUERIES_FILTER_ID,
+        text: savedSearchName.value ?? $gettext("Saved filters"),
         clear: () => {
             for (const filterKey of unrepresentedQueryKeys.value) {
-                clearAttributeFilter(filterKey);
+                clearQuery(filterKey);
             }
         },
         inverted: false,
@@ -362,51 +318,73 @@ const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
     };
 });
 
-const allActiveFilters = computed<ActiveFilter[]>(() => [
-    ...activeFilters.value,
-    ...resourceTypeActiveFilters.value,
-    ...(timeActiveFilter.value ? [timeActiveFilter.value] : []),
-    ...(mapActiveFilter.value ? [mapActiveFilter.value] : []),
-    ...attributeActiveFilters.value,
-    ...(advancedQueryActiveFilter.value
-        ? [advancedQueryActiveFilter.value]
-        : []),
-]);
+const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
+    const appliedQuery = advancedQuery.value;
+    if (!appliedQuery) {
+        return null;
+    }
 
-watch(
-    () => activeGraphs.value,
-    (graphs) => {
-        // Drop any attribute-filter queries from the previously active graph.
-        const nextGraphSlug = graphs.length === 1 ? graphs[0].slug : null;
-        for (const node of nodeFilterConfigNodes.value) {
-            if (
-                queries.value.get(node.node_alias)?.graph_slug !== nextGraphSlug
-            ) {
-                clearQuery(node.node_alias);
-            }
-        }
-        filterValues.value = {};
+    const graphName =
+        graphModels.value.find(
+            (graphModel) => graphModel.slug === appliedQuery.graph_slug,
+        )?.name ?? appliedQuery.graph_slug;
+    const isModelSearched =
+        activeGraphs.value.length === 0 ||
+        activeGraphs.value.some(
+            (graph) => graph.slug === appliedQuery.graph_slug,
+        );
 
-        if (graphs.length !== 1) {
-            nodeFilterConfigNodes.value = [];
-            // Attribute/time filters are single-graph features and are
-            // unreachable outside the exactly-one-selected state; clear the
-            // time-filter query explicitly rather than relying on
-            // TimeFilter.vue's own prop watcher, since closeSidePanel()
-            // below unmounts it synchronously (and it may already be
-            // unmounted), so that watcher isn't guaranteed to run.
-            clearQuery(TIME_FILTER_QUERY_KEY);
+    let inactiveNote: string | undefined;
+    if (!isModelSearched) {
+        inactiveNote = $gettext(
+            "Not applied while %{model} is not selected. Select it to apply the advanced query.",
+            { model: graphName },
+        );
+    }
 
-            if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
-                closeSidePanel();
-            }
+    return {
+        id: ADVANCED_QUERY_KEY,
+        text: graphName,
+        clear: () => setAdvancedQuery(null),
+        inverted: false,
+        kind: ACTIVE_FILTER_KIND_ATTRIBUTE,
+        category: $gettext("Advanced search"),
+        icon: "pi pi-sliders-h",
+        onEdit: openAdvancedSearch,
+        inactiveNote,
+    };
+});
 
-            return;
-        }
-
-        void loadNodeFilterConfig(graphs[0].id as string);
-    },
+const allActiveFilters = computed<ActiveFilter[]>(() =>
+    [
+        ...activeFilters.value,
+        ...resourceTypeActiveFilters.value,
+        timeActiveFilter.value,
+        mapActiveFilter.value,
+        ...attributeActiveFilters.value,
+        unrepresentedQueriesActiveFilter.value,
+        advancedQueryActiveFilter.value,
+    ].filter(
+        (activeFilter): activeFilter is ActiveFilter => activeFilter !== null,
+    ),
 );
+
+watch(isExportResultsOpen, (isOpen) => {
+    if (!isOpen) {
+        exportState.value = EXPORT_STATE_IDLE;
+    }
+});
+
+// Attribute and time filters are single-graph features, so their panels
+// close once more or fewer than one resource model is selected.
+watch(singleActiveGraph, (graph) => {
+    if (graph) {
+        return;
+    }
+    if (isTimeFilterOpen.value || isAttributeFiltersOpen.value) {
+        closeSidePanel();
+    }
+});
 
 watchEffect(() => {
     void initializeSearch();
@@ -415,10 +393,9 @@ watchEffect(() => {
 onMounted(() => {
     const pendingSearch = usePendingSearchStore().consume();
     if (pendingSearch) {
-        savedSearchName.value = pendingSearch.searchName ?? null;
         applyPendingSearch(pendingSearch, {
-            applySearchDefinition,
-            clearTermFilter,
+            applySearchDefinition: applySavedSearch,
+            clearAll,
             openMapFilter,
             setGraphsBySlug,
             setMapFilter,
@@ -427,36 +404,8 @@ onMounted(() => {
     }
 });
 
-async function loadNodeFilterConfig(graphId: string): Promise<void> {
-    try {
-        const config = await fetchNodeFilterConfig(graphId);
-        nodeFilterConfigNodes.value = config.nodes;
-    } catch (err) {
-        console.error("[SimpleSearch] error loading filter config:", err);
-        nodeFilterConfigNodes.value = [];
-    }
-}
-
-// Each attribute-filter widget emits a datatype-specific value; the registry
-// turns it into a query (or null to clear). Query-shape logic lives in the
-// per-datatype builders, so this handler stays datatype-agnostic.
-function onAttributeFilterChange(nodeAlias: string, value: unknown): void {
-    filterValues.value = { ...filterValues.value, [nodeAlias]: value };
-
-    const node = nodeFilterConfigNodes.value.find(
-        (candidate) => candidate.node_alias === nodeAlias,
-    );
-    const graphSlug = activeGraphSlug.value;
-    if (!node || !graphSlug) {
-        return;
-    }
-
-    const query = buildAttributeFilterQuery(node, value, graphSlug);
-    if (query) {
-        setQuery(nodeAlias, query);
-    } else {
-        clearQuery(nodeAlias);
-    }
+function onExportResults(exportRequest: ExportRequest): void {
+    void exportResults({ ...getExportPayload(), exportRequest });
 }
 
 async function initializeSearch(): Promise<void> {
@@ -480,50 +429,16 @@ function onRequestPage(page: number): void {
     search(page);
 }
 
-function onSortDirectionUpdate(nextDirection: ResultsSortDirection): void {
-    sortDirection.value = nextDirection;
-    setSort(sortSpecForValue(sortField.value, nextDirection));
-}
-
 function onSortFieldUpdate(nextField: ResultsSortField | null): void {
-    sortField.value = nextField;
-    setSort(sortSpecForValue(nextField, sortDirection.value));
+    setSort(
+        sortSpecForField(nextField, sortDirection.value, activeGraphSlug.value),
+    );
 }
 
-function sortSpecForValue(
-    field: ResultsSortField | null,
-    direction: ResultsSortDirection,
-): SortSpec[] {
-    switch (field) {
-        case RESULTS_SORT_NAME:
-            return [{ type: "primary_name", direction }];
-        case RESULTS_SORT_CREATED_TIME:
-            return [{ type: "created_time", direction }];
-        case RESULTS_SORT_RELEVANCE:
-        case null:
-            return [];
-        default: {
-            const nodeSort = nodeSortSpecForField(field, direction);
-            return nodeSort ? [nodeSort] : [];
-        }
-    }
-}
-
-function nodeSortSpecForField(
-    field: ResultsSortField,
-    direction: ResultsSortDirection,
-): SortSpec | null {
-    const graphSlug = activeGraphSlug.value;
-    if (!graphSlug || !field.startsWith(RESULTS_SORT_NODE_PREFIX)) {
-        return null;
-    }
-
-    return {
-        type: "NODE",
-        graph_slug: graphSlug,
-        node_alias: field.slice(RESULTS_SORT_NODE_PREFIX.length),
-        direction,
-    };
+function onSortDirectionUpdate(nextDirection: ResultsSortDirection): void {
+    setSort(
+        sortSpecForField(sortField.value, nextDirection, activeGraphSlug.value),
+    );
 }
 
 function onTimeFilterUpdate(clauses: LiteralClause[]): void {
@@ -573,26 +488,31 @@ function formatTimeFilterLabel(clause: LiteralClause): string {
     return `${fromText} – ${dayjs(to).format("MMM D, YYYY")}`;
 }
 
-function clearAttributeFilter(nodeAlias: string): void {
-    clearQuery(nodeAlias);
-    const { [nodeAlias]: _removedValue, ...remainingFilterValues } =
-        filterValues.value;
-    filterValues.value = remainingFilterValues;
-}
-
-function onClearAll(): void {
-    clearAll();
-    filterValues.value = {};
-    savedSearchName.value = null;
+function openAdvancedSearch(): void {
+    void router.push({ name: routeNames.advancedSearch });
 }
 
 async function onRunSavedQuery(
     queryDefinition: Record<string, unknown>,
     searchName: string,
 ): Promise<void> {
-    filterValues.value = {};
-    savedSearchName.value = searchName;
-    await applySearchDefinition(parseSearchDefinition(queryDefinition));
+    await applySavedSearch(parseSearchDefinition(queryDefinition), searchName);
+}
+
+async function applySavedSearch(
+    definition: SearchDefinition,
+    searchName: string | null,
+): Promise<void> {
+    try {
+        await applySearchDefinition(definition, searchName);
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("The saved search could not be opened."),
+            detail: (error as Error).message,
+        });
+    }
 }
 </script>
 
@@ -604,7 +524,7 @@ async function onRunSavedQuery(
 
         <ActiveFilters
             :active-filters="allActiveFilters"
-            @clear-all="onClearAll"
+            @clear-all="clearAll"
         />
 
         <div class="body">
@@ -620,6 +540,7 @@ async function onRunSavedQuery(
                     :min-size="RESULTS_PANEL_MIN_SIZE"
                 >
                     <ResultsToolbar
+                        :total-results="searchResults.pagination.total_results"
                         :sort-field="sortField"
                         :sort-direction="sortDirection"
                         :sortable-nodes="sortableNodeFilterConfigNodes"
@@ -643,7 +564,6 @@ async function onRunSavedQuery(
                     <SearchResults
                         :results="searchResults"
                         :is-searching="isSearching"
-                        :filter-text="''"
                         :graph-models="graphModels"
                         @request-page="onRequestPage"
                     />
@@ -680,7 +600,7 @@ async function onRunSavedQuery(
                             :graph-slug="activeGraphSlug"
                             :graph-id="activeGraphId"
                             :graph-label="activeGraphLabel"
-                            :model-value="selectedTimeFilterClause"
+                            :model-value="timeFilterClauses"
                             @update:model-value="onTimeFilterUpdate"
                             @remove="onRemoveTimeFilter"
                             @close="closeSidePanel()"
@@ -688,12 +608,13 @@ async function onRunSavedQuery(
                         <AttributeFilters
                             v-else-if="isAttributeFiltersActive"
                             :nodes="filterableNodeFilterConfigNodes"
-                            :values="filterValues"
-                            @update:value="onAttributeFilterChange"
+                            :values="attributeFilterValues"
+                            @update:value="setAttributeFilter"
                             @close="closeSidePanel()"
                         />
                         <SavedSearchPanel
                             v-else-if="isSavedSearchesActive"
+                            :definition-to-save="searchDefinition"
                             @run-query="onRunSavedQuery"
                             @close="closeSidePanel()"
                         />
@@ -701,6 +622,9 @@ async function onRunSavedQuery(
                             v-else-if="isExportResultsActive"
                             :has-single-graph="isSingleGraphSelected"
                             :export-state="exportState"
+                            :result-count="
+                                searchResults.pagination.total_results
+                            "
                             @export="onExportResults"
                             @close="closeSidePanel()"
                         />

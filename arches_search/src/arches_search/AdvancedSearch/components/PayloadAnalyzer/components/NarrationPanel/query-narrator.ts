@@ -1,6 +1,13 @@
+import { isFeatureCollection } from "@/arches_search/AdvancedSearch/utils/query-builder.ts";
 import {
     ClauseSubjectTypeToken,
     LogicToken,
+    QUANTIFIER_ALL,
+    QUANTIFIER_ANY,
+    QUANTIFIER_NONE,
+    SEARCH_MODELS_DATE,
+    SEARCH_MODEL_GEOMETRY,
+    SEARCH_MODEL_TERM,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     AdvancedSearchFacet,
@@ -23,9 +30,6 @@ export type DescribeQueryOptions = {
     nodeMetadata?: NodeMetadataMap;
     resourceNames?: Readonly<Record<string, string>>;
 };
-
-const TRAVERSAL_ALL = "ALL" as const;
-const TRAVERSAL_NONE = "NONE" as const;
 
 export function describeAdvancedSearchQuery(
     options: DescribeQueryOptions,
@@ -174,6 +178,38 @@ export function describeAdvancedSearchQuery(
     }
 
     function describeGroupConditions(groupPayload: GroupPayload): string {
+        return joinConditionList(
+            describeConditionList(groupPayload),
+            groupPayload.logic,
+        );
+    }
+
+    // A nested group is put in parentheses so its ALL/ANY reads apart from
+    // the group around it, and is introduced by its label when it has one.
+    function describeNestedGroup(groupPayload: GroupPayload): string {
+        const conditionDescriptions = describeConditionList(groupPayload);
+        let description = joinConditionList(
+            conditionDescriptions,
+            groupPayload.logic,
+        );
+        if (!description) {
+            return "";
+        }
+        if (conditionDescriptions.length > 1) {
+            description = gettext("(%{conditions})", {
+                conditions: description,
+            });
+        }
+        if (groupPayload.label) {
+            description = gettext("%{label}: %{conditions}", {
+                label: groupPayload.label,
+                conditions: description,
+            });
+        }
+        return description;
+    }
+
+    function describeConditionList(groupPayload: GroupPayload): string[] {
         const conditionDescriptions: string[] = [];
 
         for (const clause of groupPayload.clauses) {
@@ -198,7 +234,7 @@ export function describeAdvancedSearchQuery(
 
             for (const nestedGroupPayload of groupPayload.groups.slice(1)) {
                 const nestedGroupDescription =
-                    describeGroupConditions(nestedGroupPayload);
+                    describeNestedGroup(nestedGroupPayload);
                 if (nestedGroupDescription) {
                     conditionDescriptions.push(nestedGroupDescription);
                 }
@@ -206,14 +242,14 @@ export function describeAdvancedSearchQuery(
         } else {
             for (const nestedGroupPayload of groupPayload.groups) {
                 const nestedGroupDescription =
-                    describeGroupConditions(nestedGroupPayload);
+                    describeNestedGroup(nestedGroupPayload);
                 if (nestedGroupDescription) {
                     conditionDescriptions.push(nestedGroupDescription);
                 }
             }
         }
 
-        return joinConditionList(conditionDescriptions, groupPayload.logic);
+        return conditionDescriptions;
     }
 
     function describeClause(clause: LiteralClause) {
@@ -228,7 +264,7 @@ export function describeAdvancedSearchQuery(
         }
 
         const rawOperator = clause.operator?.trim();
-        const fieldLabel = resolveClauseFieldLabel(clause).trim();
+        let fieldLabel = resolveClauseFieldLabel(clause).trim();
 
         let operatorLabel = "";
         if (rawOperator) {
@@ -239,6 +275,9 @@ export function describeAdvancedSearchQuery(
 
         if (!fieldLabel || !operatorLabel) {
             return "";
+        }
+        if (clause.quantifier === QUANTIFIER_ALL) {
+            fieldLabel = gettext("every %{field} value", { field: fieldLabel });
         }
 
         let subjectDatatype = "";
@@ -264,18 +303,22 @@ export function describeAdvancedSearchQuery(
 
         const valuePhrase = formatValueList(operandDescriptions).trim();
 
+        let condition = gettext("%{field} %{operator}", {
+            field: fieldLabel,
+            operator: operatorLabel,
+        });
         if (valuePhrase) {
-            return gettext("%{field} %{operator} %{value}", {
+            condition = gettext("%{field} %{operator} %{value}", {
                 field: fieldLabel,
                 operator: operatorLabel,
                 value: valuePhrase,
             });
         }
 
-        return gettext("%{field} %{operator}", {
-            field: fieldLabel,
-            operator: operatorLabel,
-        });
+        if (clause.quantifier === QUANTIFIER_NONE) {
+            return gettext("NOT (%{condition})", { condition });
+        }
+        return condition;
     }
 
     function resolveClauseFieldLabel(clause: LiteralClause) {
@@ -298,14 +341,22 @@ export function describeAdvancedSearchQuery(
             clause.subject.type === ClauseSubjectTypeToken.SEARCH_MODELS &&
             clause.subject.search_models.length > 0
         ) {
+            const searchModels = clause.subject.search_models;
             const graphLabel = resolveGraphLabel(subjectGraphSlug).trim();
-            if (graphLabel) {
-                return gettext("any field in %{graph}", {
+            if (searchModels.includes(SEARCH_MODEL_GEOMETRY)) {
+                return gettext("any location in %{graph}", {
                     graph: graphLabel,
                 });
             }
-
-            return gettext("any field");
+            if (
+                searchModels.some((model) => SEARCH_MODELS_DATE.includes(model))
+            ) {
+                return gettext("any date in %{graph}", { graph: graphLabel });
+            }
+            if (searchModels.includes(SEARCH_MODEL_TERM)) {
+                return gettext("any text in %{graph}", { graph: graphLabel });
+            }
+            return gettext("any field in %{graph}", { graph: graphLabel });
         }
 
         return "";
@@ -369,6 +420,10 @@ export function describeAdvancedSearchQuery(
 
         if (rawValue === null || typeof rawValue === "undefined") {
             return "";
+        }
+
+        if (isFeatureCollection(rawValue)) {
+            return gettext("the area drawn on the map");
         }
 
         if (Array.isArray(rawValue)) {
@@ -471,7 +526,7 @@ export function describeAdvancedSearchQuery(
         const hasInnerConditions = innerConditions.length > 0;
 
         if (relationship.is_inverse) {
-            if (traversalQuantifier === TRAVERSAL_ALL) {
+            if (traversalQuantifier === QUANTIFIER_ALL) {
                 if (hasInnerConditions) {
                     return gettext(
                         "that are the %{field} of all %{graph} instances where %{conditions}",
@@ -490,7 +545,7 @@ export function describeAdvancedSearchQuery(
                     },
                 );
             }
-            if (traversalQuantifier === TRAVERSAL_NONE) {
+            if (traversalQuantifier === QUANTIFIER_NONE) {
                 if (hasInnerConditions) {
                     return gettext(
                         "that are the %{field} of no %{graph} instances where %{conditions}",
@@ -525,7 +580,7 @@ export function describeAdvancedSearchQuery(
             });
         }
 
-        if (traversalQuantifier === TRAVERSAL_ALL) {
+        if (traversalQuantifier === QUANTIFIER_ALL) {
             if (hasInnerConditions) {
                 return gettext("that have only %{field} where %{conditions}", {
                     field: relationshipFieldLabel,
@@ -537,7 +592,7 @@ export function describeAdvancedSearchQuery(
             });
         }
 
-        if (traversalQuantifier === TRAVERSAL_NONE) {
+        if (traversalQuantifier === QUANTIFIER_NONE) {
             if (hasInnerConditions) {
                 return gettext("that have no %{field} where %{conditions}", {
                     field: relationshipFieldLabel,
@@ -582,8 +637,8 @@ function startsWithPredicateFragment(groupPayload: GroupPayload): boolean {
 }
 
 function resolveTraversalQuantifier(quantifier: string) {
-    if (quantifier === TRAVERSAL_ALL || quantifier === TRAVERSAL_NONE) {
+    if (quantifier === QUANTIFIER_ALL || quantifier === QUANTIFIER_NONE) {
         return quantifier;
     }
-    return "ANY";
+    return QUANTIFIER_ANY;
 }

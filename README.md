@@ -101,6 +101,14 @@ pip install arches-search
     npm run build_development
     ```
 
+## Database Settings
+
+Set PostgreSQL's `work_mem` to at least `16MB`. A relationship condition under
+ANY is checked against the set of related records, and Postgres can only
+compute that set once and hash it when it fits in `work_mem`. Below that, it
+falls back to checking every record separately, which is slow on large
+datasets.
+
 ## Developer Setup (for contributing to the Arches Search project)
 
 1. Download the arches-search repo:
@@ -375,6 +383,26 @@ class MyAppConfig(AppConfig):
 ```
 
 This is opt-in; a datatype with no normalizer just passes its value through untouched. Most scalar datatypes (numbers, booleans) don't need one at all.
+
+### A side-panel editor
+
+In the Advanced Search builder, a condition's value is edited inline with its
+node's widget. A datatype whose value does not fit in a row, like a date range
+or an area on a map, can name its own Vue component instead, with an
+`AdvancedSearchOperandComponent` row added via a migration:
+
+| Field           | Meaning                                                                                                                                  |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `datatype`      | The datatype it edits (one row per datatype).                                                                                            |
+| `slug`          | Shared by datatypes edited the same way (`date` and `edtf` are both `time`). The builder lets you switch between conditions of one slug. |
+| `label`, `icon` | The badge shown on the condition.                                                                                                        |
+| `component`     | Path of the Vue component that opens in the side panel, relative to the frontend source root.                                            |
+| `sets_operator` | The component chooses the operator itself, so the condition does not show its own operator select.                                       |
+
+The component takes the condition as a `clause` prop and emits
+`update:clause` with the edited clause. Arches Search registers its own time
+and map editors this way, for `date`, `edtf` and `geojson-feature-collection`.
+They are listed by `GET /api/advanced-search/operand-components`.
 
 ## Clause Subjects
 
@@ -1280,6 +1308,38 @@ DELETE /api/saved-searches/{savedsearchid}
 
 `scope` defaults to `mine`; `shared` lists searches shared with the requester
 by user or by group.
+
+A saved search's `query_definition` is the search as the interface built it:
+
+```json
+{
+    "terms": [{ "id": "termfilter:blue", "text": "blue", "inverted": false }],
+    "queries": {
+        "timeFilter": { "graph_slug": "...", "logic": "OR", "...": "..." },
+        "material": { "graph_slug": "...", "logic": "AND", "...": "..." },
+        "advancedQuery": { "graph_slug": "...", "logic": "AND", "...": "..." }
+    },
+    "graphSlugs": ["reference_and_sample_collection_item"],
+    "mapFilter": null,
+    "sort": [{ "type": "primary_name", "direction": "asc" }],
+    "includeRelated": true
+}
+```
+
+Each entry in `queries` is a group payload (see [Clause Subjects](#clause-subjects)):
+the time filter under `timeFilter`, each attribute filter under its node
+alias, and the Advanced Search query under `advancedQuery`. A search is
+built from all of them, ANDed, keeping only those on a selected model. A
+reference node's value is the list items chosen, as the reference widget saves
+them (`list_id`, `uri` and `labels`); a list of plain labels, as earlier
+searches saved, is still read.
+
+Simple Search saves all of its filters, the Advanced Search query included.
+Advanced Search saves its query alone, on its model. A query whose model is not
+selected in Simple Search is kept but not applied. When Advanced Search opens,
+any query Simple Search cannot show as a filter is folded into the Advanced
+Search query, so it can be seen and edited there. Searches saved before `sort`
+or `advancedQuery` existed still load.
 
 ### Term suggestions
 

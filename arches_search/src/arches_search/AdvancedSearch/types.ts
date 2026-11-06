@@ -55,6 +55,10 @@ export interface Node {
     nodegroup_id: string;
     nodeid: string;
     ontologyclass: string | null;
+    // False for a card heading listed beside its top node, under the same alias.
+    selectable?: boolean;
+    card_x_node_x_widget_label?: string;
+    nodegroup_has_cardinality_n?: boolean;
     sortorder: number;
     source_identifier_id: number | null;
     sourcebranchpublication_id: string | null;
@@ -75,8 +79,18 @@ export enum ClauseSubjectTypeToken {
     SEARCH_MODELS = "SEARCH_MODELS",
 }
 
-type ClauseTypeToken = "LITERAL";
-type QuantifierToken = "ANY" | "ALL" | "NONE";
+export const CLAUSE_TYPE_LITERAL = "LITERAL";
+export const OPERAND_TYPE_LITERAL = "LITERAL";
+export const OPERAND_TYPE_GEO_LITERAL = "GEO_LITERAL";
+export const QUANTIFIER_ANY = "ANY";
+export const QUANTIFIER_ALL = "ALL";
+export const QUANTIFIER_NONE = "NONE";
+
+type ClauseTypeToken = typeof CLAUSE_TYPE_LITERAL;
+type QuantifierToken =
+    | typeof QUANTIFIER_ANY
+    | typeof QUANTIFIER_ALL
+    | typeof QUANTIFIER_NONE;
 
 export type OperatorString = string;
 
@@ -101,7 +115,7 @@ export type RelationshipPath = {
 };
 
 export type LiteralOperand = {
-    type: "LITERAL";
+    type: typeof OPERAND_TYPE_LITERAL;
     value: unknown;
     display_value?: string;
 };
@@ -128,7 +142,86 @@ export type GroupPayload = {
     groups: GroupPayload[];
     aggregations: unknown[];
     relationship: RelationshipBlock | null;
+    // Display only; the backend ignores it.
+    label?: string;
 };
+
+export const SEARCH_MODEL_GEOMETRY = "GeometrySearch";
+export const SEARCH_MODEL_TERM = "TermSearch";
+export const SEARCH_MODELS_DATE = ["DateSearch", "DateRangeSearch"];
+
+export const QUERY_BUILDER_ITEM_ROW = "row";
+export const QUERY_BUILDER_ITEM_GROUP = "group";
+export const QUERY_BUILDER_ITEM_RELATED_GROUP = "related-group";
+export const QUERY_BUILDER_ITEM_LOCKED_CLAUSE = "locked-clause";
+export const QUERY_BUILDER_ITEM_LOCKED_GROUP = "locked-group";
+
+export type QueryBuilderRow = {
+    id: string;
+    itemType: typeof QUERY_BUILDER_ITEM_ROW;
+    clause: LiteralClause;
+};
+
+export type QueryBuilderGroup = {
+    id: string;
+    itemType: typeof QUERY_BUILDER_ITEM_GROUP;
+    graphSlug: string;
+    logic: LogicToken;
+    label: string;
+    items: QueryBuilderItem[];
+};
+
+// Rows inside a related group filter the related resource, so they are on
+// targetGraphSlug; the group itself sits among its parent's anchorGraphSlug
+// items. `logic` is the ALL/ANY of those inner rows.
+export type QueryBuilderRelatedGroup = {
+    id: string;
+    itemType: typeof QUERY_BUILDER_ITEM_RELATED_GROUP;
+    anchorGraphSlug: string;
+    targetGraphSlug: string;
+    relationship: RelationshipBlock;
+    logic: LogicToken;
+    label: string;
+    items: QueryBuilderItem[];
+};
+
+// Parts of a saved query the builder cannot edit are carried as they are, so
+// loading and re-saving a query never loses or changes them.
+export type QueryBuilderLockedClause = {
+    id: string;
+    itemType: typeof QUERY_BUILDER_ITEM_LOCKED_CLAUSE;
+    clause: LiteralClause;
+};
+
+export type QueryBuilderLockedGroup = {
+    id: string;
+    itemType: typeof QUERY_BUILDER_ITEM_LOCKED_GROUP;
+    payload: GroupPayload;
+};
+
+export type QueryBuilderItem =
+    | QueryBuilderRow
+    | QueryBuilderGroup
+    | QueryBuilderRelatedGroup
+    | QueryBuilderLockedClause
+    | QueryBuilderLockedGroup;
+
+export interface AdvancedSearchOperandComponent {
+    datatype_id: string;
+    slug: string;
+    label: string;
+    icon: string;
+    component: string;
+    sets_operator: boolean;
+}
+
+export interface QueryBuilderLookups {
+    getNodeDatatype(graphSlug: string, nodeAlias: string): string | undefined;
+    getOperatorArity(datatype: string, operator: string): number | undefined;
+    getOperandComponent(
+        datatype: string,
+    ): AdvancedSearchOperandComponent | undefined;
+}
 
 export type NodeMetadataEntry = {
     card_x_node_x_widget_label?: string;

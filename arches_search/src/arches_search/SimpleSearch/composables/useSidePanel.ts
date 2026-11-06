@@ -26,6 +26,7 @@ const MAP_FILTER_PANEL = "map-filter" as const;
 const SAVED_SEARCHES_PANEL = "saved-searches" as const;
 const EXPORT_RESULTS_PANEL = "export-results" as const;
 const RELATED_RESOURCES_PANEL = "related-resources" as const;
+const OPERAND_PANEL = "operand" as const;
 const MAX_RELATED_RESOURCES = 2;
 const RELATED_RESOURCES_PANEL_SIZE = 35;
 const RELATED_RESOURCES_GRAPH_PANEL_SIZE = 65;
@@ -46,7 +47,8 @@ type SidePanelType =
     | typeof MAP_FILTER_PANEL
     | typeof SAVED_SEARCHES_PANEL
     | typeof EXPORT_RESULTS_PANEL
-    | typeof RELATED_RESOURCES_PANEL;
+    | typeof RELATED_RESOURCES_PANEL
+    | typeof OPERAND_PANEL;
 
 const PANEL_SIZES: Record<SidePanelType, number> = {
     [IDLE_PANEL]: IDLE_PANEL_SIZE,
@@ -56,6 +58,7 @@ const PANEL_SIZES: Record<SidePanelType, number> = {
     [SAVED_SEARCHES_PANEL]: 27,
     [EXPORT_RESULTS_PANEL]: 27,
     [RELATED_RESOURCES_PANEL]: RELATED_RESOURCES_PANEL_SIZE,
+    [OPERAND_PANEL]: SIDE_PANEL_SIZE,
 };
 
 export function useSidePanel() {
@@ -100,6 +103,10 @@ export function useSidePanel() {
 
     const isRelatedResourcesOpen = computed<boolean>(
         () => activeSidePanel.value === RELATED_RESOURCES_PANEL,
+    );
+
+    const isOperandPanelOpen = computed<boolean>(
+        () => activeSidePanel.value === OPERAND_PANEL,
     );
 
     // Kept as separate names for the SimpleSearch.vue v-if chain; identical
@@ -284,6 +291,10 @@ export function useSidePanel() {
         switchToPanel(MAP_FILTER_PANEL);
     }
 
+    function openOperandPanel(): void {
+        switchToPanel(OPERAND_PANEL);
+    }
+
     onUnmounted(clearSwitchTimer);
 
     return {
@@ -299,6 +310,7 @@ export function useSidePanel() {
         isTimeFilterActive,
         isTimeFilterOpen,
         isRelatedResourcesOpen,
+        isOperandPanelOpen,
         relatedResources,
         resultsPanelSize,
         visibleSidePanelSize,
@@ -315,6 +327,7 @@ export function useSidePanel() {
         onToggleTimeFilter,
         openAttributeFilters,
         openMapFilter,
+        openOperandPanel,
         openTimeFilter,
         onSplitterResizeStart,
         onSplitterResize,

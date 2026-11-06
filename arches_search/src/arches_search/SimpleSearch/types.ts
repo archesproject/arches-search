@@ -17,8 +17,14 @@ export interface SearchDefinition {
     queries: Record<string, GroupPayload>;
     graphSlugs: string[];
     mapFilter: FeatureCollection | null;
+    sort: SortSpec[];
     includeRelated: boolean;
 }
+
+export const TIME_FILTER_QUERY_KEY = "timeFilter";
+// The advanced query block is stored in `queries` under this key, beside the
+// keys Simple Search's own filters use.
+export const ADVANCED_QUERY_KEY = "advancedQuery";
 
 export const TERM_KIND_CONTROLLED_TERM = "controlled-term";
 export const TERM_KIND_RECORD = "record";
@@ -79,6 +85,8 @@ export interface ActiveFilter {
     icon: string;
     onEdit?: () => void;
     options?: Record<string, unknown>;
+    // Set when the filter is kept but not sent with the search; says why.
+    inactiveNote?: string;
 }
 
 export const RESULTS_SORT_RELEVANCE = "relevance";

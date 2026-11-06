@@ -2,10 +2,18 @@ import NumericFilter from "@/arches_search/SimpleSearch/components/attribute-fil
 import ReferenceFilterMultiSelect from "@/arches_search/SimpleSearch/components/attribute-filters/ReferenceFilterMultiSelect.vue";
 
 import {
+    CLAUSE_TYPE_LITERAL,
     ClauseSubjectTypeToken,
     GraphScopeToken,
     LogicToken,
+    OPERAND_TYPE_LITERAL,
+    QUANTIFIER_ANY,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import {
+    isLabelList,
+    isReferenceValueList,
+    referenceValueLabel,
+} from "@/arches_search/AdvancedSearch/utils/reference-labels.ts";
 
 import type {
     ClauseSubject,
@@ -16,6 +24,7 @@ import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts
 import type {
     AttributeFilterEntry,
     NumericFilterValue,
+    NumericToken,
     ReferenceFilterValue,
 } from "@/arches_search/SimpleSearch/components/attribute-filters/types.ts";
 
@@ -31,8 +40,8 @@ function nodeSubject(
     };
 }
 
-// Reference: a single REFERENCES_ANY clause whose operand is the list of
-// selected labels. Matches the original hardcoded behavior in SimpleSearch.
+// Reference: a single REFERENCES_ANY clause whose operand is the list items
+// selected.
 function buildReferenceQuery(
     node: NodeFilterConfigNode,
     value: unknown,
@@ -49,14 +58,14 @@ function buildReferenceQuery(
         logic: LogicToken.AND,
         clauses: [
             {
-                type: "LITERAL",
-                quantifier: "ANY",
+                type: CLAUSE_TYPE_LITERAL,
+                quantifier: QUANTIFIER_ANY,
                 subject: nodeSubject(node, graphSlug),
                 operator: "REFERENCES_ANY",
                 operands: [
                     {
-                        type: "LITERAL",
-                        value: selected.map((option) => option.label),
+                        type: OPERAND_TYPE_LITERAL,
+                        value: selected,
                     },
                 ],
             },
@@ -83,22 +92,22 @@ function buildNumericQuery(
     const clauses: LiteralClause[] = tokens.map((token) => {
         if (token.kind === "range") {
             return {
-                type: "LITERAL",
-                quantifier: "ANY",
+                type: CLAUSE_TYPE_LITERAL,
+                quantifier: QUANTIFIER_ANY,
                 subject,
                 operator: "BETWEEN",
                 operands: [
-                    { type: "LITERAL", value: token.min },
-                    { type: "LITERAL", value: token.max },
+                    { type: OPERAND_TYPE_LITERAL, value: token.min },
+                    { type: OPERAND_TYPE_LITERAL, value: token.max },
                 ],
             };
         }
         return {
-            type: "LITERAL",
-            quantifier: "ANY",
+            type: CLAUSE_TYPE_LITERAL,
+            quantifier: QUANTIFIER_ANY,
             subject,
             operator: "EQUALS",
-            operands: [{ type: "LITERAL", value: token.value }],
+            operands: [{ type: OPERAND_TYPE_LITERAL, value: token.value }],
         };
     });
 
@@ -115,11 +124,46 @@ function buildNumericQuery(
 
 function formatReferenceValue(value: unknown): string {
     const selected = (value as ReferenceFilterValue | null) ?? [];
-    return selected.map((option) => option.label).join(", ");
+    if (isLabelList(selected)) {
+        return selected.join(", ");
+    }
+    return selected.map(referenceValueLabel).join(", ");
 }
 
 function formatNumericValue(value: unknown): string {
     return (value as NumericFilterValue | null)?.text ?? "";
+}
+
+function parseReferenceValue(query: GroupPayload): ReferenceFilterValue {
+    const value = query.clauses[0]?.operands[0]?.value;
+    if (isLabelList(value) || isReferenceValueList(value)) {
+        return value;
+    }
+    return [];
+}
+
+function parseNumericValue(query: GroupPayload): NumericFilterValue {
+    const tokens = query.clauses.flatMap((clause): NumericToken[] => {
+        const [first, second] = clause.operands.map((operand) => operand.value);
+        if (clause.operator === "BETWEEN") {
+            return [{ kind: "range", min: Number(first), max: Number(second) }];
+        }
+        if (clause.operator === "EQUALS") {
+            return [{ kind: "value", value: Number(first) }];
+        }
+        return [];
+    });
+
+    const text = tokens
+        .map((token) => {
+            if (token.kind === "range") {
+                return `${token.min}-${token.max}`;
+            }
+            return String(token.value);
+        })
+        .join(", ");
+
+    return { text, tokens };
 }
 
 // Maps an Arches node datatype to its filter widget + query builder. Add a new
@@ -129,11 +173,13 @@ const ATTRIBUTE_FILTER_REGISTRY: Record<string, AttributeFilterEntry> = {
         component: ReferenceFilterMultiSelect,
         buildQuery: buildReferenceQuery,
         formatValue: formatReferenceValue,
+        parseValue: parseReferenceValue,
     },
     number: {
         component: NumericFilter,
         buildQuery: buildNumericQuery,
         formatValue: formatNumericValue,
+        parseValue: parseNumericValue,
     },
 };
 
@@ -162,4 +208,11 @@ export function formatAttributeFilterValue(
     value: unknown,
 ): string {
     return getAttributeFilterEntry(node.datatype)?.formatValue(value) ?? "";
+}
+
+export function parseAttributeFilterValue(
+    node: NodeFilterConfigNode,
+    query: GroupPayload,
+): unknown {
+    return getAttributeFilterEntry(node.datatype)?.parseValue(query) ?? null;
 }

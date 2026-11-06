@@ -133,6 +133,60 @@ class ResourceFieldFacet(SearchFacet):
         return f"{self.field_class}: {self.operator}"
 
 
+class AdvancedSearchOperandComponent(models.Model):
+    id = models.AutoField(primary_key=True)
+    datatype = models.OneToOneField(
+        "models.DDataType",
+        on_delete=models.CASCADE,
+        db_column="datatypeid",
+        verbose_name=_("Data Type"),
+        help_text=_(
+            "The data type whose values this component edits in the advanced "
+            "search builder. Data types without one are edited inline with "
+            "their node's widget."
+        ),
+    )
+    slug = models.CharField(
+        max_length=50,
+        verbose_name=_("Slug"),
+        help_text=_(
+            "Shared by data types whose values are edited the same way, "
+            "e.g. date and edtf."
+        ),
+    )
+    label = I18n_TextField(verbose_name=_("Label"))
+    icon = models.CharField(max_length=100, verbose_name=_("Icon"))
+    component = models.CharField(
+        max_length=255,
+        verbose_name=_("Component"),
+        help_text=_(
+            "Path of the Vue component that edits the value in the side "
+            "panel, relative to the frontend source root."
+        ),
+    )
+    sets_operator = models.BooleanField(
+        default=False,
+        verbose_name=_("Sets operator"),
+        help_text=_(
+            "Whether the component chooses the operator itself, so the "
+            "builder does not show its own operator select."
+        ),
+    )
+
+    def serialize(self, fields=None, exclude=None, **kwargs):
+        return {
+            "datatype_id": self.datatype_id,
+            "slug": self.slug,
+            "label": self.label,
+            "icon": self.icon,
+            "component": self.component,
+            "sets_operator": self.sets_operator,
+        }
+
+    def __str__(self):
+        return f"{self.datatype_id}: {self.component}"
+
+
 def _get_operand_normalizer(datatype_name):
     from arches_search.utils.advanced_search.operand_normalization.operand_normalizer_factory import (
         OperandNormalizerFactory,

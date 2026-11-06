@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import { ref, watch, watchEffect } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
-import { useToast } from "openvue/usetoast";
 
 import Button from "openvue/button";
 import InputText from "openvue/inputtext";
 import Select from "openvue/select";
 import Textarea from "openvue/textarea";
 
+import { useToast } from "openvue/usetoast";
 import {
     createSavedSearch,
     getSavedSearches,
     deleteSavedSearch,
 } from "@/arches_search/SimpleSearch/api.ts";
-import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 
 import type {
     SavedSearch,
+    SearchDefinition,
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -38,23 +38,27 @@ type SavedSearchSortValue =
     | typeof SORT_NEWEST
     | typeof SORT_OLDEST;
 
-const { shouldShowHeader = true, shouldShowSaveTab = true } = defineProps<{
+const {
+    shouldShowHeader = true,
+    shouldShowSaveTab = true,
+    definitionToSave = null,
+} = defineProps<{
     shouldShowHeader?: boolean;
     shouldShowSaveTab?: boolean;
+    definitionToSave?: SearchDefinition | null;
 }>();
 
 const emit = defineEmits<{
     (
-        event: "run-query",
+        event: typeof RUN_QUERY_EVENT,
         queryDefinition: Record<string, unknown>,
         searchName: string,
     ): void;
-    (event: "close"): void;
+    (event: typeof CLOSE_EVENT): void;
 }>();
 
 const { $gettext } = useGettext();
 const toast = useToast();
-const searchFilters = shouldShowSaveTab ? useSearchFilters() : null;
 
 const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
     shouldShowSaveTab ? SAVE_TAB : MINE_TAB,
@@ -67,6 +71,13 @@ const isLoading = ref(false);
 const saveSearchName = ref("");
 const saveSearchDescription = ref("");
 const isSaving = ref(false);
+
+const isSaveDisabled = computed<boolean>(
+    () =>
+        isSaving.value ||
+        saveSearchName.value.trim() === "" ||
+        definitionToSave === null,
+);
 
 const sortOptions: SortOption[] = [
     { label: $gettext("Sort A to Z"), value: SORT_A_TO_Z },
@@ -85,7 +96,7 @@ watch(sortValue, () => {
 
 async function onSaveSearch(): Promise<void> {
     const name = saveSearchName.value.trim();
-    if (!name || !searchFilters) {
+    if (!name || !definitionToSave) {
         return;
     }
 
@@ -94,10 +105,7 @@ async function onSaveSearch(): Promise<void> {
         await createSavedSearch(
             name,
             saveSearchDescription.value.trim(),
-            searchFilters.getSearchDefinition() as unknown as Record<
-                string,
-                unknown
-            >,
+            definitionToSave,
         );
         saveSearchName.value = "";
         saveSearchDescription.value = "";
@@ -114,7 +122,7 @@ async function onSaveSearch(): Promise<void> {
             severity: "error",
             life: 5000,
             summary: $gettext("Failed to save search"),
-            detail: error instanceof Error ? error.message : undefined,
+            detail: (error as Error).message,
         });
     } finally {
         isSaving.value = false;
@@ -175,7 +183,7 @@ async function onDelete(search: SavedSearch): Promise<void> {
             severity: "error",
             life: 5000,
             summary: $gettext("Failed to delete search"),
-            detail: error instanceof Error ? error.message : undefined,
+            detail: (error as Error).message,
         });
     }
 }
@@ -296,7 +304,7 @@ function queryTypeLabel(search: SavedSearch): string {
                     icon="pi pi-check"
                     :label="$gettext('Save')"
                     :loading="isSaving"
-                    :disabled="isSaving || !saveSearchName.trim()"
+                    :disabled="isSaveDisabled"
                     @click="onSaveSearch"
                 />
             </div>

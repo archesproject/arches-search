@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 import Card from "openvue/card";
 
 import { routeNames } from "@/arches_search/routes.ts";
+import { provideSearchFilters } from "@/arches_search/SimpleSearch/composables/useSearchFilters.ts";
 import { usePendingSearchStore } from "@/arches_search/stores/usePendingSearchStore.ts";
 
 const router = useRouter();
 const route = useRoute();
+const { $gettext } = useGettext();
+
+provideSearchFilters();
 
 router.afterEach((to, _from, failure) => {
     if (to.name !== routeNames.simpleSearch || failure) {
@@ -19,6 +24,20 @@ router.afterEach((to, _from, failure) => {
 
 const isSearchLanding = computed(() => route.name === routeNames.searchLanding);
 const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
+
+const headerTitle = computed<string>(() => {
+    if (isSimpleSearch.value) {
+        return $gettext("Search the Collection");
+    }
+    return $gettext("Advanced Search");
+});
+
+const headerIcon = computed<string>(() => {
+    if (isSimpleSearch.value) {
+        return "pi pi-search";
+    }
+    return "pi pi-sliders-h";
+});
 </script>
 
 <template>
@@ -31,11 +50,12 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
         <template #header>
             <header
                 v-if="!isSearchLanding"
-                class="simple-search-header"
+                class="search-header"
+                :class="{ 'search-header-advanced': !isSimpleSearch }"
             >
                 <h1 class="search-title">
-                    <i class="pi pi-search" />
-                    {{ $gettext("Search the Collection") }}
+                    <i :class="headerIcon" />
+                    {{ headerTitle }}
                 </h1>
                 <nav
                     v-if="isSimpleSearch"
@@ -57,7 +77,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
                     class="header-nav"
                 >
                     <Button
-                        icon="pi pi-sliders-h"
+                        icon="pi pi-arrow-left"
                         icon-pos="left"
                         class="header-link"
                         :label="$gettext('Simple Search')"
@@ -94,7 +114,7 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     background-color: var(--arches-search-page-bg);
 }
 
-.simple-search-header {
+.search-header {
     display: flex;
     flex-shrink: 0;
     flex-wrap: wrap;
@@ -105,10 +125,15 @@ const isSimpleSearch = computed(() => route.name === routeNames.simpleSearch);
     background-color: var(--arches-search-card-bg);
 }
 
+.search-header.search-header-advanced {
+    padding: 1.4rem 2.4rem;
+    border-block-end: 0.1rem solid var(--p-content-border-color);
+}
+
 .search-title {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 1.2rem;
     margin: 0;
     color: var(--p-text-color);
     font-size: 2.2rem;

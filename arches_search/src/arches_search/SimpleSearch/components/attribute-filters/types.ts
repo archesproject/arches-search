@@ -1,18 +1,12 @@
 import type { Component } from "vue";
 
+import type { ReferenceSelectNodeValue } from "@/arches_controlled_lists/datatypes/reference-select/types.ts";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import type { NodeFilterConfigNode } from "@/arches_search/SimpleSearch/types.ts";
 
-// A single selectable reference value (controlled-list item).
-export interface ReferenceFilterOption {
-    id: string;
-    label: string;
-}
-
-// The reference filter carries the selected options (id + label). The label
-// is retained so the query builder can send labels as operands without
-// re-resolving against the loaded option list.
-export type ReferenceFilterValue = ReferenceFilterOption[];
+// The list items chosen, as the reference widget saves them; a search saved
+// before that holds only their labels.
+export type ReferenceFilterValue = ReferenceSelectNodeValue[] | string[];
 
 // One parsed segment of a numeric expression like "9-10, 12".
 export type NumericToken =
@@ -40,4 +34,7 @@ export interface AttributeFilterEntry {
     // the active-filters row) — kept per-datatype here alongside buildQuery
     // since both are just different views of the same datatype-specific value.
     formatValue(value: unknown): string;
+    // The inverse of buildQuery, for a query restored from a saved search
+    // rather than built from this widget.
+    parseValue(query: GroupPayload): unknown;
 }

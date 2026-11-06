@@ -1,50 +1,9 @@
 import Cookies from "js-cookie";
-import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 import { generateArchesURL } from "@/arches_vue_components/application";
-
-export async function getSearchResults(
-    searchQuery: GroupPayload,
-    options?: { page?: number; pageSize?: number },
-) {
-    const requestPayload: {
-        graph_slugs: string[];
-        advanced_search_queries: GroupPayload[];
-        pagination?: { page?: number; page_size?: number };
-    } = {
-        graph_slugs: [searchQuery.graph_slug],
-        advanced_search_queries: [searchQuery],
-    };
-
-    const pagination: { page?: number; page_size?: number } = {};
-
-    if (options && options.page !== undefined) {
-        pagination.page = options.page;
-    }
-
-    if (options && options.pageSize !== undefined) {
-        pagination.page_size = options.pageSize;
-    }
-
-    if (Object.keys(pagination).length > 0) {
-        requestPayload.pagination = pagination;
-    }
-
-    const url = generateArchesURL("arches_search:search");
-
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": Cookies.get("csrftoken") || "",
-        },
-        body: JSON.stringify(requestPayload),
-    });
-
-    const parsed = await response.json();
-    if (!response.ok) throw new Error(parsed.message || response.statusText);
-
-    return parsed;
-}
+import type {
+    AdvancedSearchOperandComponent,
+    GroupPayload,
+} from "@/arches_search/AdvancedSearch/types.ts";
 
 export async function getSearchSQL(searchQuery: GroupPayload) {
     const response = await fetch(
@@ -180,6 +139,27 @@ export async function getAdvancedSearchFacets() {
 
     const parsed = await response.json();
     if (!response.ok) throw new Error(parsed.message || response.statusText);
+
+    return parsed;
+}
+
+export async function getAdvancedSearchOperandComponents(): Promise<
+    AdvancedSearchOperandComponent[]
+> {
+    const response = await fetch(
+        generateArchesURL("arches_search:advanced_search_operand_components"),
+        {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        },
+    );
+
+    const parsed = await response.json();
+    if (!response.ok) {
+        throw new Error(parsed.message || response.statusText);
+    }
 
     return parsed;
 }

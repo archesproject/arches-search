@@ -22,40 +22,64 @@ import type {
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
-const { $gettext } = useGettext();
-const { includeRelated, searchResults, setIncludeRelated } = useSearchFilters();
+const UPDATE_SORT_FIELD_EVENT = "update:sortField" as const;
+const UPDATE_SORT_DIRECTION_EVENT = "update:sortDirection" as const;
+const TOGGLE_FILTERS_EVENT = "toggle-filters" as const;
+const TOGGLE_MAP_EVENT = "toggle-map" as const;
+const TOGGLE_TIME_EVENT = "toggle-time" as const;
+const TOGGLE_SAVED_SEARCHES_EVENT = "toggle-saved-searches" as const;
+const TOGGLE_EXPORT_RESULTS_EVENT = "toggle-export-results" as const;
 
-const totalResults = computed<number>(
-    () => searchResults.value.pagination?.total_results ?? 0,
-);
-const resultsLabelText = computed(() =>
-    $gettext("%{count} results", { count: String(totalResults.value) }),
-);
-
-const props = defineProps<{
+const {
+    totalResults,
+    sortField,
+    sortDirection,
+    sortableNodes = [],
+    showFilters = false,
+    showMap = false,
+    hasMapFilter = false,
+    showTime = false,
+    hasTimeFilter = false,
+} = defineProps<{
+    totalResults: number;
     sortField: ResultsSortField | null;
     sortDirection: ResultsSortDirection;
-    sortableNodes: NodeFilterConfigNode[];
-    showFilters: boolean;
-    showMap: boolean;
-    hasMapFilter: boolean;
-    showTime: boolean;
-    hasTimeFilter: boolean;
+    sortableNodes?: NodeFilterConfigNode[];
+    showFilters?: boolean;
+    showMap?: boolean;
+    hasMapFilter?: boolean;
+    showTime?: boolean;
+    hasTimeFilter?: boolean;
     showSavedSearches: boolean;
     showExportResults: boolean;
     hideFiltersButton?: boolean;
     hideTimeButton?: boolean;
+    hideMapButton?: boolean;
+    hideIncludeRelated?: boolean;
 }>();
 
-defineEmits<{
-    (event: "update:sortField", value: ResultsSortField | null): void;
-    (event: "update:sortDirection", value: ResultsSortDirection): void;
-    (event: "toggle-filters"): void;
-    (event: "toggle-map"): void;
-    (event: "toggle-time"): void;
-    (event: "toggle-saved-searches"): void;
-    (event: "toggle-export-results"): void;
+const emit = defineEmits<{
+    (
+        event: typeof UPDATE_SORT_FIELD_EVENT,
+        value: ResultsSortField | null,
+    ): void;
+    (
+        event: typeof UPDATE_SORT_DIRECTION_EVENT,
+        value: ResultsSortDirection,
+    ): void;
+    (event: typeof TOGGLE_FILTERS_EVENT): void;
+    (event: typeof TOGGLE_MAP_EVENT): void;
+    (event: typeof TOGGLE_TIME_EVENT): void;
+    (event: typeof TOGGLE_SAVED_SEARCHES_EVENT): void;
+    (event: typeof TOGGLE_EXPORT_RESULTS_EVENT): void;
 }>();
+
+const { $gettext } = useGettext();
+const { includeRelated, setIncludeRelated } = useSearchFilters();
+
+const resultsLabelText = computed<string>(() =>
+    $gettext("%{count} results", { count: String(totalResults) }),
+);
 
 const sortFieldOptions = computed<SortOption[]>(() => {
     const options: SortOption[] = [
@@ -64,7 +88,7 @@ const sortFieldOptions = computed<SortOption[]>(() => {
         { label: $gettext("Date created"), value: RESULTS_SORT_CREATED_TIME },
     ];
 
-    for (const node of props.sortableNodes) {
+    for (const node of sortableNodes) {
         options.push({
             label: node.label,
             value: `${RESULTS_SORT_NODE_PREFIX}${node.node_alias}`,
@@ -74,21 +98,22 @@ const sortFieldOptions = computed<SortOption[]>(() => {
     return options;
 });
 
-const directionIcon = computed<string>(() =>
-    props.sortDirection === "asc"
-        ? "pi pi-sort-amount-down-alt"
-        : "pi pi-sort-amount-up-alt",
-);
+const directionIcon = computed<string>(() => {
+    if (sortDirection === "asc") {
+        return "pi pi-sort-amount-down-alt";
+    }
+    return "pi pi-sort-amount-up-alt";
+});
 
-const directionLabel = computed<string>(() =>
-    props.sortDirection === "asc"
-        ? $gettext("Sort ascending")
-        : $gettext("Sort descending"),
-);
+const directionLabel = computed<string>(() => {
+    if (sortDirection === "asc") {
+        return $gettext("Sort ascending");
+    }
+    return $gettext("Sort descending");
+});
 
 const showDirectionToggle = computed<boolean>(
-    () =>
-        Boolean(props.sortField) && props.sortField !== RESULTS_SORT_RELEVANCE,
+    () => sortField !== null && sortField !== RESULTS_SORT_RELEVANCE,
 );
 </script>
 
@@ -97,34 +122,37 @@ const showDirectionToggle = computed<boolean>(
         <div class="toolbar-left">
             <span class="results-label">{{ resultsLabelText }}</span>
             <Select
-                :model-value="sortField"
-                :options="sortFieldOptions"
                 option-label="label"
                 option-value="value"
-                :placeholder="$gettext('Sort by...')"
-                :show-clear="true"
                 class="sort-select"
                 overlay-class="sort-select-overlay"
-                @update:model-value="$emit('update:sortField', $event)"
+                :model-value="sortField"
+                :options="sortFieldOptions"
+                :placeholder="$gettext('Sort by...')"
+                :show-clear="true"
+                @update:model-value="emit(UPDATE_SORT_FIELD_EVENT, $event)"
             />
             <Button
                 v-if="showDirectionToggle"
-                text
-                rounded
                 class="sort-direction-btn"
+                variant="text"
+                :rounded="true"
                 :icon="directionIcon"
                 :aria-label="directionLabel"
                 @click="
-                    $emit(
-                        'update:sortDirection',
+                    emit(
+                        UPDATE_SORT_DIRECTION_EVENT,
                         sortDirection === 'asc' ? 'desc' : 'asc',
                     )
                 "
             />
-            <div class="include-related">
+            <div
+                v-if="!hideIncludeRelated"
+                class="include-related"
+            >
                 <ToggleSwitch
-                    :model-value="includeRelated"
                     input-id="include-related-toggle"
+                    :model-value="includeRelated"
                     @update:model-value="setIncludeRelated"
                 />
                 <label for="include-related-toggle">
@@ -136,47 +164,48 @@ const showDirectionToggle = computed<boolean>(
         <div class="toolbar-right">
             <Button
                 v-if="!hideFiltersButton"
-                :label="$gettext('Filters')"
                 icon="pi pi-filter"
                 icon-pos="left"
                 size="small"
+                :label="$gettext('Filters')"
                 :class="['toolbar-btn', { active: showFilters }]"
-                @click="$emit('toggle-filters')"
+                @click="emit(TOGGLE_FILTERS_EVENT)"
             />
             <Button
                 v-if="!hideTimeButton"
-                :label="$gettext('Time')"
                 icon="pi pi-clock"
                 icon-pos="left"
                 size="small"
+                :label="$gettext('Time')"
                 :class="['toolbar-btn', { active: showTime || hasTimeFilter }]"
-                @click="$emit('toggle-time')"
+                @click="emit(TOGGLE_TIME_EVENT)"
             />
             <Button
-                :label="$gettext('Map')"
+                v-if="!hideMapButton"
                 icon="pi pi-map"
                 icon-pos="left"
                 size="small"
+                :label="$gettext('Map')"
                 :class="['toolbar-btn', { active: showMap || hasMapFilter }]"
-                @click="$emit('toggle-map')"
+                @click="emit(TOGGLE_MAP_EVENT)"
             />
             <Button
+                icon-pos="left"
+                size="small"
                 :label="$gettext('Save Search')"
                 :icon="
                     showSavedSearches ? 'pi pi-bookmark-fill' : 'pi pi-bookmark'
                 "
-                icon-pos="left"
-                size="small"
                 :class="['toolbar-btn', { active: showSavedSearches }]"
-                @click="$emit('toggle-saved-searches')"
+                @click="emit(TOGGLE_SAVED_SEARCHES_EVENT)"
             />
             <Button
-                :label="$gettext('Export Results')"
                 icon="pi pi-download"
                 icon-pos="left"
                 size="small"
+                :label="$gettext('Export Results')"
                 :class="['toolbar-btn', { active: showExportResults }]"
-                @click="$emit('toggle-export-results')"
+                @click="emit(TOGGLE_EXPORT_RESULTS_EVENT)"
             />
         </div>
     </div>
@@ -192,7 +221,7 @@ const showDirectionToggle = computed<boolean>(
     gap: 1.2rem;
     padding: 1rem;
     padding-inline-start: 1.4rem;
-    border-bottom: 0.15rem solid var(--p-content-border-color);
+    border-block-end: 0.15rem solid var(--p-content-border-color);
     background: var(--arches-search-page-bg);
     min-height: 5.5rem;
 }

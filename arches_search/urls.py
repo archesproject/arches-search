@@ -8,6 +8,9 @@ from arches_search.views.api.advanced_search_facet import (
     DatatypeFacetsAPI,
     AllDatatypeFacetsAPI,
 )
+from arches_search.views.api.advanced_search_operand_component import (
+    AdvancedSearchOperandComponentsAPI,
+)
 from arches_search.views.api.graph_models import GraphModelsAPI
 from arches_search.views.api.node_metadata_for_payload import NodeMetadataForPayloadAPI
 from arches_search.views.api.node_date_bounds_for_graph import (
@@ -74,6 +77,11 @@ urlpatterns = [
         "api/advanced-search/facets",
         AllDatatypeFacetsAPI.as_view(),
         name="all_datatype_facets",
+    ),
+    path(
+        "api/advanced-search/operand-components",
+        AdvancedSearchOperandComponentsAPI.as_view(),
+        name="advanced_search_operand_components",
     ),
     path(
         "api/advanced-search/resource-fields",

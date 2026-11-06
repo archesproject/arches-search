@@ -13,7 +13,7 @@ const { activeFilters } = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (event: "clear-all"): void;
+    (event: typeof CLEAR_ALL_EVENT): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -21,6 +21,9 @@ const { $gettext } = useGettext();
 const hasActiveFilters = computed(() => activeFilters.length > 0);
 
 function editTitle(activeFilter: ActiveFilter): string | undefined {
+    if (activeFilter.inactiveNote) {
+        return activeFilter.inactiveNote;
+    }
     if (!activeFilter.onEdit) {
         return undefined;
     }
@@ -63,11 +66,12 @@ function clearAllFilters(): void {
         <Button
             v-for="activeFilter in activeFilters"
             :key="activeFilter.id"
-            :text="true"
             class="filter-chip"
+            :text="true"
             :class="[
-                'filter-chip--' + activeFilter.kind,
-                { 'filter-chip--editable': activeFilter.onEdit != null },
+                'filter-chip-' + activeFilter.kind,
+                { 'filter-chip-editable': activeFilter.onEdit != null },
+                { 'filter-chip-inactive': activeFilter.inactiveNote },
             ]"
             :title="editTitle(activeFilter)"
             @click="onChipClick(activeFilter)"
@@ -77,6 +81,12 @@ function clearAllFilters(): void {
                 <span class="fc-category">{{ activeFilter.category }}</span>
                 <span class="fc-sep">·</span>
                 <span class="fc-value">{{ activeFilter.text }}</span>
+                <span
+                    v-if="activeFilter.inactiveNote"
+                    class="fc-inactive"
+                >
+                    {{ $gettext("not applied") }}
+                </span>
             </span>
             <span
                 class="fc-dismiss"
@@ -104,7 +114,7 @@ function clearAllFilters(): void {
     flex-wrap: wrap;
     gap: 0.6rem;
     padding: 0.8rem 2.4rem;
-    border-top: 0.1rem solid var(--p-content-border-color);
+    border-block-start: 0.1rem solid var(--p-content-border-color);
     min-height: 4.4rem;
 }
 
@@ -132,12 +142,12 @@ function clearAllFilters(): void {
     transition: box-shadow 0.12s;
 }
 
-.filter-chip--editable {
+.filter-chip-editable {
     cursor: pointer;
 }
 
-.filter-chip--editable:hover {
-    box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.08);
+.filter-chip-editable:hover {
+    box-shadow: var(--arches-search-chip-hover-shadow);
 }
 
 .filter-chip:focus-visible {
@@ -195,46 +205,54 @@ function clearAllFilters(): void {
     opacity: 1;
 }
 
-.filter-chip--term {
+.filter-chip-term {
     background: var(--arches-search-chip-search-bg);
     border-color: var(--arches-search-chip-search-border);
     color: var(--arches-search-chip-search-text);
 }
 
-.filter-chip--resource-type {
+.filter-chip-resource-type {
     background: var(--arches-search-filter-resource-type-bg);
     border-color: var(--arches-search-filter-resource-type-border);
     color: var(--arches-search-filter-resource-type-text);
 }
 
-.filter-chip--time {
+.filter-chip-time {
     background: var(--arches-search-filter-time-bg);
     border-color: var(--arches-search-filter-time-border);
     color: var(--arches-search-filter-time-text);
 }
 
-.filter-chip--map {
+.filter-chip-map {
     background: var(--arches-search-filter-map-bg);
     border-color: var(--arches-search-filter-map-border);
     color: var(--arches-search-filter-map-text);
 }
 
-.filter-chip--attribute {
+.filter-chip-attribute {
     background: var(--arches-search-filter-attribute-bg);
     border-color: var(--arches-search-filter-attribute-border);
     color: var(--arches-search-filter-attribute-text);
 }
 
-.filter-chip--controlled-term {
+.filter-chip-controlled-term {
     background: var(--arches-search-filter-controlled-term-bg);
     border-color: var(--arches-search-filter-controlled-term-border);
     color: var(--arches-search-filter-controlled-term-text);
 }
 
-.filter-chip--record {
+.filter-chip-record {
     background: var(--arches-search-filter-record-bg);
     border-color: var(--arches-search-filter-record-border);
     color: var(--arches-search-filter-record-text);
+}
+
+.filter-chip.filter-chip-inactive {
+    opacity: 0.55;
+}
+
+.filter-chip-inactive .fc-inactive {
+    font-style: italic;
 }
 
 .clear-all-button {

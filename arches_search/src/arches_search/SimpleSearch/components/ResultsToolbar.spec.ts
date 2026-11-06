@@ -21,7 +21,6 @@ vi.mock(
         return {
             useSearchFilters: () => ({
                 includeRelated: ref(false),
-                searchResults: ref({ pagination: { total_results: 3 } }),
                 setIncludeRelated: () => {},
             }),
         };
@@ -56,6 +55,7 @@ vi.mock("openvue/button", () => ({
 function mountToolbar(sortableNodes: NodeFilterConfigNode[] = []) {
     return mount(ResultsToolbar, {
         props: {
+            totalResults: 3,
             sortField: RESULTS_SORT_NAME,
             sortDirection: "asc",
             sortableNodes,
