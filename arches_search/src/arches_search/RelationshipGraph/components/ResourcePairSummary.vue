@@ -16,12 +16,14 @@ import {
 
 import type { PathState } from "@/arches_search/RelationshipGraph/composables/useResourcePath.ts";
 
-const { fromTitle, toTitle, pathState, isPathShown } = defineProps<{
-    fromTitle: string;
-    toTitle: string;
-    pathState: PathState | null;
-    isPathShown: boolean;
-}>();
+const { fromTitle, toTitle, pathState, isPathShown, isGraphVisible } =
+    defineProps<{
+        fromTitle: string;
+        toTitle: string;
+        pathState: PathState | null;
+        isPathShown: boolean;
+        isGraphVisible: boolean;
+    }>();
 
 const emit = defineEmits<{
     (event: "toggle-path"): void;
@@ -43,12 +45,22 @@ const hasFailed = computed<boolean>(() => pathState?.status === FAILED);
 const hopsMessage = computed<string>(() => {
     if (!path.value) return "";
     if (path.value.hops !== null) {
-        return $ngettext(
+        const hops = $ngettext(
             "%{count} hop apart",
             "%{count} hops apart",
             path.value.hops,
             { count: String(path.value.hops) },
         );
+        if (path.value.path_count <= 1) {
+            return hops;
+        }
+        const paths = $ngettext(
+            "%{count} path",
+            "%{count} paths",
+            path.value.path_count,
+            { count: String(path.value.path_count) },
+        );
+        return $gettext("%{hops} · %{paths}", { hops, paths }, true);
     }
     if (path.value.limit_reached) {
         return $gettext(
@@ -63,11 +75,23 @@ const hopsMessage = computed<string>(() => {
     );
 });
 
-const togglePathLabel = computed<string>(() =>
-    isPathShown
-        ? $gettext("Hide the path from the graph")
-        : $gettext("Show the path in the graph"),
-);
+const togglePathLabel = computed<string>(() => {
+    if (!path.value) {
+        return "";
+    }
+    if (isPathShown) {
+        return $ngettext(
+            "Hide the path from the graph",
+            "Hide the paths from the graph",
+            path.value.path_count,
+        );
+    }
+    return $ngettext(
+        "Show the path in the graph",
+        "Show the paths in the graph",
+        path.value.path_count,
+    );
+});
 </script>
 
 <template>
@@ -94,7 +118,7 @@ const togglePathLabel = computed<string>(() =>
             <div class="hops-row">
                 <span class="hops">{{ hopsMessage }}</span>
                 <Button
-                    v-if="path.hops !== null"
+                    v-if="isGraphVisible && path.hops !== null"
                     class="path-toggle"
                     variant="text"
                     size="small"
@@ -121,6 +145,16 @@ const togglePathLabel = computed<string>(() =>
                     />
                 </li>
             </ul>
+            <p
+                v-if="path.paths_truncated && isGraphVisible && isPathShown"
+                role="status"
+            >
+                {{
+                    $gettext(
+                        "Only some of the shortest paths are shown, as there are too many to draw.",
+                    )
+                }}
+            </p>
             <p
                 v-if="path.direct_relationships_truncated"
                 role="status"

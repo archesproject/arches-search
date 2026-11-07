@@ -62,13 +62,16 @@ const {
     loadGraph,
 } = useRelationshipGraph(selections, isGraphVisible, shownPathRelationshipIds);
 
-const panelTitle = computed<string>(() =>
-    resources.length === 1
-        ? $gettext("%{title}: related resources", {
-              title: resources[0].title,
-          })
-        : $gettext("Related resources"),
-);
+const panelTitle = computed<string>(() => {
+    if (resources.length === 1) {
+        return $gettext(
+            "%{title}: related resources",
+            { title: resources[0].title },
+            true,
+        );
+    }
+    return $gettext("Related resources");
+});
 
 const showRelationshipsLabel = computed<string>(() =>
     selectedRelationshipCount.value > 0
@@ -203,12 +206,14 @@ const truncatedNotice = computed<string>(() =>
                     :to-title="resources[1].title"
                     :path-state="pathState"
                     :is-path-shown="isPathShown"
+                    :is-graph-visible="isGraphVisible"
                     @toggle-path="togglePath"
                     @retry="loadPath()"
                 />
                 <ResourceRelationshipSummary
                     v-for="resource in resources"
                     :key="resource.id"
+                    :resource-id="resource.id"
                     :title="resource.title"
                     :summary-state="summaryStates[resource.id]"
                     :deselected-row-ids="deselectedRowIds[resource.id] ?? []"

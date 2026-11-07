@@ -25,49 +25,86 @@ const PROPS = {
     modelName: "Model",
     modelColor: "var(--p-primary-color)",
     relatedCount: 1,
+    isSeed: false,
 };
+
+function mountPopup(
+    props: Partial<typeof PROPS> = {},
+    viewRelatedResource: unknown = vi.fn(),
+) {
+    return mount(NodeDetailsPopup, {
+        props: { ...PROPS, ...props },
+        global: { provide: { viewRelatedResource } },
+    });
+}
+
+function actionLabels(wrapper: ReturnType<typeof mountPopup>): string[] {
+    return wrapper.findAll(".actions > *").map((action) => action.text());
+}
 
 describe("node details popup", () => {
     afterEach(() => vi.resetAllMocks());
 
-    it("keeps the report link but hides edit for a read-only resource", async () => {
+    it("offers the report and focus, and no editor", async () => {
         vi.mocked(fetchResourceDescriptors).mockResolvedValue({
-            resource: { descriptors: {}, graph_id: "model", can_edit: false },
+            resource: { descriptors: {}, graph_id: "model" },
         });
-        const wrapper = mount(NodeDetailsPopup, { props: PROPS });
+        const wrapper = mountPopup();
         await flushPromises();
-        expect(wrapper.findAll("a").map((link) => link.text())).toEqual([
-            "View Report",
-        ]);
+        expect(actionLabels(wrapper)).toEqual(["View Report", "Focus"]);
         expect(wrapper.find(".name").text()).toBe(PROPS.name);
         expect(wrapper.find("img").exists()).toBe(false);
         wrapper.unmount();
     });
 
-    it("shows edit only after the server grants it", async () => {
-        vi.mocked(fetchResourceDescriptors).mockResolvedValue({
-            resource: { descriptors: {}, graph_id: "model", can_edit: true },
+    it("adds the resource to the panel when focused", async () => {
+        vi.mocked(fetchResourceDescriptors).mockResolvedValue({});
+        const viewRelatedResource = vi.fn();
+        const wrapper = mountPopup({}, viewRelatedResource);
+        await wrapper.find("button").trigger("click");
+        expect(viewRelatedResource).toHaveBeenCalledWith({
+            id: PROPS.resourceId,
+            title: PROPS.name,
         });
-        const wrapper = mount(NodeDetailsPopup, { props: PROPS });
-        expect(wrapper.findAll("a")).toHaveLength(1);
-        await flushPromises();
-        expect(wrapper.findAll("a").map((link) => link.text())).toEqual([
-            "View Report",
-            "Edit",
-        ]);
+        expect(wrapper.emitted("close")).toHaveLength(1);
         wrapper.unmount();
     });
 
-    it("announces loading failures and does not expose edit", async () => {
+    it("closes once the report is opened", async () => {
+        vi.mocked(fetchResourceDescriptors).mockResolvedValue({});
+        const wrapper = mountPopup();
+        const report = wrapper.find("a");
+        // Opening the report is the browser's job, not the test's
+        report.element.addEventListener("click", (event) =>
+            event.preventDefault(),
+        );
+        await report.trigger("click");
+        expect(wrapper.emitted("close")).toHaveLength(1);
+        wrapper.unmount();
+    });
+
+    it("has nothing to focus for a resource already in the panel, or outside the search page", async () => {
+        vi.mocked(fetchResourceDescriptors).mockResolvedValue({});
+        for (const wrapper of [
+            mountPopup({ isSeed: true }),
+            mountPopup({}, null),
+        ]) {
+            await flushPromises();
+            expect(actionLabels(wrapper)).toEqual(["View Report"]);
+            wrapper.unmount();
+        }
+    });
+
+    it("announces loading failures and still offers the report", async () => {
         vi.mocked(fetchResourceDescriptors).mockRejectedValue(
             new Error("Unavailable"),
         );
-        const wrapper = mount(NodeDetailsPopup, { props: PROPS });
+        const wrapper = mountPopup();
         await flushPromises();
         expect(wrapper.find('[role="status"]').text()).toContain(
             "could not be loaded",
         );
-        expect(wrapper.findAll("a")).toHaveLength(1);
+        expect(actionLabels(wrapper)).toEqual(["View Report", "Focus"]);
         wrapper.unmount();
     });
 });

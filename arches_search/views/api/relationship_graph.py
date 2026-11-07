@@ -1,5 +1,6 @@
 import uuid
 from collections import defaultdict
+from dataclasses import dataclass, replace
 
 from django.conf import settings
 from django.db.models import Count, F, Q
@@ -21,6 +22,7 @@ from arches_search.utils.advanced_search.metadata.resource_names_for_payload imp
     resolve_resource_display_name,
 )
 from arches_search.utils.readable_nodes import ReadableNodes
+from arches_search.utils.search.sorting import SORT_TYPE_PRIMARY_NAME, SortResolver
 
 OUTGOING = "outgoing"
 INCOMING = "incoming"
@@ -35,6 +37,11 @@ MAX_GRAPH_EDGES = 1000
 # how many resources the search may visit before it gives up
 MAX_PATH_HOPS = 6
 MAX_PATH_SEARCH_NODES = 5000
+MAX_PATH_RELATIONSHIPS = 100
+# How many related resources one page of a summary row lists
+DEFAULT_RELATED_RESOURCES_PAGE = 50
+MAX_RELATED_RESOURCES_PAGE = 200
+MAX_RELATED_RESOURCES_TERM_LENGTH = 200
 
 # What a relationship is described by, wherever one is returned
 RELATION_FIELDS = (
@@ -417,10 +424,13 @@ def _parse_selections(body):
 
 
 def _parse_path_relationship_ids(body):
-    """The ids of the relationships of a path, or none. Raises ValueError for
-    anything that is not a short list of ids."""
+    """The ids of the relationships of the shortest paths, or none. Raises
+    ValueError for anything that is not a short list of ids."""
     relationship_ids = body.get("path_relationship_ids", [])
-    if not isinstance(relationship_ids, list) or len(relationship_ids) > MAX_PATH_HOPS:
+    if (
+        not isinstance(relationship_ids, list)
+        or len(relationship_ids) > MAX_PATH_RELATIONSHIPS
+    ):
         raise ValueError("path_relationship_ids")
     return [uuid.UUID(str(relationship_id)) for relationship_id in relationship_ids]
 
@@ -462,6 +472,126 @@ def _incoming_row_filter(relationship_type_id, graph_id):
             "relationshiptype"
         )
     return type_filter & Q(from_resource_graph_id=graph_id)
+
+
+def _row_relations(user, readable_nodes, resource_id, row):
+    """The relationships one summary row of a resource counted, and the name a
+    resource on their far end reaches them by. Filters as the summary does."""
+    direction, relationship_type_id, graph_id = row
+    relations = _readable_relations(readable_nodes)
+    if direction == OUTGOING:
+        relations = relations.filter(
+            _outgoing_row_filter(relationship_type_id, graph_id),
+            from_resource_id=resource_id,
+            to_resource_graph__isresource=True,
+        )
+        far_field, reverse_relation = "to_resource_id", "to_resxres"
+    else:
+        relations = relations.filter(
+            _incoming_row_filter(relationship_type_id, graph_id),
+            to_resource_id=resource_id,
+            from_resource_graph__isresource=True,
+        ).exclude(from_resource_id=resource_id)
+        far_field, reverse_relation = "from_resource_id", "from_resxres"
+    return (
+        filter_resource_queryset(user, relations, resourceinstance_field=far_field),
+        reverse_relation,
+    )
+
+
+class RelationshipGraphRelatedResourcesAPI(APIBase):
+    """The resources behind one summary row, a page at a time, sorted as the
+    search results' primary name sort sorts them.
+
+    GET /arches_search/api/relationship-graph/related-resources
+        ?resource_id=<uuid>&row_id=<summary row id>&offset=0&limit=50&term=<text>
+
+    Response shape:
+    {
+        "resources": [
+            {
+                "relationship_id": "<resourcexid>",
+                "resource_id": "<uuid>",
+                "name": "..."
+            },
+            ...
+        ],
+        "next_offset": 50 | null
+    }
+
+    The row already names the relationship, so each resource does not.
+    `next_offset` is null on the last page. A resource appears once for each
+    relationship, and only readable relationships to readable resources are
+    listed, so without a term the resources add up to the row's count. A term
+    keeps the resources whose name, in the current or the default language,
+    contains it, ignoring case.
+    """
+
+    def get(self, request):
+        try:
+            resource_id = uuid.UUID(request.GET.get("resource_id", ""))
+            row = _parse_row_id(request.GET.get("row_id"))
+            offset = int(request.GET.get("offset", 0))
+            limit = int(request.GET.get("limit", DEFAULT_RELATED_RESOURCES_PAGE))
+        except (TypeError, ValueError):
+            return JSONErrorResponse(_("Invalid request"), status=400)
+        term = request.GET.get("term", "").strip()
+        if (
+            offset < 0
+            or not 0 < limit <= MAX_RELATED_RESOURCES_PAGE
+            or len(term) > MAX_RELATED_RESOURCES_TERM_LENGTH
+        ):
+            return JSONErrorResponse(_("Invalid request"), status=400)
+
+        resource = ResourceInstance.objects.filter(
+            pk=resource_id, graph__isresource=True
+        ).first()
+        # A resource the user cannot read looks the same as one that is missing
+        if resource is None or not user_can_read_resource(
+            request.user, resource=resource
+        ):
+            return JSONErrorResponse(_("Resource not found"), status=404)
+
+        relations, reverse_relation = _row_relations(
+            request.user, ReadableNodes(request.user), resource_id, row
+        )
+        # The far-end resources, joined once to each of the row's relationships,
+        # so the search's own sort can order them
+        resources = ResourceInstance.objects.filter(
+            **{f"{reverse_relation}__in": relations}
+        ).annotate(relationship_id=F(f"{reverse_relation}__resourcexid"))
+        if term:
+            resources = resources.filter(_name_contains(term))
+        # A resource related twice ties on its id, so the relationship breaks it
+        ordered = SortResolver([{"type": SORT_TYPE_PRIMARY_NAME}]).apply(
+            resources, tie_breakers=[F("relationship_id").asc()]
+        )
+        page = list(ordered.only("descriptors", "name")[offset : offset + limit + 1])
+        has_more = len(page) > limit
+        page = page[:limit]
+
+        return JSONResponse(
+            {
+                "resources": [
+                    {
+                        "relationship_id": str(resource.relationship_id),
+                        "resource_id": str(resource.pk),
+                        "name": _display_name(resource),
+                    }
+                    for resource in page
+                ],
+                "next_offset": offset + limit if has_more else None,
+            }
+        )
+
+
+def _name_contains(term):
+    """Whether a resource's name, as shown in the current or the default
+    language, contains the term, ignoring case."""
+    condition = Q()
+    for language in {get_language() or settings.LANGUAGE_CODE, settings.LANGUAGE_CODE}:
+        condition |= Q(**{f"descriptors__{language}__name__icontains": term})
+    return condition
 
 
 def _selected_relations(user, readable_nodes, selections):
@@ -582,7 +712,7 @@ def _readable_relations_by_id(user, readable_nodes, relationship_ids):
 
 class RelationshipGraphPathAPI(APIBase):
     """How two resources are related: the relationships between them, and the
-    shortest chain of relationships that links them, if there is one.
+    shortest chains of relationships that link them, if there are any.
 
     GET /arches_search/api/relationship-graph/path?from=<uuid>&to=<uuid>
 
@@ -600,18 +730,23 @@ class RelationshipGraphPathAPI(APIBase):
             ...
         ],
         "hops": 2,
+        "path_count": 3,
         "relationship_ids": ["<resourcexid>", ...],
+        "paths_truncated": false,
         "max_hops": 6,
         "limit_reached": false
     }
 
     A direct relationship is worded from the `from` resource's side, as a
-    summary row is. `hops` is the number of relationships in the shortest
-    chain, ignoring which way each points, and `relationship_ids` lists them
-    in order from `from` to `to`. Both are empty when no chain of at most
-    `max_hops` was found; `limit_reached` says the search gave up on the
-    number of resources it had to visit rather than on the distance. Only
-    readable resources and relationships are followed.
+    summary row is. `hops` is the number of relationships in a shortest
+    chain, ignoring which way each points; `path_count` is how many chains
+    are that short, and `relationship_ids` holds every relationship on any
+    of them, in no particular order. When they would hold more than
+    MAX_PATH_RELATIONSHIPS, only some whole chains are kept and
+    `paths_truncated` says so. `hops` is null, and there are no chains, when
+    none of at most `max_hops` was found; `limit_reached` says the search
+    gave up on the number of resources it had to visit rather than on the
+    distance. Only readable resources and relationships are followed.
     """
 
     def get(self, request):
@@ -633,9 +768,7 @@ class RelationshipGraphPathAPI(APIBase):
             return JSONErrorResponse(_("Resource not found"), status=404)
 
         readable_nodes = ReadableNodes(request.user)
-        relationship_ids, limit_reached = _shortest_path(
-            request.user, readable_nodes, from_id, to_id
-        )
+        paths = _shortest_path(request.user, readable_nodes, from_id, to_id)
 
         direct_relationships, direct_truncated = _direct_relationships(
             readable_nodes, from_id, to_id
@@ -646,12 +779,14 @@ class RelationshipGraphPathAPI(APIBase):
                 "to_resource_id": str(to_id),
                 "direct_relationships": direct_relationships,
                 "direct_relationships_truncated": direct_truncated,
-                "hops": len(relationship_ids) or None,
+                "hops": paths.hops,
+                "path_count": paths.path_count,
                 "relationship_ids": [
-                    str(relationship_id) for relationship_id in relationship_ids
+                    str(relationship_id) for relationship_id in paths.relationship_ids
                 ],
+                "paths_truncated": paths.truncated,
                 "max_hops": MAX_PATH_HOPS,
-                "limit_reached": limit_reached,
+                "limit_reached": paths.limit_reached,
             }
         )
 
@@ -709,9 +844,9 @@ def _direct_relationships(readable_nodes, from_id, to_id):
 
 
 class _SearchSide:
-    """One end of a search for the shortest chain between two resources. It
-    knows how far each resource it has reached is from its start, and how it
-    got there."""
+    """One end of a search for the shortest chains between two resources. It
+    knows how far each resource it has reached is from its start, and every
+    relationship that reached it from one step closer."""
 
     def __init__(self, start):
         self.depth = 0
@@ -722,7 +857,7 @@ class _SearchSide:
     def expand(self, user, relations, other_depths, row_budget):
         """Reach every resource one relationship further, in either direction.
         Returns those the other end of the search had already reached."""
-        reached = {}
+        reached = defaultdict(list)
         for near, far in (
             ("from_resource_id", "to_resource_id"),
             ("to_resource_id", "from_resource_id"),
@@ -743,36 +878,83 @@ class _SearchSide:
                 return [], True
             row_budget -= len(rows)
             for row in rows:
-                if row[far] not in self.depths and row[far] not in reached:
-                    reached[row[far]] = (row[near], row["resourcexid"])
+                if row[far] not in self.depths:
+                    reached[row[far]].append((row[near], row["resourcexid"]))
 
         self.depth += 1
-        for resource_id, (previous_id, relationship_id) in reached.items():
+        for resource_id, steps in reached.items():
             self.depths[resource_id] = self.depth
-            self.previous[resource_id] = (previous_id, relationship_id)
+            self.previous[resource_id] = steps
         self.frontier = set(reached)
         return [
             resource_id for resource_id in reached if resource_id in other_depths
         ], False
 
-    def trace(self, resource_id):
-        """The relationships from the start to a resource this side reached,
-        in order."""
-        relationship_ids = []
+    def relationships_to(self, resource_ids):
+        """Every relationship on any shortest chain from the start to the
+        given resources, which this side reached."""
+        relationship_ids = set()
+        pending = list(resource_ids)
+        seen = set(pending)
+        while pending:
+            for previous_id, relationship_id in self.previous.get(pending.pop(), ()):
+                relationship_ids.add(relationship_id)
+                if previous_id not in seen:
+                    seen.add(previous_id)
+                    pending.append(previous_id)
+        return relationship_ids
+
+    def one_chain_to(self, resource_id):
+        """The relationships of a single shortest chain from the start to a
+        resource this side reached."""
+        relationship_ids = set()
         while resource_id in self.previous:
-            resource_id, relationship_id = self.previous[resource_id]
-            relationship_ids.append(relationship_id)
-        return relationship_ids[::-1]
+            resource_id, relationship_id = self.previous[resource_id][0]
+            relationship_ids.add(relationship_id)
+        return relationship_ids
+
+    def chain_counts(self):
+        """How many shortest chains lead from the start to each resource."""
+        counts = {}
+        # Resources were reached nearest first, so their predecessors are
+        # counted before them; only the start has none
+        for resource_id in self.depths:
+            counts[resource_id] = (
+                sum(
+                    counts[previous_id]
+                    for previous_id, _relationship_id in self.previous.get(
+                        resource_id, ()
+                    )
+                )
+                or 1
+            )
+        return counts
+
+
+@dataclass(frozen=True)
+class ShortestPaths:
+    relationship_ids: list
+    hops: int | None
+    path_count: int
+    # Some chains were left out to stay within MAX_PATH_RELATIONSHIPS
+    truncated: bool
+    # The search gave up on its size rather than on the distance
+    limit_reached: bool
+
+
+NO_PATHS = ShortestPaths([], None, 0, False, False)
 
 
 def _shortest_path(user, readable_nodes, from_id, to_id):
     """Search outward from both resources at once, always widening the end
     with fewer resources to look at, until the two meet. Because the ends
-    only ever grow by whole steps, the first meeting is the shortest chain.
+    only ever grow by whole steps, every resource where they first meet lies
+    on a shortest chain, and together they hold all of them.
 
-    Returns the relationships of the chain, in order from `from_id`, and
-    whether the search gave up on its size. The chain is empty when none was
-    found."""
+    Returns the relationships on every shortest chain, the chains' length,
+    how many there are, whether some relationships were left out to stay
+    within MAX_PATH_RELATIONSHIPS, and whether the search gave up on its
+    size. There are no relationships when no chain was found."""
     relations = _readable_relations(readable_nodes, **BETWEEN_RESOURCES)
     from_side = _SearchSide(from_id)
     to_side = _SearchSide(to_id)
@@ -783,20 +965,54 @@ def _shortest_path(user, readable_nodes, from_id, to_id):
         else:
             side, other = to_side, from_side
         if not side.frontier:
-            return [], False
+            return NO_PATHS
 
         remaining = MAX_PATH_SEARCH_NODES - len(from_side.depths) - len(to_side.depths)
         meeting_ids, limit_reached = side.expand(
             user, relations, other.depths, remaining
         )
         if limit_reached:
-            return [], True
+            return replace(NO_PATHS, limit_reached=True)
         if meeting_ids:
-            meeting_id = min(meeting_ids, key=str)
-            return (
-                from_side.trace(meeting_id) + to_side.trace(meeting_id)[::-1],
-                False,
-            )
+            return _paths_through(from_side, to_side, sorted(meeting_ids, key=str))
         if len(from_side.depths) + len(to_side.depths) > MAX_PATH_SEARCH_NODES:
-            return [], True
-    return [], False
+            return replace(NO_PATHS, limit_reached=True)
+    return NO_PATHS
+
+
+def _paths_through(from_side, to_side, meeting_ids):
+    """The shortest chains through the resources where the two ends of the
+    search met. When they hold too many relationships, a meeting resource's
+    chains are kept or left out whole, so what is kept is always made of
+    complete chains."""
+    relationship_ids = from_side.relationships_to(
+        meeting_ids
+    ) | to_side.relationships_to(meeting_ids)
+    truncated = len(relationship_ids) > MAX_PATH_RELATIONSHIPS
+    if truncated:
+        relationship_ids = set()
+        for meeting_id in meeting_ids:
+            through = from_side.relationships_to(
+                [meeting_id]
+            ) | to_side.relationships_to([meeting_id])
+            if len(relationship_ids | through) <= MAX_PATH_RELATIONSHIPS:
+                relationship_ids |= through
+            elif not relationship_ids:
+                # Too many even for one meeting resource: keep a single chain
+                relationship_ids = from_side.one_chain_to(
+                    meeting_id
+                ) | to_side.one_chain_to(meeting_id)
+
+    from_counts = from_side.chain_counts()
+    to_counts = to_side.chain_counts()
+    first_meeting_id = meeting_ids[0]
+    return ShortestPaths(
+        relationship_ids=sorted(relationship_ids, key=str),
+        hops=from_side.depths[first_meeting_id] + to_side.depths[first_meeting_id],
+        path_count=sum(
+            from_counts[meeting_id] * to_counts[meeting_id]
+            for meeting_id in meeting_ids
+        ),
+        truncated=truncated,
+        limit_reached=False,
+    )

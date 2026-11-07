@@ -7,11 +7,10 @@ import { fetchResourceDescriptors } from "@/arches_search/SearchResults/api.ts";
 import type { MaybeRefOrGetter } from "vue";
 
 // The description a resource's model configures for it, in the active
-// language, with permission to expose the editor link.
+// language.
 export function useResourceDescription(resourceId: MaybeRefOrGetter<string>) {
     const description = ref("");
     const isLoading = ref(false);
-    const canEdit = ref(false);
     const hasFailed = ref(false);
 
     let latestRequestId = 0;
@@ -25,18 +24,14 @@ export function useResourceDescription(resourceId: MaybeRefOrGetter<string>) {
     async function loadDescription(id: string): Promise<void> {
         const requestId = ++latestRequestId;
         description.value = "";
-        canEdit.value = false;
         hasFailed.value = false;
         isLoading.value = true;
         try {
-            const descriptors = await fetchResourceDescriptors([id], {
-                includeCanEdit: true,
-            });
+            const descriptors = await fetchResourceDescriptors([id]);
             if (requestId !== latestRequestId) return;
             description.value =
                 descriptors[id]?.descriptors?.[arches.activeLanguage]
                     ?.description ?? "";
-            canEdit.value = descriptors[id]?.can_edit === true;
         } catch {
             if (requestId === latestRequestId) hasFailed.value = true;
         } finally {
@@ -44,5 +39,5 @@ export function useResourceDescription(resourceId: MaybeRefOrGetter<string>) {
         }
     }
 
-    return { description, isLoading, canEdit, hasFailed };
+    return { description, isLoading, hasFailed };
 }

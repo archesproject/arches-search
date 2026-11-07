@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
@@ -9,18 +9,36 @@ import { generateArchesURL } from "@/arches_vue_components/application";
 
 import { useResourceDescription } from "@/arches_search/RelationshipGraph/composables/useResourceDescription.ts";
 
-const { resourceId, name, modelName, modelColor, relatedCount } = defineProps<{
-    resourceId: string;
-    name: string;
-    modelName: string;
-    modelColor: string;
-    relatedCount: number;
+import type { SelectedResource } from "@/arches_search/RelationshipGraph/types.ts";
+
+const { resourceId, name, modelName, modelColor, relatedCount, isSeed } =
+    defineProps<{
+        resourceId: string;
+        name: string;
+        modelName: string;
+        modelColor: string;
+        relatedCount: number;
+        isSeed: boolean;
+    }>();
+
+// Either action is the end of looking at this resource here
+const emit = defineEmits<{
+    (event: "close"): void;
 }>();
+
+// Not provided outside the search page
+const viewRelatedResource = inject<
+    ((resource: SelectedResource) => void) | null
+>("viewRelatedResource", null);
 
 const { $gettext, $ngettext } = useGettext();
 
-const { description, isLoading, canEdit, hasFailed } = useResourceDescription(
+const { description, isLoading, hasFailed } = useResourceDescription(
     () => resourceId,
+);
+
+const focusLabel = computed<string>(() =>
+    $gettext("Show the relationships of %{name} in the panel", { name }, true),
 );
 
 const relatedCountLabel = computed<string>(() =>
@@ -33,9 +51,10 @@ const reportLink = computed<string>(() =>
     generateArchesURL("arches:resource_report", { resourceid: resourceId }),
 );
 
-const editorLink = computed<string>(() =>
-    generateArchesURL("arches:resource_editor", { resourceid: resourceId }),
-);
+function focusOnResource(): void {
+    viewRelatedResource?.({ id: resourceId, title: name });
+    emit("close");
+}
 </script>
 
 <template>
@@ -80,16 +99,16 @@ const editorLink = computed<string>(() =>
                 variant="link"
                 :href="reportLink"
                 :label="$gettext('View Report')"
+                @click="emit('close')"
             />
             <Button
-                v-if="canEdit"
-                as="a"
-                icon="pi pi-wrench"
-                rel="noopener noreferrer"
-                target="_blank"
+                v-if="viewRelatedResource && !isSeed"
+                icon="pi pi-share-alt"
                 variant="link"
-                :href="editorLink"
-                :label="$gettext('Edit')"
+                :label="$gettext('Focus')"
+                :aria-label="focusLabel"
+                :title="focusLabel"
+                @click="focusOnResource"
             />
         </footer>
     </div>

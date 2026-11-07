@@ -12,10 +12,7 @@ vi.mock("@/arches_search/SearchResults/api.ts", () => ({
     fetchResourceDescriptors: vi.fn(),
 }));
 
-function descriptors(
-    id: string,
-    canEdit: boolean,
-): Record<string, ResourceDescriptorData> {
+function descriptors(id: string): Record<string, ResourceDescriptorData> {
     return {
         [id]: {
             descriptors: {
@@ -26,7 +23,6 @@ function descriptors(
                 },
             },
             graph_id: "model",
-            can_edit: canEdit,
         },
     };
 }
@@ -34,35 +30,22 @@ function descriptors(
 describe("resource popup details", () => {
     afterEach(() => vi.resetAllMocks());
 
-    it("exposes edit permission only after a successful response", async () => {
+    it("loads the description in the active language", async () => {
         vi.mocked(fetchResourceDescriptors).mockResolvedValue(
-            descriptors("one", true),
+            descriptors("one"),
         );
         const scope = effectScope();
         const state = scope.run(() => useResourceDescription("one"))!;
-        expect(state.canEdit.value).toBe(false);
+        expect(state.isLoading.value).toBe(true);
         await flushPromises();
         expect(state.description.value).toBe("one description");
-        expect(state.canEdit.value).toBe(true);
-        expect(fetchResourceDescriptors).toHaveBeenCalledWith(["one"], {
-            includeCanEdit: true,
-        });
-        scope.stop();
-    });
-
-    it("does not grant edit permission to read-only resources", async () => {
-        vi.mocked(fetchResourceDescriptors).mockResolvedValue(
-            descriptors("one", false),
-        );
-        const scope = effectScope();
-        const state = scope.run(() => useResourceDescription("one"))!;
-        await flushPromises();
-        expect(state.canEdit.value).toBe(false);
+        expect(state.isLoading.value).toBe(false);
         expect(state.hasFailed.value).toBe(false);
+        expect(fetchResourceDescriptors).toHaveBeenCalledWith(["one"]);
         scope.stop();
     });
 
-    it("clears permission on resource changes and ignores stale responses", async () => {
+    it("ignores a response for a resource it has moved on from", async () => {
         let resolveFirst: (
             value: Record<string, ResourceDescriptorData>,
         ) => void = () => {};
@@ -73,21 +56,20 @@ describe("resource popup details", () => {
                         resolveFirst = resolve;
                     }),
             )
-            .mockResolvedValueOnce(descriptors("two", false));
+            .mockResolvedValueOnce(descriptors("two"));
         const id = ref("one");
         const scope = effectScope();
         const state = scope.run(() => useResourceDescription(id))!;
         id.value = "two";
         await nextTick();
         await flushPromises();
-        resolveFirst(descriptors("one", true));
+        resolveFirst(descriptors("one"));
         await flushPromises();
         expect(state.description.value).toBe("two description");
-        expect(state.canEdit.value).toBe(false);
         scope.stop();
     });
 
-    it("reports failure and leaves the editor unavailable", async () => {
+    it("reports failure", async () => {
         vi.mocked(fetchResourceDescriptors).mockRejectedValue(
             new Error("Unavailable"),
         );
@@ -96,7 +78,7 @@ describe("resource popup details", () => {
         await flushPromises();
         expect(state.hasFailed.value).toBe(true);
         expect(state.isLoading.value).toBe(false);
-        expect(state.canEdit.value).toBe(false);
+        expect(state.description.value).toBe("");
         scope.stop();
     });
 });

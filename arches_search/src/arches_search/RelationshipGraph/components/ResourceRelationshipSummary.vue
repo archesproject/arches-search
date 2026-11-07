@@ -18,7 +18,8 @@ import type { SummaryState } from "@/arches_search/RelationshipGraph/composables
 
 const LOADING_PLACEHOLDER_COUNT = 3;
 
-const { title, summaryState, deselectedRowIds } = defineProps<{
+const { resourceId, title, summaryState, deselectedRowIds } = defineProps<{
+    resourceId: string;
     title: string;
     summaryState: SummaryState | undefined;
     deselectedRowIds: string[];
@@ -50,7 +51,7 @@ const isLoading = computed<boolean>(
 const hasFailed = computed<boolean>(() => summaryState?.status === FAILED);
 
 const removeLabel = computed<string>(() =>
-    $gettext("Remove %{title} from the panel", { title }),
+    $gettext("Remove %{title} from the panel", { title }, true),
 );
 </script>
 
@@ -113,6 +114,7 @@ const removeLabel = computed<string>(() =>
             <RelationshipSummaryRow
                 v-for="row in rows"
                 :key="row.id"
+                :resource-id="resourceId"
                 :row="row"
                 :selected="!deselectedRowIds.includes(row.id)"
                 @toggle="emit('toggle-row', row.id)"

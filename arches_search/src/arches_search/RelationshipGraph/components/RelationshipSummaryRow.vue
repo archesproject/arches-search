@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 
+import RelatedResourceList from "@/arches_search/RelationshipGraph/components/RelatedResourceList.vue";
 import { useGraphColors } from "@/arches_search/RelationshipGraph/composables/useGraphColors.ts";
 
 import type { RelationshipSummaryRow } from "@/arches_search/RelationshipGraph/types.ts";
 
-const { row, selected } = defineProps<{
+const { resourceId, row, selected } = defineProps<{
+    resourceId: string;
     row: RelationshipSummaryRow;
     selected: boolean;
 }>();
@@ -20,11 +22,32 @@ const emit = defineEmits<{
 const { $gettext } = useGettext();
 const { colorFor } = useGraphColors();
 
+const isExpanded = ref(false);
+
 const swatchColor = computed<string>(() => colorFor(row.related_model));
 
 const typeLabel = computed<string>(
     () => row.relationship_type_label || $gettext("Unspecified relationship"),
 );
+
+const listId = computed<string>(
+    () => `related-resources-${resourceId}-${row.id}`,
+);
+
+const expandLabel = computed<string>(() => {
+    if (isExpanded.value) {
+        return $gettext(
+            "Hide the related %{model} resources",
+            { model: row.related_model.name },
+            true,
+        );
+    }
+    return $gettext(
+        "Show the related %{model} resources",
+        { model: row.related_model.name },
+        true,
+    );
+});
 
 const isOutgoing = computed<boolean>(() => row.direction === "outgoing");
 
@@ -32,69 +55,124 @@ const directionLabel = computed<string>(() =>
     isOutgoing.value ? $gettext("Outgoing") : $gettext("Incoming"),
 );
 
-const toggleLabel = computed<string>(() =>
-    selected
-        ? $gettext("Hide %{type} relationships to %{model} from the graph", {
-              type: typeLabel.value,
-              model: row.related_model.name,
-          })
-        : $gettext("Show %{type} relationships to %{model} in the graph", {
-              type: typeLabel.value,
-              model: row.related_model.name,
-          }),
-);
+const toggleLabel = computed<string>(() => {
+    const labelParameters = {
+        type: typeLabel.value,
+        model: row.related_model.name,
+    };
+    if (selected) {
+        return $gettext(
+            "Hide %{type} relationships to %{model} from the graph",
+            labelParameters,
+            true,
+        );
+    }
+    return $gettext(
+        "Show %{type} relationships to %{model} in the graph",
+        labelParameters,
+        true,
+    );
+});
 </script>
 
 <template>
-    <li
-        class="relationship-summary-row"
-        :class="{ 'relationship-summary-row-off': !selected }"
-    >
-        <span
-            class="swatch"
-            :style="{ backgroundColor: swatchColor }"
-        />
-        <div class="details">
-            <span class="model-name">{{ row.related_model.name }}</span>
-            <span class="relationship-type">
+    <li class="relationship-summary-row">
+        <div
+            class="summary"
+            :class="{ 'summary-off': !selected }"
+        >
+            <Button
+                class="expand"
+                variant="text"
+                :aria-expanded="isExpanded"
+                :aria-controls="isExpanded ? listId : undefined"
+                :title="expandLabel"
+                @click="isExpanded = !isExpanded"
+            >
                 <i
-                    role="img"
+                    aria-hidden="true"
                     :class="[
                         'pi',
-                        isOutgoing ? 'pi-arrow-right' : 'pi-arrow-left',
+                        'chevron',
+                        isExpanded ? 'pi-chevron-down' : 'pi-chevron-right',
                     ]"
-                    :title="directionLabel"
-                    :aria-label="directionLabel"
                 />
-                <span>{{ typeLabel }}</span>
-            </span>
+                <span
+                    class="swatch"
+                    :style="{ backgroundColor: swatchColor }"
+                />
+                <span class="details">
+                    <span class="model-name">{{ row.related_model.name }}</span>
+                    <span class="relationship-type">
+                        <i
+                            role="img"
+                            :class="[
+                                'pi',
+                                isOutgoing ? 'pi-arrow-right' : 'pi-arrow-left',
+                            ]"
+                            :title="directionLabel"
+                            :aria-label="directionLabel"
+                        />
+                        <span>{{ typeLabel }}</span>
+                    </span>
+                </span>
+                <span class="count">{{ row.count }}</span>
+            </Button>
+            <Button
+                class="toggle"
+                variant="text"
+                size="small"
+                :icon="selected ? 'pi pi-eye' : 'pi pi-eye-slash'"
+                :aria-label="toggleLabel"
+                :aria-pressed="selected"
+                :title="toggleLabel"
+                @click="emit('toggle')"
+            />
         </div>
-        <span class="count">{{ row.count }}</span>
-        <Button
-            class="toggle"
-            variant="text"
-            size="small"
-            :icon="selected ? 'pi pi-eye' : 'pi pi-eye-slash'"
-            :aria-label="toggleLabel"
-            :aria-pressed="selected"
-            :title="toggleLabel"
-            @click="emit('toggle')"
+        <RelatedResourceList
+            v-if="isExpanded"
+            :id="listId"
+            :resource-id="resourceId"
+            :row-id="row.id"
         />
     </li>
 </template>
 
 <style scoped>
 .relationship-summary-row {
+    border-block-end: 0.0625rem solid var(--p-content-border-color);
+}
+
+.relationship-summary-row .summary {
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.8rem 0;
-    border-block-end: 0.0625rem solid var(--p-content-border-color);
+    padding-block: 0.8rem;
     transition: opacity 0.15s ease;
 }
 
-.relationship-summary-row.relationship-summary-row-off {
+.relationship-summary-row .summary.summary-off {
     opacity: 0.5;
+}
+
+.relationship-summary-row .expand.p-button {
+    display: flex;
+    flex: 1;
+    justify-content: flex-start;
+    gap: 1rem;
+    min-inline-size: 0;
+    padding: 0;
+    text-align: start;
+}
+
+.relationship-summary-row .expand:hover .model-name {
+    text-decoration: underline;
+}
+
+.relationship-summary-row .expand .chevron {
+    flex-shrink: 0;
+    font-size: 1rem;
+    color: var(--p-text-muted-color);
 }
 
 .relationship-summary-row .swatch {
@@ -164,6 +242,6 @@ const toggleLabel = computed<string>(() =>
 
 /* The icon takes its size from the theme, not from the button */
 .relationship-summary-row .toggle.p-button :deep(.p-button-icon) {
-    font-size: 1.3rem;
+    font-size: 1.5rem;
 }
 </style>

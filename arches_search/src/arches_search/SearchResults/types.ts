@@ -19,8 +19,6 @@ export interface ResourceDescriptorData {
         }
     >;
     graph_id: string;
-    // Only present when requested with includeCanEdit
-    can_edit?: boolean;
 }
 
 export interface ResourceInstanceLifecycleState {
