@@ -30,7 +30,9 @@ class SearchExportAPI(APIBase):
         search_payload = SearchPayload.from_body(body)
         try:
             validate_search_payload(search_payload)
-            queryset = SearchCompiler(search_payload, request.user).compile().results
+            queryset = SearchCompiler(
+                search_payload, request.user
+            ).compile_without_counts()
         except ValidationError as error:
             return JSONResponse({"error": str(error)}, status=400)
 

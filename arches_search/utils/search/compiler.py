@@ -161,15 +161,7 @@ class SearchCompiler:
         The matches in the graphs graph_slugs names, how many there are, and how
         many of them each of those graphs holds.
         """
-        requested_graphs = self._requested_graphs()
-        if not requested_graphs:
-            return SearchResult(
-                results=self._base_resources().none(),
-                scoped_count=0,
-                resource_type_counts=[],
-            )
-
-        matches = self._permitted_matches(requested_graphs)
+        matches = self.compile_without_counts()
         # One grouped count gives both the per-graph counts and the total, so a
         # paginator can skip its own COUNT(*).
         counts_by_graph_id = _counts_by_graph_id(matches)
@@ -177,11 +169,11 @@ class SearchCompiler:
             results=matches,
             scoped_count=sum(counts_by_graph_id.values()),
             resource_type_counts=_resource_type_counts(
-                requested_graphs, counts_by_graph_id
+                self._requested_graphs(), counts_by_graph_id
             ),
         )
 
-    def compile_results(self) -> QuerySet:
+    def compile_without_counts(self) -> QuerySet:
         """The matches only, without the counts compile() runs."""
         requested_graphs = self._requested_graphs()
         if not requested_graphs:

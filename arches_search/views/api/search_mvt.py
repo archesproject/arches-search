@@ -62,7 +62,7 @@ class SearchMVTContextAPI(APIBase):
         try:
             search_payload = SearchPayload.from_body(body)
             validate_search_payload(search_payload)
-            SearchCompiler(search_payload, request.user).compile_results()
+            SearchCompiler(search_payload, request.user).compile_without_counts()
         except ValidationError as error:
             return JSONResponse({"error": str(error)}, status=400)
 
@@ -88,7 +88,7 @@ class SearchMVTAPI(APIBase):
         try:
             matches = SearchCompiler(
                 SearchPayload.from_body(body), request.user
-            ).compile_results()
+            ).compile_without_counts()
         except ValidationError:
             # The context was checked as the user who created it. Another user
             # may not be able to read a node it names, and gets nothing drawn.
