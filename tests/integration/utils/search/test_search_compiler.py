@@ -211,7 +211,7 @@ class SearchCompilerTests(TestCase):
             for graph in (self.graph_a, self.graph_b)
         ]
 
-    def _compile_without_counts_ids(self, **kwargs):
+    def _compile_skipping_counts_ids(self, **kwargs):
         slugs = kwargs.pop("graph_slugs", [self.graph_a.slug, self.graph_b.slug])
         payload = SearchPayload(
             graph_slugs=slugs,
@@ -220,25 +220,25 @@ class SearchCompilerTests(TestCase):
         )
         compiler = SearchCompiler(payload, self.user)
         return set(
-            compiler.compile_without_counts().values_list(
+            compiler.compile(return_counts=False).results.values_list(
                 "resourceinstanceid", flat=True
             )
         ), self._result_ids(SearchCompiler(payload, self.user).compile())
 
-    def test_compile_without_counts_matches_compile_with_no_requested_graphs(self):
-        results_ids, compile_ids = self._compile_without_counts_ids(graph_slugs=[])
+    def test_compile_skipping_counts_matches_compile_with_no_requested_graphs(self):
+        results_ids, compile_ids = self._compile_skipping_counts_ids(graph_slugs=[])
         self.assertEqual(results_ids, set())
         self.assertEqual(results_ids, compile_ids)
 
-    def test_compile_without_counts_matches_compile_for_a_term_search(self):
-        results_ids, compile_ids = self._compile_without_counts_ids(
+    def test_compile_skipping_counts_matches_compile_for_a_term_search(self):
+        results_ids, compile_ids = self._compile_skipping_counts_ids(
             term_search={"terms": ["amber"], "max_hops": 0}
         )
         self.assertTrue(results_ids)
         self.assertEqual(results_ids, compile_ids)
 
-    def test_compile_without_counts_matches_compile_for_an_advanced_search(self):
-        results_ids, compile_ids = self._compile_without_counts_ids(
+    def test_compile_skipping_counts_matches_compile_for_an_advanced_search(self):
+        results_ids, compile_ids = self._compile_skipping_counts_ids(
             advanced_search_queries=self._search_models_payloads(
                 ["DateSearch", "DateRangeSearch"],
                 "BETWEEN",
@@ -251,7 +251,7 @@ class SearchCompilerTests(TestCase):
         self.assertEqual(results_ids, {self.amber_mineral.resourceinstanceid})
         self.assertEqual(results_ids, compile_ids)
 
-    def test_compile_without_counts_refuses_a_payload_naming_an_unsearched_graph(self):
+    def test_compile_skipping_counts_refuses_a_payload_naming_an_unsearched_graph(self):
         payload = SearchPayload(
             graph_slugs=[self.graph_a.slug],
             term_search=None,
@@ -268,9 +268,19 @@ class SearchCompilerTests(TestCase):
             ],
         )
         with self.assertRaises(ValidationError):
-            SearchCompiler(payload, self.user).compile_without_counts()
+            SearchCompiler(payload, self.user).compile(return_counts=False).results
 
-    def test_compile_without_counts_issues_no_count_query(self):
+    def test_compile_skipping_counts_leaves_the_counts_unset(self):
+        payload = SearchPayload(
+            graph_slugs=[self.graph_a.slug],
+            term_search=None,
+            advanced_search_queries=None,
+        )
+        result = SearchCompiler(payload, self.user).compile(return_counts=False)
+        self.assertIsNone(result.scoped_count)
+        self.assertIsNone(result.resource_type_counts)
+
+    def test_compile_skipping_counts_issues_no_count_query(self):
         payload = SearchPayload(
             graph_slugs=[self.graph_a.slug, self.graph_b.slug],
             term_search={"terms": ["amber"], "max_hops": 0},
@@ -279,8 +289,8 @@ class SearchCompilerTests(TestCase):
         with CaptureQueriesContext(connection) as queries:
             list(
                 SearchCompiler(payload, self.user)
-                .compile_without_counts()
-                .values("resourceinstanceid")
+                .compile(return_counts=False)
+                .results.values("resourceinstanceid")
             )
         self.assertTrue(queries.captured_queries)
         for query in queries.captured_queries:
@@ -883,7 +893,7 @@ class CompileResultsPermissionTests(TestCase):
         cls.member = get_user_model().objects.create_user(
             username="compile-results-member", password="password"
         )
-        cls.group = Group.objects.create(name="compile_without_counts_group")
+        cls.group = Group.objects.create(name="compile_skipping_counts_group")
         cls.member.groups.add(cls.group)
         cls.graph = GraphModel.objects.create(
             graphid=uuid.uuid4(),
@@ -900,7 +910,7 @@ class CompileResultsPermissionTests(TestCase):
         )
         assign_perm("view_resourceinstance", cls.group, cls.granted)
 
-    def test_compile_without_counts_applies_the_permission_filter(self):
+    def test_compile_skipping_counts_applies_the_permission_filter(self):
         payload = SearchPayload(
             graph_slugs=[self.graph.slug],
             term_search=None,
@@ -908,8 +918,8 @@ class CompileResultsPermissionTests(TestCase):
         )
         results_ids = set(
             SearchCompiler(payload, self.member)
-            .compile_without_counts()
-            .values_list("resourceinstanceid", flat=True)
+            .compile(return_counts=False)
+            .results.values_list("resourceinstanceid", flat=True)
         )
         compile_ids = set(
             SearchCompiler(payload, self.member)
