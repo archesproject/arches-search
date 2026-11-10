@@ -14,8 +14,10 @@ from django.contrib.gis.geos import GEOSGeometry
 from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
+from django.contrib.auth.models import Group
 from django.urls import reverse
 
+from arches.app.utils.permission_backend import assign_perm
 from arches.app.models.models import (
     GraphModel,
     ResourceInstance,
@@ -208,6 +210,79 @@ class SearchCompilerTests(TestCase):
             }
             for graph in (self.graph_a, self.graph_b)
         ]
+
+    def _compile_results_ids(self, **kwargs):
+        slugs = kwargs.pop("graph_slugs", [self.graph_a.slug, self.graph_b.slug])
+        payload = SearchPayload(
+            graph_slugs=slugs,
+            term_search=kwargs.get("term_search"),
+            advanced_search_queries=kwargs.get("advanced_search_queries"),
+        )
+        compiler = SearchCompiler(payload, self.user)
+        return set(
+            compiler.compile_results().values_list("resourceinstanceid", flat=True)
+        ), self._result_ids(SearchCompiler(payload, self.user).compile())
+
+    def test_compile_results_matches_compile_with_no_requested_graphs(self):
+        results_ids, compile_ids = self._compile_results_ids(graph_slugs=[])
+        self.assertEqual(results_ids, set())
+        self.assertEqual(results_ids, compile_ids)
+
+    def test_compile_results_matches_compile_for_a_term_search(self):
+        results_ids, compile_ids = self._compile_results_ids(
+            term_search={"terms": ["amber"], "max_hops": 0}
+        )
+        self.assertTrue(results_ids)
+        self.assertEqual(results_ids, compile_ids)
+
+    def test_compile_results_matches_compile_for_an_advanced_search(self):
+        results_ids, compile_ids = self._compile_results_ids(
+            advanced_search_queries=self._search_models_payloads(
+                ["DateSearch", "DateRangeSearch"],
+                "BETWEEN",
+                [
+                    {"type": "LITERAL", "value": "1890-01-01"},
+                    {"type": "LITERAL", "value": "1910-01-01"},
+                ],
+            )
+        )
+        self.assertEqual(results_ids, {self.amber_mineral.resourceinstanceid})
+        self.assertEqual(results_ids, compile_ids)
+
+    def test_compile_results_refuses_a_payload_naming_an_unsearched_graph(self):
+        payload = SearchPayload(
+            graph_slugs=[self.graph_a.slug],
+            term_search=None,
+            advanced_search_queries=[
+                {
+                    "graph_slug": self.graph_a.slug + "-typo",
+                    "scope": "RESOURCE",
+                    "logic": "AND",
+                    "clauses": [],
+                    "groups": [],
+                    "aggregations": [],
+                    "relationship": None,
+                }
+            ],
+        )
+        with self.assertRaises(ValidationError):
+            SearchCompiler(payload, self.user).compile_results()
+
+    def test_compile_results_issues_no_count_query(self):
+        payload = SearchPayload(
+            graph_slugs=[self.graph_a.slug, self.graph_b.slug],
+            term_search={"terms": ["amber"], "max_hops": 0},
+            advanced_search_queries=None,
+        )
+        with CaptureQueriesContext(connection) as queries:
+            list(
+                SearchCompiler(payload, self.user)
+                .compile_results()
+                .values("resourceinstanceid")
+            )
+        self.assertTrue(queries.captured_queries)
+        for query in queries.captured_queries:
+            self.assertNotIn("COUNT(", query["sql"].upper())
 
     def test_text_match_direct_only_max_hops_zero(self):
         result = self._search(term_search={"terms": ["amber"], "max_hops": 0})
@@ -798,3 +873,46 @@ class PerGraphAdvancedSearchQueryTests(AdvancedSearchSetupMixin, TestCase):
             self.assertEqual(ids & self.DOG_IDS, {DOG_B_ID})
         with self.subTest("the unaddressed graph is narrowed to it"):
             self.assertEqual(ids & self.PERSON_IDS, {PERSON_A_ID, PERSON_B_ID})
+
+
+class CompileResultsPermissionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.member = get_user_model().objects.create_user(
+            username="compile-results-member", password="password"
+        )
+        cls.group = Group.objects.create(name="compile_results_group")
+        cls.member.groups.add(cls.group)
+        cls.graph = GraphModel.objects.create(
+            graphid=uuid.uuid4(),
+            name="Permissioned",
+            slug="compile-results-permissioned",
+            isresource=True,
+            is_active=True,
+        )
+        cls.granted = ResourceInstance.objects.create(
+            resourceinstanceid=uuid.uuid4(), graph=cls.graph
+        )
+        cls.hidden = ResourceInstance.objects.create(
+            resourceinstanceid=uuid.uuid4(), graph=cls.graph
+        )
+        assign_perm("view_resourceinstance", cls.group, cls.granted)
+
+    def test_compile_results_applies_the_permission_filter(self):
+        payload = SearchPayload(
+            graph_slugs=[self.graph.slug],
+            term_search=None,
+            advanced_search_queries=None,
+        )
+        results_ids = set(
+            SearchCompiler(payload, self.member)
+            .compile_results()
+            .values_list("resourceinstanceid", flat=True)
+        )
+        compile_ids = set(
+            SearchCompiler(payload, self.member)
+            .compile()
+            .results.values_list("resourceinstanceid", flat=True)
+        )
+        self.assertEqual(results_ids, {self.granted.resourceinstanceid})
+        self.assertEqual(results_ids, compile_ids)

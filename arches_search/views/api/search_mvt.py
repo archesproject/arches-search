@@ -62,7 +62,7 @@ class SearchMVTContextAPI(APIBase):
         try:
             search_payload = SearchPayload.from_body(body)
             validate_search_payload(search_payload)
-            SearchCompiler(search_payload, request.user).compile()
+            SearchCompiler(search_payload, request.user).compile_results()
         except ValidationError as error:
             return JSONResponse({"error": str(error)}, status=400)
 
@@ -86,15 +86,15 @@ class SearchMVTAPI(APIBase):
             return HttpResponse(cached_tile, content_type="application/x-protobuf")
 
         try:
-            search_result = SearchCompiler(
+            matches = SearchCompiler(
                 SearchPayload.from_body(body), request.user
-            ).compile()
+            ).compile_results()
         except ValidationError:
             # The context was checked as the user who created it. Another user
             # may not be able to read a node it names, and gets nothing drawn.
             return HttpResponse(b"", content_type="application/x-protobuf")
 
-        search_results_queryset = search_result.results.values("resourceinstanceid")
+        search_results_queryset = matches.values("resourceinstanceid")
         mvt_tile = self._generate_tile(search_results_queryset, zoom, x, y)
 
         mvt_cache.set(tile_key, mvt_tile, settings.TILE_CACHE_TIMEOUT)

@@ -161,10 +161,7 @@ class SearchCompiler:
         The matches in the graphs graph_slugs names, how many there are, and how
         many of them each of those graphs holds.
         """
-        requested_slugs = set(self.search_payload.graph_slugs or [])
-        requested_graphs = [
-            graph for graph in self._named_graphs if graph.slug in requested_slugs
-        ]
+        requested_graphs = self._requested_graphs()
         if not requested_graphs:
             return SearchResult(
                 results=self._base_resources().none(),
@@ -183,6 +180,17 @@ class SearchCompiler:
                 requested_graphs, counts_by_graph_id
             ),
         )
+
+    def compile_results(self) -> QuerySet:
+        """The matches only, without the counts compile() runs."""
+        requested_graphs = self._requested_graphs()
+        if not requested_graphs:
+            return self._base_resources().none()
+        return self._permitted_matches(requested_graphs)
+
+    def _requested_graphs(self) -> List[SearchableGraph]:
+        requested_slugs = set(self.search_payload.graph_slugs or [])
+        return [graph for graph in self._named_graphs if graph.slug in requested_slugs]
 
     @cached_property
     def _named_graphs(self) -> List[SearchableGraph]:
