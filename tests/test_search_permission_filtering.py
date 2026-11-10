@@ -2,11 +2,19 @@ import json
 import uuid
 
 from django.contrib.auth.models import Group, User
+from django.contrib.gis.geos import GEOSGeometry
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
-from arches.app.models.models import GraphModel, ResourceInstance, TileModel
+from arches.app.models.models import (
+    GeoJSONGeometry,
+    GraphModel,
+    Node,
+    NodeGroup,
+    ResourceInstance,
+    TileModel,
+)
 from arches.app.utils.permission_backend import assign_perm
 
 from arches_search.models.models import TermSearch
@@ -623,6 +631,38 @@ class NodePermissionFilteringTest(AdvancedSearchSetupMixin, TestCase):
             ],
         }
 
+    def _add_person_a_geometry(self, node_alias):
+        nodegroup = NodeGroup.objects.create(nodegroupid=uuid.uuid4(), cardinality="1")
+        geometry_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name=node_alias,
+            alias=node_alias,
+            datatype="geojson-feature-collection",
+            graph=self.person_graph,
+            nodegroup=nodegroup,
+            istopnode=True,
+        )
+        GeoJSONGeometry.objects.create(
+            tile=TileModel.objects.create(
+                resourceinstance=self.person_a, nodegroup=nodegroup
+            ),
+            resourceinstance=self.person_a,
+            node=geometry_node,
+            geom=GEOSGeometry("POINT(0 0)", srid=3857),
+        )
+        return geometry_node
+
+    def _tile_as(self, user):
+        self.client.force_login(user)
+        context_id = self.client.post(
+            reverse("search_mvt_context"),
+            json.dumps({"graph_slugs": ["person"]}),
+            content_type="application/json",
+        ).json()["context_id"]
+        return self.client.get(
+            reverse("search_mvt", args=[context_id, 0, 0, 0])
+        ).content
+
     def test_a_map_context_naming_an_unreadable_node_is_a_400(self):
         self.client.force_login(self.restricted)
         response = self.client.post(
@@ -647,6 +687,45 @@ class NodePermissionFilteringTest(AdvancedSearchSetupMixin, TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"")
+
+    def test_a_tile_omits_geometries_its_viewer_cannot_read(self):
+        readable_node = self._add_person_a_geometry("home")
+        unreadable_node = self._add_person_a_geometry("birthplace")
+        assign_perm(
+            "no_access_to_nodegroup", self.restricted, unreadable_node.nodegroup
+        )
+
+        restricted_tile = self._tile_as(self.restricted)
+
+        with self.subTest("a readable geometry is drawn"):
+            self.assertIn(str(readable_node.nodeid).encode(), restricted_tile)
+        with self.subTest("an unreadable geometry is not drawn"):
+            self.assertNotIn(str(unreadable_node.nodeid).encode(), restricted_tile)
+        with self.subTest(
+            "the unreadable geometry is drawn for a user who can read it"
+        ):
+            self.assertIn(
+                str(unreadable_node.nodeid).encode(), self._tile_as(self.admin)
+            )
+
+    def test_descriptors_report_only_geometry_the_viewer_can_read(self):
+        unreadable_node = self._add_person_a_geometry("birthplace")
+        assign_perm(
+            "no_access_to_nodegroup", self.restricted, unreadable_node.nodegroup
+        )
+        person_a_id = str(self.person_a.pk)
+
+        def has_geometry_as(user):
+            self.client.force_login(user)
+            response = self.client.get(
+                reverse("api_resource_descriptors"), {"ids": [person_a_id]}
+            )
+            return response.json()[person_a_id]["has_geometry"]
+
+        with self.subTest("an unreadable geometry is not reported"):
+            self.assertFalse(has_geometry_as(self.restricted))
+        with self.subTest("it is reported for a user who can read it"):
+            self.assertTrue(has_geometry_as(self.admin))
 
     def test_the_sql_view_refuses_an_unreadable_node_with_a_400(self):
         self.client.force_login(self.restricted)

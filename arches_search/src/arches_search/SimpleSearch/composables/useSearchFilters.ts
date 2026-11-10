@@ -155,9 +155,12 @@ function createSearchFilters(): SearchFilters {
     const mvtContextId = ref<string | null>(null);
     const sort = ref<SortSpec[]>(DEFAULT_SORT);
     let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+    let mvtContextParamsKey: string | null = null;
 
     const resultsTileUrl = computed<string | null>(() => {
-        if (!mvtContextId.value) return null;
+        if (!mvtContextId.value) {
+            return null;
+        }
         const path = generateArchesURL("arches_search:search_mvt", {
             context_id: mvtContextId.value,
             zoom: "{z}",
@@ -342,6 +345,7 @@ function createSearchFilters(): SearchFilters {
         const next = new Map(queries.value);
         next.delete(filterKey);
         queries.value = next;
+        currentPage.value = FIRST_SEARCH_PAGE;
         search();
     }
 
@@ -424,6 +428,7 @@ function createSearchFilters(): SearchFilters {
 
     function clearMapFilter(): void {
         mapFilter.value = null;
+        currentPage.value = FIRST_SEARCH_PAGE;
         search();
     }
 
@@ -581,13 +586,24 @@ function createSearchFilters(): SearchFilters {
                 };
 
                 const { page: _page, sort: _sort, ...mvtParams } = searchParams;
+                const mvtParamsKey = JSON.stringify(mvtParams);
+                let mapContextRequest: Promise<{ context_id: string } | null> =
+                    Promise.resolve(null);
+                if (
+                    page === FIRST_SEARCH_PAGE &&
+                    mvtParamsKey !== mvtContextParamsKey
+                ) {
+                    mapContextRequest = createSearchMVTContext(mvtParams).catch(
+                        (error) => {
+                            throw new Error(
+                                `Failed to create MVT context: ${error.message}`,
+                            );
+                        },
+                    );
+                }
                 const [results, context] = await Promise.all([
                     fetchSearchResults(searchParams),
-                    createSearchMVTContext(mvtParams).catch((error) => {
-                        throw new Error(
-                            `Failed to create MVT context: ${error.message}`,
-                        );
-                    }),
+                    mapContextRequest,
                 ]);
 
                 if (page > FIRST_SEARCH_PAGE) {
@@ -603,7 +619,10 @@ function createSearchFilters(): SearchFilters {
                 }
 
                 resultsGraphs.value = requestGraphs;
-                mvtContextId.value = context?.context_id ?? null;
+                if (context !== null) {
+                    mvtContextId.value = context.context_id;
+                    mvtContextParamsKey = mvtParamsKey;
+                }
             } catch (error) {
                 console.error(error);
             } finally {

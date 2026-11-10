@@ -60,6 +60,9 @@ export interface TermSuggestion {
 
 export const TERM_FILTER_KEY = "termfilter";
 
+export const SEARCH_RESULTS_SOURCE = "arches-search-results";
+export const SEARCH_RESULTS_SOURCE_LAYER = "search-results";
+
 export const ACTIVE_FILTER_KIND_TERM = "term";
 export const ACTIVE_FILTER_KIND_RESOURCE_TYPE = "resource-type";
 export const ACTIVE_FILTER_KIND_TIME = "time";

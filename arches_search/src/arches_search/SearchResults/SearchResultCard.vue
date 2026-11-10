@@ -14,12 +14,10 @@ import arches from "arches";
 
 import { importComponents } from "@/arches_modular_reports/ModularReport/utils.ts";
 import ExpandedResultSection from "@/arches_search/SearchResults/components/ExpandedResultSection.vue";
+import { useResultsMapSelection } from "@/arches_search/SimpleSearch/composables/useResultsMapSelection.ts";
 
 import type { ComponentLookup } from "@/arches_modular_reports/ModularReport/types.ts";
-import type {
-    GraphModel,
-    ResourceData,
-} from "@/arches_search/AdvancedSearch/types.ts";
+import type { GraphModel } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     ResourceDescriptorData,
     ResourceInstanceLifecycleState,
@@ -29,10 +27,15 @@ import type {
 const FALLBACK_THUMB_ICON = "pi pi-box";
 const FALLBACK_THUMB_ACCENT_COLOR = "var(--p-surface-500)";
 
-const { $gettext } = useGettext();
-
-const props = defineProps<{
-    result: ResourceData;
+const {
+    resourceInstanceId,
+    descriptorData,
+    reportConfig,
+    reportConfigLoaded,
+    graphModel,
+    lifecycleState,
+} = defineProps<{
+    resourceInstanceId: string;
     descriptorData: ResourceDescriptorData | null;
     reportConfig: SearchReportConfig | null;
     reportConfigLoaded: boolean;
@@ -40,13 +43,25 @@ const props = defineProps<{
     lifecycleState: ResourceInstanceLifecycleState | null;
 }>();
 
+const resultsMapSelection = useResultsMapSelection();
+const { $gettext } = useGettext();
+
 const componentLookup: ComponentLookup = {};
+let hasAttemptedThumbnailLoad = false;
 
 const isExpanded = ref(false);
+const hasLoadedThumbnailImage = ref(false);
+const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
 
-provide("resourceInstanceId", props.result.resourceinstanceid);
-provide("descriptorData", toRef(props, "descriptorData"));
-provide("lifecycleState", toRef(props, "lifecycleState"));
+provide("resourceInstanceId", resourceInstanceId);
+provide(
+    "descriptorData",
+    toRef(() => descriptorData),
+);
+provide(
+    "lifecycleState",
+    toRef(() => lifecycleState),
+);
 provide("searchResultExpanded", isExpanded);
 
 // Read-only stubs for DataSection edit-path injections.
@@ -86,24 +101,26 @@ provide("shouldShowEditor", {
 });
 
 const configAsNamedSection = computed(() => ({
-    name: props.reportConfig?.name ?? "",
-    components: props.reportConfig?.components ?? [],
+    name: reportConfig?.name ?? "",
+    components: reportConfig?.components ?? [],
 }));
 
-watchEffect(() => {
-    if (props.reportConfig?.components?.length) {
-        importComponents([configAsNamedSection.value], componentLookup);
-    }
-});
-
 const thumbIconClass = computed<string>(
-    () => props.graphModel?.iconclass || FALLBACK_THUMB_ICON,
+    () => graphModel?.iconclass || FALLBACK_THUMB_ICON,
 );
 
-const thumbLabel = computed<string>(() => props.graphModel?.name ?? "");
+const thumbLabel = computed<string>(() => graphModel?.name ?? "");
 
 const thumbAccentColor = computed<string>(
-    () => props.graphModel?.color || FALLBACK_THUMB_ACCENT_COLOR,
+    () => graphModel?.color || FALLBACK_THUMB_ACCENT_COLOR,
+);
+
+const isHovered = computed<boolean>(
+    () => resultsMapSelection?.hoveredResourceId.value === resourceInstanceId,
+);
+
+const isSelectedOnMap = computed<boolean>(
+    () => resultsMapSelection?.selectedResourceId.value === resourceInstanceId,
 );
 
 const shouldShowThumbnailImage = computed<boolean>(
@@ -114,16 +131,18 @@ const shouldShowThumbnailImage = computed<boolean>(
 
 const resourceDisplayName = computed<string>(
     () =>
-        props.descriptorData?.descriptors?.[arches.activeLanguage]?.name ||
+        descriptorData?.descriptors?.[arches.activeLanguage]?.name ||
         $gettext("Unnamed Resource"),
 );
 
-const hasLoadedThumbnailImage = ref(false);
-const thumbnailContainerElement = ref<HTMLDivElement | null>(null);
-let hasAttemptedThumbnailLoad = false;
+watchEffect(() => {
+    if (reportConfig?.components?.length) {
+        importComponents([configAsNamedSection.value], componentLookup);
+    }
+});
 
 watch(
-    () => props.reportConfigLoaded,
+    () => reportConfigLoaded,
     function loadThumbnailImage(isReportConfigLoaded) {
         if (
             !isReportConfigLoaded ||
@@ -155,14 +174,36 @@ watch(
             hasLoadedThumbnailImage.value = false;
         };
 
-        thumbnailImageElement.src = `/thumbnail/${props.result.resourceinstanceid}`;
+        thumbnailImageElement.src = `/thumbnail/${resourceInstanceId}`;
     },
     { immediate: true },
 );
+
+function markHovered(): void {
+    if (resultsMapSelection) {
+        resultsMapSelection.hoveredResourceId.value = resourceInstanceId;
+    }
+}
+
+function clearHovered(): void {
+    if (resultsMapSelection?.hoveredResourceId.value === resourceInstanceId) {
+        resultsMapSelection.hoveredResourceId.value = null;
+    }
+}
 </script>
 
 <template>
-    <div class="search-result-card">
+    <div
+        class="search-result-card"
+        :class="{
+            'search-result-card-hovered': isHovered,
+            'search-result-card-selected': isSelectedOnMap,
+        }"
+        @mouseenter="markHovered"
+        @mouseleave="clearHovered"
+        @focusin="markHovered"
+        @focusout="clearHovered"
+    >
         <div
             class="search-result-card-thumb"
             :style="{ '--thumb-accent-color': thumbAccentColor }"
@@ -171,7 +212,7 @@ watch(
                 v-if="shouldShowThumbnailImage && hasLoadedThumbnailImage"
                 ref="thumbnailContainerElement"
                 class="search-result-card-thumbnail-image-slot"
-            ></div>
+            />
             <div class="search-result-card-thumb-caption">
                 <i :class="[thumbIconClass, 'search-result-card-thumb-icon']" />
                 <span
@@ -188,7 +229,7 @@ watch(
                 v-for="component in configAsNamedSection.components"
                 :key="componentLookup[component.component]?.key"
                 :component
-                :resource-instance-id="result.resourceinstanceid"
+                :resource-instance-id="resourceInstanceId"
             />
             <ExpandedResultSection />
         </div>
@@ -213,10 +254,10 @@ watch(
         border-color 0.15s;
 }
 
-.search-result-card:hover {
-    box-shadow:
-        0 0.4rem 1.2rem rgba(0, 0, 0, 0.09),
-        0 0.2rem 0.4rem rgba(0, 0, 0, 0.05);
+.search-result-card:hover,
+.search-result-card.search-result-card-hovered,
+.search-result-card.search-result-card-selected {
+    box-shadow: var(--arches-search-card-shadow-hover);
     border-color: var(--p-primary-color);
 }
 
@@ -224,11 +265,11 @@ watch(
     display: flex;
     flex-direction: column;
     flex: 1;
-    min-width: 0;
+    min-inline-size: 0;
 }
 
 .search-result-card-thumb {
-    width: 7.5rem;
+    inline-size: 7.5rem;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -246,15 +287,15 @@ watch(
 
 .search-result-card-thumbnail-image-slot {
     flex: 1;
-    width: 100%;
-    min-height: 0;
+    inline-size: 100%;
+    min-block-size: 0;
     overflow: hidden;
 }
 
 .search-result-card-thumbnail-image-slot
     :deep(.search-result-card-thumbnail-image) {
-    width: 100%;
-    height: 100%;
+    inline-size: 100%;
+    block-size: 100%;
     object-fit: cover;
 }
 

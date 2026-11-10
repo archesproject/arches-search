@@ -8,6 +8,7 @@ import Tag from "openvue/tag";
 import arches from "arches";
 
 import { generateArchesURL } from "@/arches_vue_components/application";
+import { useResultsMapSelection } from "@/arches_search/SimpleSearch/composables/useResultsMapSelection.ts";
 
 import type { Ref } from "vue";
 import type { SectionContent } from "@/arches_modular_reports/ModularReport/types.ts";
@@ -20,8 +21,6 @@ import type {
 const LIFECYCLE_SEVERITY_WARN = "warn" as const;
 const LIFECYCLE_SEVERITY_SUCCESS = "success" as const;
 const LIFECYCLE_SEVERITY_SECONDARY = "secondary" as const;
-
-const { $gettext } = useGettext();
 
 defineProps<{
     component: SectionContent;
@@ -38,17 +37,28 @@ const isExpanded = inject("searchResultExpanded") as Ref<boolean>;
 const viewRelatedResource = inject<
     ((resource: RelatedResource) => void) | null
 >("viewRelatedResource", null);
+const resultsMapSelection = useResultsMapSelection();
+const { $gettext } = useGettext();
 
-function toggleExpanded(): void {
-    isExpanded.value = !isExpanded.value;
-}
+const canShowOnMap = computed<boolean>(
+    () =>
+        resultsMapSelection !== null &&
+        descriptorData.value?.has_geometry === true,
+);
 
-function onViewRelated(): void {
-    viewRelatedResource?.({
-        id: resourceInstanceId,
-        title: resourceDisplayName.value,
-    });
-}
+const shouldShowSelectedTag = computed<boolean>(
+    () =>
+        resultsMapSelection?.selectedResourceId.value === resourceInstanceId &&
+        resultsMapSelection.pinnedResourceId.value !== resourceInstanceId,
+);
+
+const expandToggleIcon = computed<string>(() =>
+    isExpanded.value ? "pi pi-chevron-up" : "pi pi-chevron-down",
+);
+
+const expandToggleLabel = computed<string>(() =>
+    isExpanded.value ? $gettext("Show less") : $gettext("Show more"),
+);
 
 const activeDescriptors = computed(function () {
     return descriptorData?.value?.descriptors?.[arches.activeLanguage];
@@ -80,11 +90,32 @@ const lifecycleSeverity = computed<
     | typeof LIFECYCLE_SEVERITY_SECONDARY
 >(() => {
     const state = lifecycleState?.value;
-    if (!state) return LIFECYCLE_SEVERITY_SECONDARY;
-    if (state.can_delete_resource_instances) return LIFECYCLE_SEVERITY_WARN;
-    if (state.can_edit_resource_instances) return LIFECYCLE_SEVERITY_SUCCESS;
+    if (!state) {
+        return LIFECYCLE_SEVERITY_SECONDARY;
+    }
+    if (state.can_delete_resource_instances) {
+        return LIFECYCLE_SEVERITY_WARN;
+    }
+    if (state.can_edit_resource_instances) {
+        return LIFECYCLE_SEVERITY_SUCCESS;
+    }
     return LIFECYCLE_SEVERITY_SECONDARY;
 });
+
+function toggleExpanded(): void {
+    isExpanded.value = !isExpanded.value;
+}
+
+function onViewRelated(): void {
+    viewRelatedResource?.({
+        id: resourceInstanceId,
+        title: resourceDisplayName.value,
+    });
+}
+
+function onShowOnMap(): void {
+    resultsMapSelection?.showOnMap(resourceInstanceId);
+}
 </script>
 
 <template>
@@ -105,6 +136,13 @@ const lifecycleSeverity = computed<
                     :value="lifecycleState.name"
                     :rounded="true"
                 />
+                <Tag
+                    v-if="shouldShowSelectedTag"
+                    class="descriptor-section-selected-tag"
+                    icon="pi pi-map-marker"
+                    :value="$gettext('Selected')"
+                    :rounded="true"
+                />
             </div>
 
             <div
@@ -119,15 +157,9 @@ const lifecycleSeverity = computed<
 
             <div class="descriptor-section-actions">
                 <Button
-                    :icon="
-                        isExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'
-                    "
                     variant="link"
-                    :label="
-                        isExpanded
-                            ? $gettext('Show less')
-                            : $gettext('Show more')
-                    "
+                    :icon="expandToggleIcon"
+                    :label="expandToggleLabel"
                     @click="toggleExpanded"
                 />
                 <Button
@@ -138,6 +170,13 @@ const lifecycleSeverity = computed<
                     variant="link"
                     :href="resourceReportLink"
                     :label="$gettext('View Report')"
+                />
+                <Button
+                    v-if="canShowOnMap"
+                    icon="pi pi-map-marker"
+                    variant="link"
+                    :label="$gettext('Show on map')"
+                    @click="onShowOnMap"
                 />
                 <Button
                     as="a"
@@ -170,7 +209,7 @@ const lifecycleSeverity = computed<
     flex-direction: column;
     gap: 0.625rem;
     flex: 1;
-    min-width: 0;
+    min-inline-size: 0;
     padding: 1.5rem 2rem;
 }
 
@@ -193,7 +232,8 @@ const lifecycleSeverity = computed<
     text-decoration: underline;
 }
 
-.descriptor-section-lifecycle-tag.p-tag {
+.descriptor-section-lifecycle-tag.p-tag,
+.descriptor-section-selected-tag.p-tag {
     font-size: 1rem;
     padding: 0.2rem 0.8rem;
     font-weight: 600;
@@ -202,9 +242,10 @@ const lifecycleSeverity = computed<
 
 .descriptor-section-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.2rem;
-    margin-top: 0.2rem;
+    margin-block-start: 0.2rem;
 }
 
 .descriptor-section-actions :deep(.p-button) {
@@ -216,6 +257,7 @@ const lifecycleSeverity = computed<
 
 .descriptor-section-actions :deep(.p-button-label) {
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .descriptor-section-actions :deep(.p-button-icon) {
