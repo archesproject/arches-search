@@ -9,7 +9,6 @@ from django.urls import reverse
 
 from arches.app.models.models import GraphModel
 
-from arches_search.utils.search import SearchCompiler
 from arches_search.views.api.search_mvt import SearchMVTAPI
 
 # python manage.py test tests.test_search_mvt_context_api --settings="tests.test_settings"
@@ -43,10 +42,9 @@ class SearchMVTSkipsCountTest(TestCase):
 
     def setUp(self):
         self.client.force_login(self.user)
-        compile_patcher = patch.object(
-            SearchCompiler,
-            "compile",
-            side_effect=AssertionError("compile() should not be called"),
+        compile_patcher = patch(
+            "arches_search.utils.search.compiler._counts_by_graph_id",
+            side_effect=AssertionError("the counts should not be computed"),
         )
         compile_patcher.start()
         self.addCleanup(compile_patcher.stop)
@@ -58,7 +56,7 @@ class SearchMVTSkipsCountTest(TestCase):
             content_type="application/json",
         )
 
-    def test_a_valid_context_is_created_without_compile(self):
+    def test_a_valid_context_is_created_without_counting(self):
         response = self._post_context({"graph_slugs": [self.graph.slug]})
 
         self.assertEqual(response.status_code, 200)
@@ -84,7 +82,7 @@ class SearchMVTSkipsCountTest(TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_a_tile_is_generated_from_the_matches_without_compile(self):
+    def test_a_tile_is_generated_from_the_matches_without_counting(self):
         context_id = self._post_context({"graph_slugs": [self.graph.slug]}).json()[
             "context_id"
         ]
