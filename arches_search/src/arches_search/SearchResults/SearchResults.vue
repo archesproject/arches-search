@@ -2,6 +2,7 @@
 import { computed, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import Button from "openvue/button";
 import Skeleton from "openvue/skeleton";
 
 import SearchResultCard from "@/arches_search/SearchResults/SearchResultCard.vue";
@@ -11,6 +12,7 @@ import {
     fetchResourceInstanceLifecycleStates,
     fetchSearchReportConfig,
 } from "@/arches_search/SearchResults/api.ts";
+import { useResultsMapSelection } from "@/arches_search/SimpleSearch/composables/useResultsMapSelection.ts";
 
 import type {
     SearchResults,
@@ -37,6 +39,7 @@ const emit = defineEmits<{
     (event: typeof REQUEST_PAGE_EVENT, page: number): void;
 }>();
 
+const resultsMapSelection = useResultsMapSelection();
 const { $gettext } = useGettext();
 
 const descriptorsByResourceId = ref<Record<string, ResourceDescriptorData>>({});
@@ -61,6 +64,26 @@ const endOfResultsText = computed<string>(() =>
     }),
 );
 
+const pinnedResourceId = computed<string | null>(
+    () => resultsMapSelection?.pinnedResourceId.value ?? null,
+);
+
+const listedResources = computed<ResourceData[]>(() =>
+    results.resources.filter(
+        (resource) => resource.resourceinstanceid !== pinnedResourceId.value,
+    ),
+);
+
+const resultRowsByResourceId = computed<Map<string, ResourceData>>(
+    () =>
+        new Map(
+            results.resources.map((resource) => [
+                resource.resourceinstanceid,
+                resource,
+            ]),
+        ),
+);
+
 watchEffect(async () => {
     try {
         const lifecycleStates = await fetchResourceInstanceLifecycleStates();
@@ -80,61 +103,19 @@ watchEffect(async () => {
 
 watch(
     () => results.resources,
-    async (resources: ResourceData[]) => {
-        if (!resources.length) return;
-
-        const idsToFetch = resources
-            .map((r) => r.resourceinstanceid)
-            .filter((id) => !requestedDescriptorIds.has(id));
-
-        if (idsToFetch.length) {
-            idsToFetch.forEach((id) => requestedDescriptorIds.add(id));
-            try {
-                const descriptors = await fetchResourceDescriptors(idsToFetch);
-                descriptorsByResourceId.value = {
-                    ...descriptorsByResourceId.value,
-                    ...descriptors,
-                };
-            } catch (error) {
-                console.error("Failed to fetch resource descriptors:", error);
-                idsToFetch.forEach((id) => requestedDescriptorIds.delete(id));
-            }
-        }
-
-        // Deduplicate by graph_id, fetch one search config per unique graph
-        const graphIdToRepresentativeResourceId = new Map<string, string>();
-        for (const resource of resources) {
-            const graphId =
-                descriptorsByResourceId.value[resource.resourceinstanceid]
-                    ?.graph_id ?? resource.graph_id;
-            if (graphId && !graphIdToRepresentativeResourceId.has(graphId)) {
-                graphIdToRepresentativeResourceId.set(
-                    graphId,
-                    resource.resourceinstanceid,
-                );
-            }
-        }
-
-        await Promise.all(
-            [...graphIdToRepresentativeResourceId.entries()]
-                .filter(([graphId]) => !configsByGraphId.value.has(graphId))
-                .map(async ([graphId, resourceId]) => {
-                    try {
-                        const config =
-                            await fetchSearchReportConfig(resourceId);
-                        configsByGraphId.value.set(graphId, config);
-                    } catch (error) {
-                        console.error(
-                            `Failed to fetch search config for graph ${graphId}:`,
-                            error,
-                        );
-                        configsByGraphId.value.set(graphId, null);
-                    }
-                }),
+    (resources: ResourceData[]) => {
+        void loadCardData(
+            resources.map((resource) => resource.resourceinstanceid),
         );
     },
     { immediate: true },
 );
+
+watch(pinnedResourceId, (resourceId) => {
+    if (resourceId !== null) {
+        void loadCardData([resourceId]);
+    }
+});
 
 watch(
     () => isSearching,
@@ -145,29 +126,126 @@ watch(
     },
 );
 
-function getGraphIdForResource(resource: ResourceData): string {
+async function loadCardData(resourceIds: string[]): Promise<void> {
+    if (resourceIds.length === 0) {
+        return;
+    }
+
+    const idsToFetch = resourceIds.filter(
+        (resourceId) => !requestedDescriptorIds.has(resourceId),
+    );
+
+    if (idsToFetch.length > 0) {
+        idsToFetch.forEach((resourceId) =>
+            requestedDescriptorIds.add(resourceId),
+        );
+        try {
+            const descriptors = await fetchResourceDescriptors(idsToFetch);
+            descriptorsByResourceId.value = {
+                ...descriptorsByResourceId.value,
+                ...descriptors,
+            };
+        } catch (error) {
+            console.error("Failed to fetch resource descriptors:", error);
+            idsToFetch.forEach((resourceId) =>
+                requestedDescriptorIds.delete(resourceId),
+            );
+        }
+    }
+
+    // Deduplicate by graph_id, fetch one search config per unique graph
+    const graphIdToRepresentativeResourceId = new Map<string, string>();
+    for (const resourceId of resourceIds) {
+        const graphId = getGraphIdForResourceId(resourceId);
+        if (graphId && !graphIdToRepresentativeResourceId.has(graphId)) {
+            graphIdToRepresentativeResourceId.set(graphId, resourceId);
+        }
+    }
+
+    await Promise.all(
+        [...graphIdToRepresentativeResourceId.entries()]
+            .filter(([graphId]) => !configsByGraphId.value.has(graphId))
+            .map(async ([graphId, resourceId]) => {
+                try {
+                    const config = await fetchSearchReportConfig(resourceId);
+                    configsByGraphId.value.set(graphId, config);
+                } catch (error) {
+                    console.error(
+                        `Failed to fetch search config for graph ${graphId}:`,
+                        error,
+                    );
+                    configsByGraphId.value.set(graphId, null);
+                }
+            }),
+    );
+}
+
+function getGraphIdForResourceId(resourceId: string): string {
     return (
-        descriptorsByResourceId.value[resource.resourceinstanceid]?.graph_id ??
-        resource.graph_id ??
+        descriptorsByResourceId.value[resourceId]?.graph_id ??
+        resultRowsByResourceId.value.get(resourceId)?.graph_id ??
         ""
     );
 }
 
+function getReportConfigForResourceId(
+    resourceId: string,
+): SearchReportConfig | null {
+    return (
+        configsByGraphId.value.get(getGraphIdForResourceId(resourceId)) ?? null
+    );
+}
+
+function isReportConfigLoadedForResourceId(resourceId: string): boolean {
+    return configsByGraphId.value.has(getGraphIdForResourceId(resourceId));
+}
+
+function getGraphModelForResourceId(resourceId: string): GraphModel | null {
+    return (
+        graphModelsByGraphId.value.get(getGraphIdForResourceId(resourceId)) ??
+        null
+    );
+}
+
+function getLifecycleStateForResourceId(
+    resourceId: string,
+): ResourceInstanceLifecycleState | null {
+    const lifecycleStateId =
+        resultRowsByResourceId.value.get(resourceId)
+            ?.resource_instance_lifecycle_state_id ??
+        descriptorsByResourceId.value[resourceId]?.lifecycle_state_id ??
+        "";
+    return lifecycleStatesById.value.get(lifecycleStateId) ?? null;
+}
+
+function unpinResource(): void {
+    resultsMapSelection?.unpin();
+}
+
 function requestNextPage(): void {
-    if (isSearching || isPageRequestInFlight.value) return;
-    if (!results.pagination.has_next) return;
+    if (isSearching || isPageRequestInFlight.value) {
+        return;
+    }
+    if (!results.pagination.has_next) {
+        return;
+    }
 
     isPageRequestInFlight.value = true;
     emit(REQUEST_PAGE_EVENT, results.pagination.page + 1);
 }
 
 function handleScroll(event: Event): void {
-    const el = event.target as HTMLElement | null;
-    if (!el) return;
+    const scrollContainer = event.target as HTMLElement | null;
+    if (!scrollContainer) {
+        return;
+    }
 
     const distanceFromBottom =
-        el.scrollHeight - (el.scrollTop + el.clientHeight);
-    if (distanceFromBottom > SCROLL_THRESHOLD_PIXELS) return;
+        scrollContainer.scrollHeight -
+        (scrollContainer.scrollTop + scrollContainer.clientHeight);
+    if (distanceFromBottom > SCROLL_THRESHOLD_PIXELS) {
+        return;
+    }
 
     requestNextPage();
 }
@@ -175,9 +253,43 @@ function handleScroll(event: Event): void {
 
 <template>
     <div class="search-results">
+        <div
+            v-if="pinnedResourceId"
+            class="search-results-pinned"
+        >
+            <div class="search-results-pinned-header">
+                <span class="search-results-pinned-label">
+                    <i class="pi pi-map-marker" />
+                    <span>{{ $gettext("Selected on map") }}</span>
+                </span>
+                <Button
+                    class="search-results-unpin"
+                    icon="pi pi-times"
+                    variant="text"
+                    :label="$gettext('Unpin')"
+                    @click="unpinResource"
+                />
+            </div>
+            <SearchResultCard
+                :key="pinnedResourceId"
+                :resource-instance-id="pinnedResourceId"
+                :descriptor-data="
+                    descriptorsByResourceId[pinnedResourceId] ?? null
+                "
+                :report-config="getReportConfigForResourceId(pinnedResourceId)"
+                :report-config-loaded="
+                    isReportConfigLoadedForResourceId(pinnedResourceId)
+                "
+                :graph-model="getGraphModelForResourceId(pinnedResourceId)"
+                :lifecycle-state="
+                    getLifecycleStateForResourceId(pinnedResourceId)
+                "
+            />
+        </div>
+
         <Skeleton
             v-if="isSearching && results.resources.length === 0"
-            style="height: 100%"
+            class="search-results-skeleton"
         />
 
         <div
@@ -193,27 +305,25 @@ function handleScroll(event: Event): void {
             @scroll.passive="handleScroll"
         >
             <SearchResultCard
-                v-for="resource in results.resources"
+                v-for="resource in listedResources"
                 :key="resource.resourceinstanceid"
-                :result="resource"
+                :resource-instance-id="resource.resourceinstanceid"
                 :descriptor-data="
                     descriptorsByResourceId[resource.resourceinstanceid] ?? null
                 "
                 :report-config="
-                    configsByGraphId.get(getGraphIdForResource(resource)) ??
-                    null
+                    getReportConfigForResourceId(resource.resourceinstanceid)
                 "
                 :report-config-loaded="
-                    configsByGraphId.has(getGraphIdForResource(resource))
+                    isReportConfigLoadedForResourceId(
+                        resource.resourceinstanceid,
+                    )
                 "
                 :graph-model="
-                    graphModelsByGraphId.get(getGraphIdForResource(resource)) ??
-                    null
+                    getGraphModelForResourceId(resource.resourceinstanceid)
                 "
                 :lifecycle-state="
-                    lifecycleStatesById.get(
-                        resource.resource_instance_lifecycle_state_id ?? '',
-                    ) ?? null
+                    getLifecycleStateForResourceId(resource.resourceinstanceid)
                 "
             />
         </div>
@@ -231,10 +341,49 @@ function handleScroll(event: Event): void {
 .search-results {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    width: 100%;
+    block-size: 100%;
+    inline-size: 100%;
     flex: 1;
     overflow: hidden;
+}
+
+.search-results-skeleton {
+    block-size: 100%;
+}
+
+.search-results-pinned {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 0.6rem;
+    max-block-size: 50%;
+    overflow-y: auto;
+    padding-block: 1.2rem 1.6rem;
+    padding-inline: 2.4rem;
+    background-color: var(--arches-search-filter-map-bg);
+    border-block-end: 0.1rem solid var(--arches-search-filter-map-border);
+}
+
+.search-results-pinned-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.search-results-pinned-label {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--arches-search-filter-map-text);
+}
+
+.search-results-unpin {
+    font-size: 1.2rem;
+    padding-block: 0.3rem;
+    padding-inline: 0.8rem;
+    color: var(--arches-search-filter-map-text);
 }
 
 .search-results-empty {
@@ -251,7 +400,7 @@ function handleScroll(event: Event): void {
     flex: 1;
     padding: 1.6rem 2.4rem;
     overflow-y: auto;
-    min-height: 0;
+    min-block-size: 0;
 }
 
 .search-results-footer {
