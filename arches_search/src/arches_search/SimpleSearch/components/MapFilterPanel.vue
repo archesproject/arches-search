@@ -18,11 +18,15 @@ import { SEARCH_RESULTS_SOURCE } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
 import type { VectorTileSource } from "maplibre-gl";
 
-import type { MapLayer } from "@/arches_vue_components/components/MapComponent/types.ts";
+import type {
+    MapLayer,
+    MapSource,
+} from "@/arches_vue_components/components/MapComponent/types.ts";
 
 const UPDATE_MODEL_VALUE_EVENT = "update:modelValue" as const;
 const REMOVE_EVENT = "remove" as const;
 const CLOSE_EVENT = "close" as const;
+const SEARCH_RESULTS_FEATURE_ID_PROPERTY = "resourceinstanceid";
 
 const { modelValue } = defineProps<{
     modelValue: FeatureCollection | null;
@@ -123,6 +127,23 @@ function resolveSearchOverlayLayers(
     return [...searchOnlyOverlays, ...hiddenDefaultOverlays];
 }
 
+function resolveSearchMapSources(
+    candidateMapSources: MapSource[],
+): MapSource[] {
+    return candidateMapSources.map((mapSource) => {
+        if (mapSource.name !== SEARCH_RESULTS_SOURCE) {
+            return mapSource;
+        }
+        return {
+            ...mapSource,
+            source: {
+                ...mapSource.source,
+                promoteId: SEARCH_RESULTS_FEATURE_ID_PROPERTY,
+            },
+        };
+    });
+}
+
 function onMapUpdate(updatedValue: FeatureCollection): void {
     if (updatedValue.features.length === 0) {
         emit(REMOVE_EVENT);
@@ -152,6 +173,7 @@ function onMapUpdate(updatedValue: FeatureCollection): void {
             ref="mapComponent"
             :value="modelValue"
             :resolve-overlay-layers="resolveSearchOverlayLayers"
+            :resolve-map-sources="resolveSearchMapSources"
             :open-popups-inside-drawn-shapes="true"
             @update:overlays="onOverlaysUpdated"
             @update:value="onMapUpdate"
