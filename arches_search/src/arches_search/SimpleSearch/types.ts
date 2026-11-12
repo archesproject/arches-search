@@ -185,6 +185,36 @@ export interface SavedSearch {
     };
 }
 
+export interface SavedResourceSet {
+    id: string;
+    name: string;
+    description: string;
+    date_created: string;
+    member_count: number;
+}
+
+export interface SavedResourceSetsResponse {
+    resource_sets: SavedResourceSet[];
+    immediate_threshold: number;
+    member_limit: number;
+}
+
+export interface SaveResourceSetResponse {
+    resource_set_id: string;
+    message: string;
+    task_id?: string;
+}
+
+export interface SearchResultsToSave {
+    terms?: SearchRequestTerm[];
+    queries?: GroupPayload[];
+    graphSlugs?: string[];
+    mapFilter?: FeatureCollection | null;
+    dateRange?: DateRangeFilter | null;
+    resourceFieldFilters?: ResourceFieldFilter[] | null;
+    maxHops?: number;
+}
+
 export const EXPORT_FORMAT_BRANCH_EXCEL = "branch-excel";
 export const EXPORT_FORMAT_TILE_EXCEL = "tile-excel";
 

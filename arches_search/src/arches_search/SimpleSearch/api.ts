@@ -18,9 +18,12 @@ import type {
     NodeFilterConfigResponse,
     ResourceFieldFilter,
     ResourceFieldMetadata,
+    SavedResourceSetsResponse,
     SavedSearch,
+    SaveResourceSetResponse,
     SearchDefinition,
     SearchRequestTerm,
+    SearchResultsToSave,
     SortSpec,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -327,6 +330,70 @@ export async function startSearchResultsExport({
     if (!response.ok) {
         const errorBody = await response.json().catch(() => null);
         throw new Error(errorBody?.error ?? response.statusText);
+    }
+}
+
+export async function getSavedResourceSets(): Promise<SavedResourceSetsResponse> {
+    const response = await fetch(
+        generateArchesURL("arches_search:search_results_resource_sets"),
+    );
+    if (!response.ok) {
+        throw new Error(response.statusText);
+    }
+    return response.json();
+}
+
+export async function saveResultsAsResourceSet({
+    name,
+    description,
+    ...search
+}: SearchResultsToSave & {
+    name: string;
+    description: string;
+}): Promise<SaveResourceSetResponse> {
+    const requestPayload = {
+        ...buildSearchApiRequestBody({
+            terms: [],
+            graphSlugs: [],
+            mapFilter: null,
+            ...search,
+        }),
+        name,
+        description,
+    };
+
+    const response = await fetch(
+        generateArchesURL("arches_search:search_results_resource_sets"),
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify(requestPayload),
+        },
+    );
+    if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error ?? response.statusText);
+    }
+    return response.json();
+}
+
+export async function deleteResourceSet(setId: string): Promise<void> {
+    const response = await fetch(
+        generateArchesURL("arches_search:search_results_resource_set", {
+            resource_set_id: setId,
+        }),
+        {
+            method: "DELETE",
+            headers: {
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+        },
+    );
+    if (!response.ok) {
+        throw new Error(response.statusText);
     }
 }
 

@@ -70,6 +70,7 @@ import type {
     ResultsSortDirection,
     ResultsSortField,
     SearchDefinition,
+    SearchResultsToSave,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 // Kept out of the search page's own code, as most visits never open it and it
@@ -159,6 +160,8 @@ const graphModels = ref<GraphModel[]>([]);
 const searchDefinition = computed<SearchDefinition>(() =>
     getSearchDefinition(),
 );
+
+const resultsToSave = computed<SearchResultsToSave>(() => getExportPayload());
 
 const sortField = computed<ResultsSortField>(() =>
     sortFieldForSpecs(sort.value),
@@ -615,6 +618,10 @@ async function applySavedSearch(
                         <SavedSearchPanel
                             v-else-if="isSavedSearchesActive"
                             :definition-to-save="searchDefinition"
+                            :results-to-save="resultsToSave"
+                            :result-count="
+                                searchResults.pagination.total_results
+                            "
                             @run-query="onRunSavedQuery"
                             @close="closeSidePanel()"
                         />

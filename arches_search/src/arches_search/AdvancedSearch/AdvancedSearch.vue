@@ -63,6 +63,7 @@ import type {
     ResultsSortDirection,
     ResultsSortField,
     SearchDefinition,
+    SearchResultsToSave,
     SortSpec,
 } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -149,6 +150,17 @@ const sortDirection = computed<ResultsSortDirection>(() =>
 const resultCount = computed<number>(
     () => searchResults.value?.pagination.total_results ?? 0,
 );
+
+// The search the results on screen came from, as exported.
+const resultsToSave = computed<SearchResultsToSave | null>(() => {
+    if (!searchedGraphSlug.value) {
+        return null;
+    }
+    return {
+        queries: advancedQuery.value ? [advancedQuery.value] : [],
+        graphSlugs: [searchedGraphSlug.value],
+    };
+});
 
 const definitionToSave = computed<SearchDefinition | null>(() => {
     if (!root.value) {
@@ -462,6 +474,8 @@ function onExportResults(exportRequest: ExportRequest): void {
                     <SavedSearchPanel
                         v-else-if="isSavedSearchesOpen"
                         :definition-to-save="definitionToSave"
+                        :results-to-save="resultsToSave"
+                        :result-count="resultCount"
                         @run-query="onRunSavedQuery"
                         @close="closeSidePanel()"
                     />
