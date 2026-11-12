@@ -3,9 +3,11 @@ import { computed, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
+import ConfirmDialog from "openvue/confirmdialog";
 import InputText from "openvue/inputtext";
 import Select from "openvue/select";
 
+import { useConfirm } from "openvue/useconfirm";
 import { useToast } from "openvue/usetoast";
 import {
     getSavedSearches,
@@ -29,6 +31,9 @@ const SORT_OLDEST = "oldest" as const;
 
 const RUN_QUERY_EVENT = "run-query" as const;
 
+// Keeps this list's dialog apart from any other ConfirmDialog on the page.
+const CONFIRM_GROUP = "saved-search-list" as const;
+
 type SavedSearchSortValue =
     | typeof SORT_A_TO_Z
     | typeof SORT_Z_TO_A
@@ -51,6 +56,7 @@ const emit = defineEmits<{
 
 const { $gettext } = useGettext();
 const toast = useToast();
+const confirm = useConfirm();
 
 const filterText = ref("");
 const sortValue = ref<SavedSearchSortValue>(SORT_A_TO_Z);
@@ -201,6 +207,26 @@ async function onDeleteResourceSet(
     }
 }
 
+function confirmDelete(
+    header: string,
+    name: string,
+    onAccept: () => Promise<void>,
+): void {
+    confirm.require({
+        group: CONFIRM_GROUP,
+        header,
+        message: $gettext('Delete "%{name}"? This cannot be undone.', {
+            name: name || $gettext("Untitled set"),
+        }),
+        icon: "pi pi-exclamation-triangle",
+        acceptLabel: $gettext("Delete"),
+        rejectLabel: $gettext("Cancel"),
+        acceptProps: { severity: "danger" },
+        rejectProps: { severity: "secondary", outlined: true },
+        accept: onAccept,
+    });
+}
+
 function formatDate(isoDateString: string): string {
     const date = new Date(isoDateString);
     return date.toLocaleString();
@@ -231,6 +257,7 @@ function queryTypeLabel(search: SavedSearch): string {
 
 <template>
     <div class="saved-search-list">
+        <ConfirmDialog :group="CONFIRM_GROUP" />
         <div class="panel-controls">
             <InputText
                 v-model="filterText"
@@ -335,7 +362,13 @@ function queryTypeLabel(search: SavedSearch): string {
                             class="action-btn action-delete"
                             :label="$gettext('Delete')"
                             :text="true"
-                            @click="onDelete(item)"
+                            @click="
+                                confirmDelete(
+                                    $gettext('Delete saved search'),
+                                    item.name,
+                                    () => onDelete(item),
+                                )
+                            "
                         />
                     </div>
                 </div>
@@ -387,7 +420,13 @@ function queryTypeLabel(search: SavedSearch): string {
                             class="action-btn action-delete"
                             :label="$gettext('Delete')"
                             :text="true"
-                            @click="onDeleteResourceSet(item)"
+                            @click="
+                                confirmDelete(
+                                    $gettext('Delete static set'),
+                                    item.name,
+                                    () => onDeleteResourceSet(item),
+                                )
+                            "
                         />
                     </div>
                 </div>
