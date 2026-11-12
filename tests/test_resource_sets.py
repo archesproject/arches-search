@@ -63,3 +63,17 @@ class SearchResultsResourceSetAPITest(TestCase):
 
         self.assertFalse(ResourceSet.objects.exists())
         self.assertFalse(ResourceSetMember.objects.exists())
+
+    def test_cannot_delete_another_users_set(self):
+        other = User.objects.create_user(username="set_other", password="x")
+        others_set = ResourceSet.objects.create(owner=other, name="Theirs")
+
+        response = self.client.delete(
+            reverse(
+                "search_results_resource_set",
+                kwargs={"resource_set_id": others_set.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(ResourceSet.objects.filter(pk=others_set.pk).exists())

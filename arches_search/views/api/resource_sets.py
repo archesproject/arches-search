@@ -14,9 +14,9 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, QuerySet
+from django.http import HttpResponse
 from django.utils.translation import gettext as _
 
-from arches.app.models.models import ResourceInstance
 from arches.app.tasks import log_error, update_user_task_record
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
@@ -31,9 +31,6 @@ from arches_search.utils.search import (
     SearchPayload,
     validate_search_payload,
 )
-
-# Not part of the search; everything else in the body is.
-SET_FIELDS = ("name", "description")
 
 
 def create_resource_set_from_queryset(
@@ -52,9 +49,6 @@ def create_resource_set_from_queryset(
     are read and created BULK_IMPORT_BATCH_SIZE at a time, so a large set is
     never held in memory at once.
     """
-    if queryset.model is not ResourceInstance:
-        raise TypeError("queryset must be a ResourceInstance queryset")
-
     batch_size = settings.BULK_IMPORT_BATCH_SIZE
     resource_ids = queryset.order_by().values_list("pk", flat=True).distinct()
     member_count = 0
@@ -205,7 +199,9 @@ class SearchResultsResourceSetAPI(APIBase):
             return JSONResponse({"error": _("A name is required.")}, status=400)
         description = str(body.get("description") or "").strip()
         search_body = {
-            key: value for key, value in body.items() if key not in SET_FIELDS
+            key: value
+            for key, value in body.items()
+            if key not in ("name", "description")
         }
 
         try:
@@ -215,3 +211,12 @@ class SearchResultsResourceSetAPI(APIBase):
         except ValidationError as error:
             return JSONResponse({"error": " ".join(error.messages)}, status=400)
         return JSONResponse(saved, status=202 if "task_id" in saved else 201)
+
+    def delete(self, request, resource_set_id):
+        # Only the owner's own sets; others' (and anonymous) get a 404.
+        deleted_count = ResourceSet.objects.filter(
+            pk=resource_set_id, owner=request.user
+        ).delete()[0]
+        if not deleted_count:
+            return JSONResponse({"error": _("Resource set not found.")}, status=404)
+        return HttpResponse(status=204)

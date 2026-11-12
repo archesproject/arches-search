@@ -181,6 +181,11 @@ urlpatterns = [
         name="search_results_resource_sets",
     ),
     path(
+        "api/search-results-resource-sets/<uuid:resource_set_id>",
+        SearchResultsResourceSetAPI.as_view(),
+        name="search_results_resource_set",
+    ),
+    path(
         "api/relationship-graph/summary",
         RelationshipGraphSummaryAPI.as_view(),
         name="relationship_graph_summary",
