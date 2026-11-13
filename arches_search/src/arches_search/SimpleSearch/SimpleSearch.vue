@@ -39,6 +39,7 @@ import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSe
 import {
     ACTIVE_FILTER_KIND_ATTRIBUTE,
     ACTIVE_FILTER_KIND_MAP,
+    ACTIVE_FILTER_KIND_RESOURCE_SET,
     ACTIVE_FILTER_KIND_RESOURCE_TYPE,
     ACTIVE_FILTER_KIND_TIME,
     ADVANCED_QUERY_KEY,
@@ -97,12 +98,14 @@ const {
     clearAttributeFilter,
     clearMapFilter,
     clearQuery,
+    clearResourceSetFilter,
     getExportPayload,
     getSearchDefinition,
     isSearching,
     mapFilter,
     nodeFilterConfigNodes,
     queries,
+    resourceSetFilter,
     savedSearchName,
     search,
     searchResults,
@@ -111,6 +114,7 @@ const {
     setGraphsBySlug,
     setMapFilter,
     setQuery,
+    setResourceSetFilter,
     setSort,
     setTermFilter,
     singleActiveGraph,
@@ -272,6 +276,22 @@ const mapActiveFilter = computed<ActiveFilter | null>(() => {
     };
 });
 
+const resourceSetActiveFilter = computed<ActiveFilter | null>(() => {
+    if (!resourceSetFilter.value) {
+        return null;
+    }
+
+    return {
+        id: `resourceSet-${resourceSetFilter.value.id}`,
+        text: resourceSetFilter.value.name || $gettext("Untitled set"),
+        clear: clearResourceSetFilter,
+        inverted: false,
+        kind: ACTIVE_FILTER_KIND_RESOURCE_SET,
+        category: $gettext("Static set"),
+        icon: "pi pi-database",
+    };
+});
+
 const attributeActiveFilters = computed<ActiveFilter[]>(() => {
     return nodeFilterConfigNodes.value.flatMap((node) => {
         if (!queries.value.has(node.node_alias)) {
@@ -360,6 +380,7 @@ const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
 
 const allActiveFilters = computed<ActiveFilter[]>(() =>
     [
+        resourceSetActiveFilter.value,
         ...activeFilters.value,
         ...resourceTypeActiveFilters.value,
         timeActiveFilter.value,
@@ -622,7 +643,9 @@ async function applySavedSearch(
                             :result-count="
                                 searchResults.pagination.total_results
                             "
+                            :can-show-resource-set-results="true"
                             @run-query="onRunSavedQuery"
+                            @show-resource-set="setResourceSetFilter"
                             @close="closeSidePanel()"
                         />
                         <ExportResultsPanel

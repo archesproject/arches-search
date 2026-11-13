@@ -65,6 +65,7 @@ export const ACTIVE_FILTER_KIND_RESOURCE_TYPE = "resource-type";
 export const ACTIVE_FILTER_KIND_TIME = "time";
 export const ACTIVE_FILTER_KIND_MAP = "map";
 export const ACTIVE_FILTER_KIND_ATTRIBUTE = "attribute";
+export const ACTIVE_FILTER_KIND_RESOURCE_SET = "resource-set";
 
 export type ActiveFilterKind =
     | typeof ACTIVE_FILTER_KIND_TERM
@@ -73,7 +74,8 @@ export type ActiveFilterKind =
     | typeof ACTIVE_FILTER_KIND_RESOURCE_TYPE
     | typeof ACTIVE_FILTER_KIND_TIME
     | typeof ACTIVE_FILTER_KIND_MAP
-    | typeof ACTIVE_FILTER_KIND_ATTRIBUTE;
+    | typeof ACTIVE_FILTER_KIND_ATTRIBUTE
+    | typeof ACTIVE_FILTER_KIND_RESOURCE_SET;
 
 export interface ActiveFilter {
     id: string;
@@ -213,6 +215,7 @@ export interface SearchResultsToSave {
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
     maxHops?: number;
+    resourceSetId?: string | null;
 }
 
 export const EXPORT_FORMAT_BRANCH_EXCEL = "branch-excel";

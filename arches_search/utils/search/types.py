@@ -24,6 +24,9 @@ class SearchPayload:
     # The only filter that reaches outside the graph being searched.
     term_search: Optional[Dict[str, Any]]
     advanced_search_queries: Optional[List[Dict[str, Any]]]
+    # Narrows every graph to the members of this resource set, which must be
+    # one the user owns.
+    resource_set_id: Optional[str] = None
 
     @classmethod
     def from_body(cls, body: Dict[str, Any]) -> "SearchPayload":
@@ -31,6 +34,7 @@ class SearchPayload:
             graph_slugs=body.get("graph_slugs") or None,
             term_search=body.get("term_search"),
             advanced_search_queries=body.get("advanced_search_queries"),
+            resource_set_id=body.get("resource_set_id"),
         )
 
 

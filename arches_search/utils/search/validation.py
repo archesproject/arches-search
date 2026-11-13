@@ -6,6 +6,8 @@ registries are available; what is checked here is the shape of the keys around
 them.
 """
 
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
@@ -137,6 +139,20 @@ def validate_graph_slugs(graph_slugs):
         raise ValidationError(_("graph_slugs must be a list of non-empty strings."))
 
 
+def validate_resource_set_id(resource_set_id) -> None:
+    """
+    Checked here so a malformed id is a 400 rather than a database error when
+    the compiler looks the set up.
+    """
+    if resource_set_id is None:
+        return
+
+    try:
+        uuid.UUID(str(resource_set_id))
+    except ValueError:
+        raise ValidationError(_("resource_set_id must be a UUID."))
+
+
 def validate_search_payload(search_payload) -> None:
     """
     Every check that applies to the filtering half of a request.
@@ -148,3 +164,4 @@ def validate_search_payload(search_payload) -> None:
     validate_graph_slugs(search_payload.graph_slugs)
     validate_term_search(search_payload.term_search)
     validate_advanced_search_queries(search_payload.advanced_search_queries)
+    validate_resource_set_id(search_payload.resource_set_id)

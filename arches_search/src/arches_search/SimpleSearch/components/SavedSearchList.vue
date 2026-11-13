@@ -30,6 +30,7 @@ const SORT_NEWEST = "newest" as const;
 const SORT_OLDEST = "oldest" as const;
 
 const RUN_QUERY_EVENT = "run-query" as const;
+const SHOW_RESOURCE_SET_EVENT = "show-resource-set" as const;
 
 // Keeps this list's dialog apart from any other ConfirmDialog on the page.
 const CONFIRM_GROUP = "saved-search-list" as const;
@@ -42,8 +43,10 @@ type SavedSearchSortValue =
 
 // "mine" lists the user's own searches and resource sets, which they can
 // delete; "shared" lists searches others shared with them.
-const { scope } = defineProps<{
+const { scope, canShowResourceSetResults = false } = defineProps<{
     scope: "mine" | "shared";
+    // Only where the search can be narrowed to a set (Simple Search).
+    canShowResourceSetResults?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -51,6 +54,10 @@ const emit = defineEmits<{
         event: typeof RUN_QUERY_EVENT,
         queryDefinition: Record<string, unknown>,
         searchName: string,
+    ): void;
+    (
+        event: typeof SHOW_RESOURCE_SET_EVENT,
+        resourceSet: SavedResourceSet,
     ): void;
 }>();
 
@@ -413,6 +420,16 @@ function queryTypeLabel(search: SavedSearch): string {
                         {{ $gettext("No description provided") }}
                     </p>
                     <div class="item-actions">
+                        <Button
+                            icon="pi pi-play"
+                            icon-pos="left"
+                            size="small"
+                            class="action-btn"
+                            :label="$gettext('Show results')"
+                            :text="true"
+                            :disabled="!canShowResourceSetResults"
+                            @click="emit(SHOW_RESOURCE_SET_EVENT, item)"
+                        />
                         <Button
                             icon="pi pi-times"
                             icon-pos="left"

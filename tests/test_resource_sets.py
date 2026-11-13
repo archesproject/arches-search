@@ -77,3 +77,46 @@ class SearchResultsResourceSetAPITest(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertTrue(ResourceSet.objects.filter(pk=others_set.pk).exists())
+
+    def search_within_set(self, resource_set):
+        return self.client.post(
+            reverse("search"),
+            json.dumps(
+                {
+                    "graph_slugs": [self.graph.slug],
+                    "resource_set_id": str(resource_set.pk),
+                }
+            ),
+            content_type="application/json",
+        )
+
+    def test_search_within_own_set_returns_only_its_members(self):
+        # Viewable but not in the set, so only the set can be keeping it out.
+        outside = ResourceInstance.objects.create(graph=self.graph)
+        assign_perm("view_resourceinstance", self.member.groups.first(), outside)
+        own_set = ResourceSet.objects.create(owner=self.member, name="Mine")
+        ResourceSetMember.objects.create(
+            resource_set=own_set, resource_instance=self.granted
+        )
+
+        response = self.search_within_set(own_set)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [
+                resource["resourceinstanceid"]
+                for resource in response.json()["resources"]
+            ],
+            [str(self.granted.pk)],
+        )
+
+    def test_cannot_search_within_another_users_set(self):
+        other = User.objects.create_user(username="set_other", password="x")
+        others_set = ResourceSet.objects.create(owner=other, name="Theirs")
+        ResourceSetMember.objects.create(
+            resource_set=others_set, resource_instance=self.granted
+        )
+
+        response = self.search_within_set(others_set)
+
+        self.assertEqual(response.status_code, 400)

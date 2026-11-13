@@ -36,6 +36,7 @@ export async function createSearchMVTContext(params: {
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
     maxHops?: number;
+    resourceSetId?: string | null;
 }): Promise<{ context_id: string }> {
     const requestPayload = buildSearchApiRequestBody({
         terms: params.terms ?? [],
@@ -45,6 +46,7 @@ export async function createSearchMVTContext(params: {
         dateRange: params.dateRange ?? null,
         resourceFieldFilters: params.resourceFieldFilters ?? null,
         maxHops: params.maxHops,
+        resourceSetId: params.resourceSetId,
     });
 
     const url = generateArchesURL("arches_search:search_mvt_context");
@@ -70,6 +72,7 @@ export async function fetchSearchResults({
     dateRange = null,
     resourceFieldFilters = null,
     maxHops,
+    resourceSetId = null,
     page = 1,
     sort,
 }: {
@@ -80,6 +83,7 @@ export async function fetchSearchResults({
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
     maxHops?: number;
+    resourceSetId?: string | null;
     page?: number;
     sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
@@ -91,6 +95,7 @@ export async function fetchSearchResults({
         dateRange,
         resourceFieldFilters,
         maxHops,
+        resourceSetId,
         page,
         sort,
     });
@@ -293,6 +298,7 @@ export async function startSearchResultsExport({
     mapFilter = null,
     dateRange = null,
     resourceFieldFilters = null,
+    resourceSetId = null,
     exportRequest,
 }: {
     terms?: SearchRequestTerm[];
@@ -301,6 +307,7 @@ export async function startSearchResultsExport({
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
+    resourceSetId?: string | null;
     exportRequest: ExportRequest;
 }): Promise<void> {
     const requestPayload = buildSearchApiRequestBody({
@@ -310,6 +317,7 @@ export async function startSearchResultsExport({
         mapFilter,
         dateRange,
         resourceFieldFilters,
+        resourceSetId,
     });
     requestPayload.format = exportRequest.format;
     requestPayload.filename = exportRequest.filename;

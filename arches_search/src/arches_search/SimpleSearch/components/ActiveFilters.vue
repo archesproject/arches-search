@@ -247,6 +247,13 @@ function clearAllFilters(): void {
     color: var(--arches-search-filter-record-text);
 }
 
+/* A set is saved records, so it shares the record chip's colours. */
+.filter-chip-resource-set {
+    background: var(--arches-search-filter-record-bg);
+    border-color: var(--arches-search-filter-record-border);
+    color: var(--arches-search-filter-record-text);
+}
+
 .filter-chip.filter-chip-inactive {
     opacity: 0.55;
 }
