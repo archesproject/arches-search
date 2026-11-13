@@ -31,7 +31,9 @@ if not apps.ready:
 from django.core.management.base import BaseCommand
 from django.db import connection, connections
 from arches.app.models.models import TileModel, Node
+from arches.app.models.resource import Resource
 from arches.app.models.system_settings import settings
+from arches_search.indexing.index_descriptor import build_descriptor_terms
 from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import (
@@ -209,6 +211,7 @@ class Command(BaseCommand):
                 self._reindex_multiprocess(max_subprocesses)
             else:
                 self._reindex_singleprocess()
+            self._reindex_descriptors()
         finally:
             if dropped_indexes:
                 self.stdout.write(
@@ -222,6 +225,29 @@ class Command(BaseCommand):
                     f"{datetime.datetime.now() - rebuild_start}"
                 )
         self.stdout.write(f"Indexing took {datetime.datetime.now() - indexing_start}")
+
+    def _reindex_descriptors(self):
+        """Append descriptor (display-name) term rows for every resource. Runs
+        after the tile pass, which has just (re)populated an empty term table, so
+        no per-resource delete is needed."""
+        batch_size = settings.INDEX_BATCH_SIZE
+        batch = []
+        count = 0
+        for resource in (
+            Resource.objects.exclude(
+                graph_id=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID
+            )
+            .select_related("graph")
+            .iterator(chunk_size=batch_size)
+        ):
+            batch.extend(build_descriptor_terms(resource))
+            count += 1
+            if len(batch) >= batch_size:
+                TermSearch.objects.bulk_create(batch, batch_size=batch_size)
+                batch = []
+        if batch:
+            TermSearch.objects.bulk_create(batch, batch_size=batch_size)
+        self.stdout.write(f"Indexed descriptors for {count} resources")
 
     def _reindex_singleprocess(self):
         batch_size = settings.INDEX_BATCH_SIZE
