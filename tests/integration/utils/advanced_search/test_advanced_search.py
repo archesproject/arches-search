@@ -5269,6 +5269,49 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
         )
         self.assertEqual(result, {PERSON_C_ID, PERSON_D_ID})
 
+    def _person_equals_any_group(self, node_alias, values):
+        return {
+            "graph_slug": "person",
+            "scope": "RESOURCE",
+            "logic": "OR",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": node_alias,
+                        "search_models": [],
+                    },
+                    "operator": "EQUALS",
+                    "operands": [{"type": "LITERAL", "value": value}],
+                }
+                for value in values
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+    def test_and_of_or_groups_ignores_empty_or_group(self):
+        result = self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "AND",
+                "clauses": [],
+                "groups": [
+                    self._person_equals_any_group("age", [22, 24]),
+                    self._person_equals_any_group("fingernail_length", [55, 20]),
+                    self._person_equals_any_group("age", []),
+                ],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, {PERSON_C_ID})
+
     # --- ALL→ANY conversion for single-hop inverse relationships ---
 
     def test_person_all_inverse_dogs_tail_gt_50_semantics_match_any_due_to_conversion(

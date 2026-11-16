@@ -172,7 +172,7 @@ class GroupCompiler:
                 combined_predicate &= predicate_fragment
             return combined_predicate
 
-        combined_predicate = Q(pk__in=[])
+        combined_predicate = Q()
         for predicate_fragment in predicate_fragments:
             combined_predicate |= predicate_fragment
         return combined_predicate
