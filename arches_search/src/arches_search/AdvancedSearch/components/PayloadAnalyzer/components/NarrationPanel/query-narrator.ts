@@ -9,6 +9,7 @@ import {
     SEARCH_MODEL_GEOMETRY,
     SEARCH_MODEL_TERM,
 } from "@/arches_search/AdvancedSearch/types.ts";
+import type { LanguageValue } from "@/arches_vue_components/datatypes/string/types.ts";
 import type {
     AdvancedSearchFacet,
     GraphModel,
@@ -27,6 +28,7 @@ export type DescribeQueryOptions = {
     >;
     gettext: (msgid: string, params?: Record<string, unknown>) => string;
     currentLanguage?: string;
+    languageNames?: Readonly<Record<string, string>>;
     nodeMetadata?: NodeMetadataMap;
     resourceNames?: Readonly<Record<string, string>>;
 };
@@ -40,6 +42,7 @@ export function describeAdvancedSearchQuery(
         datatypesToAdvancedSearchFacets,
         gettext,
         currentLanguage,
+        languageNames,
         nodeMetadata,
         resourceNames,
     } = options;
@@ -416,6 +419,17 @@ export function describeAdvancedSearchQuery(
             return describePathValue(operand.value);
         }
 
+        if (
+            subjectDatatype === "string" &&
+            typeof operand.value === "object" &&
+            operand.value !== null
+        ) {
+            return describeLocalizedString(
+                operand.value as Record<string, LanguageValue | string>,
+                operand.display_value,
+            );
+        }
+
         const rawValue = operand.display_value ?? operand.value;
 
         if (rawValue === null || typeof rawValue === "undefined") {
@@ -435,34 +449,53 @@ export function describeAdvancedSearchQuery(
             return formatValueList(resolvedNames);
         }
 
-        if (
-            subjectDatatype === "string" &&
-            typeof rawValue === "object" &&
-            !Array.isArray(rawValue)
-        ) {
-            const localeValueEntries = Object.entries(
-                rawValue as Record<string, unknown>,
-            );
-            if (localeValueEntries.length === 1) {
-                const [languageCode, localizedStringValue] =
-                    localeValueEntries[0];
-                if (typeof localizedStringValue === "string") {
-                    const trimmedValue = localizedStringValue.trim();
-                    const trimmedLanguageCode = languageCode.trim();
-                    if (trimmedValue && trimmedLanguageCode) {
-                        return gettext("%{value} (%{language})", {
-                            value: trimmedValue,
-                            language: trimmedLanguageCode,
-                        }).trim();
-                    }
-                    if (trimmedValue) {
-                        return trimmedValue;
-                    }
-                }
-            }
+        return String(rawValue).trim();
+    }
+
+    function describeLocalizedString(
+        localizedValue: Record<string, LanguageValue | string>,
+        displayValue: string | undefined,
+    ): string {
+        const filledLanguageCodes = Object.keys(localizedValue).filter(
+            (languageCode) => localizedEntryText(localizedValue[languageCode]),
+        );
+        const displayedLanguageCodes = filledLanguageCodes.filter(
+            (languageCode) =>
+                localizedEntryText(localizedValue[languageCode]) ===
+                displayValue,
+        );
+        let candidateLanguageCodes = filledLanguageCodes;
+        if (displayedLanguageCodes.length > 0) {
+            candidateLanguageCodes = displayedLanguageCodes;
         }
 
-        return String(rawValue).trim();
+        const shortLanguage = currentLanguage?.split("-")[0];
+        const searchedLanguageCode =
+            candidateLanguageCodes.find(
+                (languageCode) => languageCode === currentLanguage,
+            ) ??
+            candidateLanguageCodes.find(
+                (languageCode) => languageCode === shortLanguage,
+            ) ??
+            candidateLanguageCodes[0];
+        if (!searchedLanguageCode) {
+            return "";
+        }
+
+        return gettext("%{value} in %{language}", {
+            value: localizedEntryText(
+                localizedValue[searchedLanguageCode],
+            ).trim(),
+            language:
+                languageNames?.[searchedLanguageCode] ?? searchedLanguageCode,
+        });
+    }
+
+    function localizedEntryText(languageEntry: LanguageValue | string): string {
+        if (typeof languageEntry === "string") {
+            return languageEntry;
+        }
+        return languageEntry.value;
     }
 
     function describePathValue(value: unknown) {

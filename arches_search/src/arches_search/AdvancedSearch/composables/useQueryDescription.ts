@@ -1,5 +1,6 @@
 import { computed, onScopeDispose, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
+import arches from "arches";
 
 import {
     getNodeMetadataForPayload,
@@ -8,6 +9,7 @@ import {
 import { describeAdvancedSearchQuery } from "@/arches_search/AdvancedSearch/components/PayloadAnalyzer/components/NarrationPanel/query-narrator.ts";
 
 import type { ComputedRef, Ref } from "vue";
+import type { Language } from "@/arches_vue_components/types.ts";
 import type {
     AdvancedSearchFacet,
     GraphModel,
@@ -35,6 +37,12 @@ export function useQueryDescription({
     fetchError: ComputedRef<Error | null>;
 } {
     const gettext = useGettext();
+    const languageNames: Record<string, string> = Object.fromEntries(
+        arches.languages.map((language: Language) => [
+            language.code,
+            language.name,
+        ]),
+    );
 
     const nodeMetadata = ref<NodeMetadataMap>({});
     const resourceNames = ref<Record<string, string>>({});
@@ -73,6 +81,7 @@ export function useQueryDescription({
                 datatypesToAdvancedSearchFacets.value,
             gettext: gettext.$gettext,
             currentLanguage: gettext.current,
+            languageNames,
             nodeMetadata: nodeMetadata.value,
             resourceNames: resourceNames.value,
         });
