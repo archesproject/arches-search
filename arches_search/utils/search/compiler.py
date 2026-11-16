@@ -156,23 +156,23 @@ class SearchCompiler:
             for graph_payload in search_payload.advanced_search_queries or []
         }
 
-    def compile(self) -> SearchResult:
+    def compile(self, return_counts: bool = True) -> SearchResult:
         """
         The matches in the graphs graph_slugs names, how many there are, and how
         many of them each of those graphs holds.
-        """
-        requested_slugs = set(self.search_payload.graph_slugs or [])
-        requested_graphs = [
-            graph for graph in self._named_graphs if graph.slug in requested_slugs
-        ]
-        if not requested_graphs:
-            return SearchResult(
-                results=self._base_resources().none(),
-                scoped_count=0,
-                resource_type_counts=[],
-            )
 
-        matches = self._permitted_matches(requested_graphs)
+        With return_counts=False the counts are left as None and their grouped
+        COUNT is never run.
+        """
+        requested_graphs = self._requested_graphs()
+        if not requested_graphs:
+            matches = self._base_resources().none()
+        else:
+            matches = self._permitted_matches(requested_graphs)
+
+        if not return_counts:
+            return SearchResult(results=matches)
+
         # One grouped count gives both the per-graph counts and the total, so a
         # paginator can skip its own COUNT(*).
         counts_by_graph_id = _counts_by_graph_id(matches)
@@ -183,6 +183,10 @@ class SearchCompiler:
                 requested_graphs, counts_by_graph_id
             ),
         )
+
+    def _requested_graphs(self) -> List[SearchableGraph]:
+        requested_slugs = set(self.search_payload.graph_slugs or [])
+        return [graph for graph in self._named_graphs if graph.slug in requested_slugs]
 
     @cached_property
     def _named_graphs(self) -> List[SearchableGraph]:

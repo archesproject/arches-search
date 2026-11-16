@@ -40,12 +40,12 @@ class SearchResult:
     What the compiler found in the graphs graph_slugs names, before any
     projection or paging. scoped_count is how many resources `results` holds,
     and what pagination is measured against; resource_type_counts splits it by
-    graph.
+    graph. Both are None when the compiler was asked not to count.
     """
 
     results: QuerySet
-    scoped_count: int
-    resource_type_counts: List[Dict[str, Any]]
+    scoped_count: Optional[int] = None
+    resource_type_counts: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass(frozen=True)

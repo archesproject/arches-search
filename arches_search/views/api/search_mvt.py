@@ -1,4 +1,6 @@
 import functools
+import gzip
+import logging
 import uuid
 
 from django.core.cache import caches
@@ -6,6 +8,7 @@ from django.core.cache.backends.dummy import DummyCache
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.http import Http404, HttpResponse
+from django.utils.cache import patch_vary_headers
 
 from arches.app.models.models import Node
 from arches.app.models.system_settings import settings
@@ -22,6 +25,9 @@ from arches_search.utils.search import (
 
 MVT_LAYER_NAME = "search-results"
 CONTEXT_CACHE_TIMEOUT = 3600
+MVT_GZIP_LEVEL = 6
+
+logger = logging.getLogger(__name__)
 
 
 @functools.cache
@@ -47,7 +53,22 @@ def _context_cache_key(context_id):
 
 
 def _tile_cache_key(context_id, user_id, zoom, x, y):
-    return f"search:mvt:tile:{context_id}:{user_id}:{zoom}:{x}:{y}"
+    return f"search:mvt:tile:gz:{context_id}:{user_id}:{zoom}:{x}:{y}"
+
+
+def _tile_response(request, gzipped_tile: bytes) -> HttpResponse:
+    if not gzipped_tile:
+        return HttpResponse(b"", content_type="application/x-protobuf")
+
+    if "gzip" in request.META.get("HTTP_ACCEPT_ENCODING", ""):
+        response = HttpResponse(gzipped_tile, content_type="application/x-protobuf")
+        response["Content-Encoding"] = "gzip"
+    else:
+        response = HttpResponse(
+            gzip.decompress(gzipped_tile), content_type="application/x-protobuf"
+        )
+    patch_vary_headers(response, ("Accept-Encoding",))
+    return response
 
 
 class EmptySearchTileAPI(APIBase):
@@ -64,7 +85,9 @@ class SearchMVTContextAPI(APIBase):
         try:
             search_payload = SearchPayload.from_body(body)
             validate_search_payload(search_payload)
-            SearchCompiler(search_payload, request.user).compile()
+            SearchCompiler(search_payload, request.user).compile(
+                return_counts=False
+            ).results
         except ValidationError as error:
             return JSONResponse({"error": str(error)}, status=400)
 
@@ -83,9 +106,13 @@ class SearchMVTAPI(APIBase):
             raise Http404()
 
         tile_key = _tile_cache_key(context_id, request.user.id, zoom, x, y)
-        cached_tile = mvt_cache.get(tile_key)
+        try:
+            cached_tile = mvt_cache.get(tile_key)
+        except Exception as error:
+            logger.warning("MVT tile cache read failed for %s: %s", tile_key, error)
+            cached_tile = None
         if cached_tile is not None:
-            return HttpResponse(cached_tile, content_type="application/x-protobuf")
+            return _tile_response(request, cached_tile)
 
         readable_nodes = ReadableNodes(request.user)
         try:
@@ -93,7 +120,7 @@ class SearchMVTAPI(APIBase):
                 SearchPayload.from_body(body),
                 request.user,
                 readable_nodes=readable_nodes,
-            ).compile()
+            ).compile(return_counts=False)
         except ValidationError:
             # The context was checked as the user who created it. Another user
             # may not be able to read a node it names, and gets nothing drawn.
@@ -107,9 +134,17 @@ class SearchMVTAPI(APIBase):
             search_results_queryset, readable_geometry_nodes_queryset, zoom, x, y
         )
 
-        mvt_cache.set(tile_key, mvt_tile, settings.TILE_CACHE_TIMEOUT)
+        gzipped_tile = (
+            gzip.compress(mvt_tile, compresslevel=MVT_GZIP_LEVEL) if mvt_tile else b""
+        )
 
-        return HttpResponse(mvt_tile, content_type="application/x-protobuf")
+        # An oversized or unavailable cache must not fail the request.
+        try:
+            mvt_cache.set(tile_key, gzipped_tile, settings.TILE_CACHE_TIMEOUT)
+        except Exception as error:
+            logger.warning("MVT tile cache write failed for %s: %s", tile_key, error)
+
+        return _tile_response(request, gzipped_tile)
 
     def _generate_tile(
         self, search_results_queryset, readable_geometry_nodes_queryset, zoom, x, y
