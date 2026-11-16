@@ -131,10 +131,13 @@ class RelatedClauseEvaluator:
             resourceinstanceid=OuterRef(traversal_context["child_id_field"])
         ).annotate(_anchor_resource_id=OuterRef(traversal_context["anchor_id_field"]))
 
-        normalized_operand_items, _filter_value = (
+        normalized_operand_items, filter_value = (
             model_class.normalize_operands(operand_items, datatype_name=datatype_name)
             if hasattr(model_class, "normalize_operands")
             else (list(operand_items), None)
+        )
+        correlated_subject_rows = facet.filter_rows(
+            correlated_subject_rows, filter_value
         )
 
         predicate_expression, is_template_negated = (
