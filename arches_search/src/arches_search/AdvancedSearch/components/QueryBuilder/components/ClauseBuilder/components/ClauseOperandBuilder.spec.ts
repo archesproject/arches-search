@@ -65,4 +65,38 @@ describe("ClauseOperandBuilder hydration", () => {
         const widget = wrapper.findComponent(GenericWidgetStub);
         expect(widget.props("aliasedNodeData")).toBeUndefined();
     });
+
+    it("hands the widget's own edits back to it, keeping every language", async () => {
+        const wrapper = mount(ClauseOperandBuilder, {
+            props: {
+                subjectTerminalNode,
+                subjectTerminalGraph,
+                modelValue: null,
+            },
+            global: {
+                stubs: { GenericWidget: GenericWidgetStub },
+            },
+        });
+        const editedAliasedNodeData = {
+            node_value: {
+                en: { value: "Barcelona", direction: "ltr" },
+                fr: { value: "Barcelone", direction: "ltr" },
+            },
+            display_value: "Barcelone",
+            details: [],
+        };
+
+        const widget = wrapper.findComponent(GenericWidgetStub);
+        widget.vm.$emit("update:aliasedNodeData", editedAliasedNodeData);
+        await wrapper.vm.$nextTick();
+
+        expect(widget.props("aliasedNodeData")).toEqual(editedAliasedNodeData);
+        expect(wrapper.emitted("update:modelValue")?.[0]).toEqual([
+            {
+                type: "LITERAL",
+                value: editedAliasedNodeData.node_value,
+                display_value: "Barcelone",
+            },
+        ]);
+    });
 });

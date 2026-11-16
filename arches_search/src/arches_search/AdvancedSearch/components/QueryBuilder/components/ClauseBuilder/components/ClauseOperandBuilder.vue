@@ -31,7 +31,7 @@ const emit = defineEmits<{
 }>();
 
 const initialValue = modelValue?.value ?? null;
-const initialAliasedNodeData = ref<AliasedNodeData | undefined>(
+const aliasedNodeData = ref<AliasedNodeData | undefined>(
     buildInitialAliasedNodeData(),
 );
 const referenceLabelLookup = labelsToLookUp();
@@ -48,7 +48,7 @@ watchEffect(async () => {
             referenceLabelLookup.listId,
             referenceLabelLookup.labels,
         );
-        initialAliasedNodeData.value = {
+        aliasedNodeData.value = {
             node_value: nodeValue,
             display_value: referenceLabelLookup.labels.join(", "),
             details: [],
@@ -89,6 +89,7 @@ function buildInitialAliasedNodeData(): AliasedNodeData | undefined {
 function handleGenericWidgetUpdate(
     updatedAliasedNodeData: AliasedNodeData,
 ): void {
+    aliasedNodeData.value = updatedAliasedNodeData;
     emit(UPDATE_MODEL_VALUE, {
         type: OPERAND_TYPE_LITERAL,
         value: updatedAliasedNodeData.node_value,
@@ -107,7 +108,7 @@ function handleGenericWidgetUpdate(
                 :node-alias="subjectTerminalNode.alias"
                 :should-show-label="false"
                 :value="initialValue"
-                :aliased-node-data="initialAliasedNodeData"
+                :aliased-node-data="aliasedNodeData"
                 @update:aliased-node-data="handleGenericWidgetUpdate"
             />
         </div>
