@@ -10,12 +10,12 @@ import Textarea from "openvue/textarea";
 import { useToast } from "openvue/usetoast";
 import {
     createSavedSearch,
-    getSavedResourceSets,
+    getResourceSetLimits,
     saveResultsAsResourceSet,
 } from "@/arches_search/SimpleSearch/api.ts";
 
 import type {
-    SavedResourceSetsResponse,
+    ResourceSetLimits,
     SearchDefinition,
     SearchResultsToSave,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -43,10 +43,7 @@ const saveAs = ref<typeof SAVE_AS_QUERY | typeof SAVE_AS_RESULTS>(
 const saveSearchName = ref("");
 const saveSearchDescription = ref("");
 const isSaving = ref(false);
-const resourceSetLimits = ref<Omit<
-    SavedResourceSetsResponse,
-    "resource_sets"
-> | null>(null);
+const resourceSetLimits = ref<ResourceSetLimits | null>(null);
 
 const isSavingResults = computed<boolean>(
     () => saveAs.value === SAVE_AS_RESULTS,
@@ -81,9 +78,7 @@ watch(saveAs, async (value) => {
         return;
     }
     try {
-        const { immediate_threshold, member_limit } =
-            await getSavedResourceSets();
-        resourceSetLimits.value = { immediate_threshold, member_limit };
+        resourceSetLimits.value = await getResourceSetLimits();
     } catch {
         // e.g. not signed in; the save itself still checks the limits.
     }

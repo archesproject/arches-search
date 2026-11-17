@@ -105,7 +105,7 @@ const {
     mapFilter,
     nodeFilterConfigNodes,
     queries,
-    resourceSetFilter,
+    resourceSetId,
     savedSearchName,
     search,
     searchResults,
@@ -114,7 +114,6 @@ const {
     setGraphsBySlug,
     setMapFilter,
     setQuery,
-    setResourceSetFilter,
     setSort,
     setTermFilter,
     singleActiveGraph,
@@ -276,14 +275,15 @@ const mapActiveFilter = computed<ActiveFilter | null>(() => {
     };
 });
 
+// The set is opened from a saved search, whose name labels it.
 const resourceSetActiveFilter = computed<ActiveFilter | null>(() => {
-    if (!resourceSetFilter.value) {
+    if (!resourceSetId.value) {
         return null;
     }
 
     return {
-        id: `resourceSet-${resourceSetFilter.value.id}`,
-        text: resourceSetFilter.value.name || $gettext("Untitled set"),
+        id: `resourceSet-${resourceSetId.value}`,
+        text: savedSearchName.value || $gettext("Static set"),
         clear: clearResourceSetFilter,
         inverted: false,
         kind: ACTIVE_FILTER_KIND_RESOURCE_SET,
@@ -645,7 +645,6 @@ async function applySavedSearch(
                             "
                             :can-show-resource-set-results="true"
                             @run-query="onRunSavedQuery"
-                            @show-resource-set="setResourceSetFilter"
                             @close="closeSidePanel()"
                         />
                         <ExportResultsPanel

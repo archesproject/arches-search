@@ -19,6 +19,7 @@ export interface SearchDefinition {
     mapFilter: FeatureCollection | null;
     sort: SortSpec[];
     includeRelated: boolean;
+    resourceSetId: string | null;
 }
 
 export const TIME_FILTER_QUERY_KEY = "timeFilter";
@@ -187,16 +188,7 @@ export interface SavedSearch {
     };
 }
 
-export interface SavedResourceSet {
-    id: string;
-    name: string;
-    description: string;
-    date_created: string;
-    member_count: number;
-}
-
-export interface SavedResourceSetsResponse {
-    resource_sets: SavedResourceSet[];
+export interface ResourceSetLimits {
     immediate_threshold: number;
     member_limit: number;
 }
@@ -204,6 +196,7 @@ export interface SavedResourceSetsResponse {
 export interface SaveResourceSetResponse {
     resource_set_id: string;
     message: string;
+    saved_search_id?: string;
     task_id?: string;
 }
 

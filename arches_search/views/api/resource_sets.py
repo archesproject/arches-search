@@ -4,6 +4,10 @@ Saving a search's results as a static resource set (arches-resource-sets).
 The set is a snapshot: its members are the resources the search matched, for
 the user who ran it, at the moment it was saved. Nothing here re-runs the
 search later.
+
+Each set saved here is listed as a saved search whose query_definition is
+{"resourceSetId": <id>}. Opening it searches with resource_set_id, so the saved search table is the one list of what the user
+saved from search; sets made elsewhere in arches-resource-sets are not in it.
 """
 
 import uuid
@@ -13,8 +17,7 @@ from typing import Optional, Tuple
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, QuerySet
-from django.http import HttpResponse
+from django.db.models import QuerySet
 from django.utils.translation import gettext as _
 
 from arches.app.tasks import log_error, update_user_task_record
@@ -25,6 +28,7 @@ from arches.app.views.api import APIBase
 
 from arches_resource_sets.models import ResourceSet, ResourceSetMember
 
+from arches_search.models.models import SavedSearch
 from arches_search.tasks import create_resource_set_from_search
 from arches_search.utils.search import (
     SearchCompiler,
@@ -82,11 +86,13 @@ def save_search_as_resource_set(
     in_background=False,
 ) -> dict:
     """
-    Runs the search as user and saves its results as a set, or queues the
-    create_resource_set_from_search task when there are too many to save now.
-    The task calls this again with in_background=True, which always saves.
+    Runs the search as user and saves its results as a set, with the saved
+    search that lists it, or queues the create_resource_set_from_search task
+    when there are too many to save now. The task calls this again with
+    in_background=True, which always saves.
 
-    Returns {"resource_set_id", "message"}, plus "task_id" when queued.
+    Returns {"resource_set_id", "message"}, plus "saved_search_id" once saved
+    or "task_id" when queued.
     Raises ValidationError for a bad search, or when the results can't be
     saved (none, over the limit, or too many to save without Celery).
     """
@@ -139,15 +145,23 @@ def save_search_as_resource_set(
             ),
         }
 
-    resource_set, member_count = create_resource_set_from_queryset(
-        user,
-        search_result.results,
-        name=name,
-        description=description,
-        set_id=resource_set_id,
-    )
+    with transaction.atomic(using=search_result.results.db):
+        resource_set, member_count = create_resource_set_from_queryset(
+            user,
+            search_result.results,
+            name=name,
+            description=description,
+            set_id=resource_set_id,
+        )
+        saved_search = SavedSearch.objects.using(search_result.results.db).create(
+            name=name,
+            description=description,
+            query_definition={"resourceSetId": str(resource_set.pk)},
+            creator=user,
+        )
     return {
         "resource_set_id": str(resource_set.pk),
+        "saved_search_id": str(saved_search.pk),
         "message": _(
             "Your resource set '{name}' is ready with {count} resources."
         ).format(name=name, count=member_count),
@@ -156,7 +170,10 @@ def save_search_as_resource_set(
 
 class SearchResultsResourceSetAPI(APIBase):
     """
-    Saves a search's results as a static resource set.
+    Saves a search's results as a static resource set. GET returns the size
+    limits the save is held to. The sets saved are listed, and deleted,
+    through the saved searches API.
+
     RESOURCE_SET_IMMEDIATE_THRESHOLD and RESOURCE_SET_MEMBER_LIMIT default to
     core's SEARCH_EXPORT_IMMEDIATE_DOWNLOAD_THRESHOLD and SEARCH_EXPORT_LIMIT.
     """
@@ -167,15 +184,8 @@ class SearchResultsResourceSetAPI(APIBase):
                 {"error": _("User not authenticated. Access denied.")}, status=401
             )
 
-        owned_resource_sets = (
-            ResourceSet.objects.filter(owner=request.user)
-            .values("id", "name", "description", "date_created")
-            .annotate(member_count=Count("resourcesetmember"))
-            .order_by("-date_created")
-        )
         return JSONResponse(
             {
-                "resource_sets": owned_resource_sets,
                 "immediate_threshold": getattr(
                     settings,
                     "RESOURCE_SET_IMMEDIATE_THRESHOLD",
@@ -211,12 +221,3 @@ class SearchResultsResourceSetAPI(APIBase):
         except ValidationError as error:
             return JSONResponse({"error": " ".join(error.messages)}, status=400)
         return JSONResponse(saved, status=202 if "task_id" in saved else 201)
-
-    def delete(self, request, resource_set_id):
-        # Only the owner's own sets; others' (and anonymous) get a 404.
-        deleted_count = ResourceSet.objects.filter(
-            pk=resource_set_id, owner=request.user
-        ).delete()[0]
-        if not deleted_count:
-            return JSONResponse({"error": _("Resource set not found.")}, status=404)
-        return HttpResponse(status=204)

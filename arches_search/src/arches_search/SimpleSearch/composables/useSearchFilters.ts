@@ -42,7 +42,6 @@ import type {
     NodeFilterConfigNode,
     ResourceFieldFilter,
     ResourceType,
-    SavedResourceSet,
     SearchDefinition,
     SearchRequestTerm,
     SerializedTerm,
@@ -62,9 +61,6 @@ interface ExportPayload {
     resourceSetId: string | null;
 }
 
-// The resource set the search is narrowed to.
-type ResourceSetFilter = Pick<SavedResourceSet, "id" | "name">;
-
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
     activeGraphs: Ref<ResourceType[]>;
@@ -80,7 +76,7 @@ interface SearchFilters {
     mapFilter: Ref<FeatureCollection | null>;
     nodeFilterConfigNodes: ComputedRef<NodeFilterConfigNode[]>;
     resourceFieldFilters: Ref<Map<string, ResourceFieldFilter>>;
-    resourceSetFilter: Ref<ResourceSetFilter | null>;
+    resourceSetId: Ref<string | null>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
     resultsGraphs: Ref<ResourceType[]>;
@@ -114,7 +110,6 @@ interface SearchFilters {
         filter: ResourceFieldFilter | null,
     ): void;
     clearResourceFieldFilters(): void;
-    setResourceSetFilter(resourceSet: ResourceSetFilter): void;
     clearResourceSetFilter(): void;
     setSort(next: SortSpec[]): void;
     setTermFilter(term: SerializedTerm): void;
@@ -147,7 +142,7 @@ function createSearchFilters(): SearchFilters {
     const resourceFieldFilters = ref<Map<string, ResourceFieldFilter>>(
         new Map(),
     );
-    const resourceSetFilter = ref<ResourceSetFilter | null>(null);
+    const resourceSetId = ref<string | null>(null);
     const activeGraphs = ref<ResourceType[]>([]);
     // Every searchable resource model.
     const availableGraphs = ref<ResourceType[]>([]);
@@ -444,7 +439,7 @@ function createSearchFilters(): SearchFilters {
         storedAttributeFilterValues.value = {};
         mapFilter.value = null;
         resourceFieldFilters.value = new Map();
-        resourceSetFilter.value = null;
+        resourceSetId.value = null;
         activeGraphs.value = [];
         savedSearchName.value = null;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -587,7 +582,7 @@ function createSearchFilters(): SearchFilters {
                     mapFilter: mapFilter.value,
                     resourceFieldFilters: getRequestResourceFieldFilters(),
                     maxHops: requestMaxHops.value,
-                    resourceSetId: resourceSetFilter.value?.id ?? null,
+                    resourceSetId: resourceSetId.value,
                     sort: sort.value,
                 };
 
@@ -644,19 +639,8 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
-    // Shows a saved resource set's results: like opening a saved search, it
-    // replaces the current filters, which can then narrow the set further.
-    function setResourceSetFilter(resourceSet: ResourceSetFilter): void {
-        resetFilters();
-        resourceSetFilter.value = {
-            id: resourceSet.id,
-            name: resourceSet.name,
-        };
-        search();
-    }
-
     function clearResourceSetFilter(): void {
-        resourceSetFilter.value = null;
+        resourceSetId.value = null;
         currentPage.value = FIRST_SEARCH_PAGE;
         search();
     }
@@ -683,6 +667,7 @@ function createSearchFilters(): SearchFilters {
             mapFilter: mapFilter.value,
             sort: sort.value,
             includeRelated: includeRelated.value,
+            resourceSetId: resourceSetId.value,
         };
     }
 
@@ -703,6 +688,7 @@ function createSearchFilters(): SearchFilters {
         activeGraphs.value = findSavedGraphSelection(definition.graphSlugs);
         sort.value = definition.sort;
         includeRelated.value = definition.includeRelated;
+        resourceSetId.value = definition.resourceSetId;
         savedSearchName.value = searchName;
         search();
     }
@@ -717,7 +703,7 @@ function createSearchFilters(): SearchFilters {
             dateRange: buildRequestDateRange([...queries.value.values()]),
             resourceFieldFilters: getRequestResourceFieldFilters(),
             maxHops: requestMaxHops.value,
-            resourceSetId: resourceSetFilter.value?.id ?? null,
+            resourceSetId: resourceSetId.value,
         };
     }
 
@@ -747,7 +733,7 @@ function createSearchFilters(): SearchFilters {
         nodeFilterConfigNodes,
         queries: queriesView,
         resourceFieldFilters,
-        resourceSetFilter,
+        resourceSetId,
         resultsTileUrl,
         resultsGraphs,
         savedSearchName,
@@ -757,7 +743,6 @@ function createSearchFilters(): SearchFilters {
         setAttributeFilter,
         setResourceFieldFilter,
         clearResourceFieldFilters,
-        setResourceSetFilter,
         clearResourceSetFilter,
         searchResults,
         setGraphsBySlug,

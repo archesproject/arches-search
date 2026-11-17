@@ -18,7 +18,7 @@ import type {
     NodeFilterConfigResponse,
     ResourceFieldFilter,
     ResourceFieldMetadata,
-    SavedResourceSetsResponse,
+    ResourceSetLimits,
     SavedSearch,
     SaveResourceSetResponse,
     SearchDefinition,
@@ -341,7 +341,7 @@ export async function startSearchResultsExport({
     }
 }
 
-export async function getSavedResourceSets(): Promise<SavedResourceSetsResponse> {
+export async function getResourceSetLimits(): Promise<ResourceSetLimits> {
     const response = await fetch(
         generateArchesURL("arches_search:search_results_resource_sets"),
     );
@@ -386,23 +386,6 @@ export async function saveResultsAsResourceSet({
         throw new Error(errorBody?.error ?? response.statusText);
     }
     return response.json();
-}
-
-export async function deleteResourceSet(setId: string): Promise<void> {
-    const response = await fetch(
-        generateArchesURL("arches_search:search_results_resource_set", {
-            resource_set_id: setId,
-        }),
-        {
-            method: "DELETE",
-            headers: {
-                "X-CSRFToken": Cookies.get("csrftoken") || "",
-            },
-        },
-    );
-    if (!response.ok) {
-        throw new Error(response.statusText);
-    }
 }
 
 export async function fetchResourceFieldMetadata(

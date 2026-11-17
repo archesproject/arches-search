@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from "vue";
+import { ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
@@ -12,12 +12,10 @@ import { useToast } from "openvue/usetoast";
 import {
     getSavedSearches,
     deleteSavedSearch,
-    deleteResourceSet,
-    getSavedResourceSets,
 } from "@/arches_search/SimpleSearch/api.ts";
+import { parseSearchDefinition } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 
 import type {
-    SavedResourceSet,
     SavedSearch,
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -30,7 +28,6 @@ const SORT_NEWEST = "newest" as const;
 const SORT_OLDEST = "oldest" as const;
 
 const RUN_QUERY_EVENT = "run-query" as const;
-const SHOW_RESOURCE_SET_EVENT = "show-resource-set" as const;
 
 // Keeps this list's dialog apart from any other ConfirmDialog on the page.
 const CONFIRM_GROUP = "saved-search-list" as const;
@@ -41,8 +38,8 @@ type SavedSearchSortValue =
     | typeof SORT_NEWEST
     | typeof SORT_OLDEST;
 
-// "mine" lists the user's own searches and resource sets, which they can
-// delete; "shared" lists searches others shared with them.
+// "mine" lists the user's own searches, which they can delete; "shared" lists
+// searches others shared with them.
 const { scope, canShowResourceSetResults = false } = defineProps<{
     scope: "mine" | "shared";
     // Only where the search can be narrowed to a set (Simple Search).
@@ -55,10 +52,6 @@ const emit = defineEmits<{
         queryDefinition: Record<string, unknown>,
         searchName: string,
     ): void;
-    (
-        event: typeof SHOW_RESOURCE_SET_EVENT,
-        resourceSet: SavedResourceSet,
-    ): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -68,7 +61,6 @@ const confirm = useConfirm();
 const filterText = ref("");
 const sortValue = ref<SavedSearchSortValue>(SORT_A_TO_Z);
 const searches = ref<SavedSearch[]>([]);
-const resourceSets = ref<SavedResourceSet[]>([]);
 const isLoading = ref(false);
 
 const sortOptions: SortOption[] = [
@@ -78,34 +70,6 @@ const sortOptions: SortOption[] = [
     { label: $gettext("Oldest first"), value: SORT_OLDEST },
 ];
 
-// The user's own resource sets, listed under "mine" and filtered here by the
-// filter text.
-const listedResourceSets = computed<SavedResourceSet[]>(() => {
-    if (scope !== MINE_SCOPE) {
-        return [];
-    }
-    const filter = filterText.value.trim().toLowerCase();
-    return resourceSets.value.filter(
-        (resourceSet) =>
-            !filter ||
-            resourceSet.name.toLowerCase().includes(filter) ||
-            (resourceSet.description ?? "").toLowerCase().includes(filter),
-    );
-});
-
-// Saved searches and resource sets, sorted together.
-const listedItems = computed<
-    (SavedSearch | (SavedResourceSet & { created_at: string }))[]
->(() =>
-    sortSearches([
-        ...searches.value,
-        ...listedResourceSets.value.map((resourceSet) => ({
-            ...resourceSet,
-            created_at: resourceSet.date_created,
-        })),
-    ]),
-);
-
 watchEffect(async () => {
     await loadSearches();
 });
@@ -113,16 +77,6 @@ watchEffect(async () => {
 watch(sortValue, () => {
     searches.value = sortSearches(searches.value);
 });
-
-watch(
-    () => scope,
-    async (value) => {
-        if (value === MINE_SCOPE) {
-            await loadResourceSets();
-        }
-    },
-    { immediate: true },
-);
 
 async function loadSearches(): Promise<void> {
     isLoading.value = true;
@@ -136,29 +90,11 @@ async function loadSearches(): Promise<void> {
     }
 }
 
-async function loadResourceSets(): Promise<void> {
-    try {
-        resourceSets.value = (await getSavedResourceSets()).resource_sets;
-    } catch {
-        // e.g. not signed in.
-        resourceSets.value = [];
-    }
-}
-
-function sortSearches<T extends Pick<SavedSearch, "name" | "created_at">>(
-    items: T[],
-): T[] {
+function sortSearches(items: SavedSearch[]): SavedSearch[] {
     const sorted = [...items];
-    // Unnamed items (e.g. sets made in arches-resource-sets) go last either way.
-    const byName = (left: T, right: T, direction: 1 | -1): number => {
-        if (!left.name || !right.name) {
-            return Number(!left.name) - Number(!right.name);
-        }
-        return direction * left.name.localeCompare(right.name);
-    };
     switch (sortValue.value) {
         case SORT_Z_TO_A:
-            sorted.sort((left, right) => byName(left, right, -1));
+            sorted.sort((left, right) => right.name.localeCompare(left.name));
             break;
         case SORT_NEWEST:
             sorted.sort(
@@ -175,7 +111,7 @@ function sortSearches<T extends Pick<SavedSearch, "name" | "created_at">>(
             );
             break;
         default:
-            sorted.sort((left, right) => byName(left, right, 1));
+            sorted.sort((left, right) => left.name.localeCompare(right.name));
     }
     return sorted;
 }
@@ -196,41 +132,21 @@ async function onDelete(search: SavedSearch): Promise<void> {
     }
 }
 
-async function onDeleteResourceSet(
-    resourceSetToDelete: SavedResourceSet,
-): Promise<void> {
-    try {
-        await deleteResourceSet(resourceSetToDelete.id);
-        resourceSets.value = resourceSets.value.filter(
-            (resourceSet) => resourceSet.id !== resourceSetToDelete.id,
-        );
-    } catch (error) {
-        toast.add({
-            severity: "error",
-            life: 5000,
-            summary: $gettext("Failed to delete resource set"),
-            detail: (error as Error).message,
-        });
-    }
-}
-
-function confirmDelete(
-    header: string,
-    name: string,
-    onAccept: () => Promise<void>,
-): void {
+function confirmDelete(search: SavedSearch): void {
     confirm.require({
         group: CONFIRM_GROUP,
-        header,
+        header: isStaticSet(search)
+            ? $gettext("Delete static set")
+            : $gettext("Delete saved search"),
         message: $gettext('Delete "%{name}"? This cannot be undone.', {
-            name: name || $gettext("Untitled set"),
+            name: search.name,
         }),
         icon: "pi pi-exclamation-triangle",
         acceptLabel: $gettext("Delete"),
         rejectLabel: $gettext("Cancel"),
         acceptProps: { severity: "danger" },
         rejectProps: { severity: "secondary", outlined: true },
-        accept: onAccept,
+        accept: () => onDelete(search),
     });
 }
 
@@ -239,26 +155,30 @@ function formatDate(isoDateString: string): string {
     return date.toLocaleString();
 }
 
-function isDynamicQuery(search: SavedSearch): boolean {
-    const queryDefinition = search.query_definition;
+function isStaticSet(search: SavedSearch): boolean {
     return (
-        queryDefinition != null &&
-        ("groups" in queryDefinition || "terms" in queryDefinition)
+        parseSearchDefinition(search.query_definition ?? {}).resourceSetId !==
+        null
     );
 }
 
 function queryTypeIconClasses(search: SavedSearch): string[] {
-    if (isDynamicQuery(search)) {
-        return ["pi", "pi-bolt", "chip-live"];
+    if (isStaticSet(search)) {
+        return ["pi", "pi-database", "chip-snapshot"];
     }
-    return ["pi", "pi-database", "chip-snapshot"];
+    return ["pi", "pi-bolt", "chip-live"];
 }
 
 function queryTypeLabel(search: SavedSearch): string {
-    if (isDynamicQuery(search)) {
-        return $gettext("Dynamic query");
+    if (isStaticSet(search)) {
+        return $gettext("Static set");
     }
-    return $gettext("Saved Results");
+    return $gettext("Dynamic query");
+}
+
+// A set's results open only where a search can be narrowed to a set.
+function canRun(search: SavedSearch): boolean {
+    return !isStaticSet(search) || canShowResourceSetResults;
 }
 </script>
 
@@ -292,162 +212,78 @@ function queryTypeLabel(search: SavedSearch): string {
                 {{ $gettext("Loading...") }}
             </div>
             <div
-                v-else-if="listedItems.length === 0"
+                v-else-if="searches.length === 0"
                 class="panel-empty"
             >
                 {{ $gettext("No saved searches found") }}
             </div>
-            <template
-                v-for="item in listedItems"
+            <div
+                v-for="item in searches"
                 v-else
-                :key="'savedsearchid' in item ? item.savedsearchid : item.id"
+                :key="item.savedsearchid"
+                class="saved-search-item"
             >
-                <div
-                    v-if="'savedsearchid' in item"
-                    class="saved-search-item"
-                >
-                    <div class="item-header">
-                        <i
-                            class="item-icon query-type-chip"
-                            :class="queryTypeIconClasses(item)"
-                        />
-                        <span class="item-name">{{ item.name }}</span>
-                    </div>
-                    <div class="item-meta">
-                        <span class="item-type">
-                            {{ queryTypeLabel(item) }}
-                        </span>
-                        <span class="item-date">
-                            {{ $gettext("Saved:") }}
-                            {{ formatDate(item.created_at) }}
-                        </span>
-                    </div>
-                    <p
-                        v-if="item.description"
-                        class="item-description"
-                    >
-                        {{ item.description }}
-                    </p>
-                    <p
-                        v-else
-                        class="item-description item-no-description"
-                    >
-                        {{ $gettext("No description provided") }}
-                    </p>
-                    <div class="item-actions">
-                        <Button
-                            v-if="isDynamicQuery(item)"
-                            icon="pi pi-play"
-                            icon-pos="left"
-                            size="small"
-                            class="action-btn"
-                            :label="$gettext('Run query')"
-                            :text="true"
-                            @click="
-                                emit(
-                                    RUN_QUERY_EVENT,
-                                    item.query_definition,
-                                    item.name,
-                                )
-                            "
-                        />
-                        <Button
-                            v-else
-                            icon="pi pi-play"
-                            icon-pos="left"
-                            size="small"
-                            class="action-btn"
-                            :label="$gettext('Show results')"
-                            :text="true"
-                            :disabled="true"
-                        />
-                        <Button
-                            v-if="scope === MINE_SCOPE"
-                            icon="pi pi-times"
-                            icon-pos="left"
-                            size="small"
-                            class="action-btn action-delete"
-                            :label="$gettext('Delete')"
-                            :text="true"
-                            @click="
-                                confirmDelete(
-                                    $gettext('Delete saved search'),
-                                    item.name,
-                                    () => onDelete(item),
-                                )
-                            "
-                        />
-                    </div>
+                <div class="item-header">
+                    <i
+                        class="item-icon query-type-chip"
+                        :class="queryTypeIconClasses(item)"
+                    />
+                    <span class="item-name">{{ item.name }}</span>
                 </div>
-                <div
+                <div class="item-meta">
+                    <span class="item-type">
+                        {{ queryTypeLabel(item) }}
+                    </span>
+                    <span class="item-date">
+                        {{ $gettext("Saved:") }}
+                        {{ formatDate(item.created_at) }}
+                    </span>
+                </div>
+                <p
+                    v-if="item.description"
+                    class="item-description"
+                >
+                    {{ item.description }}
+                </p>
+                <p
                     v-else
-                    class="saved-search-item"
+                    class="item-description item-no-description"
                 >
-                    <div class="item-header">
-                        <i
-                            class="item-icon query-type-chip pi pi-database chip-snapshot"
-                        />
-                        <span
-                            class="item-name"
-                            :class="{ 'item-untitled': !item.name }"
-                        >
-                            {{ item.name || $gettext("Untitled set") }}
-                        </span>
-                    </div>
-                    <div class="item-meta">
-                        <span class="item-type">
-                            {{
-                                $gettext("Static set · %{count} resources", {
-                                    count: String(item.member_count),
-                                })
-                            }}
-                        </span>
-                        <span class="item-date">
-                            {{ $gettext("Saved:") }}
-                            {{ formatDate(item.created_at) }}
-                        </span>
-                    </div>
-                    <p
-                        v-if="item.description"
-                        class="item-description"
-                    >
-                        {{ item.description }}
-                    </p>
-                    <p
-                        v-else
-                        class="item-description item-no-description"
-                    >
-                        {{ $gettext("No description provided") }}
-                    </p>
-                    <div class="item-actions">
-                        <Button
-                            icon="pi pi-play"
-                            icon-pos="left"
-                            size="small"
-                            class="action-btn"
-                            :label="$gettext('Show results')"
-                            :text="true"
-                            :disabled="!canShowResourceSetResults"
-                            @click="emit(SHOW_RESOURCE_SET_EVENT, item)"
-                        />
-                        <Button
-                            icon="pi pi-times"
-                            icon-pos="left"
-                            size="small"
-                            class="action-btn action-delete"
-                            :label="$gettext('Delete')"
-                            :text="true"
-                            @click="
-                                confirmDelete(
-                                    $gettext('Delete static set'),
-                                    item.name,
-                                    () => onDeleteResourceSet(item),
-                                )
-                            "
-                        />
-                    </div>
+                    {{ $gettext("No description provided") }}
+                </p>
+                <div class="item-actions">
+                    <Button
+                        icon="pi pi-play"
+                        icon-pos="left"
+                        size="small"
+                        class="action-btn"
+                        :label="
+                            isStaticSet(item)
+                                ? $gettext('Show results')
+                                : $gettext('Run query')
+                        "
+                        :text="true"
+                        :disabled="!canRun(item)"
+                        @click="
+                            emit(
+                                RUN_QUERY_EVENT,
+                                item.query_definition,
+                                item.name,
+                            )
+                        "
+                    />
+                    <Button
+                        v-if="scope === MINE_SCOPE"
+                        icon="pi pi-times"
+                        icon-pos="left"
+                        size="small"
+                        class="action-btn action-delete"
+                        :label="$gettext('Delete')"
+                        :text="true"
+                        @click="confirmDelete(item)"
+                    />
                 </div>
-            </template>
+            </div>
         </div>
     </div>
 </template>
@@ -569,12 +405,6 @@ function queryTypeLabel(search: SavedSearch): string {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.item-untitled {
-    font-style: italic;
-    font-weight: 400;
-    color: var(--p-text-muted-color);
 }
 
 .item-meta {

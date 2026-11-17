@@ -1,10 +1,15 @@
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import transaction
 from django.db.models import Q
 
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
+
+from arches_resource_sets.models import ResourceSet
 
 from arches_search.models.models import (
     SavedSearch,
@@ -17,6 +22,22 @@ def _is_list_of_ids(value):
     return isinstance(value, list) and all(
         isinstance(item, int) and not isinstance(item, bool) for item in value
     )
+
+
+def _resource_set_id(query_definition):
+    """
+    The id of the resource set a saved search is narrowed to, or None. A
+    malformed id is None too: there is no set it could delete.
+    """
+    if not isinstance(query_definition, dict):
+        return None
+    resource_set_id = query_definition.get("resourceSetId")
+    if not isinstance(resource_set_id, str):
+        return None
+    try:
+        return str(uuid.UUID(resource_set_id))
+    except ValueError:
+        return None
 
 
 def _serialize_saved_search(saved_search, include_created_at=True):
@@ -138,5 +159,16 @@ class SavedSearchAPI(APIBase):
         except SavedSearch.DoesNotExist:
             return JSONResponse(status=404)
 
-        saved_search.delete()
+        resource_set_id = _resource_set_id(saved_search.query_definition)
+        with transaction.atomic():
+            saved_search.delete()
+            if (
+                resource_set_id is not None
+                and not SavedSearch.objects.filter(
+                    query_definition__resourceSetId=resource_set_id
+                ).exists()
+            ):
+                ResourceSet.objects.filter(
+                    pk=resource_set_id, owner=request.user
+                ).delete()
         return JSONResponse(status=204)

@@ -205,6 +205,7 @@ describe("buildAdvancedSearchDefinition", () => {
             mapFilter: null,
             sort,
             includeRelated: false,
+            resourceSetId: null,
         });
         expect(parseSearchDefinition({ ...definition })).toEqual(definition);
     });
@@ -249,6 +250,23 @@ describe("parseSearchDefinition", () => {
             mapFilter: null,
             sort: [],
             includeRelated: true,
+            resourceSetId: null,
         });
+    });
+
+    it("reads the resource set a search saved from results is narrowed to", () => {
+        const resourceSetId = "5f0c4a3e-0000-4000-8000-000000000001";
+
+        expect(
+            parseSearchDefinition({ graphSlugs: [GRAPH_SLUG], resourceSetId })
+                .resourceSetId,
+        ).toBe(resourceSetId);
+    });
+
+    it.each([
+        ["absent", {}],
+        ["null", { resourceSetId: null }],
+    ])("reads no resource set when the id is %s", (_case, raw) => {
+        expect(parseSearchDefinition(raw).resourceSetId).toBeNull();
     });
 });

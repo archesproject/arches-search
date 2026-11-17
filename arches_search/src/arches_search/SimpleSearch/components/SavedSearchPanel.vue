@@ -8,7 +8,6 @@ import SavedSearchList from "@/arches_search/SimpleSearch/components/SavedSearch
 import SaveSearchForm from "@/arches_search/SimpleSearch/components/SaveSearchForm.vue";
 
 import type {
-    SavedResourceSet,
     SearchDefinition,
     SearchResultsToSave,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -18,7 +17,6 @@ const MINE_TAB = "mine" as const;
 const SHARED_TAB = "shared" as const;
 
 const RUN_QUERY_EVENT = "run-query" as const;
-const SHOW_RESOURCE_SET_EVENT = "show-resource-set" as const;
 const CLOSE_EVENT = "close" as const;
 
 const {
@@ -35,7 +33,6 @@ const {
     // Given, the save tab can also save the results as a resource set.
     resultsToSave?: SearchResultsToSave | null;
     resultCount?: number;
-    // Enables a set's "Show results", which emits show-resource-set.
     canShowResourceSetResults?: boolean;
 }>();
 
@@ -44,10 +41,6 @@ const emit = defineEmits<{
         event: typeof RUN_QUERY_EVENT,
         queryDefinition: Record<string, unknown>,
         searchName: string,
-    ): void;
-    (
-        event: typeof SHOW_RESOURCE_SET_EVENT,
-        resourceSet: SavedResourceSet,
     ): void;
     (event: typeof CLOSE_EVENT): void;
 }>();
@@ -114,9 +107,6 @@ const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
             @run-query="
                 (queryDefinition, searchName) =>
                     emit(RUN_QUERY_EVENT, queryDefinition, searchName)
-            "
-            @show-resource-set="
-                (resourceSet) => emit(SHOW_RESOURCE_SET_EVENT, resourceSet)
             "
         />
     </div>
