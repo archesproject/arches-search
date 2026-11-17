@@ -24,6 +24,7 @@ import type {
     SearchDefinition,
     SearchRequestTerm,
     SearchResultsToSave,
+    SharingGroup,
     SortSpec,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
@@ -204,6 +205,7 @@ export async function createSavedSearch(
     name: string,
     description: string,
     queryDefinition: SearchDefinition,
+    groupIds: number[] = [],
 ): Promise<SavedSearch> {
     const response = await fetch(
         generateArchesURL("arches_search:saved_searches"),
@@ -217,8 +219,42 @@ export async function createSavedSearch(
                 name,
                 description,
                 query_definition: queryDefinition,
+                groups: groupIds,
             }),
         },
+    );
+    if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error ?? response.statusText);
+    }
+    return response.json();
+}
+
+export async function updateSavedSearchGroups(
+    savedsearchid: string,
+    groupIds: number[],
+): Promise<SavedSearch> {
+    const response = await fetch(
+        generateArchesURL("arches_search:saved_search", { savedsearchid }),
+        {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify({ groups: groupIds }),
+        },
+    );
+    if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error ?? response.statusText);
+    }
+    return response.json();
+}
+
+export async function getSharingGroups(): Promise<SharingGroup[]> {
+    const response = await fetch(
+        generateArchesURL("arches_search:saved_search_groups"),
     );
     if (!response.ok) {
         throw new Error(response.statusText);

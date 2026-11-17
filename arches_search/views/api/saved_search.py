@@ -40,7 +40,45 @@ def _resource_set_id(query_definition):
         return None
 
 
-def _serialize_saved_search(saved_search, include_created_at=True):
+INVALID_SHARING_IDS_ERROR = "users and groups must be lists of existing ids"
+
+
+def _is_valid_sharing_ids(user_ids, group_ids):
+    """Whether the ids are lists of existing user and group ids."""
+    if not _is_list_of_ids(user_ids) or not _is_list_of_ids(group_ids):
+        return False
+
+    # FK constraints are deferred, so an invalid id wouldn't raise until
+    # commit; check existence up front instead.
+    requested_user_ids = set(user_ids)
+    requested_group_ids = set(group_ids)
+    existing_user_ids = set(
+        get_user_model()
+        .objects.filter(pk__in=requested_user_ids)
+        .values_list("pk", flat=True)
+    )
+    existing_group_ids = set(
+        Group.objects.filter(pk__in=requested_group_ids).values_list("pk", flat=True)
+    )
+    return (
+        existing_user_ids == requested_user_ids
+        and existing_group_ids == requested_group_ids
+    )
+
+
+def _serialize_shared_groups(saved_search):
+    return sorted(
+        (
+            {"id": shared.group_id, "name": shared.group.name}
+            for shared in saved_search.shared_groups.all()
+        ),
+        key=lambda group: group["name"],
+    )
+
+
+def _serialize_saved_search(
+    saved_search, include_created_at=True, include_shared_groups=False
+):
     data = {
         "savedsearchid": str(saved_search.savedsearchid),
         "name": saved_search.name,
@@ -53,6 +91,9 @@ def _serialize_saved_search(saved_search, include_created_at=True):
     }
     if include_created_at:
         data["created_at"] = saved_search.created_at.isoformat()
+    # Only the creator sees whom a search is shared with.
+    if include_shared_groups:
+        data["shared_groups"] = _serialize_shared_groups(saved_search)
     return data
 
 
@@ -79,8 +120,16 @@ class SavedSearchAPI(APIBase):
             )
 
         saved_searches = saved_searches.select_related("creator").order_by("name")
+        is_mine = scope == "mine"
+        if is_mine:
+            saved_searches = saved_searches.prefetch_related("shared_groups__group")
 
-        return JSONResponse([_serialize_saved_search(s) for s in saved_searches])
+        return JSONResponse(
+            [
+                _serialize_saved_search(s, include_shared_groups=is_mine)
+                for s in saved_searches
+            ]
+        )
 
     def post(self, request):
         body = JSONDeserializer().deserialize(request.body)
@@ -95,36 +144,8 @@ class SavedSearchAPI(APIBase):
 
         shared_user_ids = body.get("users", [])
         shared_group_ids = body.get("groups", [])
-        if not _is_list_of_ids(shared_user_ids) or not _is_list_of_ids(
-            shared_group_ids
-        ):
-            return JSONResponse(
-                {"error": "users and groups must be lists of integer ids"},
-                status=400,
-            )
-
-        # FK constraints are deferred, so an invalid id wouldn't raise until
-        # commit; check existence up front instead.
-        requested_user_ids = set(shared_user_ids)
-        requested_group_ids = set(shared_group_ids)
-        existing_user_ids = set(
-            get_user_model()
-            .objects.filter(pk__in=requested_user_ids)
-            .values_list("pk", flat=True)
-        )
-        existing_group_ids = set(
-            Group.objects.filter(pk__in=requested_group_ids).values_list(
-                "pk", flat=True
-            )
-        )
-        if (
-            existing_user_ids != requested_user_ids
-            or existing_group_ids != requested_group_ids
-        ):
-            return JSONResponse(
-                {"error": "users and groups must reference existing ids"},
-                status=400,
-            )
+        if not _is_valid_sharing_ids(shared_user_ids, shared_group_ids):
+            return JSONResponse({"error": INVALID_SHARING_IDS_ERROR}, status=400)
 
         saved_search = SavedSearch.objects.create(
             name=name,
@@ -136,18 +157,58 @@ class SavedSearchAPI(APIBase):
         SharedSearchXUser.objects.bulk_create(
             [
                 SharedSearchXUser(saved_search=saved_search, user_id=uid)
-                for uid in shared_user_ids
+                for uid in set(shared_user_ids)
             ]
         )
         SharedSearchXGroup.objects.bulk_create(
             [
                 SharedSearchXGroup(saved_search=saved_search, group_id=gid)
-                for gid in shared_group_ids
+                for gid in set(shared_group_ids)
             ]
         )
 
         return JSONResponse(
-            _serialize_saved_search(saved_search, include_created_at=False), status=201
+            _serialize_saved_search(
+                saved_search, include_created_at=False, include_shared_groups=True
+            ),
+            status=201,
+        )
+
+    def patch(self, request, savedsearchid):
+        """Replaces the groups a search is shared with."""
+        try:
+            saved_search = SavedSearch.objects.get(
+                savedsearchid=savedsearchid,
+                creator=request.user,
+            )
+        except SavedSearch.DoesNotExist:
+            return JSONResponse(status=404)
+
+        body = JSONDeserializer().deserialize(request.body)
+        if "groups" not in body:
+            return JSONResponse({"error": "groups is required"}, status=400)
+        shared_group_ids = body["groups"]
+        if not _is_valid_sharing_ids([], shared_group_ids):
+            return JSONResponse({"error": INVALID_SHARING_IDS_ERROR}, status=400)
+
+        with transaction.atomic():
+            SharedSearchXGroup.objects.filter(saved_search=saved_search).exclude(
+                group_id__in=shared_group_ids
+            ).delete()
+            already_shared_ids = set(
+                SharedSearchXGroup.objects.filter(
+                    saved_search=saved_search
+                ).values_list("group_id", flat=True)
+            )
+            SharedSearchXGroup.objects.bulk_create(
+                [
+                    SharedSearchXGroup(saved_search=saved_search, group_id=gid)
+                    for gid in set(shared_group_ids) - already_shared_ids
+                ]
+            )
+
+        return JSONResponse(
+            _serialize_saved_search(saved_search, include_shared_groups=True)
         )
 
     def delete(self, request, savedsearchid):
@@ -172,3 +233,13 @@ class SavedSearchAPI(APIBase):
                     pk=resource_set_id, owner=request.user
                 ).delete()
         return JSONResponse(status=204)
+
+
+class SavedSearchGroupsAPI(APIBase):
+    """Lists the groups a saved search can be shared with."""
+
+    def get(self, request):
+        if not request.user.is_authenticated or request.user.username == "anonymous":
+            return JSONResponse(status=401)
+        groups = Group.objects.order_by("name").values("id", "name")
+        return JSONResponse(list(groups))

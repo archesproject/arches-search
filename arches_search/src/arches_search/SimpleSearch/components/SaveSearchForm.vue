@@ -7,6 +7,8 @@ import InputText from "openvue/inputtext";
 import RadioButton from "openvue/radiobutton";
 import Textarea from "openvue/textarea";
 
+import SharingGroupsSelect from "@/arches_search/SimpleSearch/components/SharingGroupsSelect.vue";
+
 import { useToast } from "openvue/usetoast";
 import {
     createSavedSearch,
@@ -42,6 +44,7 @@ const saveAs = ref<typeof SAVE_AS_QUERY | typeof SAVE_AS_RESULTS>(
 );
 const saveSearchName = ref("");
 const saveSearchDescription = ref("");
+const sharedGroupIds = ref<number[]>([]);
 const isSaving = ref(false);
 const resourceSetLimits = ref<ResourceSetLimits | null>(null);
 
@@ -87,6 +90,7 @@ watch(saveAs, async (value) => {
 function resetForm(): void {
     saveSearchName.value = "";
     saveSearchDescription.value = "";
+    sharedGroupIds.value = [];
 }
 
 async function onSaveSearch(): Promise<void> {
@@ -101,6 +105,7 @@ async function onSaveSearch(): Promise<void> {
             name,
             saveSearchDescription.value.trim(),
             definitionToSave,
+            sharedGroupIds.value,
         );
         resetForm();
         toast.add({
@@ -269,6 +274,21 @@ async function onSaveResults(): Promise<void> {
                 class="save-form-input"
                 rows="3"
                 :fluid="true"
+            />
+        </div>
+        <div
+            v-if="!isSavingResults"
+            class="save-form-field"
+        >
+            <label
+                for="save-search-groups"
+                class="save-form-label"
+            >
+                {{ $gettext("Share with groups") }}
+            </label>
+            <SharingGroupsSelect
+                v-model="sharedGroupIds"
+                input-id="save-search-groups"
             />
         </div>
         <div class="save-form-actions">

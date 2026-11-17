@@ -321,6 +321,101 @@ class SavedSearchAPITest(TestCase):
             SavedSearch.objects.filter(name="Bad Group Reference").exists()
         )
 
+    # --- shared_groups in responses ---
+
+    def test_get_mine_includes_shared_groups(self):
+        search = SavedSearch.objects.create(
+            name="Alice Search", query_definition=SAMPLE_QUERY, creator=self.alice
+        )
+        SharedSearchXGroup.objects.create(saved_search=search, group=self.shared_group)
+
+        self.client.force_login(self.alice)
+        response = self.client.get(reverse("saved_searches"), {"scope": "mine"})
+
+        self.assertEqual(
+            response.json()[0]["shared_groups"],
+            [{"id": self.shared_group.pk, "name": "test_shared_group"}],
+        )
+
+    def test_get_shared_omits_shared_groups(self):
+        search = SavedSearch.objects.create(
+            name="Group Shared", query_definition=SAMPLE_QUERY, creator=self.alice
+        )
+        SharedSearchXGroup.objects.create(saved_search=search, group=self.shared_group)
+
+        self.client.force_login(self.bob)
+        response = self.client.get(reverse("saved_searches"), {"scope": "shared"})
+
+        self.assertNotIn("shared_groups", response.json()[0])
+
+    # --- PATCH ---
+
+    def _patch_groups(self, search, body):
+        return self.client.patch(
+            reverse("saved_search", kwargs={"savedsearchid": search.savedsearchid}),
+            json.dumps(body),
+            content_type="application/json",
+        )
+
+    def test_patch_replaces_shared_groups(self):
+        other_group = Group.objects.create(name="other_group")
+        search = SavedSearch.objects.create(
+            name="Alice Search", query_definition=SAMPLE_QUERY, creator=self.alice
+        )
+        SharedSearchXGroup.objects.create(saved_search=search, group=self.shared_group)
+
+        self.client.force_login(self.alice)
+        response = self._patch_groups(search, {"groups": [other_group.pk]})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["shared_groups"],
+            [{"id": other_group.pk, "name": "other_group"}],
+        )
+        self.assertEqual(
+            list(
+                SharedSearchXGroup.objects.filter(saved_search=search).values_list(
+                    "group_id", flat=True
+                )
+            ),
+            [other_group.pk],
+        )
+
+    def test_patch_by_non_creator_returns_404(self):
+        search = SavedSearch.objects.create(
+            name="Alice Search", query_definition=SAMPLE_QUERY, creator=self.alice
+        )
+
+        self.client.force_login(self.bob)
+        response = self._patch_groups(search, {"groups": [self.shared_group.pk]})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            SharedSearchXGroup.objects.filter(saved_search=search).exists()
+        )
+
+    def test_patch_nonexistent_group_returns_400_and_keeps_shares(self):
+        search = SavedSearch.objects.create(
+            name="Alice Search", query_definition=SAMPLE_QUERY, creator=self.alice
+        )
+        SharedSearchXGroup.objects.create(saved_search=search, group=self.shared_group)
+
+        self.client.force_login(self.alice)
+        response = self._patch_groups(search, {"groups": [999999]})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(
+            SharedSearchXGroup.objects.filter(
+                saved_search=search, group=self.shared_group
+            ).exists()
+        )
+
+    # --- GET groups ---
+
+    def test_get_groups_requires_login(self):
+        response = self.client.get(reverse("saved_search_groups"))
+        self.assertEqual(response.status_code, 401)
+
     # --- DELETE ---
 
     def test_delete_by_creator_succeeds(self):
