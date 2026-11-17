@@ -99,4 +99,48 @@ describe("ClauseOperandBuilder hydration", () => {
             },
         ]);
     });
+
+    it("searches only the language the widget's picker shows", async () => {
+        const wrapper = mount(ClauseOperandBuilder, {
+            props: {
+                subjectTerminalNode,
+                subjectTerminalGraph,
+                modelValue: null,
+            },
+            global: {
+                stubs: { GenericWidget: GenericWidgetStub },
+            },
+        });
+        const nodeValue = {
+            en: { value: "Barcelona", direction: "ltr" },
+            fr: { value: "Barcelone", direction: "ltr" },
+        };
+
+        const widget = wrapper.findComponent(GenericWidgetStub);
+        widget.vm.$emit("update:selectedLanguage", "en");
+        widget.vm.$emit("update:aliasedNodeData", {
+            node_value: nodeValue,
+            display_value: "Barcelona",
+            details: [],
+        });
+        widget.vm.$emit("update:selectedLanguage", "fr");
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.emitted("update:modelValue")).toEqual([
+            [
+                {
+                    type: "LITERAL",
+                    value: { en: nodeValue.en },
+                    display_value: "Barcelona",
+                },
+            ],
+            [
+                {
+                    type: "LITERAL",
+                    value: { fr: nodeValue.fr },
+                    display_value: "Barcelone",
+                },
+            ],
+        ]);
+    });
 });
