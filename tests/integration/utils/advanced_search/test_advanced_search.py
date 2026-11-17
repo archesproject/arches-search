@@ -868,6 +868,20 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
         )
         self.assertEqual(result, {DOG_A_ID, DOG_B_ID, DOG_C_ID, DOG_D_ID})
 
+    def test_dog_baseline_with_or_logic_returns_all_dogs(self):
+        result = self._compile(
+            {
+                "graph_slug": "dog",
+                "scope": "RESOURCE",
+                "logic": "OR",
+                "clauses": [],
+                "groups": [],
+                "aggregations": [],
+                "relationship": None,
+            }
+        )
+        self.assertEqual(result, {DOG_A_ID, DOG_B_ID, DOG_C_ID, DOG_D_ID})
+
     def test_person_age_greater_than_18(self):
         """
         Tests the GREATER_THAN numeric operator. Matches the two people with ages above 18 and
