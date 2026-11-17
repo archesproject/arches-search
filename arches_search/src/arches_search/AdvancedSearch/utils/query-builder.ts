@@ -17,6 +17,7 @@ import {
 } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { FeatureCollection } from "geojson";
+import type { LanguageValue } from "@/arches_vue_components/datatypes/string/types.ts";
 import type {
     AdvancedSearchOperandComponent,
     GroupPayload,
@@ -132,7 +133,7 @@ export function isClauseComplete(
     }
     return clause.operands
         .slice(0, requiredOperandCount)
-        .every((operand) => !isEmptyOperand(operand));
+        .every((operand) => !isEmptyOperand(operand, datatype));
 }
 
 export function findQueryBuilderItem(
@@ -596,7 +597,10 @@ function pruneItems(
     });
 }
 
-function isEmptyOperand(operand: LiteralOperand | undefined): boolean {
+function isEmptyOperand(
+    operand: LiteralOperand | undefined,
+    datatype: string | undefined,
+): boolean {
     if (!operand) {
         return true;
     }
@@ -609,6 +613,11 @@ function isEmptyOperand(operand: LiteralOperand | undefined): boolean {
     }
     if (isFeatureCollection(value)) {
         return value.features.length === 0;
+    }
+    if (datatype === DATATYPE_STRING && typeof value === "object") {
+        return Object.values(value as Record<string, LanguageValue>).every(
+            (languageEntry) => languageEntry.value === "",
+        );
     }
     return false;
 }

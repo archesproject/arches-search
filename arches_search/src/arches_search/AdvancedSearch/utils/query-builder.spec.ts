@@ -246,6 +246,25 @@ describe("buildPrunedPayload", () => {
         );
     });
 
+    it("drops a text row with no text in the language it searches", () => {
+        const clauseNamedAlice = nodeClause(PERSON, "name", "EQUALS", [
+            { en: { value: "Alice", direction: "ltr" } },
+        ]);
+        const root = queryBuilderRootFromPayload(
+            group(PERSON, LogicToken.AND, [
+                clauseNamedAlice,
+                nodeClause(PERSON, "name", "EQUALS", [
+                    { fr: { value: "", direction: "ltr" } },
+                ]),
+                nodeClause(PERSON, "name", "EQUALS", [{}]),
+            ]),
+        );
+
+        expect(buildPrunedPayload(root, LOOKUPS)).toEqual(
+            group(PERSON, LogicToken.AND, [clauseNamedAlice]),
+        );
+    });
+
     it("keeps a related group with a link even with no rows of its own", () => {
         const emptyRoot = createQueryBuilderRoot(SAMPLE);
         const withRelated = addRelatedGroup(emptyRoot, emptyRoot.id);
