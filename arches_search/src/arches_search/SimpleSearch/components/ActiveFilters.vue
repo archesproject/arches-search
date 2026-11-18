@@ -7,6 +7,8 @@ import Button from "openvue/button";
 import type { ActiveFilter } from "@/arches_search/SimpleSearch/types.ts";
 
 const CLEAR_ALL_EVENT = "clear-all" as const;
+const EXCLUDE_ICON = "pi pi-ban";
+const INCLUDE_ICON = "pi pi-check-circle";
 
 const { activeFilters } = defineProps<{
     activeFilters: ActiveFilter[];
@@ -37,6 +39,24 @@ function removeLabel(activeFilter: ActiveFilter): string {
     return $gettext("Remove %{category} filter", {
         category: activeFilter.category,
     });
+}
+
+function excludeLabel(activeFilter: ActiveFilter): string {
+    if (activeFilter.inverted) {
+        return $gettext("Include %{category} filter", {
+            category: activeFilter.category,
+        });
+    }
+    return $gettext("Exclude %{category} filter", {
+        category: activeFilter.category,
+    });
+}
+
+function excludeIcon(activeFilter: ActiveFilter): string {
+    if (activeFilter.inverted) {
+        return INCLUDE_ICON;
+    }
+    return EXCLUDE_ICON;
 }
 
 function onChipClick(activeFilter: ActiveFilter): void {
@@ -72,6 +92,7 @@ function clearAllFilters(): void {
                 'filter-chip-' + activeFilter.kind,
                 { 'filter-chip-editable': activeFilter.onEdit != null },
                 { 'filter-chip-inactive': activeFilter.inactiveNote },
+                { 'filter-chip-excluded': activeFilter.inverted },
             ]"
             :title="editTitle(activeFilter)"
             @click="onChipClick(activeFilter)"
@@ -80,6 +101,12 @@ function clearAllFilters(): void {
                 <i :class="[activeFilter.icon, 'fc-icon']" />
                 <span class="fc-category">{{ activeFilter.category }}</span>
                 <span class="fc-sep">·</span>
+                <span
+                    v-if="activeFilter.inverted"
+                    class="fc-not"
+                >
+                    {{ $gettext("not") }}
+                </span>
                 <span class="fc-value">{{ activeFilter.text }}</span>
                 <span
                     v-if="activeFilter.inactiveNote"
@@ -87,6 +114,15 @@ function clearAllFilters(): void {
                 >
                     {{ $gettext("not applied") }}
                 </span>
+            </span>
+            <span
+                v-if="activeFilter.toggleInverted"
+                class="fc-exclude"
+                :title="excludeLabel(activeFilter)"
+                :aria-label="excludeLabel(activeFilter)"
+                @click.stop="activeFilter.toggleInverted()"
+            >
+                <i :class="excludeIcon(activeFilter)" />
             </span>
             <span
                 class="fc-dismiss"
@@ -187,11 +223,22 @@ function clearAllFilters(): void {
     font-weight: 600;
 }
 
+.fc-not {
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.filter-chip-excluded .fc-value {
+    text-decoration: line-through;
+}
+
+.fc-exclude,
 .fc-dismiss {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0.4rem 0.8rem 0.4rem 0.4rem;
+    padding-block: 0.4rem;
+    padding-inline: 0.4rem 0.8rem;
     font-size: 1rem;
     opacity: 0.6;
     background: transparent;
@@ -201,6 +248,7 @@ function clearAllFilters(): void {
     transition: opacity 0.12s;
 }
 
+.fc-exclude:hover,
 .fc-dismiss:hover {
     opacity: 1;
 }

@@ -38,6 +38,8 @@ export interface SerializedTerm {
     text: string;
     inverted: boolean;
     termKind?: TermKind;
+    itemId?: string;
+    datatype?: string;
     icon?: string;
     options?: Record<string, unknown>;
 }
@@ -46,12 +48,15 @@ export interface SearchRequestTerm {
     type: "string" | typeof TERM_KIND_CONTROLLED_TERM;
     text: string;
     inverted: boolean;
+    itemId?: string;
+    datatype?: string;
 }
 
 export interface TermSuggestion {
-    id: number;
+    id: number | string;
     datatype: string;
     text: string;
+    item_id?: string;
     addtional_info?: Record<string, unknown>;
     resourceinstanceid?: string;
     graph_icon?: string;
@@ -80,6 +85,7 @@ export interface ActiveFilter {
     text: string;
     clear: () => void;
     inverted: boolean;
+    toggleInverted?: () => void;
     kind: ActiveFilterKind;
     category: string;
     icon: string;

@@ -173,6 +173,8 @@ function createSearchFilters(): SearchFilters {
             text: term.text,
             clear: () => clearTermFilter(term.id),
             inverted: term.inverted,
+            toggleInverted: () =>
+                setTermFilter({ ...term, inverted: !term.inverted }),
             kind: term.termKind ?? ACTIVE_FILTER_KIND_TERM,
             category: getTermFilterCategory(term.termKind),
             icon: term.icon || getTermFilterIcon(term.termKind),
@@ -748,6 +750,12 @@ function serializeTerm(term: SerializedTerm): SerializedTerm {
     };
     if (term.termKind) {
         serializedTerm.termKind = term.termKind;
+    }
+    if (term.itemId) {
+        serializedTerm.itemId = term.itemId;
+    }
+    if (term.datatype) {
+        serializedTerm.datatype = term.datatype;
     }
     if (term.termKind === TERM_KIND_RECORD && term.icon) {
         serializedTerm.icon = term.icon;

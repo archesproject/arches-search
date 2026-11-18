@@ -1,4 +1,7 @@
-import { SUGGESTION_DATATYPE_REFERENCE } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
+import {
+    SUGGESTION_DATATYPE_CONCEPT,
+    SUGGESTION_DATATYPE_REFERENCE,
+} from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
 import {
     TERM_KIND_CONTROLLED_TERM,
     TERM_KIND_RECORD,
@@ -18,7 +21,10 @@ interface TermSuggestionAdditionalInfo {
 }
 
 export function isConceptSuggestion(suggestion: TermSuggestion): boolean {
-    return suggestion.datatype === SUGGESTION_DATATYPE_REFERENCE;
+    return (
+        suggestion.datatype === SUGGESTION_DATATYPE_REFERENCE ||
+        suggestion.datatype === SUGGESTION_DATATYPE_CONCEPT
+    );
 }
 
 export function getTermKind(suggestion: TermSuggestion): TermKind | undefined {

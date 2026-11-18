@@ -18,10 +18,6 @@ class TermSearchTermValidationTests(SimpleTestCase):
             self._term_search("amber", {"text": "adobe", "datatype": "reference"})
         )
 
-    def test_rejects_a_term_object_without_a_datatype(self):
-        with self.assertRaises(ValidationError):
-            validate_term_search(self._term_search({"text": "adobe"}))
-
     def test_rejects_an_empty_datatype(self):
         with self.assertRaises(ValidationError):
             validate_term_search(self._term_search({"text": "adobe", "datatype": ""}))

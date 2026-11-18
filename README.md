@@ -688,6 +688,23 @@ reference values, rather than any text that happens to contain its label:
 }
 ```
 
+A controlled term can also name its vocabulary item by `id` (a list item for
+`reference`, a concept for `concept`). It then matches records holding that item
+or anything under it, rather than its label text. A concept term matches
+`concept` and `concept-list` values alike. Any object term can set
+`"inverted": true` to exclude whatever it would match, relationship hops
+included:
+
+```json
+"term_search": {
+    "terms": [
+        { "text": "Religious institution", "datatype": "reference", "id": "6f1c…" },
+        { "text": "ruin", "inverted": true }
+    ],
+    "max_hops": 2
+}
+```
+
 `max_hops` is lowered to the `TERM_SEARCH_MAX_HOPS` setting (default 2) when it asks for more, and `0` means "match directly, do not traverse".
 
 **This is the only anonymous traversal in the API.** It follows any relationship
@@ -732,23 +749,6 @@ behaves the same as it did as a map filter.
 graph's payload narrows what is left. They always `AND`, in that order — a term
 search cannot be OR-ed against a clause or nested inside a group.
 
-## Searching on Resource Fields
-
-A `RESOURCE_FIELD` subject reaches the resource's own columns — its lifecycle
-state, who created it, when it was made. Which fields exist is derived from
-`ResourceInstance` itself, not from a hardcoded list: each concrete model field
-is mapped to an operator vocabulary by its **Django field class**, so a column
-added to core becomes filterable, sortable and groupable with no change here.
-Fields whose class has no mapping (`name` and `descriptors`, both JSON-backed)
-fall out automatically.
-
-| Field class                   | Operators                                                             |
-| ----------------------------- | --------------------------------------------------------------------- |
-| `ForeignKey`                  | `EQUALS`, `IN`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`                       |
-| `UUIDField`                   | `EQUALS`, `IN`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`                       |
-| `DateTimeField` / `DateField` | `EQUALS`, `RANGE`, `BEFORE`, `AFTER`, `HAS_ANY_VALUE`, `HAS_NO_VALUE` |
-| `CharField` / `TextField`     | `EQUALS`, `CONTAINS`, `STARTS_WITH`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`  |
-| `BooleanField`                | `IS_TRUE`, `IS_FALSE`                                                 |
 ## Vocabulary hierarchy
 
 Reference and concept values are indexed by vocabulary item id, so their
@@ -772,6 +772,23 @@ A facet opts into the hierarchy with a `NARROWER_OR_SELF:`, `NARROWER:` or
 A reference operand given as bare labels (searches saved before items were
 indexed by id) is resolved to the items carrying each label.
 
+## Searching on Resource Fields
+
+A `RESOURCE_FIELD` subject reaches the resource's own columns — its lifecycle
+state, who created it, when it was made. Which fields exist is derived from
+`ResourceInstance` itself, not from a hardcoded list: each concrete model field
+is mapped to an operator vocabulary by its **Django field class**, so a column
+added to core becomes filterable, sortable and groupable with no change here.
+Fields whose class has no mapping (`name` and `descriptors`, both JSON-backed)
+fall out automatically.
+
+| Field class                   | Operators                                                             |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `ForeignKey`                  | `EQUALS`, `IN`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`                       |
+| `UUIDField`                   | `EQUALS`, `IN`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`                       |
+| `DateTimeField` / `DateField` | `EQUALS`, `RANGE`, `BEFORE`, `AFTER`, `HAS_ANY_VALUE`, `HAS_NO_VALUE` |
+| `CharField` / `TextField`     | `EQUALS`, `CONTAINS`, `STARTS_WITH`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`  |
+| `BooleanField`                | `IS_TRUE`, `IS_FALSE`                                                 |
 
 A foreign key to the user model also gets `IS_CURRENT_USER` and
 `IS_NOT_CURRENT_USER`, plus exactly one hop to that user's `username` — nothing
@@ -1368,3 +1385,7 @@ or `advancedQuery` existed still load.
 
 `GET /api/term-suggestions?q=<text>` — the typeahead behind the search bar,
 returning the indexed terms a query prefix matches.
+Queries shorter than three characters return nothing. Reference and concept
+values come back once per vocabulary item, with its `item_id` and, for list
+items, the path from the list down to the item. Items of lists marked
+searchable are suggested even when no record uses them yet.
