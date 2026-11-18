@@ -20,6 +20,7 @@ from arches.app.models.models import (
 from arches_search.functions.search_indexing import SearchIndexingFunction
 from arches_search.indexing.index_descriptor import (
     DESCRIPTOR_NODE_ALIAS,
+    build_descriptor_terms,
     write_descriptor_search_terms,
 )
 from arches_search.models.models import TermSearch
@@ -34,7 +35,9 @@ class DescriptorIndexingTestCase(TestCase):
         cls.graph = GraphModel.objects.create(
             graphid=uuid.uuid4(), slug="test-descriptor", isresource=True
         )
-        cls.nodegroup = NodeGroup.objects.create(nodegroupid=uuid.uuid4())
+        cls.nodegroup = NodeGroup.objects.create(
+            nodegroupid=uuid.uuid4(), cardinality="n"
+        )
         cls.node = Node.objects.create(
             nodeid=uuid.uuid4(),
             name="ref",
@@ -127,6 +130,46 @@ class DescriptorIndexingTestCase(TestCase):
             self.tile.delete()
 
         self.assertEqual(self._rows().get().tileid_id, other_tile.tileid)
+
+    def test_skips_name_from_provisional_only_tile(self):
+        TileModel.objects.filter(pk=self.tile.tileid).update(
+            data={str(self.node.nodeid): None},
+            provisionaledits={
+                str(uuid.uuid4()): {"value": {str(self.node.nodeid): 12345}}
+            },
+        )
+        self.assertEqual(build_descriptor_terms(self.resource), [])
+
+    def test_ignores_provisional_tile_the_name_is_not_built_from(self):
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            nodegroup=self.nodegroup,
+            resourceinstance=self.resource,
+            data={str(self.node.nodeid): None},
+            provisionaledits={
+                str(uuid.uuid4()): {"value": {str(self.node.nodeid): 99999}}
+            },
+            sortorder=1,
+        )
+        self.assertEqual(len(build_descriptor_terms(self.resource)), 1)
+
+    def test_multicard_borrows_a_source_tile(self):
+        FunctionXGraph.objects.filter(graph=self.graph).update(
+            config={
+                "descriptor_types": {
+                    "name": {"nodegroup_id": "", "string_template": "HER-<ref>"}
+                }
+            }
+        )
+        TileModel.objects.create(
+            tileid=uuid.UUID(int=0),
+            nodegroup=NodeGroup.objects.create(nodegroupid=uuid.uuid4()),
+            resourceinstance=self.resource,
+            data={},
+            provisionaledits=None,
+        )
+        [row] = build_descriptor_terms(self.resource)
+        self.assertEqual(row.tileid_id, self.tile.tileid)
 
     def test_skips_undefined_and_empty_names(self):
         self.resource.descriptors = {"en": {"name": "Undefined"}, "fr": {"name": ""}}

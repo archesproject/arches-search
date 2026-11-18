@@ -5,7 +5,8 @@ number, which is a ``number`` node indexed into NumericSearch, never TermSearch.
 tileid is NOT NULL but a descriptor is per-resource: prefer the descriptor's name
 nodegroup tile when configured, else any tile (tileid is only an FK anchor here).
 """
-from arches.app.models.models import FunctionXGraph, TileModel
+from arches.app.functions.multicard_resource_descriptor import extract_substrings
+from arches.app.models.models import FunctionXGraph, Node, TileModel
 from arches.app.models.system_settings import settings
 
 from arches_search.models.models import TermSearch
@@ -13,36 +14,32 @@ from arches_search.models.models import TermSearch
 DESCRIPTOR_NODE_ALIAS = "__descriptor__"
 
 
-def _descriptor_name_nodegroup_id(resource):
-    """The single nodegroup that drives the 'name' descriptor for this resource's
-    graph, if the primarydescriptors config declares one; None otherwise (including
-    the multicard descriptor, which leaves it empty)."""
+def _descriptor_nodegroup_ids(resource):
+    """The nodegroups the "name" descriptor is built from: the configured one, or
+    for a multicard descriptor the nodegroups of the <alias> nodes in its template."""
     function_x_graph = FunctionXGraph.objects.filter(
         graph_id=resource.graph_id,
         function__functiontype="primarydescriptors",
     ).first()
     if function_x_graph is None:
-        return None
+        return []
     try:
-        return function_x_graph.config["descriptor_types"]["name"].get("nodegroup_id") or None
-    except (KeyError, TypeError, AttributeError):
-        return None
+        config = function_x_graph.config["descriptor_types"]["name"]
+    except (KeyError, TypeError):
+        return []
+    if config.get("nodegroup_id"):
+        return [config["nodegroup_id"]]
+    aliases = extract_substrings(config.get("string_template") or "")
+    return list(
+        Node.objects.filter(graph_id=resource.graph_id, alias__in=aliases)
+        .values_list("nodegroup_id", flat=True)
+        .distinct()
+    )
 
 
-def _descriptor_tile(resource):
-    """Prefer a tile from the descriptor's name nodegroup when one is configured;
-    else any tile (ordered for determinism); None if the resource has no tiles."""
-    tiles = TileModel.objects.filter(resourceinstance_id=resource.resourceinstanceid)
-    nodegroup_id = _descriptor_name_nodegroup_id(resource)
-    if nodegroup_id:
-        tile = (
-            tiles.filter(nodegroup_id=nodegroup_id)
-            .order_by("sortorder")
-            .first()
-        )
-        if tile is not None:
-            return tile
-    return tiles.order_by("tileid").first()
+def _is_provisional_only(tile):
+    has_approved_value = any(value is not None for value in (tile.data or {}).values())
+    return not has_approved_value and bool(tile.provisionaledits)
 
 
 def build_descriptor_terms(resource):
@@ -52,7 +49,18 @@ def build_descriptor_terms(resource):
     descriptors = resource.descriptors or {}
     if not descriptors:
         return []
-    tile = _descriptor_tile(resource)
+    tiles = TileModel.objects.filter(resourceinstance_id=resource.resourceinstanceid)
+    nodegroup_ids = _descriptor_nodegroup_ids(resource)
+    source_tiles = list(
+        tiles.filter(nodegroup_id__in=nodegroup_ids).order_by("sortorder")
+    )
+    tiles_by_nodegroup = {}
+    for source_tile in source_tiles:
+        tiles_by_nodegroup.setdefault(source_tile.nodegroup_id, source_tile)
+    for source_tile in tiles_by_nodegroup.values():
+        if _is_provisional_only(source_tile):
+            return []
+    tile = source_tiles[0] if source_tiles else tiles.order_by("tileid").first()
     if tile is None:
         return []
     graph_slug = resource.graph.slug
