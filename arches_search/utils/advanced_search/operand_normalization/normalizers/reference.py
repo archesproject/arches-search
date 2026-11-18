@@ -18,16 +18,18 @@ class ReferenceOperandNormalizer(BaseOperandNormalizer):
                 dict.fromkeys(
                     label["list_item_id"]
                     for reference_item in raw_value
-                    for label in reference_item.get("labels") or []
+                    for label in reference_item["labels"]
                     if label.get("list_item_id") is not None
                 )
             )
+        if isinstance(raw_value, str):
+            raw_value = [raw_value]
         if self._is_label_list(raw_value):
-            return self._list_item_ids_by_label(raw_value)
+            return self._list_item_ids_for_each_label(raw_value)
         return raw_value
 
     @staticmethod
-    def _list_item_ids_by_label(labels):
+    def _list_item_ids_for_each_label(labels):
         list_item_ids_by_label = {label: set() for label in labels}
         for label in ListItemValue.objects.labels().filter(value__in=labels):
             list_item_ids_by_label[label.value].add(str(label.list_item_id))

@@ -99,36 +99,29 @@ def _list_item_paths(list_item_ids, language_code):
             ListItem.find_best_label_from_set(
                 labels_by_item_id.get(ancestor_id, []), language_code
             )
+            or str(ancestor_id)
         )
     return paths
 
 
-def _vocabulary_items(query, vocabulary_rows):
-    rows_by_tile_id = {}
-    for vocabulary_row in vocabulary_rows:
-        rows_by_tile_id.setdefault(vocabulary_row["tileid"], []).append(vocabulary_row)
-
-    item_ids_by_label = {}
-    for id_row in UUIDSearch.objects.filter(
-        tileid__in=rows_by_tile_id, datatype__in=VOCABULARY_DATATYPES
-    ).values("tileid", "node_alias", "value"):
-        for vocabulary_row in rows_by_tile_id[id_row["tileid"]]:
-            if vocabulary_row["node_alias"] == id_row["node_alias"]:
-                item_ids_by_label.setdefault(vocabulary_row["value"], set()).add(
-                    id_row["value"]
-                )
-
-    candidate_ids = set().union(*item_ids_by_label.values())
+def _vocabulary_items(query, vocabulary_rows, readable_nodes):
+    labels = {vocabulary_row["value"] for vocabulary_row in vocabulary_rows}
+    labelled_tile_ids = readable_nodes.exclude_unreadable_rows(
+        TermSearch.objects.filter(value__in=labels, datatype__in=VOCABULARY_DATATYPES)
+    ).values("tileid")
+    used_item_ids = UUIDSearch.objects.filter(
+        tileid__in=labelled_tile_ids, datatype__in=VOCABULARY_DATATYPES
+    ).values("value")
     used_items = [
         (label.list_item_id, "reference", label.value)
         for label in ListItemValue.objects.labels().filter(
-            list_item_id__in=candidate_ids, value__in=item_ids_by_label
+            list_item_id__in=used_item_ids, value__in=labels
         )
     ] + [
         (concept_value["concept_id"], "concept", concept_value["value"])
         for concept_value in Value.objects.filter(
-            concept_id__in=candidate_ids,
-            value__in=item_ids_by_label,
+            concept_id__in=used_item_ids,
+            value__in=labels,
             valuetype__category="label",
         ).values("concept_id", "value")
     ]
@@ -169,7 +162,7 @@ def build_term_suggestions(query, request):
         readable_nodes,
     )
 
-    vocabulary_items = _vocabulary_items(query, vocabulary_rows)
+    vocabulary_items = _vocabulary_items(query, vocabulary_rows, readable_nodes)
     paths = _list_item_paths(
         [
             item_id
