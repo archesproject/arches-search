@@ -1,4 +1,4 @@
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Exists, Q, QuerySet
 
 from arches_search.utils.advanced_search.constants import (
     AGGREGATE_KIND_SET_EQUAL,
@@ -9,47 +9,40 @@ from arches_search.utils.advanced_search.specs import (
 )
 
 
-def build_grouped_rows_matching_aggregate_predicate(
+def build_aggregate_predicate_q(
     correlated_rows: QuerySet,
     aggregate_predicate_spec: AggregatePredicateSpec,
-    grouping_field_name: str,
-) -> QuerySet:
-    grouped_rows = correlated_rows.values(grouping_field_name)
-
-    if aggregate_predicate_spec.kind == AGGREGATE_KIND_SET_SUPERSET:
-        requested_values_without_duplicates = tuple(
-            dict.fromkeys(aggregate_predicate_spec.values)
+) -> Q:
+    if aggregate_predicate_spec.kind not in (
+        AGGREGATE_KIND_SET_SUPERSET,
+        AGGREGATE_KIND_SET_EQUAL,
+    ):
+        raise ValueError(
+            f"Unsupported aggregate predicate kind: {aggregate_predicate_spec.kind}"
         )
-        field_name = aggregate_predicate_spec.field_name or "value"
-        return grouped_rows.annotate(
-            _matched_distinct_count=Count(
-                field_name,
-                filter=Q(
-                    **{f"{field_name}__in": list(requested_values_without_duplicates)}
-                ),
-                distinct=True,
-            )
-        ).filter(_matched_distinct_count=len(requested_values_without_duplicates))
+
+    requested_values = tuple(dict.fromkeys(aggregate_predicate_spec.values))
+    field_name = aggregate_predicate_spec.field_name or "value"
+
+    if not requested_values:
+        if aggregate_predicate_spec.kind == AGGREGATE_KIND_SET_SUPERSET:
+            return Q(Exists(correlated_rows))
+        return Q(Exists(correlated_rows.none()))
+
+    predicate = Q()
+    allowed_values = []
+    for requested_value in requested_values:
+        if isinstance(requested_value, tuple):
+            lookup = {f"{field_name}__in": requested_value}
+            allowed_values.extend(requested_value)
+        else:
+            lookup = {field_name: requested_value}
+            allowed_values.append(requested_value)
+        predicate &= Q(Exists(correlated_rows.filter(**lookup)))
 
     if aggregate_predicate_spec.kind == AGGREGATE_KIND_SET_EQUAL:
-        requested_values_without_duplicates = tuple(
-            dict.fromkeys(aggregate_predicate_spec.values)
-        )
-        field_name = aggregate_predicate_spec.field_name or "value"
-        return grouped_rows.annotate(
-            _matched_distinct_count=Count(
-                field_name,
-                filter=Q(
-                    **{f"{field_name}__in": list(requested_values_without_duplicates)}
-                ),
-                distinct=True,
-            ),
-            _total_distinct_count=Count(field_name, distinct=True),
-        ).filter(
-            _matched_distinct_count=len(requested_values_without_duplicates),
-            _total_distinct_count=len(requested_values_without_duplicates),
+        predicate &= ~Q(
+            Exists(correlated_rows.exclude(**{f"{field_name}__in": allowed_values}))
         )
 
-    raise ValueError(
-        f"Unsupported aggregate predicate kind: {aggregate_predicate_spec.kind}"
-    )
+    return predicate

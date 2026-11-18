@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 from django.db.models import Exists, OuterRef
 
 from arches_search.utils.advanced_search.predicate_building.aggregate_predicate_runtime import (
-    build_grouped_rows_matching_aggregate_predicate,
+    build_aggregate_predicate_q,
 )
 from arches_search.utils.advanced_search.constants import (
     QUANTIFIER_ALL,
@@ -148,15 +148,10 @@ class RelatedClauseEvaluator:
         )
 
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            aggregate_matches = build_grouped_rows_matching_aggregate_predicate(
+            aggregate_matches = build_aggregate_predicate_q(
                 correlated_rows=correlated_subject_rows,
                 aggregate_predicate_spec=predicate_expression,
-                grouping_field_name="resourceinstanceid",
             )
-            return (
-                ~Exists(aggregate_matches)
-                if is_template_negated
-                else Exists(aggregate_matches)
-            )
+            return ~aggregate_matches if is_template_negated else aggregate_matches
 
         return Exists(correlated_subject_rows.filter(predicate_expression))

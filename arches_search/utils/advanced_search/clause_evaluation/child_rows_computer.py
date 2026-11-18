@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from django.db.models import OuterRef, QuerySet
 
 from arches_search.utils.advanced_search.predicate_building.aggregate_predicate_runtime import (
-    build_grouped_rows_matching_aggregate_predicate,
+    build_aggregate_predicate_q,
 )
 from arches_search.utils.advanced_search.constants import (
     CLAUSE_TYPE_LITERAL,
@@ -125,23 +125,18 @@ class ChildRowsComputer:
                     )
                 )
                 if isinstance(predicate_expression, AggregatePredicateSpec):
-                    positive_rows = build_grouped_rows_matching_aggregate_predicate(
-                        correlated_rows=correlated_rows,
+                    aggregate_q = build_aggregate_predicate_q(
+                        correlated_rows=facet.filter_rows(
+                            base_rows.filter(
+                                resourceinstanceid=OuterRef("resourceinstanceid")
+                            ),
+                            filter_value,
+                        ),
                         aggregate_predicate_spec=predicate_expression,
-                        grouping_field_name="resourceinstanceid",
                     )
-                    if not is_template_negated:
-                        predicate_rows = positive_rows
-                    else:
-                        predicate_rows = (
-                            correlated_rows.values("resourceinstanceid")
-                            .exclude(
-                                resourceinstanceid__in=positive_rows.values(
-                                    "resourceinstanceid"
-                                )
-                            )
-                            .distinct()
-                        )
+                    if is_template_negated:
+                        aggregate_q = ~aggregate_q
+                    predicate_rows = correlated_rows.filter(aggregate_q)
                 else:
                     if not is_template_negated:
                         predicate_rows = correlated_rows.filter(predicate_expression)

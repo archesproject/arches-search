@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from django.db.models import Exists, OuterRef, Q, QuerySet
 
 from arches_search.utils.advanced_search.predicate_building.aggregate_predicate_runtime import (
-    build_grouped_rows_matching_aggregate_predicate,
+    build_aggregate_predicate_q,
 )
 from arches_search.utils.advanced_search.clause_evaluation.child_rows_computer import (
     ChildRowsComputer,
@@ -205,25 +205,16 @@ class LiteralClauseEvaluator:
         is_template_negated = correlated_clause_predicate.is_template_negated
 
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            aggregate_matches = build_grouped_rows_matching_aggregate_predicate(
+            aggregate_matches = build_aggregate_predicate_q(
                 correlated_rows=correlated_rows,
                 aggregate_predicate_spec=predicate_expression,
-                grouping_field_name="resourceinstanceid",
             )
 
             if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
-                return (
-                    ~Exists(aggregate_matches)
-                    if is_template_negated
-                    else Exists(aggregate_matches)
-                )
+                return ~aggregate_matches if is_template_negated else aggregate_matches
 
             if quantifier_token == QUANTIFIER_NONE:
-                return (
-                    Exists(aggregate_matches)
-                    if is_template_negated
-                    else ~Exists(aggregate_matches)
-                )
+                return aggregate_matches if is_template_negated else ~aggregate_matches
 
             raise ValueError(f"Unsupported quantifier: {quantifier_token}")
 
@@ -303,16 +294,11 @@ class LiteralClauseEvaluator:
         is_template_negated = correlated_clause_predicate.is_template_negated
 
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            aggregate_matches = build_grouped_rows_matching_aggregate_predicate(
+            aggregate_matches = build_aggregate_predicate_q(
                 correlated_rows=correlated_rows,
                 aggregate_predicate_spec=predicate_expression,
-                grouping_field_name="resourceinstanceid",
             )
-            return (
-                ~Exists(aggregate_matches)
-                if is_template_negated
-                else Exists(aggregate_matches)
-            )
+            return ~aggregate_matches if is_template_negated else aggregate_matches
 
         if not is_template_negated:
             return Exists(correlated_rows.filter(predicate_expression))
