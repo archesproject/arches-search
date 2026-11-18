@@ -47,6 +47,7 @@ def index_from_tile(
         NumericSearch.objects.filter(tileid=tile.tileid).delete()
         GeometrySearch.objects.filter(tileid=tile.tileid).delete()
         FileListSearch.objects.filter(tileid=tile.tileid).delete()
+        UUIDSearch.objects.filter(tileid=tile.tileid).delete()
 
     if indexing_factory is None:
         factory = IndexingFactory()

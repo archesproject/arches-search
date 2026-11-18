@@ -21,6 +21,7 @@ class ReferenceIndexing(BaseIndexing):
         flattens labels to bare strings and so loses both.
         """
         search_items = []
+        list_item_ids = set()
 
         for reference in tile.data[str(node.nodeid)]:
             for label in reference["labels"]:
@@ -38,16 +39,19 @@ class ReferenceIndexing(BaseIndexing):
                         )
                     )
 
-                if label["id"] is not None:
-                    search_items.append(
-                        UUIDSearch(
-                            node_alias=node.alias,
-                            tileid_id=tile.tileid,
-                            resourceinstanceid_id=tile.resourceinstance_id,
-                            datatype=self.datatype.datatype_name,
-                            graph_slug=node.graph.slug,
-                            value=label["id"],
-                        )
-                    )
+                if label["list_item_id"] is not None:
+                    list_item_ids.add(label["list_item_id"])
+
+        for list_item_id in list_item_ids:
+            search_items.append(
+                UUIDSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    graph_slug=node.graph.slug,
+                    value=list_item_id,
+                )
+            )
 
         return search_items

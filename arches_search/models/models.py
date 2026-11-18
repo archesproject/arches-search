@@ -371,7 +371,9 @@ class UUIDSearch(models.Model):
             models.Index(fields=["datatype"]),
             models.Index(fields=["node_alias"]),
             models.Index(fields=["value"]),
-            models.Index(fields=["graph_slug", "node_alias", "value"]),
+            models.Index(
+                fields=["graph_slug", "node_alias", "value", "resourceinstanceid"]
+            ),
             models.Index(
                 fields=["graph_slug", "node_alias", "resourceinstanceid", "tileid"]
             ),

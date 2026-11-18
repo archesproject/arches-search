@@ -34,17 +34,16 @@ class ConceptIndexing(BaseIndexing):
             search_items.append(string_search)
 
         for concept in document["domains"]:
-            for id in [concept["conceptid"], concept["valueid"]]:
-                if id is not None:
-                    uuid_search = UUIDSearch(
-                        node_alias=node.alias,
-                        tileid_id=tile.tileid,
-                        resourceinstanceid_id=tile.resourceinstance_id,
-                        datatype=self.datatype.datatype_name,
-                        graph_slug=node.graph.slug,
-                        value=id,
-                    )
-                    search_items.append(uuid_search)
+            if concept["conceptid"] is not None:
+                uuid_search = UUIDSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    graph_slug=node.graph.slug,
+                    value=concept["conceptid"],
+                )
+                search_items.append(uuid_search)
 
         for concept in document["date_ranges"]:
             if (
