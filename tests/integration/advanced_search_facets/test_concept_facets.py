@@ -21,9 +21,9 @@ from arches_search.utils.advanced_search.advanced_search import (
 class ConceptAdvancedSearchFacetIntegrationTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.parent_value = cls._create_concept("Religious institution")
-        cls.child_value = cls._create_concept("Mosque")
-        cls.other_value = cls._create_concept("Bridge")
+        cls.parent_value = cls._create_concept_label("Religious institution")
+        cls.child_value = cls._create_concept_label("Mosque")
+        cls.other_value = cls._create_concept_label("Bridge")
         Relation.objects.create(
             relationid=uuid.uuid4(),
             conceptfrom=cls.parent_value.concept,
@@ -62,7 +62,7 @@ class ConceptAdvancedSearchFacetIntegrationTestCase(TestCase):
         call_command("arches_search", "reindex_database")
 
     @staticmethod
-    def _create_concept(label):
+    def _create_concept_label(label):
         concept = Concept.objects.create(
             conceptid=uuid.uuid4(), nodetype_id="Concept", legacyoid=str(uuid.uuid4())
         )

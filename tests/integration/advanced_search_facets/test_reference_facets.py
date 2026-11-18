@@ -897,8 +897,8 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.none_match_resource.resourceinstanceid})
 
-    def test_descendant_of_matches_the_requested_descendant_token(self):
-        """This checks that the descendant of facet returns the resource holding an item under the requested one, named by its label."""
+    def test_descendant_of_matches_items_under_the_requested_label(self):
+        """This checks that "is narrower than" returns the resource holding an item under the requested one, named by its label."""
         payload = {
             "graph_slug": self.descendant_graph.slug,
             "scope": "RESOURCE",
@@ -930,8 +930,8 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.descendant_match_resource.resourceinstanceid})
 
-    def test_descendant_of_matches_with_real_widget_shaped_operand(self):
-        """This checks DESCENDANT_OF against the real widget-shaped operand instead of a flat label string."""
+    def test_descendant_of_matches_items_under_the_requested_widget_value(self):
+        """This checks "is narrower than" against the real widget-shaped operand instead of a flat label string."""
         payload = {
             "graph_slug": self.descendant_graph.slug,
             "scope": "RESOURCE",
@@ -963,8 +963,8 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.descendant_match_resource.resourceinstanceid})
 
-    def test_ancestor_of_matches_the_requested_ancestor_token(self):
-        """This checks that the ancestor of facet returns the resource holding an item above the requested one, named by its label."""
+    def test_ancestor_of_matches_items_above_the_requested_label(self):
+        """This checks that "is broader than" returns the resource holding an item above the requested one, named by its label."""
         payload = {
             "graph_slug": self.ancestor_graph.slug,
             "scope": "RESOURCE",
@@ -996,8 +996,8 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.ancestor_match_resource.resourceinstanceid})
 
-    def test_ancestor_of_matches_with_real_widget_shaped_operand(self):
-        """This checks ANCESTOR_OF against the real widget-shaped operand instead of a flat label string."""
+    def test_ancestor_of_matches_items_above_the_requested_widget_value(self):
+        """This checks "is broader than" against the real widget-shaped operand instead of a flat label string."""
         payload = {
             "graph_slug": self.ancestor_graph.slug,
             "scope": "RESOURCE",

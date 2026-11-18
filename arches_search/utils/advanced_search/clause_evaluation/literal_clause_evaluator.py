@@ -205,16 +205,16 @@ class LiteralClauseEvaluator:
         is_template_negated = correlated_clause_predicate.is_template_negated
 
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            aggregate_matches = build_aggregate_predicate_q(
+            aggregate_q = build_aggregate_predicate_q(
                 correlated_rows=correlated_rows,
                 aggregate_predicate_spec=predicate_expression,
             )
 
             if quantifier_token in (QUANTIFIER_ANY, QUANTIFIER_ALL):
-                return ~aggregate_matches if is_template_negated else aggregate_matches
+                return ~aggregate_q if is_template_negated else aggregate_q
 
             if quantifier_token == QUANTIFIER_NONE:
-                return aggregate_matches if is_template_negated else ~aggregate_matches
+                return aggregate_q if is_template_negated else ~aggregate_q
 
             raise ValueError(f"Unsupported quantifier: {quantifier_token}")
 
@@ -294,11 +294,11 @@ class LiteralClauseEvaluator:
         is_template_negated = correlated_clause_predicate.is_template_negated
 
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            aggregate_matches = build_aggregate_predicate_q(
+            aggregate_q = build_aggregate_predicate_q(
                 correlated_rows=correlated_rows,
                 aggregate_predicate_spec=predicate_expression,
             )
-            return ~aggregate_matches if is_template_negated else aggregate_matches
+            return ~aggregate_q if is_template_negated else aggregate_q
 
         if not is_template_negated:
             return Exists(correlated_rows.filter(predicate_expression))

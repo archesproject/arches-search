@@ -17,7 +17,7 @@ from arches_search.utils.advanced_search.specs import (
 )
 from arches_search.utils.vocabulary_hierarchy import (
     HIERARCHY_RELATIONS,
-    expand_branch,
+    expand_hierarchy,
 )
 
 
@@ -77,10 +77,10 @@ class PredicateBuilder:
         if relation in HIERARCHY_RELATIONS:
             seed_ids = operands[0]
             if isinstance(seed_ids, list):
-                branch = expand_branch(
+                related_ids = expand_hierarchy(
                     facet.datatype_id, relation, _flatten_alternatives(seed_ids)
                 )
-                return Q(**{lookup: branch})
+                return Q(**{lookup: related_ids})
             return Q(**{lookup: seed_ids})
 
         if facet.arity == 0:

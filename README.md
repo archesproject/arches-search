@@ -677,9 +677,10 @@ requester cannot read are skipped. All terms must match; each is expanded
 independently and the results intersected, so a resource cannot qualify by
 reaching two different terms down two unrelated paths.
 
-A term can instead be an object naming the one indexed datatype it may match.
-That is how a controlled term picked from the term suggestions matches only
-reference values, rather than any text that happens to contain its label:
+A term can instead be an object, which may name the one indexed datatype it
+matches. That is how a controlled term picked from the term suggestions matches
+only `reference` (or `concept`) values, rather than any text that happens to
+contain its label:
 
 ```json
 "term_search": {

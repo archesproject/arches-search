@@ -5,9 +5,9 @@ from arches.app.models.models import GraphModel, Value
 from arches.app.utils import permission_backend
 from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 from arches_search.models.models import TermSearch, UUIDSearch
-from arches_search.utils.advanced_search.constants import VOCABULARY_DATATYPES
 from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.term_search.matching import build_term_match_filter
+from arches_search.utils.vocabulary_hierarchy import VOCABULARY_DATATYPES
 
 # Matches are bucketed (vocabulary values vs everything else) so a flood of
 # incidental term matches can't crowd the one matching vocabulary row out of

@@ -90,7 +90,7 @@ class TermSuggestionViewTests(TestCase):
         # don't define REFERENCES_INDEX_NAME (a controlled_lists concern this
         # project doesn't need), so that ES sync side effect is
         # muted here -- irrelevant to what TermSuggestionView reads (which
-        # comes entirely from Postgres via ListView's serialize()).
+        # comes entirely from Postgres).
         with mock.patch.object(List, "delete_index"):
             cls.controlled_list = List.objects.create(name="Rock Types")
         cls.pref_label_type = DValueType.objects.get(valuetype="prefLabel")

@@ -40,8 +40,8 @@ def validate_paging(page, page_size) -> None:
 
 
 def _is_valid_term(term) -> bool:
-    # A string matches any datatype; an object restricts its text to one
-    # TermSearch datatype, which is how a controlled term stays a reference.
+    # A string matches any datatype; an object may restrict its text to one
+    # datatype, name a vocabulary item by id, or be inverted.
     if isinstance(term, str):
         return bool(term)
     if not isinstance(term, dict) or not _non_empty_string(term.get("text")):

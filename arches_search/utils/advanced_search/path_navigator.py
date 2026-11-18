@@ -5,8 +5,8 @@ from django.utils.translation import gettext as _
 
 from arches_search.utils.advanced_search.constants import (
     TERMINAL_RESOURCE_DATATYPES,
-    VOCABULARY_DATATYPES,
 )
+from arches_search.utils.vocabulary_hierarchy import VOCABULARY_DATATYPES
 from arches_search.utils.advanced_search.registries.search_model_registry import (
     SearchModelRegistry,
 )
@@ -44,7 +44,7 @@ class PathNavigator:
             TERMINAL_RESOURCE_DATATYPES | VOCABULARY_DATATYPES
         ):
             terminal_search_model = (
-                self.search_model_registry.get_relationship_model_for_datatype(
+                self.search_model_registry.get_uuid_value_model_for_datatype(
                     terminal_datatype_name
                 )
             )

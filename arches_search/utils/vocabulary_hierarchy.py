@@ -1,5 +1,6 @@
 from django.db import connection
-from django.db.models import Expression, UUIDField
+from django.db.models import UUIDField
+from django.db.models.expressions import RawSQL
 
 from arches.app.models.models import Relation
 from arches.extensions.controlled_lists.models import ListItem
@@ -9,7 +10,7 @@ NARROWER = "NARROWER"
 BROADER = "BROADER"
 HIERARCHY_RELATIONS = {NARROWER_OR_SELF, NARROWER, BROADER}
 
-LITERAL_BRANCH_LIMIT = 10_000
+MAX_INLINE_HIERARCHY_IDS = 10_000
 
 EDGES_BY_DATATYPE = {
     "reference": (
@@ -22,51 +23,40 @@ EDGES_BY_DATATYPE = {
     ),
 }
 EDGES_BY_DATATYPE["concept-list"] = EDGES_BY_DATATYPE["concept"]
+VOCABULARY_DATATYPES = set(EDGES_BY_DATATYPE)
 
-BRANCH_TEMPLATES = {
+HIERARCHY_TEMPLATES = {
     NARROWER_OR_SELF: (
         "SELECT unnest(%s::uuid[]) "
-        "UNION SELECT edge.child FROM ({edges}) edge JOIN branch ON edge.parent = branch.id"
+        "UNION SELECT edge.child FROM ({edges}) edge JOIN related ON edge.parent = related.id"
     ),
     NARROWER: (
         "SELECT edge.child FROM ({edges}) edge WHERE edge.parent = ANY(%s::uuid[]) "
-        "UNION SELECT edge.child FROM ({edges}) edge JOIN branch ON edge.parent = branch.id"
+        "UNION SELECT edge.child FROM ({edges}) edge JOIN related ON edge.parent = related.id"
     ),
     BROADER: (
         "SELECT edge.parent FROM ({edges}) edge "
         "WHERE edge.child = ANY(%s::uuid[]) AND edge.parent IS NOT NULL "
         "UNION SELECT edge.parent FROM ({edges}) edge "
-        "JOIN branch ON edge.child = branch.id WHERE edge.parent IS NOT NULL"
+        "JOIN related ON edge.child = related.id WHERE edge.parent IS NOT NULL"
     ),
 }
 
 
-def _branch_sql(datatype_name, relation):
-    body = BRANCH_TEMPLATES[relation].format(edges=EDGES_BY_DATATYPE[datatype_name])
-    return f"WITH RECURSIVE branch(id) AS ({body}) SELECT id FROM branch"
+def _hierarchy_sql(datatype_name, relation):
+    body = HIERARCHY_TEMPLATES[relation].format(edges=EDGES_BY_DATATYPE[datatype_name])
+    return f"WITH RECURSIVE related(id) AS ({body}) SELECT id FROM related"
 
 
-class Branch(Expression):
-    output_field = UUIDField()
-
-    def __init__(self, datatype_name, relation, seed_ids):
-        super().__init__()
-        self.sql = _branch_sql(datatype_name, relation)
-        self.seed_ids = seed_ids
-
-    def as_sql(self, compiler, connection):
-        return f"({self.sql})", [self.seed_ids]
-
-
-def expand_branch(datatype_name, relation, seed_ids):
+def expand_hierarchy(datatype_name, relation, seed_ids):
     seed_ids = [str(seed_id) for seed_id in seed_ids]
+    hierarchy_sql = _hierarchy_sql(datatype_name, relation)
     with connection.cursor() as cursor:
         cursor.execute(
-            f"{_branch_sql(datatype_name, relation)} LIMIT %s",
-            [seed_ids, LITERAL_BRANCH_LIMIT + 1],
+            f"{hierarchy_sql} LIMIT %s", [seed_ids, MAX_INLINE_HIERARCHY_IDS + 1]
         )
-        branch_ids = [branch_row[0] for branch_row in cursor.fetchall()]
+        related_ids = [related_row[0] for related_row in cursor.fetchall()]
 
-    if len(branch_ids) <= LITERAL_BRANCH_LIMIT:
-        return branch_ids
-    return Branch(datatype_name, relation, seed_ids)
+    if len(related_ids) <= MAX_INLINE_HIERARCHY_IDS:
+        return related_ids
+    return RawSQL(hierarchy_sql, [seed_ids], output_field=UUIDField())

@@ -6,7 +6,7 @@ from arches_search.models.models import TermSearch, UUIDSearch
 from arches_search.utils.term_search.relationship_expansion import (
     expand_matches_via_relationships,
 )
-from arches_search.utils.vocabulary_hierarchy import NARROWER_OR_SELF, expand_branch
+from arches_search.utils.vocabulary_hierarchy import NARROWER_OR_SELF, expand_hierarchy
 
 ROW_DATATYPES_BY_TERM_DATATYPE = {
     "reference": ["reference"],
@@ -50,7 +50,7 @@ def _direct_match_rows(term):
     if term.get("id"):
         return UUIDSearch.objects.filter(
             datatype__in=row_datatypes,
-            value__in=expand_branch(datatype, NARROWER_OR_SELF, [term["id"]]),
+            value__in=expand_hierarchy(datatype, NARROWER_OR_SELF, [term["id"]]),
         )
     rows = TermSearch.objects.filter(build_term_match_filter(term["text"]))
     if datatype is None:
@@ -60,7 +60,8 @@ def _direct_match_rows(term):
 
 def get_related_resources_by_terms(terms, target_graphid, readable_nodes, max_hops=2):
     """
-    Matches ALL of the given terms. Each term is independently expanded via
+    Matches ALL of the given terms, and none of the inverted ones. Each term is
+    independently expanded via
     relationship_traversal, then intersected across terms — collapsing all terms into
     one shared seed set before expanding would let different terms qualify a resource
     via different, unrelated hop paths.
@@ -84,12 +85,10 @@ def get_related_resources_by_terms(terms, target_graphid, readable_nodes, max_ho
             result = candidate_resources.filter(
                 ~Exists(term_matches.filter(resourceinstanceid=OuterRef("pk")))
             )
+        elif result is None:
+            result = term_matches
         else:
-            result = (
-                term_matches
-                if result is None
-                else result.filter(resourceinstanceid__in=term_matches)
-            )
+            result = result.filter(resourceinstanceid__in=term_matches)
 
     if result is None:
         return ResourceInstance.objects.none()

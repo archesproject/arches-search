@@ -148,10 +148,10 @@ class RelatedClauseEvaluator:
         )
 
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            aggregate_matches = build_aggregate_predicate_q(
+            aggregate_q = build_aggregate_predicate_q(
                 correlated_rows=correlated_subject_rows,
                 aggregate_predicate_spec=predicate_expression,
             )
-            return ~aggregate_matches if is_template_negated else aggregate_matches
+            return ~aggregate_q if is_template_negated else aggregate_q
 
         return Exists(correlated_subject_rows.filter(predicate_expression))
