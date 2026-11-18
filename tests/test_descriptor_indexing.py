@@ -171,6 +171,14 @@ class DescriptorIndexingTestCase(TestCase):
         [row] = build_descriptor_terms(self.resource)
         self.assertEqual(row.tileid_id, self.tile.tileid)
 
+    def test_skips_languages_where_the_template_rendered_empty(self):
+        self.resource.descriptors = {
+            "en": {"name": REFERENCE},
+            "fr": {"name": "HER- "},
+        }
+        [row] = build_descriptor_terms(self.resource)
+        self.assertEqual((row.value, row.language), (REFERENCE, "en"))
+
     def test_skips_undefined_and_empty_names(self):
         self.resource.descriptors = {"en": {"name": "Undefined"}, "fr": {"name": ""}}
         self.resource.save()

@@ -14,19 +14,22 @@ from arches_search.models.models import TermSearch
 DESCRIPTOR_NODE_ALIAS = "__descriptor__"
 
 
-def _descriptor_nodegroup_ids(resource):
-    """The nodegroups the "name" descriptor is built from: the configured one, or
-    for a multicard descriptor the nodegroups of the <alias> nodes in its template."""
+def _descriptor_name_config(resource):
     function_x_graph = FunctionXGraph.objects.filter(
         graph_id=resource.graph_id,
         function__functiontype="primarydescriptors",
     ).first()
     if function_x_graph is None:
-        return []
+        return {}
     try:
-        config = function_x_graph.config["descriptor_types"]["name"]
+        return function_x_graph.config["descriptor_types"]["name"]
     except (KeyError, TypeError):
-        return []
+        return {}
+
+
+def _descriptor_nodegroup_ids(resource, config):
+    """The nodegroups the "name" descriptor is built from: the configured one, or
+    for a multicard descriptor the nodegroups of the <alias> nodes in its template."""
     if config.get("nodegroup_id"):
         return [config["nodegroup_id"]]
     aliases = extract_substrings(config.get("string_template") or "")
@@ -50,7 +53,8 @@ def build_descriptor_terms(resource):
     if not descriptors:
         return []
     tiles = TileModel.objects.filter(resourceinstance_id=resource.resourceinstanceid)
-    nodegroup_ids = _descriptor_nodegroup_ids(resource)
+    config = _descriptor_name_config(resource)
+    nodegroup_ids = _descriptor_nodegroup_ids(resource, config)
     source_tiles = list(
         tiles.filter(nodegroup_id__in=nodegroup_ids).order_by("sortorder")
     )
@@ -63,11 +67,15 @@ def build_descriptor_terms(resource):
     tile = source_tiles[0] if source_tiles else tiles.order_by("tileid").first()
     if tile is None:
         return []
+    template_name = config.get("string_template") or ""
+    for placeholder in extract_substrings(template_name):
+        template_name = template_name.replace(f"<{placeholder}>", "")
+    template_name = template_name.strip()
     graph_slug = resource.graph.slug
     rows = []
     for language, values in descriptors.items():
         name = (values or {}).get("name")
-        if not name or name == "Undefined":
+        if not name or name == "Undefined" or name.strip() == template_name:
             continue
         rows.append(
             TermSearch(
