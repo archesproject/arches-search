@@ -316,13 +316,14 @@ function queryTypeLabel(search: SavedSearch): string {
                         {{ $gettext("Share with groups") }}
                     </label>
                     <SharingGroupsSelect
-                        v-model="pendingGroupIds"
+                        v-model:shared-group-ids="pendingGroupIds"
                         :input-id="`sharing-groups-${item.savedsearchid}`"
                     />
                     <div class="item-actions">
                         <Button
                             icon="pi pi-check"
                             size="small"
+                            class="sharing-btn"
                             :label="$gettext('Save sharing')"
                             :loading="isSavingSharing"
                             @click="onSaveSharing(item)"
@@ -330,6 +331,7 @@ function queryTypeLabel(search: SavedSearch): string {
                         <Button
                             size="small"
                             severity="secondary"
+                            class="sharing-btn"
                             :label="$gettext('Cancel')"
                             :outlined="true"
                             :disabled="isSavingSharing"
@@ -546,6 +548,15 @@ function queryTypeLabel(search: SavedSearch): string {
     font-size: 1.2rem;
     font-weight: 600;
     color: var(--p-text-muted-color);
+}
+
+.sharing-btn {
+    font-size: 1.2rem;
+}
+
+:deep(.item-sharing-editor .sharing-groups-input),
+:deep(.item-sharing-editor .p-multiselect-label) {
+    font-size: 1.5rem;
 }
 
 .item-actions {

@@ -6,11 +6,12 @@ search, when given, then by the advanced search payload addressing it, and the
 results are unioned. A graph no payload addresses skips that last step.
 """
 
+import uuid
 from functools import cached_property
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional
 
 from django.core.exceptions import ValidationError
-from django.db.models import Count, QuerySet
+from django.db.models import Count, Q, QuerySet
 from django.utils.translation import gettext as _
 
 from arches.app.models.models import GraphModel, ResourceInstance
@@ -18,6 +19,7 @@ from arches.app.utils import permission_backend
 
 from arches_resource_sets.models import ResourceSet, ResourceSetMember
 
+from arches_search.models.models import SavedSearch
 from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
 )
@@ -298,15 +300,42 @@ class SearchCompiler:
         """
         The members of the resource set the payload names.
 
-        Only the user's own set can be searched. Anyone else's, or one that no
-        longer exists, is refused rather than searched as empty, so the caller
-        learns why nothing came back.
+        A set can be searched by its owner, or by anyone its owner shared a
+        saved search naming it with. A set the user can't search, or one that
+        no longer exists, is refused rather than searched as empty, so the
+        caller learns why nothing came back.
         """
-        resource_set_id = self.search_payload.resource_set_id
-        if not ResourceSet.objects.filter(pk=resource_set_id, owner=self.user).exists():
+        resource_set_id = str(uuid.UUID(str(self.search_payload.resource_set_id)))
+        owner_id = (
+            ResourceSet.objects.filter(pk=resource_set_id)
+            .values_list("owner_id", flat=True)
+            .first()
+        )
+        if owner_id is None or (
+            owner_id != self.user.pk
+            and not self._is_resource_set_shared(resource_set_id, owner_id)
+        ):
             raise ValidationError(_("Resource set not found."))
         return ResourceSetMember.objects.filter(resource_set_id=resource_set_id).values(
             "resource_instance_id"
+        )
+
+    def _is_resource_set_shared(self, resource_set_id: str, owner_id: int) -> bool:
+        """
+        Whether the set's owner shared a saved search naming it with the user.
+        The search must be the owner's: anyone can save a search naming any
+        set id, and sharing that must not open someone else's set.
+        """
+        return (
+            SavedSearch.objects.filter(
+                creator_id=owner_id,
+                query_definition__resourceSetId=resource_set_id,
+            )
+            .filter(
+                Q(shared_users__user=self.user)
+                | Q(shared_groups__group__in=self.user.groups.all())
+            )
+            .exists()
         )
 
     def _term_search_matches(self, graph_id: str) -> Optional[QuerySet]:

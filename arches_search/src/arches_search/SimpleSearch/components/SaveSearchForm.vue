@@ -136,6 +136,7 @@ async function onSaveResults(): Promise<void> {
             ...resultsToSave,
             name: saveSearchName.value.trim(),
             description: saveSearchDescription.value.trim(),
+            groupIds: sharedGroupIds.value,
         });
         resetForm();
         toast.add({
@@ -276,10 +277,7 @@ async function onSaveResults(): Promise<void> {
                 :fluid="true"
             />
         </div>
-        <div
-            v-if="!isSavingResults"
-            class="save-form-field"
-        >
+        <div class="save-form-field">
             <label
                 for="save-search-groups"
                 class="save-form-label"
@@ -287,7 +285,7 @@ async function onSaveResults(): Promise<void> {
                 {{ $gettext("Share with groups") }}
             </label>
             <SharingGroupsSelect
-                v-model="sharedGroupIds"
+                v-model:shared-group-ids="sharedGroupIds"
                 input-id="save-search-groups"
             />
         </div>
@@ -329,8 +327,6 @@ async function onSaveResults(): Promise<void> {
     font-size: 1.2rem;
     font-weight: 600;
     color: var(--p-text-muted-color);
-    text-transform: uppercase;
-    letter-spacing: 0.048rem;
 }
 
 :deep(.save-form-input .p-inputtext),

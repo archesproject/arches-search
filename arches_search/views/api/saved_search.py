@@ -43,7 +43,7 @@ def _resource_set_id(query_definition):
 INVALID_SHARING_IDS_ERROR = "users and groups must be lists of existing ids"
 
 
-def _is_valid_sharing_ids(user_ids, group_ids):
+def is_valid_sharing_ids(user_ids, group_ids):
     """Whether the ids are lists of existing user and group ids."""
     if not _is_list_of_ids(user_ids) or not _is_list_of_ids(group_ids):
         return False
@@ -144,7 +144,7 @@ class SavedSearchAPI(APIBase):
 
         shared_user_ids = body.get("users", [])
         shared_group_ids = body.get("groups", [])
-        if not _is_valid_sharing_ids(shared_user_ids, shared_group_ids):
+        if not is_valid_sharing_ids(shared_user_ids, shared_group_ids):
             return JSONResponse({"error": INVALID_SHARING_IDS_ERROR}, status=400)
 
         saved_search = SavedSearch.objects.create(
@@ -188,23 +188,14 @@ class SavedSearchAPI(APIBase):
         if "groups" not in body:
             return JSONResponse({"error": "groups is required"}, status=400)
         shared_group_ids = body["groups"]
-        if not _is_valid_sharing_ids([], shared_group_ids):
+        if not is_valid_sharing_ids([], shared_group_ids):
             return JSONResponse({"error": INVALID_SHARING_IDS_ERROR}, status=400)
 
         with transaction.atomic():
-            SharedSearchXGroup.objects.filter(saved_search=saved_search).exclude(
-                group_id__in=shared_group_ids
-            ).delete()
-            already_shared_ids = set(
-                SharedSearchXGroup.objects.filter(
-                    saved_search=saved_search
-                ).values_list("group_id", flat=True)
-            )
+            SharedSearchXGroup.objects.filter(saved_search=saved_search).delete()
             SharedSearchXGroup.objects.bulk_create(
-                [
-                    SharedSearchXGroup(saved_search=saved_search, group_id=gid)
-                    for gid in set(shared_group_ids) - already_shared_ids
-                ]
+                SharedSearchXGroup(saved_search=saved_search, group_id=gid)
+                for gid in set(shared_group_ids)
             )
 
         return JSONResponse(

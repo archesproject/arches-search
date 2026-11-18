@@ -224,8 +224,7 @@ export async function createSavedSearch(
         },
     );
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(errorBody?.error ?? response.statusText);
+        await throwResponseError(response);
     }
     return response.json();
 }
@@ -246,8 +245,7 @@ export async function updateSavedSearchGroups(
         },
     );
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(errorBody?.error ?? response.statusText);
+        await throwResponseError(response);
     }
     return response.json();
 }
@@ -395,10 +393,12 @@ export async function getResourceSetLimits(): Promise<ResourceSetLimits> {
 export async function saveResultsAsResourceSet({
     name,
     description,
+    groupIds,
     ...search
 }: SearchResultsToSave & {
     name: string;
     description: string;
+    groupIds: number[];
 }): Promise<SaveResourceSetResponse> {
     const requestPayload = {
         ...buildSearchApiRequestBody({
@@ -409,6 +409,7 @@ export async function saveResultsAsResourceSet({
         }),
         name,
         description,
+        groups: groupIds,
     };
 
     const response = await fetch(

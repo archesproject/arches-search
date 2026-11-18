@@ -6,14 +6,21 @@ from arches.app.tasks import create_user_task_record, notify_completion
 
 
 @shared_task(bind=True)
-def create_resource_set_from_search(self, userid, name, description, search_body):
+def create_resource_set_from_search(
+    self, userid, name, description, search_body, shared_group_ids=()
+):
     from arches_search.views.api.resource_sets import save_search_as_resource_set
 
     create_user_task_record(self.request.id, self.name, userid)
     user = get_user_model().objects.get(pk=userid)
     try:
         message = save_search_as_resource_set(
-            user, name, description, search_body, in_background=True
+            user,
+            name,
+            description,
+            search_body,
+            shared_group_ids,
+            in_background=True,
         )["message"]
     except ValidationError as error:
         # Results changed before the task ran; tell the user why.

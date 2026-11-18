@@ -2,22 +2,22 @@
 import { ref, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import Message from "openvue/message";
 import MultiSelect from "openvue/multiselect";
 
 import { getSharingGroups } from "@/arches_search/SimpleSearch/api.ts";
 
 import type { SharingGroup } from "@/arches_search/SimpleSearch/types.ts";
 
-const UPDATE_MODEL_VALUE_EVENT = "update:modelValue" as const;
+const UPDATE_SHARED_GROUP_IDS_EVENT = "update:sharedGroupIds" as const;
 
-const { modelValue, inputId } = defineProps<{
-    // The ids of the selected groups.
-    modelValue: number[];
+const { sharedGroupIds, inputId } = defineProps<{
+    sharedGroupIds: number[];
     inputId: string;
 }>();
 
 const emit = defineEmits<{
-    (event: typeof UPDATE_MODEL_VALUE_EVENT, value: number[]): void;
+    (event: typeof UPDATE_SHARED_GROUP_IDS_EVENT, value: number[]): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -40,7 +40,7 @@ watchEffect(async () => {
 });
 
 function onSelectionChange(value: number[]): void {
-    emit(UPDATE_MODEL_VALUE_EVENT, value);
+    emit(UPDATE_SHARED_GROUP_IDS_EVENT, value);
 }
 </script>
 
@@ -52,7 +52,7 @@ function onSelectionChange(value: number[]): void {
             option-value="id"
             display="chip"
             :input-id="inputId"
-            :model-value="modelValue"
+            :model-value="sharedGroupIds"
             :options="groups"
             :loading="isLoading"
             :filter="true"
@@ -61,12 +61,15 @@ function onSelectionChange(value: number[]): void {
             :empty-message="$gettext('No groups available')"
             @update:model-value="onSelectionChange"
         />
-        <small
+        <Message
             v-if="hasLoadError"
             class="sharing-groups-error"
+            severity="error"
+            size="small"
+            variant="simple"
         >
             {{ $gettext("Groups could not be loaded.") }}
-        </small>
+        </Message>
     </div>
 </template>
 
@@ -80,9 +83,5 @@ function onSelectionChange(value: number[]): void {
 :deep(.sharing-groups-select .sharing-groups-input),
 :deep(.sharing-groups-select .p-multiselect-label) {
     font-size: var(--p-arches-search-font-size);
-}
-
-.sharing-groups-select .sharing-groups-error {
-    color: var(--p-red-500);
 }
 </style>

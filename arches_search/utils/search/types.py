@@ -24,8 +24,7 @@ class SearchPayload:
     # The only filter that reaches outside the graph being searched.
     term_search: Optional[Dict[str, Any]]
     advanced_search_queries: Optional[List[Dict[str, Any]]]
-    # Narrows every graph to the members of this resource set, which must be
-    # one the user owns.
+    # Narrows every graph to the members of this resource set.
     resource_set_id: Optional[str] = None
 
     @classmethod
