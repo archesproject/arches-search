@@ -13,7 +13,6 @@ import {
     getSavedSearches,
     deleteSavedSearch,
 } from "@/arches_search/SimpleSearch/api.ts";
-import { parseSearchDefinition } from "@/arches_search/SimpleSearch/utils/search-definition.ts";
 
 import type {
     SavedSearch,
@@ -40,10 +39,8 @@ type SavedSearchSortValue =
 
 // "mine" lists the user's own searches, which they can delete; "shared" lists
 // searches others shared with them.
-const { scope, canShowResourceSetResults = false } = defineProps<{
+const { scope } = defineProps<{
     scope: "mine" | "shared";
-    // Only where the search can be narrowed to a set (Simple Search).
-    canShowResourceSetResults?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -156,10 +153,7 @@ function formatDate(isoDateString: string): string {
 }
 
 function isStaticSet(search: SavedSearch): boolean {
-    return (
-        parseSearchDefinition(search.query_definition ?? {}).resourceSetId !==
-        null
-    );
+    return typeof search.query_definition?.resourceSetId === "string";
 }
 
 function queryTypeIconClasses(search: SavedSearch): string[] {
@@ -174,11 +168,6 @@ function queryTypeLabel(search: SavedSearch): string {
         return $gettext("Static set");
     }
     return $gettext("Dynamic query");
-}
-
-// A set's results open only where a search can be narrowed to a set.
-function canRun(search: SavedSearch): boolean {
-    return !isStaticSet(search) || canShowResourceSetResults;
 }
 </script>
 
@@ -263,7 +252,6 @@ function canRun(search: SavedSearch): boolean {
                                 : $gettext('Run query')
                         "
                         :text="true"
-                        :disabled="!canRun(item)"
                         @click="
                             emit(
                                 RUN_QUERY_EVENT,

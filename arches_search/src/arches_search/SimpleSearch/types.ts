@@ -194,9 +194,8 @@ export interface ResourceSetLimits {
 }
 
 export interface SaveResourceSetResponse {
-    resource_set_id: string;
     message: string;
-    saved_search_id?: string;
+    // Only when the save was queued to run in the background.
     task_id?: string;
 }
 

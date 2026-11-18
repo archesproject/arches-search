@@ -38,28 +38,16 @@ import type {
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     ActiveFilter,
-    DateRangeFilter,
     NodeFilterConfigNode,
     ResourceFieldFilter,
     ResourceType,
     SearchDefinition,
-    SearchRequestTerm,
+    SearchResultsToSave,
     SerializedTerm,
     SortSpec,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
-
-interface ExportPayload {
-    terms: SearchRequestTerm[];
-    queries: GroupPayload[];
-    graphSlugs: string[];
-    mapFilter: FeatureCollection | null;
-    dateRange: DateRangeFilter | null;
-    resourceFieldFilters: ResourceFieldFilter[] | null;
-    maxHops: number;
-    resourceSetId: string | null;
-}
 
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
@@ -95,7 +83,7 @@ interface SearchFilters {
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(id: string): void;
-    getExportPayload(): ExportPayload;
+    getExportPayload(): Required<SearchResultsToSave>;
     getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
     setAdvancedQuery(payload: GroupPayload | null): void;
@@ -693,7 +681,7 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
-    function getExportPayload(): ExportPayload {
+    function getExportPayload(): Required<SearchResultsToSave> {
         const requestGraphSlugs = getRequestGraphs().map((graph) => graph.slug);
         return {
             terms: buildRequestTerms(terms.value),

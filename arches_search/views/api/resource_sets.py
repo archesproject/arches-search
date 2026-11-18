@@ -6,13 +6,13 @@ the user who ran it, at the moment it was saved. Nothing here re-runs the
 search later.
 
 Each set saved here is listed as a saved search whose query_definition is
-{"resourceSetId": <id>}. Opening it searches with resource_set_id, so the saved search table is the one list of what the user
-saved from search; sets made elsewhere in arches-resource-sets are not in it.
+{"resourceSetId": <id>}. Opening it searches with resource_set_id, so the
+saved search table is the one list of what the user saved from search; sets
+made elsewhere in arches-resource-sets are not in it.
 """
 
-import uuid
 from itertools import batched
-from typing import Optional, Tuple
+from typing import Tuple
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -37,53 +37,53 @@ from arches_search.utils.search import (
 )
 
 
+def _resource_set_limits() -> dict:
+    """
+    RESOURCE_SET_IMMEDIATE_THRESHOLD and RESOURCE_SET_MEMBER_LIMIT, defaulting
+    to core's SEARCH_EXPORT_IMMEDIATE_DOWNLOAD_THRESHOLD and SEARCH_EXPORT_LIMIT.
+    """
+    return {
+        "immediate_threshold": getattr(
+            settings,
+            "RESOURCE_SET_IMMEDIATE_THRESHOLD",
+            settings.SEARCH_EXPORT_IMMEDIATE_DOWNLOAD_THRESHOLD,
+        ),
+        "member_limit": getattr(
+            settings, "RESOURCE_SET_MEMBER_LIMIT", settings.SEARCH_EXPORT_LIMIT
+        ),
+    }
+
+
 def create_resource_set_from_queryset(
-    owner,
-    queryset: QuerySet,
-    name: str = "",
-    description: str = "",
-    set_id: Optional[uuid.UUID] = None,
+    owner, queryset: QuerySet, name: str, description: str
 ) -> Tuple[ResourceSet, int]:
     """
     Creates a set holding every resource in queryset (a ResourceInstance
-    queryset) and returns (resource_set, member_count).
+    queryset) and returns (resource_set, member_count). Call it inside a
+    transaction, so nobody sees a set that is still filling.
 
-    The set and its members are created in one transaction, so nobody sees a
-    set that is still filling, and a failure leaves nothing behind. Members
-    are read and created BULK_IMPORT_BATCH_SIZE at a time, so a large set is
-    never held in memory at once.
+    Members are read and created BULK_IMPORT_BATCH_SIZE at a time, so a large
+    set is never held in memory at once.
     """
     batch_size = settings.BULK_IMPORT_BATCH_SIZE
-    resource_ids = queryset.order_by().values_list("pk", flat=True).distinct()
+    resource_ids = queryset.order_by().values_list("pk", flat=True)
+    resource_set = ResourceSet.objects.create(
+        owner=owner, name=name, description=description
+    )
     member_count = 0
-
-    with transaction.atomic(using=queryset.db):
-        resource_set = ResourceSet.objects.using(queryset.db).create(
-            id=set_id or uuid.uuid4(),
-            owner=owner,
-            name=name,
-            description=description,
-        )
-        for id_batch in batched(
-            resource_ids.iterator(chunk_size=batch_size), batch_size
-        ):
-            ResourceSetMember.objects.using(queryset.db).bulk_create(
-                ResourceSetMember(
-                    resource_set=resource_set, resource_instance_id=resource_id
-                )
-                for resource_id in id_batch
+    for id_batch in batched(resource_ids.iterator(chunk_size=batch_size), batch_size):
+        ResourceSetMember.objects.bulk_create(
+            ResourceSetMember(
+                resource_set=resource_set, resource_instance_id=resource_id
             )
-            member_count += len(id_batch)
+            for resource_id in id_batch
+        )
+        member_count += len(id_batch)
     return resource_set, member_count
 
 
 def save_search_as_resource_set(
-    user,
-    name,
-    description,
-    search_body,
-    resource_set_id=None,
-    in_background=False,
+    user, name, description, search_body, in_background=False
 ) -> dict:
     """
     Runs the search as user and saves its results as a set, with the saved
@@ -91,19 +91,12 @@ def save_search_as_resource_set(
     when there are too many to save now. The task calls this again with
     in_background=True, which always saves.
 
-    Returns {"resource_set_id", "message"}, plus "saved_search_id" once saved
-    or "task_id" when queued.
+    Returns {"message"}, plus "resource_set_id" and "saved_search_id" once
+    saved, or "task_id" when queued.
     Raises ValidationError for a bad search, or when the results can't be
     saved (none, over the limit, or too many to save without Celery).
     """
-    immediate_threshold = getattr(
-        settings,
-        "RESOURCE_SET_IMMEDIATE_THRESHOLD",
-        settings.SEARCH_EXPORT_IMMEDIATE_DOWNLOAD_THRESHOLD,
-    )
-    member_limit = getattr(
-        settings, "RESOURCE_SET_MEMBER_LIMIT", settings.SEARCH_EXPORT_LIMIT
-    )
+    limits = _resource_set_limits()
 
     search_payload = SearchPayload.from_body(search_body)
     validate_search_payload(search_payload)
@@ -113,31 +106,29 @@ def save_search_as_resource_set(
     # Checked again in the task: results can change before it runs.
     if result_count == 0:
         raise ValidationError(_("There are no results to save."))
-    if result_count > member_limit:
+    if result_count > limits["member_limit"]:
         raise ValidationError(
             _(
                 "This search matches {count} resources, more than the limit of "
                 "{limit}. Narrow the search and try again."
-            ).format(count=result_count, limit=member_limit)
+            ).format(count=result_count, limit=limits["member_limit"])
         )
 
-    if result_count > immediate_threshold and not in_background:
+    if result_count > limits["immediate_threshold"] and not in_background:
         if not check_if_celery_available():
             raise ValidationError(
                 _(
                     "This search matches {count} resources, too many to save "
                     "right now. Narrow the search to {threshold} resources or "
                     "fewer, or try again later."
-                ).format(count=result_count, threshold=immediate_threshold)
+                ).format(count=result_count, threshold=limits["immediate_threshold"])
             )
-        resource_set_id = str(uuid.uuid4())
         task = create_resource_set_from_search.apply_async(
-            (user.pk, resource_set_id, name, description, search_body),
+            (user.pk, name, description, search_body),
             link=update_user_task_record.s(),
             link_error=log_error.s(),
         )
         return {
-            "resource_set_id": resource_set_id,
             "task_id": task.task_id,
             "message": _(
                 "Your resource set is being saved. You will be notified when it "
@@ -145,17 +136,16 @@ def save_search_as_resource_set(
             ),
         }
 
-    with transaction.atomic(using=search_result.results.db):
+    # One transaction, so the saved search never lists a set still filling.
+    with transaction.atomic():
         resource_set, member_count = create_resource_set_from_queryset(
-            user,
-            search_result.results,
-            name=name,
-            description=description,
-            set_id=resource_set_id,
+            user, search_result.results, name, description
         )
-        saved_search = SavedSearch.objects.using(search_result.results.db).create(
+        saved_search = SavedSearch.objects.create(
             name=name,
             description=description,
+            # The set's id alone: re-applying the search's own filters would
+            # drop members edited since, so it would no longer be a snapshot.
             query_definition={"resourceSetId": str(resource_set.pk)},
             creator=user,
         )
@@ -173,36 +163,19 @@ class SearchResultsResourceSetAPI(APIBase):
     Saves a search's results as a static resource set. GET returns the size
     limits the save is held to. The sets saved are listed, and deleted,
     through the saved searches API.
-
-    RESOURCE_SET_IMMEDIATE_THRESHOLD and RESOURCE_SET_MEMBER_LIMIT default to
-    core's SEARCH_EXPORT_IMMEDIATE_DOWNLOAD_THRESHOLD and SEARCH_EXPORT_LIMIT.
     """
 
-    def get(self, request):
+    def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated or request.user.username == "anonymous":
             return JSONResponse(
                 {"error": _("User not authenticated. Access denied.")}, status=401
             )
+        return super().dispatch(request, *args, **kwargs)
 
-        return JSONResponse(
-            {
-                "immediate_threshold": getattr(
-                    settings,
-                    "RESOURCE_SET_IMMEDIATE_THRESHOLD",
-                    settings.SEARCH_EXPORT_IMMEDIATE_DOWNLOAD_THRESHOLD,
-                ),
-                "member_limit": getattr(
-                    settings, "RESOURCE_SET_MEMBER_LIMIT", settings.SEARCH_EXPORT_LIMIT
-                ),
-            }
-        )
+    def get(self, request):
+        return JSONResponse(_resource_set_limits())
 
     def post(self, request):
-        if not request.user.is_authenticated or request.user.username == "anonymous":
-            return JSONResponse(
-                {"error": _("User not authenticated. Access denied.")}, status=401
-            )
-
         body = JSONDeserializer().deserialize(request.body)
         name = str(body.get("name") or "").strip()
         if not name:

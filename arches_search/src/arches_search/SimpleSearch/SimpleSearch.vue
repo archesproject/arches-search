@@ -643,7 +643,6 @@ async function applySavedSearch(
                             :result-count="
                                 searchResults.pagination.total_results
                             "
-                            :can-show-resource-set-results="true"
                             @run-query="onRunSavedQuery"
                             @close="closeSidePanel()"
                         />

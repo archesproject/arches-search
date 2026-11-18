@@ -25,7 +25,6 @@ const {
     definitionToSave = null,
     resultsToSave = null,
     resultCount = 0,
-    canShowResourceSetResults = false,
 } = defineProps<{
     shouldShowHeader?: boolean;
     shouldShowSaveTab?: boolean;
@@ -33,7 +32,6 @@ const {
     // Given, the save tab can also save the results as a resource set.
     resultsToSave?: SearchResultsToSave | null;
     resultCount?: number;
-    canShowResourceSetResults?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -103,7 +101,6 @@ const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
         <SavedSearchList
             v-else
             :scope="activeTab"
-            :can-show-resource-set-results="canShowResourceSetResults"
             @run-query="
                 (queryDefinition, searchName) =>
                     emit(RUN_QUERY_EVENT, queryDefinition, searchName)

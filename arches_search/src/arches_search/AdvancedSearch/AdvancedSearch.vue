@@ -151,7 +151,7 @@ const resultCount = computed<number>(
     () => searchResults.value?.pagination.total_results ?? 0,
 );
 
-// The search the results on screen came from, as exported.
+// The search the results on screen came from, to save or export.
 const resultsToSave = computed<SearchResultsToSave | null>(() => {
     if (!searchedGraphSlug.value) {
         return null;
@@ -366,14 +366,10 @@ async function onRunSavedQuery(
 }
 
 function onExportResults(exportRequest: ExportRequest): void {
-    if (!searchedGraphSlug.value) {
+    if (!resultsToSave.value) {
         return;
     }
-    void exportResults({
-        queries: advancedQuery.value ? [advancedQuery.value] : [],
-        graphSlugs: [searchedGraphSlug.value],
-        exportRequest,
-    });
+    void exportResults({ ...resultsToSave.value, exportRequest });
 }
 </script>
 

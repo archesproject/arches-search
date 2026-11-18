@@ -84,6 +84,11 @@ watch(saveAs, async (value) => {
     }
 });
 
+function resetForm(): void {
+    saveSearchName.value = "";
+    saveSearchDescription.value = "";
+}
+
 async function onSaveSearch(): Promise<void> {
     const name = saveSearchName.value.trim();
     if (!name || !definitionToSave) {
@@ -97,8 +102,7 @@ async function onSaveSearch(): Promise<void> {
             saveSearchDescription.value.trim(),
             definitionToSave,
         );
-        saveSearchName.value = "";
-        saveSearchDescription.value = "";
+        resetForm();
         toast.add({
             severity: "success",
             life: 3000,
@@ -128,8 +132,7 @@ async function onSaveResults(): Promise<void> {
             name: saveSearchName.value.trim(),
             description: saveSearchDescription.value.trim(),
         });
-        saveSearchName.value = "";
-        saveSearchDescription.value = "";
+        resetForm();
         toast.add({
             severity: "success",
             life: saved.task_id ? 5000 : 3000,

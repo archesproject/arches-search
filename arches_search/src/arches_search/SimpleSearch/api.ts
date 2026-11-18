@@ -28,6 +28,12 @@ import type {
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
 
+// Throws the error the API sent back, or the status text when it sent none.
+async function throwResponseError(response: Response): Promise<never> {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error ?? response.statusText);
+}
+
 export async function createSearchMVTContext(params: {
     terms?: SearchRequestTerm[];
     queries?: GroupPayload[];
@@ -336,8 +342,7 @@ export async function startSearchResultsExport({
     );
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(errorBody?.error ?? response.statusText);
+        await throwResponseError(response);
     }
 }
 
@@ -382,8 +387,7 @@ export async function saveResultsAsResourceSet({
         },
     );
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(errorBody?.error ?? response.statusText);
+        await throwResponseError(response);
     }
     return response.json();
 }
