@@ -31,14 +31,14 @@ FROM (
 ) item_ids
 """
 
-REMOVE_CONCEPT_VALUE_IDS = """
+REMOVE_CONCEPT_VALUE_IDS_SQL = """
 DELETE FROM arches_search_uuid indexed
 WHERE indexed.datatype IN ('concept', 'concept-list')
   AND EXISTS (SELECT 1 FROM "values" concept_value WHERE concept_value.valueid = indexed.value);
 """
 
 
-def reindex_reference_item_ids(apps, schema_editor):
+def reindex_reference_list_item_ids(apps, schema_editor):
     connection = schema_editor.connection
     with connection.cursor() as cursor:
         cursor.execute(REFERENCE_NODES_SQL)
@@ -76,6 +76,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(reindex_reference_item_ids, migrations.RunPython.noop),
-        migrations.RunSQL(REMOVE_CONCEPT_VALUE_IDS, migrations.RunSQL.noop),
+        migrations.RunPython(
+            reindex_reference_list_item_ids, migrations.RunPython.noop
+        ),
+        migrations.RunSQL(REMOVE_CONCEPT_VALUE_IDS_SQL, migrations.RunSQL.noop),
     ]

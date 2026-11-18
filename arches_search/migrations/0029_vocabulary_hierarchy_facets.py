@@ -79,7 +79,9 @@ FACETS_BY_DATATYPE = {
     "concept": VOCABULARY_FACETS,
     "concept-list": VOCABULARY_FACETS,
 }
-OPERATORS = {spec["operator"] for spec in VOCABULARY_FACETS + LEGACY_REFERENCE_FACETS}
+OPERATORS_TO_REPLACE = {
+    spec["operator"] for spec in VOCABULARY_FACETS + LEGACY_REFERENCE_FACETS
+}
 LEGACY_FACETS_BY_DATATYPE = {"reference": LEGACY_REFERENCE_FACETS}
 
 
@@ -89,7 +91,7 @@ def _sync_facets(apps, facets_by_datatype):
     DDataType = apps.get_model("models", "DDataType")
 
     AdvancedSearchFacet.objects.filter(
-        datatype__datatype__in=FACETS_BY_DATATYPE, operator__in=OPERATORS
+        datatype__datatype__in=FACETS_BY_DATATYPE, operator__in=OPERATORS_TO_REPLACE
     ).delete()
 
     for datatype in DDataType.objects.filter(datatype__in=facets_by_datatype):
