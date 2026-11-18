@@ -52,14 +52,17 @@ def _build_nodegroup_cache():
 _worker_factory = None
 _worker_nodegroup_cache = None
 _worker_progress = None
+_worker_descriptor_cache = None
 
 
 def _init_worker(progress_counter=None):
     django.setup()
     global _worker_factory, _worker_nodegroup_cache, _worker_progress
+    global _worker_descriptor_cache
     _worker_factory = IndexingFactory()
     _worker_nodegroup_cache = _build_nodegroup_cache()
     _worker_progress = progress_counter
+    _worker_descriptor_cache = {}
 
 
 def _index_tile_shard(worker_id, num_workers):
@@ -107,6 +110,32 @@ def _index_tile_shard(worker_id, num_workers):
     flush()
     report_progress(since_last_report)
     return (worker_id, tile_count)
+
+
+def _index_descriptor_shard(worker_id, num_workers):
+    """Index the descriptors of resources whose id hashes into this worker's shard."""
+    batch_size = settings.INDEX_BATCH_SIZE
+    batch = []
+    resource_count = 0
+
+    qs = (
+        Resource.objects.exclude(graph_id=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID)
+        .select_related("graph")
+        .extra(
+            where=["abs(hashtext(resourceinstanceid::text)::bigint) %% %s = %s"],
+            params=[num_workers, worker_id],
+        )
+    )
+
+    for resource in qs.iterator(chunk_size=batch_size):
+        batch.extend(build_descriptor_terms(resource, _worker_descriptor_cache))
+        resource_count += 1
+        if len(batch) >= batch_size:
+            TermSearch.objects.bulk_create(batch, batch_size=batch_size)
+            batch = []
+    if batch:
+        TermSearch.objects.bulk_create(batch, batch_size=batch_size)
+    return (worker_id, resource_count)
 
 
 class Command(BaseCommand):
@@ -191,7 +220,7 @@ class Command(BaseCommand):
                 self._reindex_multiprocess(max_subprocesses)
             else:
                 self._reindex_singleprocess()
-            self._reindex_descriptors()
+                self._reindex_descriptors()
         finally:
             if dropped_indexes:
                 self.stdout.write(
@@ -211,6 +240,7 @@ class Command(BaseCommand):
         after the tile pass, which has just (re)populated an empty term table, so
         no per-resource delete is needed."""
         batch_size = settings.INDEX_BATCH_SIZE
+        descriptor_cache = {}
         batch = []
         count = 0
         for resource in (
@@ -220,7 +250,7 @@ class Command(BaseCommand):
             .select_related("graph")
             .iterator(chunk_size=batch_size)
         ):
-            batch.extend(build_descriptor_terms(resource))
+            batch.extend(build_descriptor_terms(resource, descriptor_cache))
             count += 1
             if len(batch) >= batch_size:
                 TermSearch.objects.bulk_create(batch, batch_size=batch_size)
@@ -290,6 +320,12 @@ class Command(BaseCommand):
             worker_id, tile_count = result
             self.stdout.write(f"Worker {worker_id} finished ({tile_count} tiles)")
 
+        def on_descriptors_done(result):
+            worker_id, resource_count = result
+            self.stdout.write(
+                f"Worker {worker_id} finished descriptors ({resource_count} resources)"
+            )
+
         def on_err(err):
             import traceback
 
@@ -310,6 +346,15 @@ class Command(BaseCommand):
                     _index_tile_shard,
                     args=(worker_id, process_count),
                     callback=on_done,
+                    error_callback=on_err,
+                )
+                for worker_id in range(process_count)
+            ]
+            results += [
+                pool.apply_async(
+                    _index_descriptor_shard,
+                    args=(worker_id, process_count),
+                    callback=on_descriptors_done,
                     error_callback=on_err,
                 )
                 for worker_id in range(process_count)

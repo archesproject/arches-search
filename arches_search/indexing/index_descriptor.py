@@ -54,21 +54,38 @@ def _is_provisional_only(tile):
     return not has_approved_value and bool(tile.provisionaledits)
 
 
-def build_descriptor_terms(resource):
+def _graph_descriptor(graph_id, descriptor_cache):
+    """The nodegroups a graph's name is built from, and its template's plain text."""
+    if graph_id not in descriptor_cache:
+        config = _name_config(
+            FunctionXGraph.objects.filter(
+                graph_id=graph_id,
+                function__functiontype="primarydescriptors",
+            ).first()
+        )
+        template_name = config.get("string_template") or ""
+        for placeholder in extract_substrings(template_name):
+            template_name = template_name.replace(f"<{placeholder}>", "")
+        descriptor_cache[graph_id] = (
+            _descriptor_nodegroup_ids(graph_id, config),
+            template_name.strip(),
+        )
+    return descriptor_cache[graph_id]
+
+
+def build_descriptor_terms(resource, descriptor_cache=None):
     """Return the TermSearch rows for this resource's descriptor name(s), or []."""
     if str(resource.graph_id) == str(settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID):
         return []
     descriptors = resource.descriptors or {}
     if not descriptors:
         return []
-    tiles = TileModel.objects.filter(resourceinstance_id=resource.resourceinstanceid)
-    config = _name_config(
-        FunctionXGraph.objects.filter(
-            graph_id=resource.graph_id,
-            function__functiontype="primarydescriptors",
-        ).first()
+    if descriptor_cache is None:
+        descriptor_cache = {}
+    nodegroup_ids, template_name = _graph_descriptor(
+        resource.graph_id, descriptor_cache
     )
-    nodegroup_ids = _descriptor_nodegroup_ids(resource.graph_id, config)
+    tiles = TileModel.objects.filter(resourceinstance_id=resource.resourceinstanceid)
     source_tiles = list(
         tiles.filter(nodegroup_id__in=nodegroup_ids).order_by("sortorder")
     )
@@ -81,10 +98,6 @@ def build_descriptor_terms(resource):
     tile = source_tiles[0] if source_tiles else tiles.order_by("tileid").first()
     if tile is None:
         return []
-    template_name = config.get("string_template") or ""
-    for placeholder in extract_substrings(template_name):
-        template_name = template_name.replace(f"<{placeholder}>", "")
-    template_name = template_name.strip()
     graph_slug = resource.graph.slug
     rows = []
     for language, values in descriptors.items():

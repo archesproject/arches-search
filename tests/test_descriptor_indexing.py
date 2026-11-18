@@ -23,6 +23,9 @@ from arches_search.indexing.index_descriptor import (
     build_descriptor_terms,
     write_descriptor_search_terms,
 )
+from arches_search.management.commands.arches_search import (
+    _index_descriptor_shard,
+)
 from arches_search.models.models import TermSearch
 from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
     NodeAliasDatatypeRegistry,
@@ -205,6 +208,17 @@ class DescriptorIndexingTestCase(TestCase):
         write_descriptor_search_terms(self.resource)
         rows = NodeAliasDatatypeRegistry().graph_rows(TermSearch, self.graph.slug)
         self.assertFalse(rows.filter(node_alias=DESCRIPTOR_NODE_ALIAS).exists())
+
+    def test_reuses_the_graph_lookup_for_later_resources(self):
+        descriptor_cache = {}
+        build_descriptor_terms(self.resource, descriptor_cache)
+        with self.assertNumQueries(1):
+            build_descriptor_terms(self.resource, descriptor_cache)
+
+    def test_shards_index_each_resource_once(self):
+        _index_descriptor_shard(0, 2)
+        _index_descriptor_shard(1, 2)
+        self.assertEqual(self._rows().count(), 1)
 
     def test_skips_undefined_and_empty_names(self):
         self.resource.descriptors = {"en": {"name": "Undefined"}, "fr": {"name": ""}}
