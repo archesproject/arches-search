@@ -764,9 +764,14 @@ scheme needs no reindex.
 | `REFERENCES_EXACTLY` | the chosen items only                             |
 | `DESCENDANT_OF`      | anything strictly under the chosen items          |
 | `ANCESTOR_OF`        | anything strictly above the chosen items          |
-| `REFERENCES_NONE_OF` | neither the chosen items nor anything under them  |
+| `REFERENCES_NONE_OF` | a value outside the chosen items and their branch |
 | `REFERENCES_ALL`     | every chosen item, exactly                        |
 | `REFERENCES_ONLY`    | nothing but the chosen items, exactly             |
+
+Like every negated operator, `REFERENCES_NONE_OF` checks each value: under the
+default `ANY` quantifier, a record holding one of the chosen items still matches
+if it also holds a value outside them. To find records holding none of them,
+use `REFERENCES_ANY` with the `NONE` quantifier.
 
 A facet opts into the hierarchy with a `NARROWER_OR_SELF:`, `NARROWER:` or
 `BROADER:` prefix on its `orm_template`. A `PATH` operand compares exactly.
