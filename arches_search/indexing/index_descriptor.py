@@ -14,11 +14,7 @@ from arches_search.models.models import TermSearch
 DESCRIPTOR_NODE_ALIAS = "__descriptor__"
 
 
-def _descriptor_name_config(resource):
-    function_x_graph = FunctionXGraph.objects.filter(
-        graph_id=resource.graph_id,
-        function__functiontype="primarydescriptors",
-    ).first()
+def _name_config(function_x_graph):
     if function_x_graph is None:
         return {}
     try:
@@ -27,17 +23,30 @@ def _descriptor_name_config(resource):
         return {}
 
 
-def _descriptor_nodegroup_ids(resource, config):
+def _descriptor_nodegroup_ids(graph_id, config):
     """The nodegroups the "name" descriptor is built from: the configured one, or
     for a multicard descriptor the nodegroups of the <alias> nodes in its template."""
     if config.get("nodegroup_id"):
         return [config["nodegroup_id"]]
     aliases = extract_substrings(config.get("string_template") or "")
     return list(
-        Node.objects.filter(graph_id=resource.graph_id, alias__in=aliases)
+        Node.objects.filter(graph_id=graph_id, alias__in=aliases)
         .values_list("nodegroup_id", flat=True)
         .distinct()
     )
+
+
+def descriptor_nodegroup_ids_by_graph_slug():
+    """The nodegroups each graph's "name" descriptor is built from."""
+    nodegroup_ids_by_graph_slug = {}
+    for function_x_graph in FunctionXGraph.objects.filter(
+        function__functiontype="primarydescriptors"
+    ).select_related("graph"):
+        config = _name_config(function_x_graph)
+        nodegroup_ids_by_graph_slug[function_x_graph.graph.slug] = (
+            _descriptor_nodegroup_ids(function_x_graph.graph_id, config)
+        )
+    return nodegroup_ids_by_graph_slug
 
 
 def _is_provisional_only(tile):
@@ -53,8 +62,13 @@ def build_descriptor_terms(resource):
     if not descriptors:
         return []
     tiles = TileModel.objects.filter(resourceinstance_id=resource.resourceinstanceid)
-    config = _descriptor_name_config(resource)
-    nodegroup_ids = _descriptor_nodegroup_ids(resource, config)
+    config = _name_config(
+        FunctionXGraph.objects.filter(
+            graph_id=resource.graph_id,
+            function__functiontype="primarydescriptors",
+        ).first()
+    )
+    nodegroup_ids = _descriptor_nodegroup_ids(resource.graph_id, config)
     source_tiles = list(
         tiles.filter(nodegroup_id__in=nodegroup_ids).order_by("sortorder")
     )
