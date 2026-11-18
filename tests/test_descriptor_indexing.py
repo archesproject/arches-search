@@ -9,6 +9,7 @@ import uuid
 from django.test import TestCase
 
 from arches.app.models.models import (
+    FunctionXGraph,
     GraphModel,
     Node,
     NodeGroup,
@@ -19,11 +20,12 @@ from arches.app.models.models import (
 from arches_search.functions.search_indexing import SearchIndexingFunction
 from arches_search.indexing.index_descriptor import (
     DESCRIPTOR_NODE_ALIAS,
-    index_resource_descriptors,
+    write_descriptor_search_terms,
 )
 from arches_search.models.models import TermSearch
 
 REFERENCE = "HER-12345 Round Barrow"
+PRIMARY_DESCRIPTORS_FUNCTION_ID = "60000000-0000-0000-0000-000000000001"
 
 
 class DescriptorIndexingTestCase(TestCase):
@@ -62,7 +64,7 @@ class DescriptorIndexingTestCase(TestCase):
         )
 
     def test_indexes_descriptor_with_borrowed_tile_and_is_idempotent(self):
-        index_resource_descriptors(self.resource)
+        write_descriptor_search_terms(self.resource)
         rows = self._rows()
         self.assertEqual(rows.count(), 1)
         row = rows.first()
@@ -70,25 +72,46 @@ class DescriptorIndexingTestCase(TestCase):
         self.assertEqual(str(row.tileid_id), str(self.tile.tileid))
         self.assertEqual(row.language, "en")
 
-        index_resource_descriptors(self.resource)  # must not duplicate
+        write_descriptor_search_terms(self.resource)  # must not duplicate
         self.assertEqual(self._rows().count(), 1)
 
-    def test_function_indexes_descriptor_on_commit(self):
-        """Tile.save() recomputes descriptors after post_save, so the function
-        must defer to commit and pick up the *new* name, not the stale one."""
+    def test_function_indexes_descriptor_computed_from_tiles(self):
+        FunctionXGraph.objects.create(
+            function_id=PRIMARY_DESCRIPTORS_FUNCTION_ID,
+            graph=self.graph,
+            config={
+                "descriptor_types": {
+                    "name": {
+                        "nodegroup_id": str(self.nodegroup.nodegroupid),
+                        "string_template": "HER-<ref>",
+                    }
+                }
+            },
+        )
         with self.captureOnCommitCallbacks(execute=True):
             SearchIndexingFunction().post_save(self.tile)
-            # stand in for Tile.save()'s later save_descriptors() call
-            ResourceInstance.objects.filter(
-                pk=self.resource.resourceinstanceid
-            ).update(descriptors={"en": {"name": "HER-99999 Renamed"}})
+            TileModel.objects.filter(pk=self.tile.tileid).update(
+                data={str(self.node.nodeid): 99999}
+            )
 
-        self.assertEqual(
-            [row.value for row in self._rows()], ["HER-99999 Renamed"]
+        self.assertEqual([row.value for row in self._rows()], ["HER-99999"])
+
+    def test_function_queues_one_callback_per_resource(self):
+        other_tile = TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            nodegroup=self.nodegroup,
+            resourceinstance=self.resource,
+            data={},
+            provisionaledits=None,
         )
+        with self.captureOnCommitCallbacks() as callbacks:
+            SearchIndexingFunction().post_save(self.tile)
+            SearchIndexingFunction().post_save(other_tile)
+
+        self.assertEqual(len(callbacks), 1)
 
     def test_skips_undefined_and_empty_names(self):
         self.resource.descriptors = {"en": {"name": "Undefined"}, "fr": {"name": ""}}
         self.resource.save()
-        index_resource_descriptors(self.resource)
+        write_descriptor_search_terms(self.resource)
         self.assertEqual(self._rows().count(), 0)

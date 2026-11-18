@@ -1,12 +1,36 @@
+from functools import partial
+
 from django.db import transaction
 from arches.app.functions.base import BaseFunction
 from arches.app.models.models import EditLog, TileModel
 from arches.app.models.resource import Resource
 from arches.app.models.system_settings import settings
 from arches.app.models.tile import Tile
-from arches_search.indexing.index_descriptor import index_resource_descriptors
+from arches_search.indexing.index_descriptor import write_descriptor_search_terms
 from arches_search.indexing.index_from_tile import SEARCH_MODELS, index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
+
+
+def _refresh_descriptor_search_terms(resourceinstance_id):
+    resource = (
+        Resource.objects.select_related("graph").filter(pk=resourceinstance_id).first()
+    )
+    if resource is None:
+        return
+    resource.save_descriptors(descriptors=("name",))
+    write_descriptor_search_terms(resource)
+
+
+def _queue_descriptor_refresh(resourceinstance_id):
+    resourceinstance_id = str(resourceinstance_id)
+    connection = transaction.get_connection()
+    for _savepoint_ids, callback, _robust in connection.run_on_commit:
+        is_queued = getattr(callback, "func", None) is _refresh_descriptor_search_terms
+        if is_queued and callback.args == (resourceinstance_id,):
+            return
+    transaction.on_commit(
+        partial(_refresh_descriptor_search_terms, resourceinstance_id), robust=True
+    )
 
 
 class SearchIndexingFunction(BaseFunction):
@@ -18,13 +42,7 @@ class SearchIndexingFunction(BaseFunction):
         for record in index_records:
             record.save()
 
-        transaction.on_commit(
-            lambda: index_resource_descriptors(
-                Resource.objects.select_related("graph").get(
-                    pk=tile.resourceinstance_id
-                )
-            )
-        )
+        _queue_descriptor_refresh(tile.resourceinstance_id)
 
     def post_import(self, transaction_id, *args, **kwargs):
         resourceids = list(

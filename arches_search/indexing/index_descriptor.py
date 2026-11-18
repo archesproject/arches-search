@@ -75,7 +75,7 @@ def build_descriptor_terms(resource):
     return rows
 
 
-def index_resource_descriptors(resource, delete_existing=True):
+def write_descriptor_search_terms(resource, delete_existing=True):
     """Replace (or, during a fresh reindex, append) this resource's descriptor
     term rows. Idempotent when delete_existing is True."""
     if delete_existing:
