@@ -4,6 +4,7 @@ Verifies the reference-number-in-display-name is made text-searchable by indexin
 the resource descriptor into the term table, borrowing a real tile for the NOT
 NULL tileid, filtering empty/"Undefined" names, and re-indexing idempotently.
 """
+
 import uuid
 
 from django.test import TestCase

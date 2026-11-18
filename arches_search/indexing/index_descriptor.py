@@ -5,6 +5,7 @@ number, which is a ``number`` node indexed into NumericSearch, never TermSearch.
 tileid is NOT NULL but a descriptor is per-resource: prefer the descriptor's name
 nodegroup tile when configured, else any tile (tileid is only an FK anchor here).
 """
+
 from arches.app.functions.multicard_resource_descriptor import extract_substrings
 from arches.app.models.models import FunctionXGraph, Node, TileModel
 from arches.app.models.system_settings import settings
