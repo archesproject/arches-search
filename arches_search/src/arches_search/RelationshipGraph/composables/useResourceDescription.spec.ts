@@ -23,6 +23,8 @@ function descriptors(id: string): Record<string, ResourceDescriptorData> {
                 },
             },
             graph_id: "model",
+            has_geometry: false,
+            lifecycle_state_id: null,
         },
     };
 }

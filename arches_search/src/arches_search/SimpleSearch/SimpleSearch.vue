@@ -47,6 +47,7 @@ import {
     TIME_FILTER_QUERY_KEY,
 } from "@/arches_search/SimpleSearch/types.ts";
 import { useResultsExport } from "@/arches_search/SimpleSearch/composables/useResultsExport.ts";
+import { provideResultsMapSelection } from "@/arches_search/SimpleSearch/composables/useResultsMapSelection.ts";
 import { useSidePanel } from "@/arches_search/SimpleSearch/composables/useSidePanel.ts";
 import { applyPendingSearch } from "@/arches_search/SimpleSearch/utils/apply-pending-search.ts";
 import {
@@ -153,6 +154,7 @@ const {
     onSplitterResizeEnd,
 } = useSidePanel();
 const { exportState, exportResults } = useResultsExport();
+provideResultsMapSelection({ openMap: openMapFilter });
 
 const graphModels = ref<GraphModel[]>([]);
 
