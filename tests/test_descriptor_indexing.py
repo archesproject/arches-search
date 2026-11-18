@@ -44,6 +44,18 @@ class DescriptorIndexingTestCase(TestCase):
             nodegroup=cls.nodegroup,
             istopnode=True,
         )
+        FunctionXGraph.objects.create(
+            function_id=PRIMARY_DESCRIPTORS_FUNCTION_ID,
+            graph=cls.graph,
+            config={
+                "descriptor_types": {
+                    "name": {
+                        "nodegroup_id": str(cls.nodegroup.nodegroupid),
+                        "string_template": "HER-<ref>",
+                    }
+                }
+            },
+        )
         cls.resource = ResourceInstance.objects.create(
             resourceinstanceid=uuid.uuid4(),
             graph=cls.graph,
@@ -76,18 +88,6 @@ class DescriptorIndexingTestCase(TestCase):
         self.assertEqual(self._rows().count(), 1)
 
     def test_function_indexes_descriptor_computed_from_tiles(self):
-        FunctionXGraph.objects.create(
-            function_id=PRIMARY_DESCRIPTORS_FUNCTION_ID,
-            graph=self.graph,
-            config={
-                "descriptor_types": {
-                    "name": {
-                        "nodegroup_id": str(self.nodegroup.nodegroupid),
-                        "string_template": "HER-<ref>",
-                    }
-                }
-            },
-        )
         with self.captureOnCommitCallbacks(execute=True):
             SearchIndexingFunction().post_save(self.tile)
             TileModel.objects.filter(pk=self.tile.tileid).update(
@@ -109,6 +109,24 @@ class DescriptorIndexingTestCase(TestCase):
             SearchIndexingFunction().post_save(other_tile)
 
         self.assertEqual(len(callbacks), 1)
+
+    def test_function_delete_rebuilds_row_on_remaining_tile(self):
+        other_tile = TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            nodegroup=self.nodegroup,
+            resourceinstance=self.resource,
+            data={str(self.node.nodeid): 12345},
+            provisionaledits=None,
+            sortorder=1,
+        )
+        write_descriptor_search_terms(self.resource)
+        self.assertEqual(self._rows().get().tileid_id, self.tile.tileid)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            SearchIndexingFunction().delete(self.tile)
+            self.tile.delete()
+
+        self.assertEqual(self._rows().get().tileid_id, other_tile.tileid)
 
     def test_skips_undefined_and_empty_names(self):
         self.resource.descriptors = {"en": {"name": "Undefined"}, "fr": {"name": ""}}

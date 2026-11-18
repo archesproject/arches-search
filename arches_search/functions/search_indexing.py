@@ -44,6 +44,10 @@ class SearchIndexingFunction(BaseFunction):
 
         _queue_descriptor_refresh(tile.resourceinstance_id)
 
+    def delete(self, *args, **kwargs):
+        tile: Tile = args[0]
+        _queue_descriptor_refresh(tile.resourceinstance_id)
+
     def post_import(self, transaction_id, *args, **kwargs):
         resourceids = list(
             EditLog.objects.filter(transactionid=transaction_id)

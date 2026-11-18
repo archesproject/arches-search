@@ -37,7 +37,7 @@ def _descriptor_tile(resource):
     if nodegroup_id:
         tile = (
             tiles.filter(nodegroup_id=nodegroup_id)
-            .order_by("sortorder", "tileid")
+            .order_by("sortorder")
             .first()
         )
         if tile is not None:
