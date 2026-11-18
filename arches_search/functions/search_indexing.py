@@ -6,9 +6,13 @@ from arches.app.models.models import EditLog, TileModel
 from arches.app.models.resource import Resource
 from arches.app.models.system_settings import settings
 from arches.app.models.tile import Tile
-from arches_search.indexing.index_descriptor import write_descriptor_search_terms
+from arches_search.indexing.index_descriptor import (
+    build_descriptor_terms,
+    write_descriptor_search_terms,
+)
 from arches_search.indexing.index_from_tile import SEARCH_MODELS, index_from_tile
 from arches_search.indexing.indexing_factory import IndexingFactory
+from arches_search.models.models import TermSearch
 
 
 def _refresh_descriptor_search_terms(resourceinstance_id):
@@ -58,6 +62,7 @@ class SearchIndexingFunction(BaseFunction):
         batch_size = settings.INDEX_BATCH_SIZE
         nodegroup_cache = {}
         indexing_factory = IndexingFactory()
+        descriptor_cache = {}
 
         for start in range(0, len(resourceids), batch_size):
             batch = resourceids[start : start + batch_size]
@@ -75,6 +80,12 @@ class SearchIndexingFunction(BaseFunction):
                     or []
                 ):
                     values_to_index[type(val)].append(val)
+            for resource in Resource.objects.filter(pk__in=batch).select_related(
+                "graph"
+            ):
+                values_to_index[TermSearch].extend(
+                    build_descriptor_terms(resource, descriptor_cache)
+                )
 
             # replace each resource's rows wholesale so tiles edited or
             # removed by the load don't leave stale values behind
