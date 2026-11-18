@@ -3,8 +3,10 @@ import uuid
 from django.core.management import call_command
 from django.test import TestCase
 
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 from arches.app.models.models import (
     GraphModel,
+    Language,
     Node,
     NodeGroup,
     ResourceInstance,
@@ -120,6 +122,47 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                 },
             ],
         }
+
+        Language.objects.get_or_create(code="fr", defaults={"name": "French"})
+        List.objects.create(id=cls.reference_list_id, name="Facet references")
+        for sortorder, reference in enumerate(
+            [
+                cls.reference_parent,
+                cls.reference_child,
+                cls.reference_a,
+                cls.reference_b,
+                cls.reference_c,
+                cls.reference_other,
+                cls.reference_a_bilingual,
+            ]
+        ):
+            list_item = ListItem.objects.create(
+                id=reference["labels"][0]["list_item_id"],
+                list_id=cls.reference_list_id,
+                uri=reference["uri"],
+                sortorder=sortorder,
+            )
+            for label in reference["labels"]:
+                ListItemValue.objects.create(
+                    id=label["id"],
+                    list_item=list_item,
+                    valuetype_id=label["valuetype_id"],
+                    language_id=label["language_id"],
+                    value=label["value"],
+                )
+        ListItem.objects.filter(
+            pk=cls.reference_child["labels"][0]["list_item_id"]
+        ).update(parent_id=cls.reference_parent["labels"][0]["list_item_id"])
+        other_list = List.objects.create(id=uuid.uuid4(), name="Other references")
+        same_label_item = ListItem.objects.create(
+            id=uuid.uuid4(), list=other_list, uri="urn:test:other", sortorder=0
+        )
+        ListItemValue.objects.create(
+            list_item=same_label_item,
+            valuetype_id="prefLabel",
+            language_id="en",
+            value="ref-a",
+        )
 
         any_suffix = uuid.uuid4().hex[:8]
         cls.any_graph = GraphModel.objects.create(
@@ -600,6 +643,38 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
 
         self.assertEqual(result, {self.all_match_resource.resourceinstanceid})
 
+    def test_references_all_with_a_label_nothing_carries_matches_nothing(self):
+        payload = {
+            "graph_slug": self.all_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.all_graph.slug,
+                        "node_alias": self.all_reference_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_ALL",
+                    "operands": [{"type": "LITERAL", "value": ["ref-a", "gone"]}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, set())
+
     def test_references_all_matches_with_real_widget_shaped_operand(self):
         """This checks REFERENCES_ALL against the real widget-shaped operand instead of flat label strings."""
         payload = {
@@ -823,7 +898,7 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
         self.assertEqual(result, {self.none_match_resource.resourceinstanceid})
 
     def test_descendant_of_matches_the_requested_descendant_token(self):
-        """This checks that the descendant of facet returns only the resource whose indexed reference label matches the requested descendant token."""
+        """This checks that the descendant of facet returns the resource holding an item under the requested one, named by its label."""
         payload = {
             "graph_slug": self.descendant_graph.slug,
             "scope": "RESOURCE",
@@ -839,7 +914,7 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "DESCENDANT_OF",
-                    "operands": [{"type": "LITERAL", "value": ["ref-child"]}],
+                    "operands": [{"type": "LITERAL", "value": ["ref-parent"]}],
                 }
             ],
             "groups": [],
@@ -872,7 +947,7 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "DESCENDANT_OF",
-                    "operands": [{"type": "LITERAL", "value": [self.reference_child]}],
+                    "operands": [{"type": "LITERAL", "value": [self.reference_parent]}],
                 }
             ],
             "groups": [],
@@ -889,7 +964,7 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
         self.assertEqual(result, {self.descendant_match_resource.resourceinstanceid})
 
     def test_ancestor_of_matches_the_requested_ancestor_token(self):
-        """This checks that the ancestor of facet returns only the resource whose indexed reference label matches the requested ancestor token."""
+        """This checks that the ancestor of facet returns the resource holding an item above the requested one, named by its label."""
         payload = {
             "graph_slug": self.ancestor_graph.slug,
             "scope": "RESOURCE",
@@ -905,7 +980,7 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "ANCESTOR_OF",
-                    "operands": [{"type": "LITERAL", "value": ["ref-parent"]}],
+                    "operands": [{"type": "LITERAL", "value": ["ref-child"]}],
                 }
             ],
             "groups": [],
@@ -938,7 +1013,7 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
                         "search_models": [],
                     },
                     "operator": "ANCESTOR_OF",
-                    "operands": [{"type": "LITERAL", "value": [self.reference_parent]}],
+                    "operands": [{"type": "LITERAL", "value": [self.reference_child]}],
                 }
             ],
             "groups": [],
@@ -953,6 +1028,37 @@ class ReferenceAdvancedSearchFacetIntegrationTestCase(TestCase):
         )
 
         self.assertEqual(result, {self.ancestor_match_resource.resourceinstanceid})
+
+    def test_references_any_matches_items_under_the_requested_one(self):
+        payload = {
+            "graph_slug": self.descendant_graph.slug,
+            "scope": "RESOURCE",
+            "logic": "AND",
+            "clauses": [
+                {
+                    "type": "LITERAL",
+                    "quantifier": "ANY",
+                    "subject": {
+                        "type": "NODE",
+                        "graph_slug": self.descendant_graph.slug,
+                        "node_alias": self.descendant_reference_node.alias,
+                        "search_models": [],
+                    },
+                    "operator": "REFERENCES_ANY",
+                    "operands": [{"type": "LITERAL", "value": [self.reference_parent]}],
+                }
+            ],
+            "groups": [],
+            "aggregations": [],
+            "relationship": None,
+        }
+        result = set(
+            AdvancedSearchQueryCompiler(payload)
+            .compile()
+            .values_list("resourceinstanceid", flat=True)
+        )
+
+        self.assertEqual(result, {self.descendant_match_resource.resourceinstanceid})
 
     def test_has_no_value_matches_the_resource_without_a_reference_row(self):
         """This checks that the has no value facet returns only the resource whose reference tile indexed no value at all."""

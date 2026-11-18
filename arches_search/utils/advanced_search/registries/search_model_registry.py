@@ -20,7 +20,7 @@ class SearchModelRegistry:
         # search model, since they read a column on the resource row.
         for facet in AdvancedSearchFacet.objects.select_related(
             "datatype", "target_search_model"
-        ):
+        ).order_by("pk"):
             datatype_name = facet.datatype.datatype
             model_class = facet.target_model_class
             if model_class is None:
@@ -55,8 +55,13 @@ class SearchModelRegistry:
                 for model_class in model_classes
                 if self._model_has_field(model_class, "value")
             ]
+            text_value_models = self._text_value_models(model_classes)
             if len(value_models) == 1:
                 self._datatype_to_value_model_class[datatype_name] = value_models[0]
+            elif len(text_value_models) == 1:
+                self._datatype_to_value_model_class[datatype_name] = text_value_models[
+                    0
+                ]
 
             relationship_models = [
                 model_class
@@ -135,12 +140,9 @@ class SearchModelRegistry:
         The model an ordering reads, or None where the datatype has nothing
         worth ordering by.
         """
-        value_models = [
-            model_class
-            for model_class in self._datatype_to_model_classes.get(datatype_name, [])
-            if self._model_has_field(model_class, "value")
-            and not self._value_field_is_uuid(model_class)
-        ]
+        value_models = self._text_value_models(
+            self._datatype_to_model_classes.get(datatype_name, [])
+        )
 
         if len(value_models) != 1:
             return None
@@ -158,6 +160,14 @@ class SearchModelRegistry:
             )
 
         return model_class
+
+    def _text_value_models(self, model_classes: List[Any]) -> List[Any]:
+        return [
+            model_class
+            for model_class in model_classes
+            if self._model_has_field(model_class, "value")
+            and not self._value_field_is_uuid(model_class)
+        ]
 
     def _model_has_field(self, model_class: Any, field_name: str) -> bool:
         try:

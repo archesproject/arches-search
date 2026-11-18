@@ -28,3 +28,5 @@ AGGREGATE_KIND_SET_EQUAL = "set_equal"
 
 # Datatypes that represent resource-to-resource links rather than scalar values.
 TERMINAL_RESOURCE_DATATYPES = {"resource-instance", "resource-instance-list"}
+
+VOCABULARY_DATATYPES = {"reference", "concept", "concept-list"}

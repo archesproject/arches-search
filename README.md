@@ -749,6 +749,29 @@ fall out automatically.
 | `DateTimeField` / `DateField` | `EQUALS`, `RANGE`, `BEFORE`, `AFTER`, `HAS_ANY_VALUE`, `HAS_NO_VALUE` |
 | `CharField` / `TextField`     | `EQUALS`, `CONTAINS`, `STARTS_WITH`, `HAS_ANY_VALUE`, `HAS_NO_VALUE`  |
 | `BooleanField`                | `IS_TRUE`, `IS_FALSE`                                                 |
+## Vocabulary hierarchy
+
+Reference and concept values are indexed by vocabulary item id, so their
+operators can follow the hierarchy (list item parents for `reference`; a
+scheme's `narrower` and `hasTopConcept` relations for `concept` and
+`concept-list`). It is read live from the core tables, so editing a list or
+scheme needs no reindex.
+
+| Operator             | Matches                                           |
+| -------------------- | ------------------------------------------------- |
+| `REFERENCES_ANY`     | the chosen items or anything under them           |
+| `REFERENCES_EXACTLY` | the chosen items only                             |
+| `DESCENDANT_OF`      | anything strictly under the chosen items          |
+| `ANCESTOR_OF`        | anything strictly above the chosen items          |
+| `REFERENCES_NONE_OF` | neither the chosen items nor anything under them  |
+| `REFERENCES_ALL`     | every chosen item, exactly                        |
+| `REFERENCES_ONLY`    | nothing but the chosen items, exactly             |
+
+A facet opts into the hierarchy with a `NARROWER_OR_SELF:`, `NARROWER:` or
+`BROADER:` prefix on its `orm_template`. A `PATH` operand compares exactly.
+A reference operand given as bare labels (searches saved before items were
+indexed by id) is resolved to the items carrying each label.
+
 
 A foreign key to the user model also gets `IS_CURRENT_USER` and
 `IS_NOT_CURRENT_USER`, plus exactly one hop to that user's `username` — nothing
