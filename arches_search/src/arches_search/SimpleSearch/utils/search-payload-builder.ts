@@ -22,7 +22,7 @@ import type {
 // The server lowers this to its own TERM_SEARCH_MAX_HOPS setting.
 export const TERM_SEARCH_MAX_HOPS = 2;
 
-// A string matches any datatype; an object only matches its own.
+// A string matches any datatype; an object may name one datatype.
 interface TermSearchObject {
     text: string;
     datatype?: string;

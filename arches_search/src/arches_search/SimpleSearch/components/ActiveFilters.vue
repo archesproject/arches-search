@@ -41,7 +41,7 @@ function removeLabel(activeFilter: ActiveFilter): string {
     });
 }
 
-function excludeLabel(activeFilter: ActiveFilter): string {
+function toggleExclusionLabel(activeFilter: ActiveFilter): string {
     if (activeFilter.inverted) {
         return $gettext("Include %{category} filter", {
             category: activeFilter.category,
@@ -52,7 +52,7 @@ function excludeLabel(activeFilter: ActiveFilter): string {
     });
 }
 
-function excludeIcon(activeFilter: ActiveFilter): string {
+function toggleExclusionIcon(activeFilter: ActiveFilter): string {
     if (activeFilter.inverted) {
         return INCLUDE_ICON;
     }
@@ -117,12 +117,12 @@ function clearAllFilters(): void {
             </span>
             <span
                 v-if="activeFilter.toggleInverted"
-                class="fc-exclude"
-                :title="excludeLabel(activeFilter)"
-                :aria-label="excludeLabel(activeFilter)"
+                class="fc-toggle-exclusion"
+                :title="toggleExclusionLabel(activeFilter)"
+                :aria-label="toggleExclusionLabel(activeFilter)"
                 @click.stop="activeFilter.toggleInverted()"
             >
-                <i :class="excludeIcon(activeFilter)" />
+                <i :class="toggleExclusionIcon(activeFilter)" />
             </span>
             <span
                 class="fc-dismiss"
@@ -232,7 +232,7 @@ function clearAllFilters(): void {
     text-decoration: line-through;
 }
 
-.fc-exclude,
+.fc-toggle-exclusion,
 .fc-dismiss {
     display: inline-flex;
     align-items: center;
@@ -248,7 +248,7 @@ function clearAllFilters(): void {
     transition: opacity 0.12s;
 }
 
-.fc-exclude:hover,
+.fc-toggle-exclusion:hover,
 .fc-dismiss:hover {
     opacity: 1;
 }

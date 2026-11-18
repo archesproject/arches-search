@@ -26,7 +26,10 @@ export function isTermKind(value: unknown): value is TermKind {
 }
 
 export function buildRequestTerms(
-    terms: SerializedTerm[],
+    terms: Pick<
+        SerializedTerm,
+        "text" | "inverted" | "termKind" | "itemId" | "datatype"
+    >[],
 ): SearchRequestTerm[] {
     return terms.map((term) => {
         let type: SearchRequestTerm["type"] = "string";
