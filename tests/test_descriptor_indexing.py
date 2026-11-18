@@ -24,6 +24,11 @@ from arches_search.indexing.index_descriptor import (
     write_descriptor_search_terms,
 )
 from arches_search.models.models import TermSearch
+from arches_search.utils.advanced_search.registries.node_alias_datatype_registry import (
+    NodeAliasDatatypeRegistry,
+)
+from arches_search.utils.readable_nodes import ReadableNodes
+from arches_search.utils.term_search.matching import get_related_resources_by_text
 
 REFERENCE = "HER-12345 Round Barrow"
 PRIMARY_DESCRIPTORS_FUNCTION_ID = "60000000-0000-0000-0000-000000000001"
@@ -178,6 +183,28 @@ class DescriptorIndexingTestCase(TestCase):
         }
         [row] = build_descriptor_terms(self.resource)
         self.assertEqual((row.value, row.language), (REFERENCE, "en"))
+
+    def test_text_only_term_search_skips_the_descriptor(self):
+        write_descriptor_search_terms(self.resource)
+
+        def matches(datatype):
+            return set(
+                get_related_resources_by_text(
+                    [REFERENCE],
+                    self.graph.graphid,
+                    ReadableNodes(user=None),
+                    max_hops=0,
+                    datatype=datatype,
+                ).values_list("resourceinstanceid", flat=True)
+            )
+
+        self.assertIn(self.resource.resourceinstanceid, matches(None))
+        self.assertNotIn(self.resource.resourceinstanceid, matches("string"))
+
+    def test_any_text_clause_rows_skip_the_descriptor(self):
+        write_descriptor_search_terms(self.resource)
+        rows = NodeAliasDatatypeRegistry().graph_rows(TermSearch, self.graph.slug)
+        self.assertFalse(rows.filter(node_alias=DESCRIPTOR_NODE_ALIAS).exists())
 
     def test_skips_undefined_and_empty_names(self):
         self.resource.descriptors = {"en": {"name": "Undefined"}, "fr": {"name": ""}}
