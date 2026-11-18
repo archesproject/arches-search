@@ -92,7 +92,6 @@ function clearAllFilters(): void {
                 'filter-chip-' + activeFilter.kind,
                 { 'filter-chip-editable': activeFilter.onEdit != null },
                 { 'filter-chip-inactive': activeFilter.inactiveNote },
-                { 'filter-chip-excluded': activeFilter.inverted },
             ]"
             :title="editTitle(activeFilter)"
             @click="onChipClick(activeFilter)"
@@ -226,10 +225,6 @@ function clearAllFilters(): void {
 .fc-not {
     font-weight: 700;
     text-transform: uppercase;
-}
-
-.filter-chip-excluded .fc-value {
-    text-decoration: line-through;
 }
 
 .fc-toggle-exclusion,

@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     atomic = False
 
     dependencies = [
-        ("arches_search", "0027_index_vocabulary_item_ids"),
+        ("arches_search", "0026_advancedsearchoperandcomponent"),
     ]
 
     operations = [

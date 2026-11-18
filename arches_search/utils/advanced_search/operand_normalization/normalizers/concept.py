@@ -1,5 +1,3 @@
-import uuid
-
 from arches.app.datatypes.datatypes import DataTypeFactory
 from arches.app.models.models import Value
 
@@ -23,17 +21,10 @@ class ConceptOperandNormalizer(BaseOperandNormalizer):
         concept_ids_by_value_id = {
             str(value_id): str(concept_id)
             for value_id, concept_id in Value.objects.filter(
-                valueid__in=[value_id for value_id in value_ids if _is_uuid(value_id)]
+                valueid__in=value_ids
             ).values_list("valueid", "concept_id")
         }
         return [
-            concept_ids_by_value_id.get(str(value_id), ()) for value_id in value_ids
+            concept_ids_by_value_id.get(str(value_id), value_id)
+            for value_id in value_ids
         ]
-
-
-def _is_uuid(value):
-    try:
-        uuid.UUID(str(value))
-    except ValueError:
-        return False
-    return True

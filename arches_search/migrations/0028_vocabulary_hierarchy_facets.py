@@ -123,7 +123,7 @@ def backwards(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("arches_search", "0028_uuidsearch_covering_value_index"),
+        ("arches_search", "0027_uuidsearch_covering_value_index"),
     ]
 
     operations = [
