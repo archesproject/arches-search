@@ -335,12 +335,12 @@ class MeasurementIndexing(BaseIndexing):
 An indexer whose values are vocabulary item ids written to `UUIDSearch` can
 override these `BaseIndexing` hooks; `reference` and `concept` do:
 
-| Hook                                  | Returns                                                                       |
-| ------------------------------------- | ----------------------------------------------------------------------------- |
-| `hierarchy_edges_sql()`               | SQL selecting `parent` and `child` item ids; not `None` makes it a vocabulary |
-| `item_labels(item_ids, labels)`       | `(item_id, label)` pairs for those items carrying those labels                |
-| `searchable_items(query, limit)`      | `(item_id, label)` pairs to suggest even when no record uses them             |
-| `item_paths(item_ids, language_code)` | `{item_id: [label, …]}` breadcrumbs shown with suggestions                    |
+| Hook                                  | Returns                                                                                         |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `hierarchy_edges()`                   | a `values_list` queryset of (broader, narrower) item id pairs; not `None` makes it a vocabulary |
+| `item_labels(item_ids, labels)`       | `(item_id, label)` pairs for those items carrying those labels                                  |
+| `searchable_items(query, limit)`      | `(item_id, label)` pairs to suggest even when no record uses them                               |
+| `item_paths(item_ids, language_code)` | `{item_id: [label, …]}` breadcrumbs shown with suggestions                                      |
 
 Declare `search_indexers` on your app's `AppConfig`:
 
@@ -765,7 +765,7 @@ search cannot be OR-ed against a clause or nested inside a group.
 ## Vocabulary hierarchy
 
 Reference and concept values are indexed by vocabulary item id, so their
-operators can follow the hierarchy each indexer's `hierarchy_edges_sql()`
+operators can follow the hierarchy each indexer's `hierarchy_edges()`
 declares (list item parents for `reference`; a scheme's `narrower` and
 `hasTopConcept` relations for `concept` and `concept-list`). It is read live
 from the core tables, so editing a list or scheme needs no reindex. A custom

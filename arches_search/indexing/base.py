@@ -1,3 +1,5 @@
+from django.db.models import QuerySet
+
 from arches.app.datatypes.datatypes import BaseDataType
 
 
@@ -19,7 +21,7 @@ class BaseIndexing:
         """
         return {}
 
-    def hierarchy_edges_sql(self) -> str | None:
+    def hierarchy_edges(self) -> QuerySet | None:
         return None
 
     def item_labels(self, item_ids, labels) -> list:

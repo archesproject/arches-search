@@ -1,21 +1,11 @@
-from django.db import connection
+from django.db.models import Q
 
 from arches.app.datatypes.datatypes import DataTypeFactory, BaseDataType
 from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 from arches_search.models.models import TermSearch, UUIDSearch
 
 from arches_search.indexing.base import BaseIndexing
-
-ANCESTRY_SQL = f"""
-WITH RECURSIVE ancestry(item_id, ancestor_id, depth) AS (
-    SELECT id, id, 0 FROM {ListItem._meta.db_table} WHERE id = ANY(%s::uuid[])
-    UNION ALL
-    SELECT ancestry.item_id, item.parent_id, ancestry.depth + 1
-    FROM ancestry JOIN {ListItem._meta.db_table} item ON item.id = ancestry.ancestor_id
-    WHERE item.parent_id IS NOT NULL
-)
-SELECT item_id, ancestor_id FROM ancestry ORDER BY item_id, depth DESC
-"""
+from arches_search.utils.vocabulary_hierarchy import BROADER, expand_hierarchy
 
 
 class ReferenceIndexing(BaseIndexing):
@@ -27,8 +17,8 @@ class ReferenceIndexing(BaseIndexing):
         """Sort by the preferred label, not by an alternate one."""
         return {"valuetype": "prefLabel"}
 
-    def hierarchy_edges_sql(self):
-        return f"SELECT parent_id AS parent, id AS child FROM {ListItem._meta.db_table}"
+    def hierarchy_edges(self):
+        return ListItem.objects.values_list("parent_id", "id")
 
     def item_labels(self, item_ids, labels):
         return [
@@ -52,29 +42,35 @@ class ReferenceIndexing(BaseIndexing):
         ]
 
     def item_paths(self, item_ids, language_code):
-        with connection.cursor() as cursor:
-            cursor.execute(ANCESTRY_SQL, [[str(item_id) for item_id in item_ids]])
-            ancestry = cursor.fetchall()
+        ancestor_ids = expand_hierarchy(self.datatype.datatype_name, BROADER, item_ids)
+        items = ListItem.objects.filter(
+            Q(id__in=item_ids) | Q(id__in=ancestor_ids)
+        ).values_list("id", "parent_id", "list__name")
+        parent_ids_by_item_id = {}
+        list_names_by_item_id = {}
+        for item_id, parent_id, list_name in items:
+            parent_ids_by_item_id[item_id] = parent_id
+            list_names_by_item_id[item_id] = list_name
 
         labels_by_item_id = {}
         for label in ListItemValue.objects.labels().filter(
-            list_item_id__in={ancestor_id for _item_id, ancestor_id in ancestry}
+            list_item_id__in=parent_ids_by_item_id
         ):
             labels_by_item_id.setdefault(label.list_item_id, []).append(label)
 
-        paths = {
-            list_item["id"]: [list_item["list__name"]]
-            for list_item in ListItem.objects.filter(id__in=item_ids).values(
-                "id", "list__name"
-            )
-        }
-        for item_id, ancestor_id in ancestry:
-            paths[item_id].append(
-                ListItem.find_best_label_from_set(
-                    labels_by_item_id.get(ancestor_id, []), language_code
+        paths = {}
+        for item_id in item_ids:
+            labels = []
+            path_item_id = item_id
+            while path_item_id is not None:
+                labels.append(
+                    ListItem.find_best_label_from_set(
+                        labels_by_item_id.get(path_item_id, []), language_code
+                    )
+                    or str(path_item_id)
                 )
-                or str(ancestor_id)
-            )
+                path_item_id = parent_ids_by_item_id[path_item_id]
+            paths[item_id] = [list_names_by_item_id[item_id], *reversed(labels)]
         return paths
 
     def index(self, tile, node):

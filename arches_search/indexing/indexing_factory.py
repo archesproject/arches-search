@@ -23,5 +23,5 @@ class IndexingFactory:
         return [
             datatype_name
             for datatype_name, indexer in self.registry.items()
-            if indexer.hierarchy_edges_sql() is not None
+            if indexer.hierarchy_edges() is not None
         ]

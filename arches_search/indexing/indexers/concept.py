@@ -14,12 +14,10 @@ class ConceptIndexing(BaseIndexing):
         """Sort by the preferred label, not by an alternate one."""
         return {"valuetype": "prefLabel"}
 
-    def hierarchy_edges_sql(self):
-        return (
-            "SELECT conceptidfrom AS parent, conceptidto AS child "
-            f"FROM {Relation._meta.db_table} "
-            "WHERE relationtype IN ('narrower', 'hasTopConcept')"
-        )
+    def hierarchy_edges(self):
+        return Relation.objects.filter(
+            relationtype_id__in=["narrower", "hasTopConcept"]
+        ).values_list("conceptfrom_id", "conceptto_id")
 
     def item_labels(self, item_ids, labels):
         return list(
