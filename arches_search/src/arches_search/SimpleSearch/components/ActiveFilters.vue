@@ -241,7 +241,8 @@ function clearAllFilters(): void {
     color: var(--arches-search-filter-controlled-term-text);
 }
 
-.filter-chip-record {
+.filter-chip-record,
+.filter-chip-resource-set {
     background: var(--arches-search-filter-record-bg);
     border-color: var(--arches-search-filter-record-border);
     color: var(--arches-search-filter-record-text);

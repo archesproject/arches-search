@@ -175,6 +175,9 @@ export function parseSearchDefinition(
     // Searches saved before the switch existed included related resources.
     const includeRelated = raw.includeRelated !== false;
 
+    const resourceSetId =
+        typeof raw.resourceSetId === "string" ? raw.resourceSetId : null;
+
     return {
         terms,
         queries: queriesIn,
@@ -182,6 +185,7 @@ export function parseSearchDefinition(
         mapFilter,
         sort,
         includeRelated,
+        resourceSetId,
     };
 }
 
@@ -213,6 +217,7 @@ export function buildAdvancedSearchDefinition(
         mapFilter: null,
         sort,
         includeRelated: false,
+        resourceSetId: null,
     };
 }
 

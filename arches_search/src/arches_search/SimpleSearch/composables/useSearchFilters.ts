@@ -38,27 +38,16 @@ import type {
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     ActiveFilter,
-    DateRangeFilter,
     NodeFilterConfigNode,
     ResourceFieldFilter,
     ResourceType,
     SearchDefinition,
-    SearchRequestTerm,
+    SearchResultsToSave,
     SerializedTerm,
     SortSpec,
     TermKind,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type { FeatureCollection } from "geojson";
-
-interface ExportPayload {
-    terms: SearchRequestTerm[];
-    queries: GroupPayload[];
-    graphSlugs: string[];
-    mapFilter: FeatureCollection | null;
-    dateRange: DateRangeFilter | null;
-    resourceFieldFilters: ResourceFieldFilter[] | null;
-    maxHops: number;
-}
 
 interface SearchFilters {
     activeFilters: ComputedRef<ActiveFilter[]>;
@@ -75,6 +64,7 @@ interface SearchFilters {
     mapFilter: Ref<FeatureCollection | null>;
     nodeFilterConfigNodes: ComputedRef<NodeFilterConfigNode[]>;
     resourceFieldFilters: Ref<Map<string, ResourceFieldFilter>>;
+    resourceSetId: Ref<string | null>;
     queries: ComputedRef<ReadonlyMap<string, GroupPayload>>;
     resultsTileUrl: ComputedRef<string | null>;
     resultsGraphs: Ref<ResourceType[]>;
@@ -93,7 +83,7 @@ interface SearchFilters {
     clearMapFilter(): void;
     clearQuery(filterKey: string): void;
     clearTermFilter(id: string): void;
-    getExportPayload(): ExportPayload;
+    getExportPayload(): Required<SearchResultsToSave>;
     getSearchDefinition(): SearchDefinition;
     search(page?: number): void;
     setAdvancedQuery(payload: GroupPayload | null): void;
@@ -108,6 +98,7 @@ interface SearchFilters {
         filter: ResourceFieldFilter | null,
     ): void;
     clearResourceFieldFilters(): void;
+    clearResourceSetFilter(): void;
     setSort(next: SortSpec[]): void;
     setTermFilter(term: SerializedTerm): void;
     toggleGraph(resourceType: ResourceType): void;
@@ -139,6 +130,7 @@ function createSearchFilters(): SearchFilters {
     const resourceFieldFilters = ref<Map<string, ResourceFieldFilter>>(
         new Map(),
     );
+    const resourceSetId = ref<string | null>(null);
     const activeGraphs = ref<ResourceType[]>([]);
     // Every searchable resource model.
     const availableGraphs = ref<ResourceType[]>([]);
@@ -435,6 +427,7 @@ function createSearchFilters(): SearchFilters {
         storedAttributeFilterValues.value = {};
         mapFilter.value = null;
         resourceFieldFilters.value = new Map();
+        resourceSetId.value = null;
         activeGraphs.value = [];
         savedSearchName.value = null;
         currentPage.value = FIRST_SEARCH_PAGE;
@@ -577,6 +570,7 @@ function createSearchFilters(): SearchFilters {
                     mapFilter: mapFilter.value,
                     resourceFieldFilters: getRequestResourceFieldFilters(),
                     maxHops: requestMaxHops.value,
+                    resourceSetId: resourceSetId.value,
                     sort: sort.value,
                 };
 
@@ -633,6 +627,12 @@ function createSearchFilters(): SearchFilters {
         search();
     }
 
+    function clearResourceSetFilter(): void {
+        resourceSetId.value = null;
+        currentPage.value = FIRST_SEARCH_PAGE;
+        search();
+    }
+
     function getRequestResourceFieldFilters(): ResourceFieldFilter[] | null {
         const filters = [...resourceFieldFilters.value.values()];
         return filters.length > 0 ? filters : null;
@@ -655,6 +655,7 @@ function createSearchFilters(): SearchFilters {
             mapFilter: mapFilter.value,
             sort: sort.value,
             includeRelated: includeRelated.value,
+            resourceSetId: resourceSetId.value,
         };
     }
 
@@ -675,11 +676,12 @@ function createSearchFilters(): SearchFilters {
         activeGraphs.value = findSavedGraphSelection(definition.graphSlugs);
         sort.value = definition.sort;
         includeRelated.value = definition.includeRelated;
+        resourceSetId.value = definition.resourceSetId;
         savedSearchName.value = searchName;
         search();
     }
 
-    function getExportPayload(): ExportPayload {
+    function getExportPayload(): Required<SearchResultsToSave> {
         const requestGraphSlugs = getRequestGraphs().map((graph) => graph.slug);
         return {
             terms: buildRequestTerms(terms.value),
@@ -689,6 +691,7 @@ function createSearchFilters(): SearchFilters {
             dateRange: buildRequestDateRange([...queries.value.values()]),
             resourceFieldFilters: getRequestResourceFieldFilters(),
             maxHops: requestMaxHops.value,
+            resourceSetId: resourceSetId.value,
         };
     }
 
@@ -718,6 +721,7 @@ function createSearchFilters(): SearchFilters {
         nodeFilterConfigNodes,
         queries: queriesView,
         resourceFieldFilters,
+        resourceSetId,
         resultsTileUrl,
         resultsGraphs,
         savedSearchName,
@@ -727,6 +731,7 @@ function createSearchFilters(): SearchFilters {
         setAttributeFilter,
         setResourceFieldFilter,
         clearResourceFieldFilters,
+        clearResourceSetFilter,
         searchResults,
         setGraphsBySlug,
         setIncludeRelated,

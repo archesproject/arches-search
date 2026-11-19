@@ -44,6 +44,7 @@ describe("applyPendingSearch", () => {
                 mapFilter: null,
                 sort: [],
                 includeRelated: true,
+                resourceSetId: null,
             },
             "People",
         );

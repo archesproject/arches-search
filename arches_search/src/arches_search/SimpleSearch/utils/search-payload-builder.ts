@@ -187,6 +187,7 @@ export function buildSearchApiRequestBody({
     dateRange,
     resourceFieldFilters,
     maxHops = TERM_SEARCH_MAX_HOPS,
+    resourceSetId,
     page,
     sort,
 }: {
@@ -199,6 +200,8 @@ export function buildSearchApiRequestBody({
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
     maxHops?: number;
+    // Searches only within this resource set.
+    resourceSetId?: string | null;
     page?: number;
     sort?: SortSpec[];
 }): Record<string, unknown> {
@@ -219,6 +222,9 @@ export function buildSearchApiRequestBody({
         ),
     };
 
+    if (resourceSetId) {
+        requestPayload.resource_set_id = resourceSetId;
+    }
     if (page !== undefined) {
         requestPayload.pagination = { page };
     }

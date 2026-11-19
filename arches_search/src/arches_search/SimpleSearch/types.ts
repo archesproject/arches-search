@@ -19,6 +19,7 @@ export interface SearchDefinition {
     mapFilter: FeatureCollection | null;
     sort: SortSpec[];
     includeRelated: boolean;
+    resourceSetId: string | null;
 }
 
 export const TIME_FILTER_QUERY_KEY = "timeFilter";
@@ -65,6 +66,7 @@ export const ACTIVE_FILTER_KIND_RESOURCE_TYPE = "resource-type";
 export const ACTIVE_FILTER_KIND_TIME = "time";
 export const ACTIVE_FILTER_KIND_MAP = "map";
 export const ACTIVE_FILTER_KIND_ATTRIBUTE = "attribute";
+export const ACTIVE_FILTER_KIND_RESOURCE_SET = "resource-set";
 
 export type ActiveFilterKind =
     | typeof ACTIVE_FILTER_KIND_TERM
@@ -73,7 +75,8 @@ export type ActiveFilterKind =
     | typeof ACTIVE_FILTER_KIND_RESOURCE_TYPE
     | typeof ACTIVE_FILTER_KIND_TIME
     | typeof ACTIVE_FILTER_KIND_MAP
-    | typeof ACTIVE_FILTER_KIND_ATTRIBUTE;
+    | typeof ACTIVE_FILTER_KIND_ATTRIBUTE
+    | typeof ACTIVE_FILTER_KIND_RESOURCE_SET;
 
 export interface ActiveFilter {
     id: string;
@@ -183,6 +186,28 @@ export interface SavedSearch {
         id: number;
         username: string;
     };
+}
+
+export interface ResourceSetLimits {
+    immediate_threshold: number;
+    member_limit: number;
+}
+
+export interface SaveResourceSetResponse {
+    message: string;
+    // Only when the save was queued to run in the background.
+    task_id?: string;
+}
+
+export interface SearchResultsToSave {
+    terms?: SearchRequestTerm[];
+    queries?: GroupPayload[];
+    graphSlugs?: string[];
+    mapFilter?: FeatureCollection | null;
+    dateRange?: DateRangeFilter | null;
+    resourceFieldFilters?: ResourceFieldFilter[] | null;
+    maxHops?: number;
+    resourceSetId?: string | null;
 }
 
 export const EXPORT_FORMAT_BRANCH_EXCEL = "branch-excel";

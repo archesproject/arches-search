@@ -39,6 +39,7 @@ import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSe
 import {
     ACTIVE_FILTER_KIND_ATTRIBUTE,
     ACTIVE_FILTER_KIND_MAP,
+    ACTIVE_FILTER_KIND_RESOURCE_SET,
     ACTIVE_FILTER_KIND_RESOURCE_TYPE,
     ACTIVE_FILTER_KIND_TIME,
     ADVANCED_QUERY_KEY,
@@ -70,6 +71,7 @@ import type {
     ResultsSortDirection,
     ResultsSortField,
     SearchDefinition,
+    SearchResultsToSave,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 // Kept out of the search page's own code, as most visits never open it and it
@@ -96,12 +98,14 @@ const {
     clearAttributeFilter,
     clearMapFilter,
     clearQuery,
+    clearResourceSetFilter,
     getExportPayload,
     getSearchDefinition,
     isSearching,
     mapFilter,
     nodeFilterConfigNodes,
     queries,
+    resourceSetId,
     savedSearchName,
     search,
     searchResults,
@@ -159,6 +163,8 @@ const graphModels = ref<GraphModel[]>([]);
 const searchDefinition = computed<SearchDefinition>(() =>
     getSearchDefinition(),
 );
+
+const resultsToSave = computed<SearchResultsToSave>(() => getExportPayload());
 
 const sortField = computed<ResultsSortField>(() =>
     sortFieldForSpecs(sort.value),
@@ -269,6 +275,23 @@ const mapActiveFilter = computed<ActiveFilter | null>(() => {
     };
 });
 
+// The set is opened from a saved search, whose name labels it.
+const resourceSetActiveFilter = computed<ActiveFilter | null>(() => {
+    if (!resourceSetId.value) {
+        return null;
+    }
+
+    return {
+        id: `resourceSet-${resourceSetId.value}`,
+        text: savedSearchName.value || $gettext("Static set"),
+        clear: clearResourceSetFilter,
+        inverted: false,
+        kind: ACTIVE_FILTER_KIND_RESOURCE_SET,
+        category: $gettext("Static set"),
+        icon: "pi pi-database",
+    };
+});
+
 const attributeActiveFilters = computed<ActiveFilter[]>(() => {
     return nodeFilterConfigNodes.value.flatMap((node) => {
         if (!queries.value.has(node.node_alias)) {
@@ -357,6 +380,7 @@ const advancedQueryActiveFilter = computed<ActiveFilter | null>(() => {
 
 const allActiveFilters = computed<ActiveFilter[]>(() =>
     [
+        resourceSetActiveFilter.value,
         ...activeFilters.value,
         ...resourceTypeActiveFilters.value,
         timeActiveFilter.value,
@@ -615,6 +639,10 @@ async function applySavedSearch(
                         <SavedSearchPanel
                             v-else-if="isSavedSearchesActive"
                             :definition-to-save="searchDefinition"
+                            :results-to-save="resultsToSave"
+                            :result-count="
+                                searchResults.pagination.total_results
+                            "
                             @run-query="onRunSavedQuery"
                             @close="closeSidePanel()"
                         />

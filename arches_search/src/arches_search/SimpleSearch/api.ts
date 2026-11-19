@@ -18,12 +18,21 @@ import type {
     NodeFilterConfigResponse,
     ResourceFieldFilter,
     ResourceFieldMetadata,
+    ResourceSetLimits,
     SavedSearch,
+    SaveResourceSetResponse,
     SearchDefinition,
     SearchRequestTerm,
+    SearchResultsToSave,
     SortSpec,
     TermSuggestion,
 } from "@/arches_search/SimpleSearch/types.ts";
+
+// Throws the error the API sent back, or the status text when it sent none.
+async function throwResponseError(response: Response): Promise<never> {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error ?? response.statusText);
+}
 
 export async function createSearchMVTContext(params: {
     terms?: SearchRequestTerm[];
@@ -33,6 +42,7 @@ export async function createSearchMVTContext(params: {
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
     maxHops?: number;
+    resourceSetId?: string | null;
 }): Promise<{ context_id: string }> {
     const requestPayload = buildSearchApiRequestBody({
         terms: params.terms ?? [],
@@ -42,6 +52,7 @@ export async function createSearchMVTContext(params: {
         dateRange: params.dateRange ?? null,
         resourceFieldFilters: params.resourceFieldFilters ?? null,
         maxHops: params.maxHops,
+        resourceSetId: params.resourceSetId,
     });
 
     const url = generateArchesURL("arches_search:search_mvt_context");
@@ -67,6 +78,7 @@ export async function fetchSearchResults({
     dateRange = null,
     resourceFieldFilters = null,
     maxHops,
+    resourceSetId = null,
     page = 1,
     sort,
 }: {
@@ -77,6 +89,7 @@ export async function fetchSearchResults({
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
     maxHops?: number;
+    resourceSetId?: string | null;
     page?: number;
     sort?: SortSpec[];
 } = {}): Promise<SearchResults> {
@@ -88,6 +101,7 @@ export async function fetchSearchResults({
         dateRange,
         resourceFieldFilters,
         maxHops,
+        resourceSetId,
         page,
         sort,
     });
@@ -290,6 +304,7 @@ export async function startSearchResultsExport({
     mapFilter = null,
     dateRange = null,
     resourceFieldFilters = null,
+    resourceSetId = null,
     exportRequest,
 }: {
     terms?: SearchRequestTerm[];
@@ -298,6 +313,7 @@ export async function startSearchResultsExport({
     mapFilter?: FeatureCollection | null;
     dateRange?: DateRangeFilter | null;
     resourceFieldFilters?: ResourceFieldFilter[] | null;
+    resourceSetId?: string | null;
     exportRequest: ExportRequest;
 }): Promise<void> {
     const requestPayload = buildSearchApiRequestBody({
@@ -307,6 +323,7 @@ export async function startSearchResultsExport({
         mapFilter,
         dateRange,
         resourceFieldFilters,
+        resourceSetId,
     });
     requestPayload.format = exportRequest.format;
     requestPayload.filename = exportRequest.filename;
@@ -325,9 +342,54 @@ export async function startSearchResultsExport({
     );
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(errorBody?.error ?? response.statusText);
+        await throwResponseError(response);
     }
+}
+
+export async function getResourceSetLimits(): Promise<ResourceSetLimits> {
+    const response = await fetch(
+        generateArchesURL("arches_search:search_results_resource_sets"),
+    );
+    if (!response.ok) {
+        throw new Error(response.statusText);
+    }
+    return response.json();
+}
+
+export async function saveResultsAsResourceSet({
+    name,
+    description,
+    ...search
+}: SearchResultsToSave & {
+    name: string;
+    description: string;
+}): Promise<SaveResourceSetResponse> {
+    const requestPayload = {
+        ...buildSearchApiRequestBody({
+            terms: [],
+            graphSlugs: [],
+            mapFilter: null,
+            ...search,
+        }),
+        name,
+        description,
+    };
+
+    const response = await fetch(
+        generateArchesURL("arches_search:search_results_resource_sets"),
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": Cookies.get("csrftoken") || "",
+            },
+            body: JSON.stringify(requestPayload),
+        },
+    );
+    if (!response.ok) {
+        await throwResponseError(response);
+    }
+    return response.json();
 }
 
 export async function fetchResourceFieldMetadata(

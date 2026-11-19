@@ -16,6 +16,8 @@ from django.utils.translation import gettext as _
 from arches.app.models.models import GraphModel, ResourceInstance
 from arches.app.utils import permission_backend
 
+from arches_resource_sets.models import ResourceSet, ResourceSetMember
+
 from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
 )
@@ -278,6 +280,11 @@ class SearchCompiler:
                 resourceinstanceid__in=self.pre_filter.values("resourceinstanceid")
             )
 
+        if self.search_payload.resource_set_id is not None:
+            resources = resources.filter(
+                resourceinstanceid__in=self._resource_set_member_ids
+            )
+
         term_search_matches = self._term_search_matches(graph_id)
         if term_search_matches is not None:
             resources = resources.filter(
@@ -285,6 +292,22 @@ class SearchCompiler:
             )
 
         return resources
+
+    @cached_property
+    def _resource_set_member_ids(self) -> QuerySet:
+        """
+        The members of the resource set the payload names.
+
+        Only the user's own set can be searched. Anyone else's, or one that no
+        longer exists, is refused rather than searched as empty, so the caller
+        learns why nothing came back.
+        """
+        resource_set_id = self.search_payload.resource_set_id
+        if not ResourceSet.objects.filter(pk=resource_set_id, owner=self.user).exists():
+            raise ValidationError(_("Resource set not found."))
+        return ResourceSetMember.objects.filter(resource_set_id=resource_set_id).values(
+            "resource_instance_id"
+        )
 
     def _term_search_matches(self, graph_id: str) -> Optional[QuerySet]:
         """
