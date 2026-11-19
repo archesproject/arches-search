@@ -1,4 +1,3 @@
-import { CONTROLLED_TERM_DATATYPES } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
 import {
     TERM_KIND_CONTROLLED_TERM,
     TERM_KIND_RECORD,
@@ -20,7 +19,7 @@ interface TermSuggestionAdditionalInfo {
 export function isControlledTermSuggestion(
     suggestion: TermSuggestion,
 ): boolean {
-    return CONTROLLED_TERM_DATATYPES.includes(suggestion.datatype);
+    return Boolean(suggestion.controlled_term);
 }
 
 export function getTermKind(suggestion: TermSuggestion): TermKind | undefined {

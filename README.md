@@ -296,6 +296,7 @@ A custom datatype needs four things to work with Advanced Search:
 2.  `AdvancedSearchFacet` rows, added via a migration, pointing at whichever table fits: `TermSearch`, `UUIDSearch`, `DateSearch`, `NumericSearch`, `BooleanSearch`, `GeometrySearch`, `FileListSearch`.
 3.  An indexer, so tile values get written into that table.
 4.  Optionally, an operand normalizer, so values submitted from the UI are shaped correctly before comparison.
+5.  Optionally, vocabulary hooks on the indexer, so its values join the [vocabulary hierarchy](#vocabulary-hierarchy).
 
 A custom datatype gets sorting for free once it has an indexer: an ordering reads whichever table that indexer writes to. See [Sorting a node value](#sorting-a-node-value).
 
@@ -330,6 +331,16 @@ class MeasurementIndexing(BaseIndexing):
             )
         ]
 ```
+
+An indexer whose values are vocabulary item ids written to `UUIDSearch` can
+override these `BaseIndexing` hooks; `reference` and `concept` do:
+
+| Hook                                  | Returns                                                                       |
+| ------------------------------------- | ----------------------------------------------------------------------------- |
+| `hierarchy_edges_sql()`               | SQL selecting `parent` and `child` item ids; not `None` makes it a vocabulary |
+| `item_labels(item_ids, labels)`       | `(item_id, label)` pairs for those items carrying those labels                |
+| `searchable_items(query, limit)`      | `(item_id, label)` pairs to suggest even when no record uses them             |
+| `item_paths(item_ids, language_code)` | `{item_id: [label, …]}` breadcrumbs shown with suggestions                    |
 
 Declare `search_indexers` on your app's `AppConfig`:
 
@@ -690,9 +701,10 @@ contain its label:
 ```
 
 A controlled term can also name its vocabulary item by `id` (a list item for
-`reference`, a concept for `concept`). It then matches records holding that item
-or anything under it, rather than its label text. A concept term matches
-`concept` and `concept-list` values alike. Any object term can set
+`reference`, a concept for `concept` or `concept-list`); `datatype` must then be
+one with a [vocabulary hierarchy](#vocabulary-hierarchy). It matches records
+holding that item or anything under it, in any vocabulary node, rather than its
+label text. Any object term can set
 `"inverted": true` to exclude whatever it would match, relationship hops
 included:
 
@@ -753,10 +765,11 @@ search cannot be OR-ed against a clause or nested inside a group.
 ## Vocabulary hierarchy
 
 Reference and concept values are indexed by vocabulary item id, so their
-operators can follow the hierarchy (list item parents for `reference`; a
-scheme's `narrower` and `hasTopConcept` relations for `concept` and
-`concept-list`). It is read live from the core tables, so editing a list or
-scheme needs no reindex.
+operators can follow the hierarchy each indexer's `hierarchy_edges_sql()`
+declares (list item parents for `reference`; a scheme's `narrower` and
+`hasTopConcept` relations for `concept` and `concept-list`). It is read live
+from the core tables, so editing a list or scheme needs no reindex. A custom
+datatype joins by overriding the [indexer hooks](#indexers).
 
 | Operator             | Matches                                           |
 | -------------------- | ------------------------------------------------- |
@@ -1391,7 +1404,9 @@ or `advancedQuery` existed still load.
 
 `GET /api/term-suggestions?q=<text>` — the typeahead behind the search bar,
 returning the indexed terms a query prefix matches.
-Queries shorter than three characters return nothing. Reference and concept
-values come back once per vocabulary item, with its `item_id` and, for list
+Queries shorter than three characters return nothing. Values of datatypes with
+a [vocabulary hierarchy](#vocabulary-hierarchy) come back flagged
+`controlled_term`, and those naming an item come back once per vocabulary item,
+with its `item_id` and, for list
 items, the path from the list down to the item. Items of lists marked
 searchable are suggested even when no record uses them yet.

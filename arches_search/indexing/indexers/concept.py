@@ -1,4 +1,5 @@
 from arches.app.datatypes.datatypes import DataTypeFactory, BaseDataType
+from arches.app.models.models import Relation, Value
 from arches_search.models.models import DateRangeSearch, TermSearch, UUIDSearch
 
 from arches_search.indexing.base import BaseIndexing
@@ -12,6 +13,22 @@ class ConceptIndexing(BaseIndexing):
     def sort_row_filters(self) -> dict:
         """Sort by the preferred label, not by an alternate one."""
         return {"valuetype": "prefLabel"}
+
+    def hierarchy_edges_sql(self):
+        return (
+            "SELECT conceptidfrom AS parent, conceptidto AS child "
+            f"FROM {Relation._meta.db_table} "
+            "WHERE relationtype IN ('narrower', 'hasTopConcept')"
+        )
+
+    def item_labels(self, item_ids, labels):
+        return list(
+            Value.objects.filter(
+                concept_id__in=item_ids,
+                value__in=labels,
+                valuetype__category="label",
+            ).values_list("concept_id", "value")
+        )
 
     def index(self, tile, node):
         nodeid = str(node.nodeid)

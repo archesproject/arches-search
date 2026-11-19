@@ -12,7 +12,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
-from arches_search.utils.term_search.matching import ROW_DATATYPES_BY_TERM_DATATYPE
+from arches_search.indexing.indexing_factory import IndexingFactory
 
 
 def _positive_integer(value) -> bool:
@@ -52,7 +52,7 @@ def _is_valid_term(term) -> bool:
         return False
     if "id" not in term:
         return True
-    if term.get("datatype") not in ROW_DATATYPES_BY_TERM_DATATYPE:
+    if term.get("datatype") not in IndexingFactory().vocabulary_datatypes():
         return False
     try:
         uuid.UUID(str(term["id"]))

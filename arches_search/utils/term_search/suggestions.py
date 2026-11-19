@@ -1,13 +1,11 @@
-from django.db import connection
 from django.db.models import Q
 
-from arches.app.models.models import GraphModel, Value
+from arches.app.models.models import GraphModel
 from arches.app.utils import permission_backend
-from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
+from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.models.models import TermSearch, UUIDSearch
 from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.term_search.matching import build_term_match_filter
-from arches_search.utils.vocabulary_hierarchy import VOCABULARY_DATATYPES
 
 # Matches are bucketed (vocabulary values vs everything else) so a flood of
 # incidental term matches can't crowd the one matching vocabulary row out of
@@ -17,17 +15,6 @@ INITIAL_RAW_MATCH_LIMIT = 1000
 MAX_RAW_MATCH_LIMIT = 200000
 RAW_MATCH_LIMIT_GROWTH_FACTOR = 10
 MIN_QUERY_LENGTH = 3
-
-ANCESTRY_SQL = f"""
-WITH RECURSIVE ancestry(item_id, ancestor_id, depth) AS (
-    SELECT id, id, 0 FROM {ListItem._meta.db_table} WHERE id = ANY(%s::uuid[])
-    UNION ALL
-    SELECT ancestry.item_id, item.parent_id, ancestry.depth + 1
-    FROM ancestry JOIN {ListItem._meta.db_table} item ON item.id = ancestry.ancestor_id
-    WHERE item.parent_id IS NOT NULL
-)
-SELECT item_id, ancestor_id FROM ancestry ORDER BY item_id, depth DESC
-"""
 
 
 def _find_distinct_matches(term_filter, user, readable_nodes):
@@ -77,71 +64,44 @@ def _find_distinct_matches(term_filter, user, readable_nodes):
         )
 
 
-def _list_item_paths(list_item_ids, language_code):
-    with connection.cursor() as cursor:
-        cursor.execute(ANCESTRY_SQL, [[str(item_id) for item_id in list_item_ids]])
-        ancestry = cursor.fetchall()
-
-    labels_by_item_id = {}
-    for label in ListItemValue.objects.labels().filter(
-        list_item_id__in={ancestor_id for _item_id, ancestor_id in ancestry}
-    ):
-        labels_by_item_id.setdefault(label.list_item_id, []).append(label)
-
-    paths = {
-        list_item["id"]: [list_item["list__name"]]
-        for list_item in ListItem.objects.filter(id__in=list_item_ids).values(
-            "id", "list__name"
-        )
-    }
-    for item_id, ancestor_id in ancestry:
-        paths[item_id].append(
-            ListItem.find_best_label_from_set(
-                labels_by_item_id.get(ancestor_id, []), language_code
-            )
-            or str(ancestor_id)
-        )
-    return paths
-
-
-def _vocabulary_items(query, vocabulary_rows, readable_nodes):
+def _vocabulary_items(query, vocabulary_rows, vocabulary_datatypes, readable_nodes):
     labels = {vocabulary_row["value"] for vocabulary_row in vocabulary_rows}
     labelled_tile_ids = readable_nodes.exclude_unreadable_rows(
-        TermSearch.objects.filter(value__in=labels, datatype__in=VOCABULARY_DATATYPES)
+        TermSearch.objects.filter(value__in=labels, datatype__in=vocabulary_datatypes)
     ).values("tileid")
-    used_item_ids = UUIDSearch.objects.filter(
-        tileid__in=labelled_tile_ids, datatype__in=VOCABULARY_DATATYPES
-    ).values("value")
-    used_items = [
-        (label.list_item_id, "reference", label.value)
-        for label in ListItemValue.objects.labels().filter(
-            list_item_id__in=used_item_ids, value__in=labels
-        )
-    ] + [
-        (concept_value["concept_id"], "concept", concept_value["value"])
-        for concept_value in Value.objects.filter(
-            concept_id__in=used_item_ids,
-            value__in=labels,
-            valuetype__category="label",
-        ).values("concept_id", "value")
-    ]
 
-    searchable_list_ids = list(
-        List.objects.filter(searchable=True).values_list("id", flat=True)
-    )
+    used_items = []
     searchable_items = []
-    if searchable_list_ids:
-        searchable_items = [
-            (label.list_item_id, "reference", label.value)
-            for label in ListItemValue.objects.labels().filter(
-                list_item__list_id__in=searchable_list_ids, value__icontains=query
-            )[:MAX_RESULTS]
+    for datatype in vocabulary_datatypes:
+        indexer = IndexingFactory().get_indexing_class(datatype)
+        used_item_ids = UUIDSearch.objects.filter(
+            tileid__in=labelled_tile_ids, datatype=datatype
+        ).values("value")
+        used_items += [
+            (item_id, datatype, label)
+            for item_id, label in indexer.item_labels(used_item_ids, labels)
+        ]
+        searchable_items += [
+            (item_id, datatype, label)
+            for item_id, label in indexer.searchable_items(query, MAX_RESULTS)
         ]
 
     items_by_id = {}
     for item_id, datatype, label in used_items + searchable_items:
         items_by_id.setdefault(item_id, (item_id, datatype, label))
     return list(items_by_id.values())[:MAX_RESULTS]
+
+
+def _item_paths(vocabulary_items, language_code):
+    item_ids_by_datatype = {}
+    for item_id, datatype, _label in vocabulary_items:
+        item_ids_by_datatype.setdefault(datatype, []).append(item_id)
+
+    paths = {}
+    for datatype, item_ids in item_ids_by_datatype.items():
+        indexer = IndexingFactory().get_indexing_class(datatype)
+        paths.update(indexer.item_paths(item_ids, language_code))
+    return paths
 
 
 def build_term_suggestions(query, request):
@@ -151,30 +111,27 @@ def build_term_suggestions(query, request):
 
     term_filter = build_term_match_filter(query)
     readable_nodes = ReadableNodes(request.user)
+    vocabulary_datatypes = IndexingFactory().vocabulary_datatypes()
     vocabulary_rows = _find_distinct_matches(
-        term_filter & Q(datatype__in=VOCABULARY_DATATYPES),
+        term_filter & Q(datatype__in=vocabulary_datatypes),
         request.user,
         readable_nodes,
     )
     record_rows = _find_distinct_matches(
-        term_filter & ~Q(datatype__in=VOCABULARY_DATATYPES),
+        term_filter & ~Q(datatype__in=vocabulary_datatypes),
         request.user,
         readable_nodes,
     )
 
-    vocabulary_items = _vocabulary_items(query, vocabulary_rows, readable_nodes)
-    paths = _list_item_paths(
-        [
-            item_id
-            for item_id, datatype, _label in vocabulary_items
-            if datatype == "reference"
-        ],
-        request.LANGUAGE_CODE,
+    vocabulary_items = _vocabulary_items(
+        query, vocabulary_rows, vocabulary_datatypes, readable_nodes
     )
+    paths = _item_paths(vocabulary_items, request.LANGUAGE_CODE)
     suggestions = [
         {
             "id": str(item_id),
             "item_id": str(item_id),
+            "controlled_term": True,
             "datatype": datatype,
             "text": label,
             "addtional_info": {"path": paths[item_id]} if item_id in paths else {},
@@ -210,6 +167,7 @@ def build_term_suggestions(query, request):
         suggestions.append(
             {
                 "id": record_row["id"],
+                "controlled_term": record_row["datatype"] in vocabulary_datatypes,
                 "datatype": record_row["datatype"],
                 "text": record_row["value"],
                 "addtional_info": {},

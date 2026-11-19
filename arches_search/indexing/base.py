@@ -18,3 +18,15 @@ class BaseIndexing:
         nothing to narrow, and returns nothing.
         """
         return {}
+
+    def hierarchy_edges_sql(self) -> str | None:
+        return None
+
+    def item_labels(self, item_ids, labels) -> list:
+        return []
+
+    def searchable_items(self, query, limit) -> list:
+        return []
+
+    def item_paths(self, item_ids, language_code) -> dict:
+        return {}

@@ -2,8 +2,7 @@ from django.db import connection
 from django.db.models import UUIDField
 from django.db.models.expressions import RawSQL
 
-from arches.app.models.models import Relation
-from arches.extensions.controlled_lists.models import ListItem
+from arches_search.indexing.indexing_factory import IndexingFactory
 
 NARROWER_OR_SELF = "NARROWER_OR_SELF"
 NARROWER = "NARROWER"
@@ -11,19 +10,6 @@ BROADER = "BROADER"
 HIERARCHY_RELATIONS = {NARROWER_OR_SELF, NARROWER, BROADER}
 
 MAX_INLINE_HIERARCHY_IDS = 10_000
-
-EDGES_BY_DATATYPE = {
-    "reference": (
-        f"SELECT parent_id AS parent, id AS child FROM {ListItem._meta.db_table}"
-    ),
-    "concept": (
-        "SELECT conceptidfrom AS parent, conceptidto AS child "
-        f"FROM {Relation._meta.db_table} "
-        "WHERE relationtype IN ('narrower', 'hasTopConcept')"
-    ),
-}
-EDGES_BY_DATATYPE["concept-list"] = EDGES_BY_DATATYPE["concept"]
-VOCABULARY_DATATYPES = set(EDGES_BY_DATATYPE)
 
 HIERARCHY_TEMPLATES = {
     NARROWER_OR_SELF: (
@@ -44,7 +30,12 @@ HIERARCHY_TEMPLATES = {
 
 
 def _hierarchy_sql(datatype_name, relation):
-    body = HIERARCHY_TEMPLATES[relation].format(edges=EDGES_BY_DATATYPE[datatype_name])
+    edges_sql = (
+        IndexingFactory().get_indexing_class(datatype_name).hierarchy_edges_sql()
+    )
+    if edges_sql is None:
+        raise ValueError(f"Datatype '{datatype_name}' has no vocabulary hierarchy.")
+    body = HIERARCHY_TEMPLATES[relation].format(edges=edges_sql)
     return f"WITH RECURSIVE related(id) AS ({body}) SELECT id FROM related"
 
 

@@ -8,11 +8,6 @@ from arches_search.utils.term_search.relationship_expansion import (
 )
 from arches_search.utils.vocabulary_hierarchy import NARROWER_OR_SELF, expand_hierarchy
 
-ROW_DATATYPES_BY_TERM_DATATYPE = {
-    "reference": ["reference"],
-    "concept": ["concept", "concept-list"],
-}
-
 
 def _contains_ignoring_case(term_text):
     """
@@ -46,16 +41,14 @@ def _direct_match_rows(term):
     if isinstance(term, str):
         return TermSearch.objects.filter(build_term_match_filter(term))
     datatype = term.get("datatype")
-    row_datatypes = ROW_DATATYPES_BY_TERM_DATATYPE.get(datatype, [datatype])
     if term.get("id"):
         return UUIDSearch.objects.filter(
-            datatype__in=row_datatypes,
-            value__in=expand_hierarchy(datatype, NARROWER_OR_SELF, [term["id"]]),
+            value__in=expand_hierarchy(datatype, NARROWER_OR_SELF, [term["id"]])
         )
     rows = TermSearch.objects.filter(build_term_match_filter(term["text"]))
     if datatype is None:
         return rows
-    return rows.filter(datatype__in=row_datatypes)
+    return rows.filter(datatype=datatype)
 
 
 def get_related_resources_by_terms(terms, target_graphid, readable_nodes, max_hops=2):

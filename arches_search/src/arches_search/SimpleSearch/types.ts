@@ -57,6 +57,7 @@ export interface TermSuggestion {
     datatype: string;
     text: string;
     item_id?: string;
+    controlled_term?: boolean;
     addtional_info?: Record<string, unknown>;
     resourceinstanceid?: string;
     graph_icon?: string;

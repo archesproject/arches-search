@@ -5,7 +5,6 @@ import {
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import { buildTimeFilterClause } from "@/arches_search/SimpleSearch/components/TimeFilter/time-filter-clauses.ts";
-import { SUGGESTION_DATATYPE_CONCEPT } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
 import {
     buildSearchApiRequestBody,
     TERM_SEARCH_MAX_HOPS,
@@ -77,7 +76,7 @@ describe("buildSearchApiRequestBody", () => {
                     text: "church",
                     inverted: false,
                     itemId: CHURCH_ITEM_ID,
-                    datatype: SUGGESTION_DATATYPE_CONCEPT,
+                    datatype: "concept",
                 },
                 { type: "string", text: "ruin", inverted: true },
             ],
@@ -89,7 +88,7 @@ describe("buildSearchApiRequestBody", () => {
             terms: [
                 {
                     text: "church",
-                    datatype: SUGGESTION_DATATYPE_CONCEPT,
+                    datatype: "concept",
                     id: CHURCH_ITEM_ID,
                 },
                 { text: "ruin", inverted: true },
