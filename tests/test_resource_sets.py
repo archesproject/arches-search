@@ -4,7 +4,7 @@ from unittest import mock
 
 from django.contrib.auth.models import Group, User
 from django.db.models import QuerySet
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from arches.app.models.models import GraphModel, ResourceInstance
@@ -13,6 +13,7 @@ from arches.app.utils.permission_backend import assign_perm
 from arches_resource_sets.models import ResourceSet, ResourceSetMember
 
 from arches_search.models.models import SavedSearch
+from arches_search.tasks import create_resource_set_from_search
 
 # python manage.py test tests.test_resource_sets --settings="tests.test_settings"
 
@@ -137,3 +138,32 @@ class SearchResultsResourceSetAPITest(TestCase):
         response = self.search_within_set(others_set)
 
         self.assertEqual(response.status_code, 400)
+
+    def test_refuses_to_save_when_signed_out(self):
+        self.client.logout()
+
+        response, _ = self.save_results()
+
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(ResourceSet.objects.exists())
+
+    @override_settings(RESOURCE_SET_IMMEDIATE_THRESHOLD=0)
+    def test_background_task_saves_the_set(self):
+        with (
+            mock.patch("arches_search.tasks.create_user_task_record"),
+            mock.patch("arches_search.tasks.notify_completion") as notify,
+        ):
+            create_resource_set_from_search.apply(
+                args=(self.member.pk, "Big set", "", {"graph_slugs": [self.graph.slug]})
+            )
+
+        resource_set = ResourceSet.objects.get(owner=self.member, name="Big set")
+        self.assertEqual(
+            list(
+                ResourceSetMember.objects.filter(resource_set=resource_set).values_list(
+                    "resource_instance_id", flat=True
+                )
+            ),
+            [self.granted.pk],
+        )
+        notify.assert_called_once()
