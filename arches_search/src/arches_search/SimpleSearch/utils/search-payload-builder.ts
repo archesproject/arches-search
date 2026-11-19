@@ -22,8 +22,15 @@ import type {
 // The server lowers this to its own TERM_SEARCH_MAX_HOPS setting.
 export const TERM_SEARCH_MAX_HOPS = 2;
 
-// A string matches any datatype; an object only matches its own.
-type TermSearchTerm = string | { text: string; datatype: string };
+// A string matches any datatype; an object may name one datatype.
+interface TermSearchObject {
+    text: string;
+    datatype?: string;
+    id?: string;
+    inverted?: boolean;
+}
+
+type TermSearchTerm = string | TermSearchObject;
 
 interface TermSearch {
     terms: TermSearchTerm[];
@@ -51,9 +58,22 @@ interface SearchClause {
 }
 
 function buildTermSearchTerm(term: SearchRequestTerm): TermSearchTerm {
-    // A controlled term names a reference value, so it only matches those.
+    // A controlled term names a vocabulary value, so it only matches those.
     if (term.type === TERM_KIND_CONTROLLED_TERM) {
-        return { text: term.text, datatype: SUGGESTION_DATATYPE_REFERENCE };
+        const controlledTerm: TermSearchObject = {
+            text: term.text,
+            datatype: term.datatype ?? SUGGESTION_DATATYPE_REFERENCE,
+        };
+        if (term.itemId) {
+            controlledTerm.id = term.itemId;
+        }
+        if (term.inverted) {
+            controlledTerm.inverted = true;
+        }
+        return controlledTerm;
+    }
+    if (term.inverted) {
+        return { text: term.text, inverted: true };
     }
     return term.text;
 }

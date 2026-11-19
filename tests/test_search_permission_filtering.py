@@ -19,7 +19,7 @@ from arches_search.utils.advanced_search.metadata.node_alias_metadata import (
 from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.search import SearchCompiler, SearchPayload
 from arches_search.utils.search.additional_data import node_values
-from arches_search.utils.term_search.matching import get_related_resources_by_text
+from arches_search.utils.term_search.matching import get_related_resources_by_terms
 from tests.integration.utils.advanced_search.test_advanced_search import (
     AdvancedSearchSetupMixin,
     PERSON_A_ID,
@@ -543,7 +543,7 @@ class NodePermissionFilteringTest(AdvancedSearchSetupMixin, TestCase):
     def test_term_search_skips_values_of_unreadable_nodes(self):
         def matches_as(user, text):
             return set(
-                get_related_resources_by_text(
+                get_related_resources_by_terms(
                     [text], self.person_graph.graphid, ReadableNodes(user), max_hops=0
                 ).values_list("resourceinstanceid", flat=True)
             )

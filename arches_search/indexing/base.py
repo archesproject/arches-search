@@ -1,3 +1,5 @@
+from django.db.models import QuerySet
+
 from arches.app.datatypes.datatypes import BaseDataType
 
 
@@ -17,4 +19,16 @@ class BaseIndexing:
         {"valuetype": "prefLabel"}. An indexer writing one row per value has
         nothing to narrow, and returns nothing.
         """
+        return {}
+
+    def hierarchy_edges(self) -> QuerySet | None:
+        return None
+
+    def item_labels(self, item_ids, labels) -> list:
+        return []
+
+    def searchable_items(self, query, limit) -> list:
+        return []
+
+    def item_paths(self, item_ids, language_code) -> dict:
         return {}

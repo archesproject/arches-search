@@ -13,7 +13,10 @@ import { useSearchFilters } from "@/arches_search/SimpleSearch/composables/useSe
 import { useTermSuggestions } from "@/arches_search/SimpleSearch/composables/useTermSuggestions.ts";
 import { getTermKind } from "@/arches_search/SimpleSearch/components/TermFilter/suggestion-utils.ts";
 
-import { TERM_KIND_RECORD } from "@/arches_search/SimpleSearch/types.ts";
+import {
+    TERM_KIND_CONTROLLED_TERM,
+    TERM_KIND_RECORD,
+} from "@/arches_search/SimpleSearch/types.ts";
 import type {
     SerializedTerm,
     TermSuggestion,
@@ -51,7 +54,7 @@ function termKey(termValue: string): string {
 }
 
 function addTerm(suggestion: TermSuggestion): void {
-    const id = termKey(suggestion.text);
+    const id = termKey(suggestion.item_id ?? suggestion.text);
     const isAlreadySelected = searchFilters.activeFilters.value.some(
         (activeFilter) => activeFilter.id === id,
     );
@@ -67,6 +70,12 @@ function addTerm(suggestion: TermSuggestion): void {
     const termKind = getTermKind(suggestion);
     if (termKind) {
         term.termKind = termKind;
+    }
+    if (termKind === TERM_KIND_CONTROLLED_TERM) {
+        term.datatype = suggestion.datatype;
+    }
+    if (suggestion.item_id) {
+        term.itemId = suggestion.item_id;
     }
     if (termKind === TERM_KIND_RECORD && suggestion.graph_icon) {
         term.icon = suggestion.graph_icon;

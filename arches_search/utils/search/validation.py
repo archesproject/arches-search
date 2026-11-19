@@ -6,9 +6,13 @@ registries are available; what is checked here is the shape of the keys around
 them.
 """
 
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
+
+from arches_search.indexing.indexing_factory import IndexingFactory
 
 
 def _positive_integer(value) -> bool:
@@ -36,17 +40,29 @@ def validate_paging(page, page_size) -> None:
 
 
 def _is_valid_term(term) -> bool:
-    # A string matches any datatype; an object restricts its text to one
-    # TermSearch datatype, which is how a controlled term stays a reference.
+    # A string matches any datatype; an object may restrict its text to one
+    # datatype, name a vocabulary item by id, or be inverted.
     if isinstance(term, str):
         return bool(term)
-    return (
-        isinstance(term, dict)
-        and isinstance(term.get("text"), str)
-        and bool(term["text"])
-        and isinstance(term.get("datatype"), str)
-        and bool(term["datatype"])
-    )
+    if not isinstance(term, dict) or not _non_empty_string(term.get("text")):
+        return False
+    if "datatype" in term and not _non_empty_string(term["datatype"]):
+        return False
+    if "inverted" in term and not isinstance(term["inverted"], bool):
+        return False
+    if "id" not in term:
+        return True
+    if term.get("datatype") not in IndexingFactory().vocabulary_datatypes():
+        return False
+    try:
+        uuid.UUID(str(term["id"]))
+    except ValueError:
+        return False
+    return True
+
+
+def _non_empty_string(value) -> bool:
+    return isinstance(value, str) and bool(value)
 
 
 def validate_term_search(term_search):
@@ -67,7 +83,8 @@ def validate_term_search(term_search):
         raise ValidationError(
             _(
                 "term_search terms must be a list of non-empty strings, or of "
-                "objects with a non-empty text and datatype."
+                "objects with a non-empty text, an optional datatype, an optional "
+                "vocabulary item id and an optional inverted flag."
             )
         )
 

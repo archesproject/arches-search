@@ -44,7 +44,7 @@ class ExtensionDiscoverySelfScanTests(TestCase):
             lambda normalizer: normalizer.datatype.datatype_name,
         )
 
-        self.assertEqual(len(registry), 8)
+        self.assertEqual(len(registry), 10)
         self.assertIn("reference", registry)
         self.assertIn("url", registry)
 
@@ -58,7 +58,7 @@ class ExtensionDiscoverySelfScanTests(TestCase):
             lambda normalizer: normalizer.datatype.datatype_name,
         )
 
-        self.assertEqual(len(registry), 8)
+        self.assertEqual(len(registry), 10)
 
 
 class ExtensionDiscoveryCrossAppTests(TestCase):

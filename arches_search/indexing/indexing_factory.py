@@ -18,3 +18,10 @@ class IndexingFactory:
 
     def get_indexing_class(self, datatype: str) -> BaseIndexing:
         return self.registry.get(datatype, BaseIndexing())
+
+    def vocabulary_datatypes(self) -> list[str]:
+        return [
+            datatype_name
+            for datatype_name, indexer in self.registry.items()
+            if indexer.hierarchy_edges() is not None
+        ]

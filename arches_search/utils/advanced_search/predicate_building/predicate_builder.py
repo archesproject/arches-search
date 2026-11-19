@@ -15,6 +15,10 @@ from arches_search.utils.advanced_search.constants import (
 from arches_search.utils.advanced_search.specs import (
     AggregatePredicateSpec,
 )
+from arches_search.utils.vocabulary_hierarchy import (
+    HIERARCHY_RELATIONS,
+    expand_hierarchy,
+)
 
 
 class PredicateBuilder:
@@ -69,8 +73,20 @@ class PredicateBuilder:
                 operands=operands,
             )
 
+        relation, _separator, lookup = orm_template.partition(":")
+        if relation in HIERARCHY_RELATIONS:
+            seed_ids = operands[0]
+            if isinstance(seed_ids, list):
+                related_ids = expand_hierarchy(
+                    facet.datatype_id, relation, _flatten_alternatives(seed_ids)
+                )
+                return Q(**{lookup: related_ids})
+            return Q(**{lookup: seed_ids})
+
         if facet.arity == 0:
             value_for_lookup = True
+        elif facet.arity == 1 and isinstance(operands[0], list):
+            value_for_lookup = _flatten_alternatives(operands[0])
         elif facet.arity == 1:
             value_for_lookup = operands[0]
         else:
@@ -212,3 +228,13 @@ class PredicateBuilder:
             )
 
         return normalized_values
+
+
+def _flatten_alternatives(values: List[Any]) -> List[Any]:
+    flattened = []
+    for value in values:
+        if isinstance(value, tuple):
+            flattened.extend(value)
+        else:
+            flattened.append(value)
+    return flattened

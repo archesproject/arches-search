@@ -296,6 +296,7 @@ A custom datatype needs four things to work with Advanced Search:
 2.  `AdvancedSearchFacet` rows, added via a migration, pointing at whichever table fits: `TermSearch`, `UUIDSearch`, `DateSearch`, `NumericSearch`, `BooleanSearch`, `GeometrySearch`, `FileListSearch`.
 3.  An indexer, so tile values get written into that table.
 4.  Optionally, an operand normalizer, so values submitted from the UI are shaped correctly before comparison.
+5.  Optionally, vocabulary hooks on the indexer, so its values join the [vocabulary hierarchy](#vocabulary-hierarchy).
 
 A custom datatype gets sorting for free once it has an indexer: an ordering reads whichever table that indexer writes to. See [Sorting a node value](#sorting-a-node-value).
 
@@ -330,6 +331,16 @@ class MeasurementIndexing(BaseIndexing):
             )
         ]
 ```
+
+An indexer whose values are vocabulary item ids written to `UUIDSearch` can
+override these `BaseIndexing` hooks; `reference` and `concept` do:
+
+| Hook                                  | Returns                                                                                         |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `hierarchy_edges()`                   | a `values_list` queryset of (broader, narrower) item id pairs; not `None` makes it a vocabulary |
+| `item_labels(item_ids, labels)`       | `(item_id, label)` pairs for those items carrying those labels                                  |
+| `searchable_items(query, limit)`      | `(item_id, label)` pairs to suggest even when no record uses them                               |
+| `item_paths(item_ids, language_code)` | `{item_id: [label, …]}` breadcrumbs shown with suggestions                                      |
 
 Declare `search_indexers` on your app's `AppConfig`:
 
@@ -677,13 +688,32 @@ requester cannot read are skipped. All terms must match; each is expanded
 independently and the results intersected, so a resource cannot qualify by
 reaching two different terms down two unrelated paths.
 
-A term can instead be an object naming the one indexed datatype it may match.
-That is how a controlled term picked from the term suggestions matches only
-reference values, rather than any text that happens to contain its label:
+A term can instead be an object, which may name the one indexed datatype it
+matches. That is how a controlled term picked from the term suggestions matches
+only `reference` (or `concept`) values, rather than any text that happens to
+contain its label:
 
 ```json
 "term_search": {
     "terms": ["amber", { "text": "Adobe", "datatype": "reference" }],
+    "max_hops": 2
+}
+```
+
+A controlled term can also name its vocabulary item by `id` (a list item for
+`reference`, a concept for `concept` or `concept-list`); `datatype` must then be
+one with a [vocabulary hierarchy](#vocabulary-hierarchy). It matches records
+holding that item or anything under it, in any vocabulary node, rather than its
+label text. Any object term can set
+`"inverted": true` to exclude whatever it would match, relationship hops
+included:
+
+```json
+"term_search": {
+    "terms": [
+        { "text": "Religious institution", "datatype": "reference", "id": "6f1c…" },
+        { "text": "ruin", "inverted": true }
+    ],
     "max_hops": 2
 }
 ```
@@ -731,6 +761,35 @@ behaves the same as it did as a map filter.
 **Composition.** `term_search` narrows each selected graph first, then that
 graph's payload narrows what is left. They always `AND`, in that order — a term
 search cannot be OR-ed against a clause or nested inside a group.
+
+## Vocabulary hierarchy
+
+Reference and concept values are indexed by vocabulary item id, so their
+operators can follow the hierarchy each indexer's `hierarchy_edges()`
+declares (list item parents for `reference`; a scheme's `narrower` and
+`hasTopConcept` relations for `concept` and `concept-list`). It is read live
+from the core tables, so editing a list or scheme needs no reindex. A custom
+datatype joins by overriding the [indexer hooks](#indexers).
+
+| Operator             | Matches                                           |
+| -------------------- | ------------------------------------------------- |
+| `REFERENCES_ANY`     | the chosen items or anything under them           |
+| `REFERENCES_EXACTLY` | the chosen items only                             |
+| `DESCENDANT_OF`      | anything strictly under the chosen items          |
+| `ANCESTOR_OF`        | anything strictly above the chosen items          |
+| `REFERENCES_NONE_OF` | a value outside the chosen items and their branch |
+| `REFERENCES_ALL`     | every chosen item, exactly                        |
+| `REFERENCES_ONLY`    | nothing but the chosen items, exactly             |
+
+Like every negated operator, `REFERENCES_NONE_OF` checks each value: under the
+default `ANY` quantifier, a record holding one of the chosen items still matches
+if it also holds a value outside them. To find records holding none of them,
+use `REFERENCES_ANY` with the `NONE` quantifier.
+
+A facet opts into the hierarchy with a `NARROWER_OR_SELF:`, `NARROWER:` or
+`BROADER:` prefix on its `orm_template`. A `PATH` operand compares exactly.
+A reference operand given as bare labels (searches saved before items were
+indexed by id) is resolved to the items carrying each label.
 
 ## Searching on Resource Fields
 
@@ -1345,3 +1404,9 @@ or `advancedQuery` existed still load.
 
 `GET /api/term-suggestions?q=<text>` — the typeahead behind the search bar,
 returning the indexed terms a query prefix matches.
+Queries shorter than three characters return nothing. Values of datatypes with
+a [vocabulary hierarchy](#vocabulary-hierarchy) come back flagged
+`controlled_term`, and those naming an item come back once per vocabulary item,
+with its `item_id` and, for list
+items, the path from the list down to the item. Items of lists marked
+searchable are suggested even when no record uses them yet.
