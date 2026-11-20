@@ -1,21 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
 import InputText from "openvue/inputtext";
 import RadioButton from "openvue/radiobutton";
 
+import { fetchExportFormats } from "@/arches_search/SimpleSearch/api.ts";
 import {
-    EXPORT_CONCEPTS_AS_LABELS,
-    EXPORT_CONCEPTS_AS_UUIDS,
-    EXPORT_FORMAT_BRANCH_EXCEL,
-    EXPORT_FORMAT_TILE_EXCEL,
     EXPORT_STATE_IDLE,
     EXPORT_STATE_PENDING,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type {
-    ExportConceptsAs,
     ExportFormat,
     ExportRequest,
     ExportState,
@@ -29,7 +25,7 @@ const {
     exportState = EXPORT_STATE_IDLE,
     resultCount,
 } = defineProps<{
-    // Both Bulk Data Manager exporters operate on a single resource model.
+    // Bulk Data Manager exporters operate on a single resource model.
     hasSingleGraph?: boolean;
     exportState?: ExportState;
     resultCount: number;
@@ -42,20 +38,15 @@ const emit = defineEmits<{
 
 const { $gettext } = useGettext();
 
-const selectedFormat = ref<ExportFormat>(EXPORT_FORMAT_BRANCH_EXCEL);
-const exportConceptsAs = ref<ExportConceptsAs>(EXPORT_CONCEPTS_AS_LABELS);
+const formats = ref<ExportFormat[]>([]);
+const isLoadingFormats = ref(true);
+const formatsLoadFailed = ref(false);
+const selectedFormatSlug = ref<string | null>(null);
 const filename = ref("search_export");
 
-const formatOptions = computed(() => [
-    {
-        value: EXPORT_FORMAT_BRANCH_EXCEL,
-        label: $gettext("Branch Excel"),
-    },
-    {
-        value: EXPORT_FORMAT_TILE_EXCEL,
-        label: $gettext("Tile Excel"),
-    },
-]);
+const selectedFormat = computed<ExportFormat | undefined>(() =>
+    formats.value.find((format) => format.slug === selectedFormatSlug.value),
+);
 
 const isExporting = computed<boolean>(
     () => exportState === EXPORT_STATE_PENDING,
@@ -71,6 +62,7 @@ const exportButtonLabel = computed<string>(() => {
 const canExport = computed<boolean>(
     () =>
         hasSingleGraph &&
+        selectedFormat.value !== undefined &&
         !isExporting.value &&
         resultCount > 0 &&
         filename.value.trim() !== "",
@@ -80,17 +72,34 @@ watch(
     () => hasSingleGraph,
     (isSingle) => {
         if (!isSingle) {
-            selectedFormat.value = EXPORT_FORMAT_BRANCH_EXCEL;
+            selectedFormatSlug.value = formats.value[0]?.slug ?? null;
         }
     },
 );
 
+watchEffect(async () => {
+    await loadFormats();
+});
+
+async function loadFormats(): Promise<void> {
+    isLoadingFormats.value = true;
+    formatsLoadFailed.value = false;
+    try {
+        formats.value = await fetchExportFormats();
+        selectedFormatSlug.value = formats.value[0]?.slug ?? null;
+    } catch {
+        formats.value = [];
+        formatsLoadFailed.value = true;
+    } finally {
+        isLoadingFormats.value = false;
+    }
+}
+
 function onExport(): void {
-    if (!canExport.value) return;
+    if (!canExport.value || !selectedFormat.value) return;
     emit(EXPORT_EVENT, {
-        format: selectedFormat.value,
+        format: selectedFormat.value.slug,
         filename: filename.value.trim(),
-        exportConceptsAs: exportConceptsAs.value,
     });
 }
 </script>
@@ -145,59 +154,50 @@ function onExport(): void {
                 <legend class="export-label">
                     {{ $gettext("Format") }}
                 </legend>
+                <span
+                    v-if="isLoadingFormats"
+                    class="format-status"
+                >
+                    {{ $gettext("Loading...") }}
+                </span>
+                <span
+                    v-else-if="formatsLoadFailed"
+                    class="format-status"
+                >
+                    {{ $gettext("Export formats could not be loaded.") }}
+                </span>
+                <span
+                    v-else-if="formats.length === 0"
+                    class="format-status"
+                >
+                    {{ $gettext("No export formats are available to you.") }}
+                </span>
                 <label
-                    v-for="option in formatOptions"
-                    :key="option.value"
+                    v-for="format in formats"
+                    v-else
+                    :key="format.slug"
                     class="format-option"
-                    :for="`export-format-${option.value}`"
-                    :class="{ selected: selectedFormat === option.value }"
+                    :for="`export-format-${format.slug}`"
+                    :class="{ selected: selectedFormatSlug === format.slug }"
                 >
                     <span class="format-option-header">
                         <RadioButton
-                            v-model="selectedFormat"
+                            v-model="selectedFormatSlug"
                             name="exportFormat"
-                            :input-id="`export-format-${option.value}`"
-                            :value="option.value"
+                            :input-id="`export-format-${format.slug}`"
+                            :value="format.slug"
                         />
                         <span class="format-option-name">
-                            {{ option.label }}
+                            {{ format.name }}
                         </span>
                     </span>
+                    <span
+                        v-if="format.description"
+                        class="format-option-description"
+                    >
+                        {{ format.description }}
+                    </span>
                 </label>
-            </fieldset>
-
-            <fieldset
-                v-if="selectedFormat === EXPORT_FORMAT_TILE_EXCEL"
-                class="export-field"
-                :disabled="!hasSingleGraph"
-            >
-                <legend class="export-label">
-                    {{ $gettext("Export concepts as") }}
-                </legend>
-                <div class="concepts-options">
-                    <span class="concepts-option">
-                        <RadioButton
-                            v-model="exportConceptsAs"
-                            name="exportConceptsAs"
-                            input-id="export-concepts-labels"
-                            :value="EXPORT_CONCEPTS_AS_LABELS"
-                        />
-                        <label for="export-concepts-labels">
-                            {{ $gettext("Labels") }}
-                        </label>
-                    </span>
-                    <span class="concepts-option">
-                        <RadioButton
-                            v-model="exportConceptsAs"
-                            name="exportConceptsAs"
-                            input-id="export-concepts-uuids"
-                            :value="EXPORT_CONCEPTS_AS_UUIDS"
-                        />
-                        <label for="export-concepts-uuids">
-                            {{ $gettext("UUIDs") }}
-                        </label>
-                    </span>
-                </div>
             </fieldset>
 
             <div class="export-field">
@@ -366,19 +366,10 @@ function onExport(): void {
     font-size: var(--p-arches-search-font-size);
 }
 
-.concepts-options {
-    display: flex;
-    gap: 2rem;
-}
-
-.concepts-option {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-}
-
-.concepts-option label {
-    cursor: pointer;
+.format-option-description,
+.format-status {
+    font-size: 1.2rem;
+    color: var(--p-text-muted-color);
 }
 
 .export-actions {

@@ -14,14 +14,31 @@ from arches_search.utils.search import (
     SearchPayload,
     validate_search_payload,
 )
+from arches_search.utils.search_results_export import record_pending_export
 
-# The ETL module slug of the Bulk Data Manager exporter behind each format.
-EXPORTER_SLUGS = {
-    "branch-excel": "branch-excel-exporter",
-    "tile-excel": "tile-excel-exporter",
-}
-CONCEPTS_AS_CHOICES = ("labels", "uuids")
+EXPORT_ETL_TYPE = "export"
+VIEW_ETL_MODULE_PERMISSION = "view_etlmodule"
+# Exporters that offer a choice write concepts as UUIDs rather than labels.
+EXPORT_CONCEPTS_AS = "uuids"
 DEFAULT_FILENAME = "search_export"
+
+
+def get_available_exporters(user):
+    """
+    The Bulk Data Manager exporters this user may run, decided by the same rules
+    the Bulk Data Manager applies to its own module list: modules configured
+    with "show": false are hidden, and the user needs view_etlmodule on the
+    module. Admins grant that permission per user or group from the ETL module
+    admin page, or for every module with `manage.py permissions`.
+    """
+    return [
+        etl_module
+        for etl_module in models.ETLModule.objects.filter(
+            etl_type=EXPORT_ETL_TYPE, slug__isnull=False
+        )
+        if (etl_module.config or {}).get("show") is not False
+        and user.has_perm(VIEW_ETL_MODULE_PERMISSION, etl_module)
+    ]
 
 
 class SearchResultsExportAPI(APIBase):
@@ -29,7 +46,27 @@ class SearchResultsExportAPI(APIBase):
     Hands a search's results to a Bulk Data Manager exporter, which queues the
     export on Celery. The user is told when the file is ready through an Arches
     notification, so this answers as soon as the export is queued.
+
+    A format is the slug of an exporter's ETL module. GET lists the formats the
+    user may choose from.
     """
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return JSONResponse(
+                {"error": _("User not authenticated. Access denied.")}, status=401
+            )
+
+        return JSONResponse(
+            [
+                {
+                    "slug": etl_module.slug,
+                    "name": str(etl_module.name),
+                    "description": str(etl_module.description or ""),
+                }
+                for etl_module in get_available_exporters(request.user)
+            ]
+        )
 
     def post(self, request):
         if not request.user.is_authenticated:
@@ -40,15 +77,16 @@ class SearchResultsExportAPI(APIBase):
         body = JSONDeserializer().deserialize(request.body)
 
         export_format = body.get("format")
-        if export_format not in EXPORTER_SLUGS:
+        etl_module = next(
+            (
+                exporter
+                for exporter in get_available_exporters(request.user)
+                if exporter.slug == export_format
+            ),
+            None,
+        )
+        if etl_module is None:
             return JSONResponse({"error": _("Unsupported export format.")}, status=400)
-
-        export_concepts_as = body.get("exportConceptsAs", "labels")
-        if export_concepts_as not in CONCEPTS_AS_CHOICES:
-            return JSONResponse(
-                {"error": _("exportConceptsAs must be 'labels' or 'uuids'.")},
-                status=400,
-            )
 
         search_payload = SearchPayload.from_body(body)
         if len(search_payload.graph_slugs or []) != 1:
@@ -87,7 +125,6 @@ class SearchResultsExportAPI(APIBase):
                 {"error": _("There are no results to export.")}, status=400
             )
 
-        etl_module = models.ETLModule.objects.get(slug=EXPORTER_SLUGS[export_format])
         load_id = str(uuid.uuid4())
 
         request.POST = {
@@ -96,15 +133,19 @@ class SearchResultsExportAPI(APIBase):
             "graph_id": str(graph["graphid"]),
             "graph_name": str(graph["name"]),
             "resource_ids": resource_ids,
-            "export_concepts_as": export_concepts_as,
+            "export_concepts_as": EXPORT_CONCEPTS_AS,
             # The exporters add ".zip" themselves.
             "filename": os.path.basename(str(body.get("filename") or "").strip())
             or DEFAULT_FILENAME,
         }
+        # Recorded before the export is queued so the task cannot finish first;
+        # see arches_search.utils.search_results_export.
+        pending_export = record_pending_export(load_id, request.user, len(resource_ids))
         exporter = etl_module.get_class_module()(request=request)
         response = exporter.export(request)
 
         if not response["success"]:
+            pending_export.delete()
             return JSONResponse({"error": response["data"]["message"]}, status=503)
         return JSONResponse(
             {"loadid": load_id, "message": _("Your export has started.")}, status=202
