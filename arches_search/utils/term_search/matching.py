@@ -2,6 +2,7 @@ from django.contrib.postgres.search import SearchQuery
 from django.db.models import BooleanField, F, Func, Q, Value
 
 from arches.app.models.models import ResourceInstance
+from arches_search.indexing.index_descriptor import DESCRIPTOR_NODE_ALIAS
 from arches_search.models.models import TermSearch
 from arches_search.utils.term_search.relationship_expansion import (
     expand_matches_via_relationships,
@@ -38,7 +39,7 @@ def build_term_match_filter(term_text, datatype=None):
         _contains_ignoring_case(term_text)
     )
     if datatype is not None:
-        match_filter &= Q(datatype=datatype)
+        match_filter &= Q(datatype=datatype) & ~Q(node_alias=DESCRIPTOR_NODE_ALIAS)
     return match_filter
 
 

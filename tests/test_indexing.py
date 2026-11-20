@@ -25,6 +25,7 @@ from arches.app.models.models import (
 )
 
 from arches_search.functions.search_indexing import SearchIndexingFunction
+from arches_search.indexing.index_descriptor import DESCRIPTOR_NODE_ALIAS
 from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexers.file_list import FileListIndexing
 from arches_search.indexing.indexers.string import StringIndexing
@@ -460,6 +461,25 @@ class PostImportIndexingTests(IndexingTestCase):
 
         rows = NumericSearch.objects.filter(tileid=tile.pk)
         self.assertEqual([row.value for row in rows], [2])
+
+    def test_post_import_indexes_the_descriptor(self):
+        self.resource_instance.descriptors = {"en": {"name": "HER-42"}}
+        self.resource_instance.save()
+        self._make_tile(self.number_node, 42)
+        transaction_id = uuid.uuid4()
+        EditLog.objects.create(
+            resourceinstanceid=str(self.resource_instance.pk),
+            transactionid=transaction_id,
+            edittype="create",
+        )
+
+        SearchIndexingFunction().post_import(transaction_id)
+
+        rows = TermSearch.objects.filter(
+            resourceinstanceid_id=self.resource_instance.pk,
+            node_alias=DESCRIPTOR_NODE_ALIAS,
+        )
+        self.assertEqual([row.value for row in rows], ["HER-42"])
 
     def test_post_import_ignores_other_transactions(self):
         tile = self._make_tile(self.number_node, 7)
