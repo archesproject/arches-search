@@ -39,6 +39,13 @@ class UnavailableExporter(FakeExporter):
         return {"success": False, "data": {"message": "Celery is not running"}}
 
 
+class BrokenExporter(FakeExporter):
+    """Raises as an exporter with a different request contract might."""
+
+    def export(self, request):
+        raise KeyError("graphid")
+
+
 class SearchResultsExportAPITest(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -189,4 +196,11 @@ class SearchResultsExportAPITest(TestCase):
         response = self._post_export_of([uuid.uuid4()], UnavailableExporter)
 
         self.assertEqual(response.status_code, 503)
+        self.assertFalse(SearchExportHistory.objects.exists())
+
+    def test_post_discards_the_record_when_the_exporter_raises(self):
+        with self.assertLogs(VIEW_MODULE, level="ERROR"):
+            response = self._post_export_of([uuid.uuid4()], BrokenExporter)
+
+        self.assertEqual(response.status_code, 500)
         self.assertFalse(SearchExportHistory.objects.exists())

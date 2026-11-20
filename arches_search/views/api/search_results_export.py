@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 
@@ -21,6 +22,8 @@ VIEW_ETL_MODULE_PERMISSION = "view_etlmodule"
 # Exporters that offer a choice write concepts as UUIDs rather than labels.
 EXPORT_CONCEPTS_AS = "uuids"
 DEFAULT_FILENAME = "search_export"
+
+logger = logging.getLogger(__name__)
 
 
 def get_available_exporters(user):
@@ -49,6 +52,18 @@ class SearchResultsExportAPI(APIBase):
 
     A format is the slug of an exporter's ETL module. GET lists the formats the
     user may choose from.
+
+    Every visible export module is offered, so each must follow the contract
+    branch-excel and tile-excel follow:
+      - it is built as cls(request=request) and export(request) reads
+        module, load_id, graph_id, graph_name, resource_ids,
+        export_concepts_as and filename from request.POST;
+      - export() queues its work with load_data_async and returns
+        {"success": bool, "data": {...}}, with data["message"] on failure;
+      - the task writes the zip's TempFile id to load_details.zipfile.fileid,
+        which arches_search.utils.search_results_export uses to link the file.
+    An exporter that raises instead is reported as a 500 and its pending
+    export record is discarded.
     """
 
     def get(self, request):
@@ -85,6 +100,8 @@ class SearchResultsExportAPI(APIBase):
             ),
             None,
         )
+        # Also the answer when the user lacks permission on the module, so the
+        # response does not disclose which exporters exist.
         if etl_module is None:
             return JSONResponse({"error": _("Unsupported export format.")}, status=400)
 
@@ -141,8 +158,17 @@ class SearchResultsExportAPI(APIBase):
         # Recorded before the export is queued so the task cannot finish first;
         # see arches_search.utils.search_results_export.
         pending_export = record_pending_export(load_id, request.user, len(resource_ids))
-        exporter = etl_module.get_class_module()(request=request)
-        response = exporter.export(request)
+        try:
+            exporter = etl_module.get_class_module()(request=request)
+            response = exporter.export(request)
+        except Exception:
+            logger.exception(
+                "Exporter %s failed to start search export %s",
+                etl_module.slug,
+                load_id,
+            )
+            pending_export.delete()
+            return JSONResponse({"error": _("The export could not start.")}, status=500)
 
         if not response["success"]:
             pending_export.delete()
