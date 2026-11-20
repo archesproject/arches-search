@@ -1,5 +1,4 @@
 import uuid
-from datetime import timedelta
 from unittest.mock import patch
 
 from django.conf import settings
@@ -52,15 +51,20 @@ class AttachDownloadLinkTest(TestCase):
             status="indexed" if with_zip else "failed",
             load_details=load_details,
         )
-        return self._notify("Excel Export: Completed")
+        return self._notify("Excel Export: Completed", self.load_id)
 
-    def _notify(self, message):
-        notification = Notification.objects.create(message=message, context=None)
+    def _notify(self, message, load_id=None):
+        """Core's exporter tasks tag their notification with the load id."""
+        context = {"loadid": str(load_id)} if load_id else None
+        notification = Notification.objects.create(message=message, context=context)
         UserXNotification.objects.create(notif=notification, recipient=self.user)
         return notification
 
-    def _download_context(self):
+    def _files_context(self):
         return {"files": [{"fileid": str(self.load_id), "name": "my_export.zip"}]}
+
+    def _download_context(self):
+        return {"loadid": str(self.load_id), **self._files_context()}
 
     def _task_args(self):
         # The shape of core's export_branch_excel task arguments.
@@ -98,19 +102,34 @@ class AttachDownloadLinkTest(TestCase):
         notification.refresh_from_db()
         self.assertEqual(notification.context, self._download_context())
 
-    def test_leaves_notifications_from_before_the_export_alone(self):
-        earlier = self._notify("Something else")
-        Notification.objects.filter(pk=earlier.pk).update(
-            created=self.export.exporttime - timedelta(minutes=5)
-        )
+    def test_leaves_another_exports_notification_alone(self):
         notification = self._finish_export()
+        other_load_id = uuid.uuid4()
+        other_notification = self._notify("Excel Export: Failed", other_load_id)
 
         attach_download_link(self._task_args(), {})
 
-        earlier.refresh_from_db()
+        other_notification.refresh_from_db()
         notification.refresh_from_db()
-        self.assertIsNone(earlier.context)
+        self.assertEqual(other_notification.context, {"loadid": str(other_load_id)})
         self.assertEqual(notification.context, self._download_context())
+
+    def test_leaves_untagged_notifications_alone(self):
+        self._finish_export()
+        UserXNotification.objects.filter(recipient=self.user).delete()
+        untagged = self._notify("Excel Export: Completed")
+
+        attach_download_link(self._task_args(), {})
+
+        untagged.refresh_from_db()
+        self.assertIsNone(untagged.context)
+        notification = (
+            UserXNotification.objects.filter(recipient=self.user)
+            .exclude(notif=untagged)
+            .get()
+            .notif
+        )
+        self.assertEqual(notification.context, self._files_context())
 
     def test_sends_its_own_notification_when_the_exporter_sent_none(self):
         temp_file = TempFile.objects.create(path=ZIP_PATH, source="test")
@@ -124,7 +143,7 @@ class AttachDownloadLinkTest(TestCase):
         attach_download_link(self._task_args(), {})
 
         notification = UserXNotification.objects.get(recipient=self.user).notif
-        self.assertEqual(notification.context, self._download_context())
+        self.assertEqual(notification.context, self._files_context())
 
     def test_discards_the_record_when_the_export_produced_no_file(self):
         notification = self._finish_export(with_zip=False)
@@ -133,7 +152,7 @@ class AttachDownloadLinkTest(TestCase):
 
         self.assertFalse(SearchExportHistory.objects.filter(pk=self.load_id).exists())
         notification.refresh_from_db()
-        self.assertIsNone(notification.context)
+        self.assertEqual(notification.context, {"loadid": str(self.load_id)})
 
     def test_ignores_tasks_unrelated_to_a_search_export(self):
         notification = self._finish_export()
@@ -143,7 +162,7 @@ class AttachDownloadLinkTest(TestCase):
         self.export.refresh_from_db()
         notification.refresh_from_db()
         self.assertFalse(self.export.downloadfile)
-        self.assertIsNone(notification.context)
+        self.assertEqual(notification.context, {"loadid": str(self.load_id)})
 
     def test_task_postrun_handler_never_raises(self):
         with (

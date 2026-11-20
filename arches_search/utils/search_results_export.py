@@ -6,7 +6,9 @@ that carries no link, because the Bulk Data Manager lists finished exports on
 its own page. Exports started from search have no such page. So each one is
 recorded as a SearchExportHistory when it is queued, and when the exporter's
 Celery task finishes, the zip file the exporter saved is attached to that record
-and listed in the notification's files. Core's notification panel offers each
+and listed in the files of the notification the exporter tagged with the
+export's load id (or in a new notification, if there is none). Core's
+notification panel offers each
 file as a download from /files/<id>, which serves a SearchExportHistory's file,
 and core expires the file after CELERY_SEARCH_EXPORT_EXPIRES like any other
 search export.
@@ -97,7 +99,7 @@ def _complete_export(export):
             }
         ]
     }
-    notification = _find_completion_notification(export.user, export.exporttime)
+    notification = _find_completion_notification(export.user, export.pk)
     if notification is None:
         notification = models.Notification.objects.create(
             message=_("Your search export is ready to download."),
@@ -112,20 +114,18 @@ def _complete_export(export):
     notification.save()
 
 
-def _find_completion_notification(user, queued_at):
+def _find_completion_notification(user, load_id):
     """
-    The exporter task notifies the user just before it finishes, so its
-    notification is the newest one since the export was queued that offers no
-    files.
+    The exporter task tags the notification it sends when it finishes with the
+    export's load id, so it can be told apart from the user's other
+    notifications, including those of other exports.
     """
-    user_notifications = (
+    user_notification = (
         models.UserXNotification.objects.filter(
-            recipient=user, notif__created__gte=queued_at
+            recipient=user, notif__context__loadid=str(load_id)
         )
         .select_related("notif")
         .order_by("-notif__created")
+        .first()
     )
-    for user_notification in user_notifications:
-        if not (user_notification.notif.context or {}).get("files"):
-            return user_notification.notif
-    return None
+    return user_notification.notif if user_notification else None
