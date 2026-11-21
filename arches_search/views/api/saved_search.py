@@ -42,6 +42,9 @@ def _resource_set_id(query_definition):
 
 INVALID_SHARING_IDS_ERROR = "users and groups must be lists of existing ids"
 
+# Needed to list groups and share searches with them; an admin grants it.
+VIEW_GROUP_PERMISSION = "auth.view_group"
+
 
 def is_valid_sharing_ids(user_ids, group_ids):
     """Whether the ids are lists of existing user and group ids."""
@@ -146,6 +149,8 @@ class SavedSearchAPI(APIBase):
         shared_group_ids = body.get("groups", [])
         if not is_valid_sharing_ids(shared_user_ids, shared_group_ids):
             return JSONResponse({"error": INVALID_SHARING_IDS_ERROR}, status=400)
+        if shared_group_ids and not request.user.has_perm(VIEW_GROUP_PERMISSION):
+            return JSONResponse(status=403)
 
         saved_search = SavedSearch.objects.create(
             name=name,
@@ -190,6 +195,8 @@ class SavedSearchAPI(APIBase):
         shared_group_ids = body["groups"]
         if not is_valid_sharing_ids([], shared_group_ids):
             return JSONResponse({"error": INVALID_SHARING_IDS_ERROR}, status=400)
+        if shared_group_ids and not request.user.has_perm(VIEW_GROUP_PERMISSION):
+            return JSONResponse(status=403)
 
         with transaction.atomic():
             SharedSearchXGroup.objects.filter(saved_search=saved_search).delete()
@@ -232,5 +239,7 @@ class SavedSearchGroupsAPI(APIBase):
     def get(self, request):
         if not request.user.is_authenticated or request.user.username == "anonymous":
             return JSONResponse(status=401)
+        if not request.user.has_perm(VIEW_GROUP_PERMISSION):
+            return JSONResponse(status=403)
         groups = Group.objects.order_by("name").values("id", "name")
         return JSONResponse(list(groups))

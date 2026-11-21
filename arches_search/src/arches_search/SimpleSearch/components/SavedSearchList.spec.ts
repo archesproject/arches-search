@@ -10,13 +10,17 @@ import SharingGroupsSelect from "@/arches_search/SimpleSearch/components/Sharing
 import {
     deleteSavedSearch,
     getSavedSearches,
-    getSharingGroups,
     updateSavedSearchGroups,
 } from "@/arches_search/SimpleSearch/api.ts";
 
 import type { VueWrapper } from "@vue/test-utils";
 
-import type { SavedSearch } from "@/arches_search/SimpleSearch/types.ts";
+import type {
+    SavedSearch,
+    SharingGroup,
+} from "@/arches_search/SimpleSearch/types.ts";
+
+const SHARING_GROUPS: SharingGroup[] = [];
 
 const { requireConfirmation } = vi.hoisted(() => ({
     requireConfirmation: vi.fn(),
@@ -40,7 +44,6 @@ vi.mock("openvue/useconfirm", () => ({
 vi.mock("@/arches_search/SimpleSearch/api.ts", () => ({
     deleteSavedSearch: vi.fn(),
     getSavedSearches: vi.fn(),
-    getSharingGroups: vi.fn(),
     updateSavedSearchGroups: vi.fn(),
 }));
 
@@ -61,7 +64,7 @@ type ButtonWrapper = VueWrapper<InstanceType<typeof Button>>;
 
 async function mountList(scope: "mine" | "shared" = "mine") {
     const wrapper = mount(SavedSearchList, {
-        props: { scope },
+        props: { scope, sharingGroups: SHARING_GROUPS },
         global: { plugins: [OpenVue] },
     });
     await flushPromises();
@@ -86,7 +89,6 @@ beforeEach(() => {
         removeEventListener: () => {},
     }));
     vi.mocked(getSavedSearches).mockResolvedValue([MILLS]);
-    vi.mocked(getSharingGroups).mockResolvedValue([]);
 });
 
 afterEach(() => {

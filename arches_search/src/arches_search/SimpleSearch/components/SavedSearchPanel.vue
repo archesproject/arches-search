@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
@@ -7,9 +7,12 @@ import Button from "openvue/button";
 import SavedSearchList from "@/arches_search/SimpleSearch/components/SavedSearchList.vue";
 import SaveSearchForm from "@/arches_search/SimpleSearch/components/SaveSearchForm.vue";
 
+import { getSharingGroups } from "@/arches_search/SimpleSearch/api.ts";
+
 import type {
     SearchDefinition,
     SearchResultsToSave,
+    SharingGroup,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const SAVE_TAB = "save" as const;
@@ -48,6 +51,18 @@ const { $gettext } = useGettext();
 const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
     shouldShowSaveTab ? SAVE_TAB : MINE_TAB,
 );
+
+// The groups both tabs can share with; null hides sharing, for users who may
+// not share with groups (no auth.view_group).
+const sharingGroups = ref<SharingGroup[] | null>(null);
+
+onMounted(async () => {
+    try {
+        sharingGroups.value = await getSharingGroups();
+    } catch {
+        sharingGroups.value = null;
+    }
+});
 </script>
 
 <template>
@@ -97,10 +112,12 @@ const activeTab = ref<typeof SAVE_TAB | typeof MINE_TAB | typeof SHARED_TAB>(
             :definition-to-save="definitionToSave"
             :results-to-save="resultsToSave"
             :result-count="resultCount"
+            :sharing-groups="sharingGroups"
         />
         <SavedSearchList
             v-else
             :scope="activeTab"
+            :sharing-groups="sharingGroups"
             @run-query="
                 (queryDefinition, searchName) =>
                     emit(RUN_QUERY_EVENT, queryDefinition, searchName)

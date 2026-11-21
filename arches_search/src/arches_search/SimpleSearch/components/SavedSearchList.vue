@@ -19,6 +19,7 @@ import {
 
 import type {
     SavedSearch,
+    SharingGroup,
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -42,8 +43,10 @@ type SavedSearchSortValue =
 
 // "mine" lists the user's own searches, which they can delete; "shared" lists
 // searches others shared with them.
-const { scope } = defineProps<{
+const { scope, sharingGroups } = defineProps<{
     scope: "mine" | "shared";
+    // Null for users who may not share with groups.
+    sharingGroups: SharingGroup[] | null;
 }>();
 
 const emit = defineEmits<{
@@ -318,6 +321,7 @@ function queryTypeLabel(search: SavedSearch): string {
                     <SharingGroupsSelect
                         v-model:shared-group-ids="pendingGroupIds"
                         :input-id="`sharing-groups-${item.savedsearchid}`"
+                        :groups="sharingGroups ?? []"
                     />
                     <div class="item-actions">
                         <Button
@@ -360,7 +364,7 @@ function queryTypeLabel(search: SavedSearch): string {
                         "
                     />
                     <Button
-                        v-if="scope === MINE_SCOPE"
+                        v-if="scope === MINE_SCOPE && sharingGroups"
                         icon="pi pi-users"
                         icon-pos="left"
                         size="small"

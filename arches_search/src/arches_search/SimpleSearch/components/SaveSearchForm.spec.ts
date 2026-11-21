@@ -10,7 +10,6 @@ import SharingGroupsSelect from "@/arches_search/SimpleSearch/components/Sharing
 import {
     createSavedSearch,
     getResourceSetLimits,
-    getSharingGroups,
     saveResultsAsResourceSet,
 } from "@/arches_search/SimpleSearch/api.ts";
 
@@ -18,7 +17,10 @@ import type {
     SavedSearch,
     SearchDefinition,
     SearchResultsToSave,
+    SharingGroup,
 } from "@/arches_search/SimpleSearch/types.ts";
+
+const SHARING_GROUPS: SharingGroup[] = [];
 
 vi.mock("openvue/usetoast", () => ({
     useToast: () => ({ add: vi.fn() }),
@@ -27,7 +29,6 @@ vi.mock("openvue/usetoast", () => ({
 vi.mock("@/arches_search/SimpleSearch/api.ts", () => ({
     createSavedSearch: vi.fn(),
     getResourceSetLimits: vi.fn(),
-    getSharingGroups: vi.fn(),
     saveResultsAsResourceSet: vi.fn(),
 }));
 
@@ -39,7 +40,6 @@ const RESULTS: SearchResultsToSave = {
 };
 
 beforeEach(() => {
-    vi.mocked(getSharingGroups).mockResolvedValue([]);
     vi.mocked(getResourceSetLimits).mockResolvedValue({
         immediate_threshold: 10,
         member_limit: 100,
@@ -51,7 +51,11 @@ afterEach(() => vi.resetAllMocks());
 describe("SaveSearchForm saving results", () => {
     async function mountResultsForm(resultCount: number) {
         const wrapper = mount(SaveSearchForm, {
-            props: { resultsToSave: RESULTS, resultCount },
+            props: {
+                resultsToSave: RESULTS,
+                resultCount,
+                sharingGroups: SHARING_GROUPS,
+            },
             global: { plugins: [OpenVue] },
         });
         await wrapper.find("#save-as-results").setValue(true);
@@ -97,6 +101,7 @@ describe("SaveSearchForm sharing", () => {
                 definitionToSave: DEFINITION,
                 resultsToSave: RESULTS,
                 resultCount: 5,
+                sharingGroups: SHARING_GROUPS,
             },
             global: { plugins: [OpenVue] },
         });

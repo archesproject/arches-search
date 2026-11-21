@@ -1,7 +1,7 @@
 import json
 import uuid
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group, Permission, User
 from django.test import TestCase
 from django.urls import reverse
 
@@ -27,6 +27,12 @@ class SavedSearchAPITest(TestCase):
         cls.alice.groups.add(cls.shared_group)
         cls.bob.groups.add(cls.shared_group)
         # carol is NOT in shared_group
+        # only alice may view (and so share with) groups
+        cls.alice.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="auth", codename="view_group"
+            )
+        )
 
     def _post_search(
         self, name, query_definition=None, description="", users=None, groups=None
@@ -410,11 +416,23 @@ class SavedSearchAPITest(TestCase):
             ).exists()
         )
 
+    def test_post_with_groups_without_view_group_returns_403(self):
+        self.client.force_login(self.bob)
+        response = self._post_search("Bob Search", groups=[self.shared_group.pk])
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(SavedSearch.objects.filter(name="Bob Search").exists())
+
     # --- GET groups ---
 
     def test_get_groups_requires_login(self):
         response = self.client.get(reverse("saved_search_groups"))
         self.assertEqual(response.status_code, 401)
+
+    def test_get_groups_without_view_group_returns_403(self):
+        self.client.force_login(self.bob)
+        response = self.client.get(reverse("saved_search_groups"))
+        self.assertEqual(response.status_code, 403)
 
     # --- DELETE ---
 

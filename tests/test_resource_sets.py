@@ -2,7 +2,7 @@ import json
 import uuid
 from unittest import mock
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group, Permission, User
 from django.db.models import QuerySet
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -27,6 +27,11 @@ class SearchResultsResourceSetAPITest(TestCase):
         cls.other = User.objects.create_user(username="set_other", password="x")
         cls.group = Group.objects.create(name="test_resource_set_group")
         cls.member.groups.add(cls.group)
+        cls.member.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="auth", codename="view_group"
+            )
+        )
 
         cls.graph = GraphModel.objects.create(
             graphid=uuid.uuid4(), slug="test-resource-set", isresource=True

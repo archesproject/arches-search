@@ -33,6 +33,7 @@ from arches_search.models.models import SavedSearch, SharedSearchXGroup
 from arches_search.tasks import create_resource_set_from_search
 from arches_search.views.api.saved_search import (
     INVALID_SHARING_IDS_ERROR,
+    VIEW_GROUP_PERMISSION,
     is_valid_sharing_ids,
 )
 from arches_search.utils.search import (
@@ -201,6 +202,8 @@ class SearchResultsResourceSetAPI(APIBase):
         shared_group_ids = body.get("groups", [])
         if not is_valid_sharing_ids([], shared_group_ids):
             return JSONResponse({"error": INVALID_SHARING_IDS_ERROR}, status=400)
+        if shared_group_ids and not request.user.has_perm(VIEW_GROUP_PERMISSION):
+            return JSONResponse(status=403)
         search_body = {
             key: value
             for key, value in body.items()

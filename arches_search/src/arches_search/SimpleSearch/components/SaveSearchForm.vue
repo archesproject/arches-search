@@ -20,6 +20,7 @@ import type {
     ResourceSetLimits,
     SearchDefinition,
     SearchResultsToSave,
+    SharingGroup,
 } from "@/arches_search/SimpleSearch/types.ts";
 
 const SAVE_AS_QUERY = "query" as const;
@@ -29,11 +30,14 @@ const {
     definitionToSave = null,
     resultsToSave = null,
     resultCount = 0,
+    sharingGroups,
 } = defineProps<{
     definitionToSave?: SearchDefinition | null;
     // Given, the form can also save the results as a resource set.
     resultsToSave?: SearchResultsToSave | null;
     resultCount?: number;
+    // Null for users who may not share with groups.
+    sharingGroups: SharingGroup[] | null;
 }>();
 
 const { $gettext } = useGettext();
@@ -277,7 +281,10 @@ async function onSaveResults(): Promise<void> {
                 :fluid="true"
             />
         </div>
-        <div class="save-form-field">
+        <div
+            v-if="sharingGroups"
+            class="save-form-field"
+        >
             <label
                 for="save-search-groups"
                 class="save-form-label"
@@ -287,6 +294,7 @@ async function onSaveResults(): Promise<void> {
             <SharingGroupsSelect
                 v-model:shared-group-ids="sharedGroupIds"
                 input-id="save-search-groups"
+                :groups="sharingGroups"
             />
         </div>
         <div class="save-form-actions">
