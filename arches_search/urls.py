@@ -28,7 +28,10 @@ from arches_search.views.api.relatable_node_tree_for_graph import (
 )
 from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 from arches_search.views.api.resource_field_metadata import ResourceFieldMetadataAPI
-from arches_search.views.api.saved_search import SavedSearchAPI
+from arches_search.views.api.saved_search import (
+    SavedSearchAPI,
+    SavedSearchGroupsAPI,
+)
 from arches_search.views.api.search_config import NodeFilterConfigAPI
 from arches_search.views.api.search_definition_counts import (
     SearchDefinitionCountsAPI,
@@ -139,6 +142,11 @@ urlpatterns = [
         "api/saved-searches",
         SavedSearchAPI.as_view(),
         name="saved_searches",
+    ),
+    path(
+        "api/saved-searches/groups",
+        SavedSearchGroupsAPI.as_view(),
+        name="saved_search_groups",
     ),
     path(
         "api/saved-searches/<uuid:savedsearchid>",

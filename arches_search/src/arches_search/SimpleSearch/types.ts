@@ -186,6 +186,12 @@ export interface SavedSearch {
         id: number;
         username: string;
     };
+    shared_groups?: SharingGroup[];
+}
+
+export interface SharingGroup {
+    id: number;
+    name: string;
 }
 
 export interface ResourceSetLimits {

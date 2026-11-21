@@ -7,15 +7,19 @@ import ConfirmDialog from "openvue/confirmdialog";
 import InputText from "openvue/inputtext";
 import Select from "openvue/select";
 
+import SharingGroupsSelect from "@/arches_search/SimpleSearch/components/SharingGroupsSelect.vue";
+
 import { useConfirm } from "openvue/useconfirm";
 import { useToast } from "openvue/usetoast";
 import {
     getSavedSearches,
     deleteSavedSearch,
+    updateSavedSearchGroups,
 } from "@/arches_search/SimpleSearch/api.ts";
 
 import type {
     SavedSearch,
+    SharingGroup,
     SortOption,
 } from "@/arches_search/SimpleSearch/types.ts";
 
@@ -39,8 +43,10 @@ type SavedSearchSortValue =
 
 // "mine" lists the user's own searches, which they can delete; "shared" lists
 // searches others shared with them.
-const { scope } = defineProps<{
+const { scope, sharingGroups } = defineProps<{
     scope: "mine" | "shared";
+    // Null for users who may not share with groups.
+    sharingGroups: SharingGroup[] | null;
 }>();
 
 const emit = defineEmits<{
@@ -59,6 +65,9 @@ const filterText = ref("");
 const sortValue = ref<SavedSearchSortValue>(SORT_A_TO_Z);
 const searches = ref<SavedSearch[]>([]);
 const isLoading = ref(false);
+const sharingSearchId = ref<string | null>(null);
+const pendingGroupIds = ref<number[]>([]);
+const isSavingSharing = ref(false);
 
 const sortOptions: SortOption[] = [
     { label: $gettext("Sort A to Z"), value: SORT_A_TO_Z },
@@ -127,6 +136,52 @@ async function onDelete(search: SavedSearch): Promise<void> {
             detail: (error as Error).message,
         });
     }
+}
+
+function startEditingSharing(search: SavedSearch): void {
+    sharingSearchId.value = search.savedsearchid;
+    pendingGroupIds.value = (search.shared_groups ?? []).map(
+        (group) => group.id,
+    );
+}
+
+function stopEditingSharing(): void {
+    sharingSearchId.value = null;
+    pendingGroupIds.value = [];
+}
+
+async function onSaveSharing(search: SavedSearch): Promise<void> {
+    isSavingSharing.value = true;
+    try {
+        const updated = await updateSavedSearchGroups(
+            search.savedsearchid,
+            pendingGroupIds.value,
+        );
+        searches.value = searches.value.map((savedSearch) =>
+            savedSearch.savedsearchid === search.savedsearchid
+                ? { ...savedSearch, shared_groups: updated.shared_groups }
+                : savedSearch,
+        );
+        stopEditingSharing();
+        toast.add({
+            severity: "success",
+            life: 3000,
+            summary: $gettext("Sharing updated"),
+        });
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            life: 5000,
+            summary: $gettext("Failed to update sharing"),
+            detail: (error as Error).message,
+        });
+    } finally {
+        isSavingSharing.value = false;
+    }
+}
+
+function sharedGroupNames(search: SavedSearch): string {
+    return (search.shared_groups ?? []).map((group) => group.name).join(", ");
 }
 
 function confirmDelete(search: SavedSearch): void {
@@ -240,6 +295,54 @@ function queryTypeLabel(search: SavedSearch): string {
                 >
                     {{ $gettext("No description provided") }}
                 </p>
+                <p
+                    v-if="scope === MINE_SCOPE && item.shared_groups?.length"
+                    class="item-shared"
+                >
+                    <i class="pi pi-users" />
+                    <span>
+                        {{
+                            $gettext("Shared with: %{groups}", {
+                                groups: sharedGroupNames(item),
+                            })
+                        }}
+                    </span>
+                </p>
+                <div
+                    v-if="sharingSearchId === item.savedsearchid"
+                    class="item-sharing-editor"
+                >
+                    <label
+                        :for="`sharing-groups-${item.savedsearchid}`"
+                        class="item-sharing-label"
+                    >
+                        {{ $gettext("Share with groups") }}
+                    </label>
+                    <SharingGroupsSelect
+                        v-model:shared-group-ids="pendingGroupIds"
+                        :input-id="`sharing-groups-${item.savedsearchid}`"
+                        :groups="sharingGroups ?? []"
+                    />
+                    <div class="item-actions">
+                        <Button
+                            icon="pi pi-check"
+                            size="small"
+                            class="sharing-btn"
+                            :label="$gettext('Save sharing')"
+                            :loading="isSavingSharing"
+                            @click="onSaveSharing(item)"
+                        />
+                        <Button
+                            size="small"
+                            severity="secondary"
+                            class="sharing-btn"
+                            :label="$gettext('Cancel')"
+                            :outlined="true"
+                            :disabled="isSavingSharing"
+                            @click="stopEditingSharing"
+                        />
+                    </div>
+                </div>
                 <div class="item-actions">
                     <Button
                         icon="pi pi-play"
@@ -259,6 +362,17 @@ function queryTypeLabel(search: SavedSearch): string {
                                 item.name,
                             )
                         "
+                    />
+                    <Button
+                        v-if="scope === MINE_SCOPE && sharingGroups"
+                        icon="pi pi-users"
+                        icon-pos="left"
+                        size="small"
+                        class="action-btn"
+                        :label="$gettext('Share')"
+                        :text="true"
+                        :disabled="sharingSearchId === item.savedsearchid"
+                        @click="startEditingSharing(item)"
                     />
                     <Button
                         v-if="scope === MINE_SCOPE"
@@ -411,6 +525,42 @@ function queryTypeLabel(search: SavedSearch): string {
 .item-no-description {
     font-style: italic;
     color: var(--p-text-muted-color);
+}
+
+.item-shared {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    color: var(--p-text-muted-color);
+}
+
+.item-shared .pi {
+    color: var(--p-primary-color);
+}
+
+.item-sharing-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.6rem;
+    border-radius: 0.4rem;
+    background: var(--p-content-background);
+}
+
+.item-sharing-label {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--p-text-muted-color);
+}
+
+.sharing-btn {
+    font-size: 1.2rem;
+}
+
+:deep(.item-sharing-editor .sharing-groups-input),
+:deep(.item-sharing-editor .p-multiselect-label) {
+    font-size: 1.5rem;
 }
 
 .item-actions {

@@ -15,6 +15,7 @@ from itertools import batched
 from typing import Tuple
 
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import QuerySet
@@ -28,8 +29,13 @@ from arches.app.views.api import APIBase
 
 from arches_resource_sets.models import ResourceSet, ResourceSetMember
 
-from arches_search.models.models import SavedSearch
+from arches_search.models.models import SavedSearch, SharedSearchXGroup
 from arches_search.tasks import create_resource_set_from_search
+from arches_search.views.api.saved_search import (
+    INVALID_SHARING_IDS_ERROR,
+    VIEW_GROUP_PERMISSION,
+    is_valid_sharing_ids,
+)
 from arches_search.utils.search import (
     SearchCompiler,
     SearchPayload,
@@ -83,13 +89,18 @@ def create_resource_set_from_queryset(
 
 
 def save_search_as_resource_set(
-    user, name, description, search_body, in_background=False
+    user,
+    name,
+    description,
+    search_body,
+    shared_group_ids=(),
+    in_background=False,
 ) -> dict:
     """
     Runs the search as user and saves its results as a set, with the saved
-    search that lists it, or queues the create_resource_set_from_search task
-    when there are too many to save now. The task calls this again with
-    in_background=True, which always saves.
+    search that lists it, shared with shared_group_ids, or queues the
+    create_resource_set_from_search task when there are too many to save now.
+    The task calls this again with in_background=True, which always saves.
 
     Returns {"message"}, plus "resource_set_id" and "saved_search_id" once
     saved, or "task_id" when queued.
@@ -124,7 +135,7 @@ def save_search_as_resource_set(
                 ).format(count=result_count, threshold=limits["immediate_threshold"])
             )
         task = create_resource_set_from_search.apply_async(
-            (user.pk, name, description, search_body),
+            (user.pk, name, description, search_body, list(shared_group_ids)),
             link=update_user_task_record.s(),
             link_error=log_error.s(),
         )
@@ -148,6 +159,13 @@ def save_search_as_resource_set(
             # drop members edited since, so it would no longer be a snapshot.
             query_definition={"resourceSetId": str(resource_set.pk)},
             creator=user,
+        )
+        # Groups deleted while a background save waited are left out.
+        SharedSearchXGroup.objects.bulk_create(
+            SharedSearchXGroup(saved_search=saved_search, group_id=group_id)
+            for group_id in Group.objects.filter(
+                pk__in=set(shared_group_ids)
+            ).values_list("pk", flat=True)
         )
     return {
         "resource_set_id": str(resource_set.pk),
@@ -181,15 +199,20 @@ class SearchResultsResourceSetAPI(APIBase):
         if not name:
             return JSONResponse({"error": _("A name is required.")}, status=400)
         description = str(body.get("description") or "").strip()
+        shared_group_ids = body.get("groups", [])
+        if not is_valid_sharing_ids([], shared_group_ids):
+            return JSONResponse({"error": INVALID_SHARING_IDS_ERROR}, status=400)
+        if shared_group_ids and not request.user.has_perm(VIEW_GROUP_PERMISSION):
+            return JSONResponse(status=403)
         search_body = {
             key: value
             for key, value in body.items()
-            if key not in ("name", "description")
+            if key not in ("name", "description", "groups")
         }
 
         try:
             saved = save_search_as_resource_set(
-                request.user, name, description, search_body
+                request.user, name, description, search_body, shared_group_ids
             )
         except ValidationError as error:
             return JSONResponse({"error": " ".join(error.messages)}, status=400)
