@@ -26,31 +26,33 @@ from arches_search.views.api.resource_descriptors import ResourceDescriptorsAPI
 
 
 class RelationshipGraphInputTest(SimpleTestCase):
-    def test_labels_only_send_uuids_to_older_arches(self):
+    def test_labels_look_up_every_type_and_fall_back_to_raw_value(self):
         type_id = str(uuid.uuid4())
-        values = {type_id, "", "http://example.test/related", "not-a-uuid"}
+        list_item_uri = f"http://example.test/item/{uuid.uuid4()}"
+        values = {
+            type_id,
+            list_item_uri,
+            "",
+            "http://example.test/related",
+            "not-a-uuid",
+        }
         with patch.object(
             graph_api,
             "get_resource_relationship_type_label",
-            return_value={type_id: "Owns"},
+            return_value={type_id: "Owns", list_item_uri: "Part of"},
         ) as labels:
             result = graph_api._relationship_type_labels(values)
-        labels.assert_called_once_with([type_id])
+        labels.assert_called_once_with(values)
         self.assertEqual(
             result,
             {
                 type_id: "Owns",
+                list_item_uri: "Part of",
                 "": "",
                 "http://example.test/related": "related",
                 "not-a-uuid": "not-a-uuid",
             },
         )
-
-    def test_no_label_query_for_blank_or_url_types(self):
-        with patch.object(graph_api, "get_resource_relationship_type_label") as labels:
-            self.assertEqual(graph_api._relationship_type_labels({""}), {"": ""})
-            self.assertEqual(graph_api._relationship_type_labels(set()), {})
-        labels.assert_not_called()
 
     def test_row_id_preserves_delimiters_in_type_and_blank_types(self):
         graph_id = uuid.uuid4()
