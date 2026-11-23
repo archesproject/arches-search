@@ -1,9 +1,23 @@
 import json
 
-from django.contrib.gis.geos import GEOSGeometry
+from django.contrib.gis.geos import GEOSGeometry, WKBWriter
 from arches.app.datatypes.datatypes import DataTypeFactory
 from arches_search.models.models import GeometrySearch
 from arches_search.indexing.base import BaseIndexing
+
+
+TWO_DIMENSIONS = 2
+
+
+def force_2d(geometry):
+    # The search geometry column is 2D; KML imports and other sources can carry
+    # Z (altitude) coordinates, which PostGIS rejects on insert.
+    if not geometry.hasz:
+        return geometry
+    writer = WKBWriter()
+    writer.outdim = TWO_DIMENSIONS
+    writer.srid = True
+    return GEOSGeometry(writer.write(geometry))
 
 
 class GeoJSONFeatureCollectionIndexing(BaseIndexing):
@@ -23,7 +37,7 @@ class GeoJSONFeatureCollectionIndexing(BaseIndexing):
             if geometry is None:
                 continue
             try:
-                geom = GEOSGeometry(json.dumps(geometry), srid=4326)
+                geom = force_2d(GEOSGeometry(json.dumps(geometry), srid=4326))
             except Exception:
                 continue
             search_items.append(

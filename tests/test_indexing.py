@@ -27,8 +27,16 @@ from arches.app.models.models import (
 from arches_search.functions.search_indexing import SearchIndexingFunction
 from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.indexing.indexers.file_list import FileListIndexing
+from arches_search.indexing.indexers.geojson_feature_collection import (
+    GeoJSONFeatureCollectionIndexing,
+)
 from arches_search.indexing.indexers.string import StringIndexing
-from arches_search.models.models import FileListSearch, NumericSearch, TermSearch
+from arches_search.models.models import (
+    FileListSearch,
+    GeometrySearch,
+    NumericSearch,
+    TermSearch,
+)
 
 
 class IndexingTestCase(TestCase):
@@ -350,6 +358,56 @@ class FileListIndexingTests(IndexingTestCase):
                 },
             ],
         )
+
+
+class GeoJSONFeatureCollectionIndexingTests(IndexingTestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.geometry_node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            name="test_geometry_node",
+            alias="test_geometry_node",
+            datatype="geojson-feature-collection",
+            graph=cls.graph,
+            nodegroup=cls.nodegroup,
+            istopnode=False,
+        )
+
+    def test_geometry_with_z_coordinates_is_saved_as_2d(self):
+        """KML imports produce [lon, lat, alt] coordinates; the 2D column must accept them."""
+        tile = self._make_tile(
+            self.geometry_node,
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {},
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [
+                                    [-120.0, 38.0, 0.0],
+                                    [-120.0, 39.0, 0.0],
+                                    [-119.0, 39.0, 0.0],
+                                    [-120.0, 38.0, 0.0],
+                                ]
+                            ],
+                        },
+                    }
+                ],
+            },
+        )
+
+        result = GeoJSONFeatureCollectionIndexing().index(tile, self.geometry_node)
+
+        self.assertEqual(len(result), 1)
+        result[0].save()
+        saved = GeometrySearch.objects.get(pk=result[0].pk)
+        self.assertFalse(saved.geom.hasz)
+        self.assertEqual(saved.geom.srid, 4326)
+        self.assertEqual(saved.geom.coords[0][1], (-120.0, 39.0))
 
 
 class AllDatatypesNullIndexingTest(IndexingTestCase):
