@@ -19,8 +19,10 @@ from arches_search.utils.search_results_export import record_pending_export
 
 EXPORT_ETL_TYPE = "export"
 VIEW_ETL_MODULE_PERMISSION = "view_etlmodule"
-# Exporters that offer a choice write concepts as UUIDs rather than labels.
-EXPORT_CONCEPTS_AS = "uuids"
+# The exporters that honor export_concepts_as; others ignore it.
+EXPORTERS_OFFERING_CONCEPTS_AS = {"tile-excel-exporter"}
+CONCEPTS_AS_CHOICES = ("labels", "uuids")
+DEFAULT_CONCEPTS_AS = "labels"
 DEFAULT_FILENAME = "search_export"
 
 logger = logging.getLogger(__name__)
@@ -51,7 +53,8 @@ class SearchResultsExportAPI(APIBase):
     notification, so this answers as soon as the export is queued.
 
     A format is the slug of an exporter's ETL module. GET lists the formats the
-    user may choose from.
+    user may choose from, and whether each offers a choice of exporting
+    concepts as labels or UUIDs.
 
     Every visible export module is offered, so each must follow the contract
     branch-excel and tile-excel follow:
@@ -78,6 +81,8 @@ class SearchResultsExportAPI(APIBase):
                     "slug": etl_module.slug,
                     "name": str(etl_module.name),
                     "description": str(etl_module.description or ""),
+                    "offersExportConceptsAs": etl_module.slug
+                    in EXPORTERS_OFFERING_CONCEPTS_AS,
                 }
                 for etl_module in get_available_exporters(request.user)
             ]
@@ -104,6 +109,13 @@ class SearchResultsExportAPI(APIBase):
         # response does not disclose which exporters exist.
         if etl_module is None:
             return JSONResponse({"error": _("Unsupported export format.")}, status=400)
+
+        export_concepts_as = body.get("exportConceptsAs", DEFAULT_CONCEPTS_AS)
+        if export_concepts_as not in CONCEPTS_AS_CHOICES:
+            return JSONResponse(
+                {"error": _("exportConceptsAs must be 'labels' or 'uuids'.")},
+                status=400,
+            )
 
         search_payload = SearchPayload.from_body(body)
         if len(search_payload.graph_slugs or []) != 1:
@@ -150,7 +162,7 @@ class SearchResultsExportAPI(APIBase):
             "graph_id": str(graph["graphid"]),
             "graph_name": str(graph["name"]),
             "resource_ids": resource_ids,
-            "export_concepts_as": EXPORT_CONCEPTS_AS,
+            "export_concepts_as": export_concepts_as,
             # The exporters add ".zip" themselves.
             "filename": os.path.basename(str(body.get("filename") or "").strip())
             or DEFAULT_FILENAME,

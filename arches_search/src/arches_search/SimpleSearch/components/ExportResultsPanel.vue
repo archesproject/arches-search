@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from "vue";
+import { computed, ref, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Button from "openvue/button";
@@ -8,10 +8,13 @@ import RadioButton from "openvue/radiobutton";
 
 import { fetchExportFormats } from "@/arches_search/SimpleSearch/api.ts";
 import {
+    EXPORT_CONCEPTS_AS_LABELS,
+    EXPORT_CONCEPTS_AS_UUIDS,
     EXPORT_STATE_IDLE,
     EXPORT_STATE_PENDING,
 } from "@/arches_search/SimpleSearch/types.ts";
 import type {
+    ExportConceptsAs,
     ExportFormat,
     ExportRequest,
     ExportState,
@@ -42,6 +45,7 @@ const formats = ref<ExportFormat[]>([]);
 const isLoadingFormats = ref(true);
 const formatsLoadFailed = ref(false);
 const selectedFormatSlug = ref<string | null>(null);
+const exportConceptsAs = ref<ExportConceptsAs>(EXPORT_CONCEPTS_AS_LABELS);
 const filename = ref("search_export");
 
 const selectedFormat = computed<ExportFormat | undefined>(() =>
@@ -68,15 +72,6 @@ const canExport = computed<boolean>(
         filename.value.trim() !== "",
 );
 
-watch(
-    () => hasSingleGraph,
-    (isSingle) => {
-        if (!isSingle) {
-            selectedFormatSlug.value = formats.value[0]?.slug ?? null;
-        }
-    },
-);
-
 watchEffect(async () => {
     await loadFormats();
 });
@@ -100,6 +95,7 @@ function onExport(): void {
     emit(EXPORT_EVENT, {
         format: selectedFormat.value.slug,
         filename: filename.value.trim(),
+        exportConceptsAs: exportConceptsAs.value,
     });
 }
 </script>
@@ -198,6 +194,40 @@ function onExport(): void {
                         {{ format.description }}
                     </span>
                 </label>
+            </fieldset>
+
+            <fieldset
+                v-if="selectedFormat?.offersExportConceptsAs"
+                class="export-field"
+                :disabled="!hasSingleGraph"
+            >
+                <legend class="export-label">
+                    {{ $gettext("Export concepts as") }}
+                </legend>
+                <div class="concepts-options">
+                    <span class="concepts-option">
+                        <RadioButton
+                            v-model="exportConceptsAs"
+                            name="exportConceptsAs"
+                            input-id="export-concepts-labels"
+                            :value="EXPORT_CONCEPTS_AS_LABELS"
+                        />
+                        <label for="export-concepts-labels">
+                            {{ $gettext("Labels") }}
+                        </label>
+                    </span>
+                    <span class="concepts-option">
+                        <RadioButton
+                            v-model="exportConceptsAs"
+                            name="exportConceptsAs"
+                            input-id="export-concepts-uuids"
+                            :value="EXPORT_CONCEPTS_AS_UUIDS"
+                        />
+                        <label for="export-concepts-uuids">
+                            {{ $gettext("UUIDs") }}
+                        </label>
+                    </span>
+                </div>
             </fieldset>
 
             <div class="export-field">
@@ -364,6 +394,21 @@ function onExport(): void {
 
 .format-option-name {
     font-size: var(--p-arches-search-font-size);
+}
+
+.concepts-options {
+    display: flex;
+    gap: 2rem;
+}
+
+.concepts-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.concepts-option label {
+    cursor: pointer;
 }
 
 .format-option-description,

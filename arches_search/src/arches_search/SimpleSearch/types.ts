@@ -189,11 +189,20 @@ export interface ExportFormat {
     slug: string;
     name: string;
     description: string;
+    offersExportConceptsAs: boolean;
 }
+
+export const EXPORT_CONCEPTS_AS_LABELS = "labels";
+export const EXPORT_CONCEPTS_AS_UUIDS = "uuids";
+
+export type ExportConceptsAs =
+    | typeof EXPORT_CONCEPTS_AS_LABELS
+    | typeof EXPORT_CONCEPTS_AS_UUIDS;
 
 export interface ExportRequest {
     format: string;
     filename: string;
+    exportConceptsAs: ExportConceptsAs;
 }
 
 export const EXPORT_STATE_IDLE = "idle";

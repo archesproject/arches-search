@@ -95,7 +95,7 @@ class SearchResultsExportAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         return {exporter["slug"] for exporter in response.json()}
 
-    def _post_export(self, export_format):
+    def _post_export(self, export_format, **extra):
         return self.client.post(
             reverse("search_results_export"),
             json.dumps(
@@ -103,6 +103,7 @@ class SearchResultsExportAPITest(TestCase):
                     "format": export_format,
                     "graph_slugs": [self.graph.slug],
                     "filename": "my_export",
+                    **extra,
                 }
             ),
             content_type="application/json",
@@ -147,6 +148,18 @@ class SearchResultsExportAPITest(TestCase):
         )
         self.assertNotIn(self.hidden_module.slug, slugs)
 
+    def test_get_marks_the_exporters_that_offer_concepts_as(self):
+        self.client.force_login(self.superuser)
+        response = self.client.get(reverse("search_results_export"))
+
+        offers = {
+            exporter["slug"]: exporter["offersExportConceptsAs"]
+            for exporter in response.json()
+        }
+        self.assertTrue(offers["tile-excel-exporter"])
+        self.assertFalse(offers["branch-excel-exporter"])
+        self.assertFalse(offers[self.granted_module.slug])
+
     # --- POST: starting an export ---
 
     def test_post_rejects_an_exporter_the_user_was_not_granted(self):
@@ -159,7 +172,12 @@ class SearchResultsExportAPITest(TestCase):
         response = self._post_export(self.hidden_module.slug)
         self.assertEqual(response.status_code, 400)
 
-    def _post_export_of(self, resource_ids, exporter_class=FakeExporter):
+    def test_post_rejects_an_unknown_concepts_as(self):
+        self.client.force_login(self.member)
+        response = self._post_export(self.granted_module.slug, exportConceptsAs="codes")
+        self.assertEqual(response.status_code, 400)
+
+    def _post_export_of(self, resource_ids, exporter_class=FakeExporter, **extra):
         compiled = MagicMock()
         compiled.results.filter.return_value.values_list.return_value = resource_ids
         search_compiler = MagicMock()
@@ -171,7 +189,7 @@ class SearchResultsExportAPITest(TestCase):
             patch(f"{VIEW_MODULE}.validate_search_payload"),
             patch.object(ETLModule, "get_class_module", return_value=exporter_class),
         ):
-            return self._post_export(self.granted_module.slug)
+            return self._post_export(self.granted_module.slug, **extra)
 
     def test_post_hands_the_results_to_the_chosen_exporter(self):
         resource_id = uuid.uuid4()
@@ -183,6 +201,12 @@ class SearchResultsExportAPITest(TestCase):
         )
         self.assertEqual(FakeExporter.received_post["resource_ids"], [str(resource_id)])
         self.assertEqual(FakeExporter.received_post["filename"], "my_export")
+        self.assertEqual(FakeExporter.received_post["export_concepts_as"], "labels")
+
+    def test_post_hands_the_chosen_concepts_as_to_the_exporter(self):
+        response = self._post_export_of([uuid.uuid4()], exportConceptsAs="uuids")
+
+        self.assertEqual(response.status_code, 202)
         self.assertEqual(FakeExporter.received_post["export_concepts_as"], "uuids")
 
     def test_post_records_the_export_so_it_can_be_downloaded(self):

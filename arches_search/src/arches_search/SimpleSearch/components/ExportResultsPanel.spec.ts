@@ -51,11 +51,13 @@ const BRANCH_EXCEL: ExportFormat = {
     slug: "branch-excel-exporter",
     name: "Branch Excel Exporter",
     description: "Export branch data",
+    offersExportConceptsAs: false,
 };
 const TILE_EXCEL: ExportFormat = {
     slug: "tile-excel-exporter",
     name: "Tile Excel Exporter",
     description: "Export tile data",
+    offersExportConceptsAs: true,
 };
 
 async function mountPanel(hasSingleGraph = true) {
@@ -128,25 +130,56 @@ describe("ExportResultsPanel formats", () => {
                 {
                     format: TILE_EXCEL.slug,
                     filename: "search_export",
+                    exportConceptsAs: "labels",
                 },
             ],
         ]);
     });
+});
 
-    it("returns to the first format when more than one resource type is selected", async () => {
+describe("ExportResultsPanel concepts", () => {
+    beforeEach(() => {
+        vi.mocked(fetchExportFormats).mockReset();
         vi.mocked(fetchExportFormats).mockResolvedValue([
             BRANCH_EXCEL,
             TILE_EXCEL,
         ]);
+    });
+
+    it("hides the choice for a format that does not offer it", async () => {
+        const wrapper = await mountPanel();
+
+        expect(wrapper.find("#export-concepts-labels").exists()).toBe(false);
+    });
+
+    it("offers the choice for a format that does", async () => {
         const wrapper = await mountPanel();
 
         await wrapper
             .find(`#export-format-${TILE_EXCEL.slug}`)
             .trigger("click");
-        await wrapper.setProps({ hasSingleGraph: false });
 
-        expect(
-            wrapper.find(".format-option.selected .format-option-name").text(),
-        ).toBe(BRANCH_EXCEL.name);
+        expect(wrapper.find("#export-concepts-labels").exists()).toBe(true);
+        expect(wrapper.find("#export-concepts-uuids").exists()).toBe(true);
+    });
+
+    it("emits the chosen way of exporting concepts", async () => {
+        const wrapper = await mountPanel();
+
+        await wrapper
+            .find(`#export-format-${TILE_EXCEL.slug}`)
+            .trigger("click");
+        await wrapper.find("#export-concepts-uuids").trigger("click");
+        await exportButton(wrapper).trigger("click");
+
+        expect(wrapper.emitted("export")).toEqual([
+            [
+                {
+                    format: TILE_EXCEL.slug,
+                    filename: "search_export",
+                    exportConceptsAs: "uuids",
+                },
+            ],
+        ]);
     });
 });

@@ -321,6 +321,8 @@ export async function startSearchResultsExport({
     });
     requestPayload.format = exportRequest.format;
     requestPayload.filename = exportRequest.filename;
+    requestPayload.exportConceptsAs = exportRequest.exportConceptsAs;
+
     const response = await fetch(
         generateArchesURL("arches_search:search_results_export"),
         {
