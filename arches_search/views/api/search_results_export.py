@@ -31,13 +31,6 @@ logger = logging.getLogger(__name__)
 
 
 def get_available_exporters(user):
-    """
-    The Bulk Data Manager exporters this user may run, decided by the same rules
-    the Bulk Data Manager applies to its own module list: modules configured
-    with "show": false are hidden, and the user needs view_etlmodule on the
-    module. Admins grant that permission per user or group from the ETL module
-    admin page, or for every module with `manage.py permissions`.
-    """
     return [
         etl_module
         for etl_module in models.ETLModule.objects.filter(
@@ -49,27 +42,6 @@ def get_available_exporters(user):
 
 
 class SearchResultsExportAPI(APIBase):
-    """
-    Hands a search's results to a Bulk Data Manager exporter, which queues the
-    export on Celery. The user is told when the file is ready through an Arches
-    notification, so this answers as soon as the export is queued.
-
-    A format is the slug of an exporter's ETL module. GET lists the formats the
-    user may choose from, and whether each offers a choice of exporting
-    concepts as labels or UUIDs.
-
-    Every visible export module is offered, so each must follow the contract
-    branch-excel and tile-excel follow:
-      - it is built as cls(request=request) and export(request) reads
-        module, load_id, graph_id, graph_name, resource_ids,
-        export_concepts_as and filename from request.POST;
-      - export() queues its work with load_data_async and returns
-        {"success": bool, "data": {...}}, with data["message"] on failure;
-      - the task writes the zip's TempFile id to load_details.zipfile.fileid,
-        which arches_search.utils.search_results_export uses to link the file.
-    An exporter that raises instead is reported as a 500 and its pending
-    export record is discarded.
-    """
 
     def get(self, request):
         if not request.user.is_authenticated:
