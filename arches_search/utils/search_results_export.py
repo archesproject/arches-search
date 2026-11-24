@@ -7,6 +7,8 @@ from django.utils.translation import gettext as _
 
 from arches.app.models import models
 
+EXPORT_ETL_TYPE = "export"
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,15 +25,19 @@ def attach_download_link(task_args, task_kwargs):
     """
     Completes any pending search export whose loadid was an argument of the
     task that just finished. Exporter tasks differ in signature, but each is
-    handed the loadid.
+    handed the loadid. Only load events run by an export ETL module count, so
+    other tasks that happen to take the same UUID are ignored.
     """
     candidate_ids = _uuid_arguments(task_args, task_kwargs)
     if not candidate_ids:
         return
 
+    export_load_ids = models.LoadEvent.objects.filter(
+        loadid__in=candidate_ids, etl_module__etl_type=EXPORT_ETL_TYPE
+    ).values("loadid")
     pending_exports = models.SearchExportHistory.objects.filter(
         Q(downloadfile="") | Q(downloadfile__isnull=True),
-        pk__in=candidate_ids,
+        pk__in=export_load_ids,
     ).select_related("user")
     for export in pending_exports:
         _complete_export(export)

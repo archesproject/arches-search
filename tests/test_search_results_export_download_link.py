@@ -164,6 +164,30 @@ class AttachDownloadLinkTest(TestCase):
         self.assertFalse(self.export.downloadfile)
         self.assertEqual(notification.context, {"loadid": str(self.load_id)})
 
+    def test_ignores_tasks_that_ran_no_export_module(self):
+        import_module = ETLModule.objects.create(
+            name="Some Importer",
+            icon="fa fa-upload",
+            etl_type="import",
+            component="",
+            componentname="some-importer",
+        )
+        temp_file = TempFile.objects.create(path=ZIP_PATH, source="test")
+        LoadEvent.objects.create(
+            loadid=self.load_id,
+            user=self.user,
+            etl_module=import_module,
+            load_details={"zipfile": {"fileid": str(temp_file.pk)}},
+        )
+        notification = self._notify("Import: Completed", self.load_id)
+
+        attach_download_link(self._task_args(), {})
+
+        self.export.refresh_from_db()
+        notification.refresh_from_db()
+        self.assertFalse(self.export.downloadfile)
+        self.assertEqual(notification.context, {"loadid": str(self.load_id)})
+
     def test_task_postrun_handler_never_raises(self):
         with (
             patch(

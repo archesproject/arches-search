@@ -15,9 +15,11 @@ from arches_search.utils.search import (
     SearchPayload,
     validate_search_payload,
 )
-from arches_search.utils.search_results_export import record_pending_export
+from arches_search.utils.search_results_export import (
+    EXPORT_ETL_TYPE,
+    record_pending_export,
+)
 
-EXPORT_ETL_TYPE = "export"
 VIEW_ETL_MODULE_PERMISSION = "view_etlmodule"
 # The exporters that honor export_concepts_as; others ignore it.
 EXPORTERS_OFFERING_CONCEPTS_AS = {"tile-excel-exporter"}
