@@ -1,22 +1,3 @@
-"""
-Gives search results exports a download in their completion notification.
-
-The Bulk Data Manager exporters announce a finished export with a notification
-that carries no link, because the Bulk Data Manager lists finished exports on
-its own page. Exports started from search have no such page. So each one is
-recorded as a SearchExportHistory when it is queued, and when the exporter's
-Celery task finishes, the zip file the exporter saved is attached to that record
-and listed in the files of the notification the exporter tagged with the
-export's load id (or in a new notification, if there is none). Core's
-notification panel offers each
-file as a download from /files/<id>, which serves a SearchExportHistory's file,
-and core expires the file after CELERY_SEARCH_EXPORT_EXPIRES like any other
-search export.
-
-The notification's "link" is not used: core's get_export_file view, which it
-leads to, requires Elasticsearch.
-"""
-
 import logging
 import os
 import uuid
@@ -40,9 +21,9 @@ def record_pending_export(load_id, user, resource_count):
 
 def attach_download_link(task_args, task_kwargs):
     """
-    Completes any pending search export whose load id was an argument of the
+    Completes any pending search export whose loadid was an argument of the
     task that just finished. Exporter tasks differ in signature, but each is
-    handed the load id.
+    handed the loadid.
     """
     candidate_ids = _uuid_arguments(task_args, task_kwargs)
     if not candidate_ids:
