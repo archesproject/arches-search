@@ -5,6 +5,7 @@ from django.db.models import QuerySet
 from django.utils.translation import gettext as _
 from arches.app.models import models as arches_models
 
+from arches_search.indexing.index_descriptor import DESCRIPTOR_NODE_ALIAS
 from arches_search.utils.advanced_search.constants import (
     OPERAND_TYPE_PATH,
     SUBJECT_TYPE_NODE,
@@ -81,7 +82,9 @@ class NodeAliasDatatypeRegistry:
         single node.
         """
         return self.readable_nodes.exclude_unreadable_rows(
-            model_class.objects.filter(graph_slug=graph_slug)
+            model_class.objects.filter(graph_slug=graph_slug).exclude(
+                node_alias=DESCRIPTOR_NODE_ALIAS
+            )
         )
 
     def _preload_required_datatypes(

@@ -19,6 +19,11 @@ from django.db.models import Q, QuerySet
 from arches.app.models.models import Node, NodeGroup
 from arches.app.utils.permission_backend import get_nodegroups_by_perm
 
+from arches_search.indexing.index_descriptor import (
+    DESCRIPTOR_NODE_ALIAS,
+    descriptor_nodegroup_ids_by_graph_slug,
+)
+
 READ_NODEGROUP_PERMISSION = "models.read_nodegroup"
 
 
@@ -49,6 +54,11 @@ class ReadableNodes:
         unreadable_rows = Q()
         for graph_slug, node_aliases in self._unreadable_aliases_by_graph_slug.items():
             unreadable_rows |= Q(graph_slug=graph_slug, node_alias__in=node_aliases)
+        if self._unreadable_descriptor_graph_slugs:
+            unreadable_rows |= Q(
+                graph_slug__in=self._unreadable_descriptor_graph_slugs,
+                node_alias=DESCRIPTOR_NODE_ALIAS,
+            )
         return rows.exclude(unreadable_rows)
 
     def exclude_unreadable_relations(self, relations: QuerySet) -> QuerySet:
@@ -93,3 +103,18 @@ class ReadableNodes:
                 node["alias"]
             )
         return aliases_by_graph_slug
+
+    @cached_property
+    def _unreadable_descriptor_graph_slugs(self) -> FrozenSet[str]:
+        """Graphs whose display name is built from a nodegroup the user cannot read."""
+        unreadable_nodegroup_ids = {
+            str(nodegroup_id) for nodegroup_id in self._unreadable_nodegroup_ids
+        }
+        graph_slugs = set()
+        descriptor_nodegroup_ids = descriptor_nodegroup_ids_by_graph_slug()
+        for graph_slug, nodegroup_ids in descriptor_nodegroup_ids.items():
+            for nodegroup_id in nodegroup_ids:
+                if str(nodegroup_id) in unreadable_nodegroup_ids:
+                    graph_slugs.add(graph_slug)
+                    break
+        return frozenset(graph_slugs)

@@ -6,9 +6,15 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
-from arches.app.models.models import GraphModel, ResourceInstance, TileModel
+from arches.app.models.models import (
+    FunctionXGraph,
+    GraphModel,
+    ResourceInstance,
+    TileModel,
+)
 from arches.app.utils.permission_backend import assign_perm
 
+from arches_search.indexing.index_descriptor import DESCRIPTOR_NODE_ALIAS
 from arches_search.models.models import TermSearch
 from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
@@ -26,6 +32,8 @@ from tests.integration.utils.advanced_search.test_advanced_search import (
     PERSON_C_ID,
     PERSON_D_ID,
 )
+
+PRIMARY_DESCRIPTORS_FUNCTION_ID = "60000000-0000-0000-0000-000000000001"
 
 # python manage.py test tests.test_search_permission_filtering --settings="tests.test_settings"
 #
@@ -554,6 +562,44 @@ class NodePermissionFilteringTest(AdvancedSearchSetupMixin, TestCase):
             self.assertIn(PERSON_A_ID, matches_as(self.restricted, "ALPHA"))
         with self.subTest("the unreadable value matches for a user who can read it"):
             self.assertIn(PERSON_A_ID, matches_as(self.admin, "CHILD"))
+
+    def test_term_search_skips_a_descriptor_built_from_unreadable_nodes(self):
+        FunctionXGraph.objects.create(
+            function_id=PRIMARY_DESCRIPTORS_FUNCTION_ID,
+            graph=self.person_graph,
+            config={
+                "descriptor_types": {
+                    "name": {
+                        "nodegroup_id": str(self.alias.nodegroupid),
+                        "string_template": "<last_name>",
+                    }
+                }
+            },
+        )
+        TermSearch.objects.create(
+            node_alias=DESCRIPTOR_NODE_ALIAS,
+            tileid_id=TileModel.objects.filter(resourceinstance_id=PERSON_A_ID)
+            .first()
+            .tileid,
+            resourceinstanceid_id=PERSON_A_ID,
+            datatype="string",
+            language="en",
+            graph_slug="person",
+            value="DESCRIPTORNAME",
+        )
+
+        def matches_as(user):
+            return set(
+                get_related_resources_by_text(
+                    ["DESCRIPTORNAME"],
+                    self.person_graph.graphid,
+                    ReadableNodes(user),
+                    max_hops=0,
+                ).values_list("resourceinstanceid", flat=True)
+            )
+
+        self.assertNotIn(PERSON_A_ID, matches_as(self.restricted))
+        self.assertIn(PERSON_A_ID, matches_as(self.admin))
 
     def test_term_suggestions_skip_values_of_unreadable_nodes(self):
         def suggestions_as(user, text):
