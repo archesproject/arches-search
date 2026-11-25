@@ -11,6 +11,7 @@ import {
 import { OPERAND_TYPE_LITERAL } from "@/arches_search/AdvancedSearch/types.ts";
 
 import type { AliasedNodeData } from "@/arches_vue_components/types.ts";
+import type { LanguageValue } from "@/arches_vue_components/datatypes/string/types.ts";
 import type {
     GraphModel,
     LiteralOperand,
@@ -31,9 +32,10 @@ const emit = defineEmits<{
 }>();
 
 const initialValue = modelValue?.value ?? null;
-const initialAliasedNodeData = ref<AliasedNodeData | undefined>(
+const aliasedNodeData = ref<AliasedNodeData | undefined>(
     buildInitialAliasedNodeData(),
 );
+const selectedLanguageCode = ref<string>();
 const referenceLabelLookup = labelsToLookUp();
 const isLookingUpLabels = ref(referenceLabelLookup !== null);
 
@@ -48,7 +50,7 @@ watchEffect(async () => {
             referenceLabelLookup.listId,
             referenceLabelLookup.labels,
         );
-        initialAliasedNodeData.value = {
+        aliasedNodeData.value = {
             node_value: nodeValue,
             display_value: referenceLabelLookup.labels.join(", "),
             details: [],
@@ -89,11 +91,39 @@ function buildInitialAliasedNodeData(): AliasedNodeData | undefined {
 function handleGenericWidgetUpdate(
     updatedAliasedNodeData: AliasedNodeData,
 ): void {
-    emit(UPDATE_MODEL_VALUE, {
+    aliasedNodeData.value = updatedAliasedNodeData;
+    emit(UPDATE_MODEL_VALUE, buildOperand(updatedAliasedNodeData));
+}
+
+function handleSelectedLanguageUpdate(languageCode: string): void {
+    const isLanguageSwitch = selectedLanguageCode.value !== undefined;
+    selectedLanguageCode.value = languageCode;
+    if (isLanguageSwitch && aliasedNodeData.value) {
+        emit(UPDATE_MODEL_VALUE, buildOperand(aliasedNodeData.value));
+    }
+}
+
+function buildOperand(currentAliasedNodeData: AliasedNodeData): LiteralOperand {
+    if (selectedLanguageCode.value === undefined) {
+        return {
+            type: OPERAND_TYPE_LITERAL,
+            value: currentAliasedNodeData.node_value,
+            display_value: currentAliasedNodeData.display_value || undefined,
+        };
+    }
+    const localizedValue = currentAliasedNodeData.node_value as Record<
+        string,
+        LanguageValue
+    >;
+    const selectedEntry = localizedValue[selectedLanguageCode.value];
+    if (!selectedEntry) {
+        return { type: OPERAND_TYPE_LITERAL, value: {} };
+    }
+    return {
         type: OPERAND_TYPE_LITERAL,
-        value: updatedAliasedNodeData.node_value,
-        display_value: updatedAliasedNodeData.display_value || undefined,
-    });
+        value: { [selectedLanguageCode.value]: selectedEntry },
+        display_value: selectedEntry.value || undefined,
+    };
 }
 </script>
 
@@ -107,8 +137,9 @@ function handleGenericWidgetUpdate(
                 :node-alias="subjectTerminalNode.alias"
                 :should-show-label="false"
                 :value="initialValue"
-                :aliased-node-data="initialAliasedNodeData"
+                :aliased-node-data="aliasedNodeData"
                 @update:aliased-node-data="handleGenericWidgetUpdate"
+                @update:selected-language="handleSelectedLanguageUpdate"
             />
         </div>
     </div>

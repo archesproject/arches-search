@@ -12,6 +12,7 @@ from arches.app.models.models import (
     TileModel,
 )
 
+from arches_search.indexing.index_from_tile import index_from_tile
 from arches_search.models.models import BooleanSearch, DateRangeSearch, DateSearch
 from arches_search.utils.advanced_search.advanced_search import (
     AdvancedSearchQueryCompiler,
@@ -1393,6 +1394,77 @@ class AdvancedSearchTestCase(AdvancedSearchSetupMixin, TestCase):
             }
         )
         self.assertEqual(result, {PERSON_A_ID, PERSON_C_ID, PERSON_D_ID})
+
+    def test_related_equals_with_language_dict_matches_only_the_selected_locale(self):
+        """
+        Tests that a RELATED string clause compares the related resource's text in the
+        operand's language only. Person C, a friend of Persons A and B, gets the French first
+        name AMI; asking for AMI in English matches nobody.
+        """
+        person_c_alias_tile = TileModel.objects.get(
+            resourceinstance_id=PERSON_C_ID, nodegroup=self.alias
+        )
+        person_c_alias_tile.data[str(self.first_name_node.nodeid)] = (
+            self._localized_string_value("FRIEND", fr="AMI")
+        )
+        person_c_alias_tile.save()
+        for index_record in index_from_tile(person_c_alias_tile):
+            index_record.save()
+
+        self.assertEqual(
+            self._persons_with_a_friend_whose_first_name_equals({"fr": "AMI"}),
+            {PERSON_A_ID, PERSON_B_ID},
+        )
+        self.assertEqual(
+            self._persons_with_a_friend_whose_first_name_equals({"en": "AMI"}),
+            set(),
+        )
+
+    def _persons_with_a_friend_whose_first_name_equals(self, localized_operand_value):
+        return self._compile(
+            {
+                "graph_slug": "person",
+                "scope": "RESOURCE",
+                "logic": "AND",
+                "clauses": [
+                    {
+                        "type": "RELATED",
+                        "quantifier": "ANY",
+                        "subject": {
+                            "type": "NODE",
+                            "graph_slug": "person",
+                            "node_alias": "first_name",
+                            "search_models": [],
+                        },
+                        "operator": "EQUALS",
+                        "operands": [
+                            {"type": "LITERAL", "value": localized_operand_value}
+                        ],
+                    }
+                ],
+                "groups": [
+                    {
+                        "graph_slug": "person",
+                        "scope": "RESOURCE",
+                        "logic": "AND",
+                        "clauses": [],
+                        "groups": [],
+                        "aggregations": [],
+                        "relationship": None,
+                    }
+                ],
+                "aggregations": [],
+                "relationship": {
+                    "path": {
+                        "type": "NODE",
+                        "graph_slug": "person",
+                        "node_alias": "friends",
+                    },
+                    "is_inverse": False,
+                    "traversal_quantifier": "ANY",
+                },
+            }
+        )
 
     def test_person_dog_tail_gte_person_fingernail(self):
         """
