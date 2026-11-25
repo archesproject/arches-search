@@ -1,59 +1,20 @@
-import json
-
 from django.db.models import Q
 
+from arches.app.models.models import GraphModel
 from arches.app.utils import permission_backend
-from arches_search.models.models import TermSearch
+from arches_search.indexing.indexing_factory import IndexingFactory
+from arches_search.models.models import TermSearch, UUIDSearch
 from arches_search.utils.readable_nodes import ReadableNodes
-from arches_search.utils.term_search.matching import (
-    build_term_match_filter,
-)
-from arches.extensions.controlled_lists.models import List
-from arches.extensions.controlled_lists.views import ListView
+from arches_search.utils.term_search.matching import build_term_match_filter
 
-from arches.app.models.models import TileModel, Node, GraphModel
-
-# Matches are bucketed by datatype (reference vs everything else) so a
-# flood of incidental term matches can't crowd the one matching
-# reference-datatype row out of MAX_RESULTS before the scan reaches it.
+# Matches are bucketed (vocabulary values vs everything else) so a flood of
+# incidental term matches can't crowd the one matching vocabulary row out of
+# MAX_RESULTS before the scan reaches it.
 MAX_RESULTS = 100
 INITIAL_RAW_MATCH_LIMIT = 1000
 MAX_RAW_MATCH_LIMIT = 200000
 RAW_MATCH_LIMIT_GROWTH_FACTOR = 10
-
-
-def _get_item_path(list_data, value_id, language_code="en"):
-    """Return the prefLabel path from the list name to value_id's item."""
-    items = list_data.get("items", [])
-    items_by_id = {item["id"]: item for item in items}
-    value_to_item = {
-        item_value["id"]: item
-        for item in items
-        for item_value in item.get("values", [])
-    }
-
-    def pref_label(item):
-        fallback_label = item["id"]
-        for item_value in item.get("values", []):
-            if item_value["valuetype_id"] == "prefLabel":
-                fallback_label = item_value["value"]
-                if item_value["language_id"] == language_code:
-                    return item_value["value"]
-        return fallback_label
-
-    item = value_to_item.get(value_id)
-
-    if item is None:
-        return None
-
-    path = []
-    while item is not None:
-        path.append(pref_label(item))
-        parent_id = item.get("parent_id")
-        item = items_by_id.get(parent_id) if parent_id else None
-
-    path.reverse()
-    return [list_data["name"]] + path
+MIN_QUERY_LENGTH = 3
 
 
 def _find_distinct_matches(term_filter, user, readable_nodes):
@@ -103,16 +64,96 @@ def _find_distinct_matches(term_filter, user, readable_nodes):
         )
 
 
+def _vocabulary_items(query, vocabulary_rows, vocabulary_datatypes, readable_nodes):
+    labels = {vocabulary_row["value"] for vocabulary_row in vocabulary_rows}
+    labelled_tile_ids = readable_nodes.exclude_unreadable_rows(
+        TermSearch.objects.filter(value__in=labels, datatype__in=vocabulary_datatypes)
+    ).values("tileid")
+
+    used_items = []
+    searchable_items = []
+    for datatype in vocabulary_datatypes:
+        indexer = IndexingFactory().get_indexing_class(datatype)
+        used_item_ids = UUIDSearch.objects.filter(
+            tileid__in=labelled_tile_ids, datatype=datatype
+        ).values("value")
+        used_items += [
+            (item_id, datatype, label)
+            for item_id, label in indexer.item_labels(used_item_ids, labels)
+        ]
+        searchable_items += [
+            (item_id, datatype, label)
+            for item_id, label in indexer.searchable_items(query, MAX_RESULTS)
+        ]
+
+    items_by_id = {}
+    for item_id, datatype, label in used_items + searchable_items:
+        items_by_id.setdefault(item_id, (item_id, datatype, label))
+    return list(items_by_id.values())[:MAX_RESULTS]
+
+
+def _item_paths(vocabulary_items, language_code):
+    item_ids_by_datatype = {}
+    for item_id, datatype, _label in vocabulary_items:
+        item_ids_by_datatype.setdefault(datatype, []).append(item_id)
+
+    paths = {}
+    for datatype, item_ids in item_ids_by_datatype.items():
+        indexer = IndexingFactory().get_indexing_class(datatype)
+        paths.update(indexer.item_paths(item_ids, language_code))
+    return paths
+
+
 def build_term_suggestions(query, request):
+    query = query.strip()
+    if len(query) < MIN_QUERY_LENGTH:
+        return []
+
     term_filter = build_term_match_filter(query)
     readable_nodes = ReadableNodes(request.user)
-    results = _find_distinct_matches(
-        term_filter & Q(datatype="reference"), request.user, readable_nodes
-    ) + _find_distinct_matches(
-        term_filter & ~Q(datatype="reference"), request.user, readable_nodes
+    vocabulary_datatypes = IndexingFactory().vocabulary_datatypes()
+    vocabulary_rows = _find_distinct_matches(
+        term_filter & Q(datatype__in=vocabulary_datatypes),
+        request.user,
+        readable_nodes,
+    )
+    record_rows = _find_distinct_matches(
+        term_filter & ~Q(datatype__in=vocabulary_datatypes),
+        request.user,
+        readable_nodes,
     )
 
-    graph_slugs = {result["graph_slug"] for result in results if result["graph_slug"]}
+    vocabulary_items = _vocabulary_items(
+        query, vocabulary_rows, vocabulary_datatypes, readable_nodes
+    )
+    paths = _item_paths(vocabulary_items, request.LANGUAGE_CODE)
+    suggestions = [
+        {
+            "id": str(item_id),
+            "item_id": str(item_id),
+            "controlled_term": True,
+            "datatype": datatype,
+            "text": label,
+            "addtional_info": {"path": paths[item_id]} if item_id in paths else {},
+            "resourceinstanceid": None,
+            "graph_icon": "",
+            "graph_name": "",
+        }
+        for item_id, datatype, label in vocabulary_items
+    ]
+
+    mapped_labels = {label for _item_id, _datatype, label in vocabulary_items}
+    record_rows += [
+        vocabulary_row
+        for vocabulary_row in vocabulary_rows
+        if vocabulary_row["value"] not in mapped_labels
+    ]
+
+    graph_slugs = {
+        record_row["graph_slug"]
+        for record_row in record_rows
+        if record_row["graph_slug"]
+    }
     graph_info_by_slug = {
         graph["slug"]: {"icon": graph["iconclass"], "name": str(graph["name"])}
         for graph in GraphModel.objects.filter(
@@ -121,55 +162,19 @@ def build_term_suggestions(query, request):
         .exclude(slug="arches_system_settings")
         .values("slug", "iconclass", "name")
     }
-
-    data = []
-
-    for result in results:
-        addtional_info = {}
-        if result["datatype"] == "reference":
-            try:
-                tile = TileModel.objects.select_related("resourceinstance").get(
-                    pk=result["tileid"]
-                )
-                node = Node.objects.get(
-                    alias=result["node_alias"],
-                    graph_id=tile.resourceinstance.graph_id,
-                )
-
-                selected_reference = None
-                for reference in tile.data[str(node.pk)]:
-                    for label in reference["labels"]:
-                        if (
-                            label["value"] == result["value"]
-                            and label["valuetype_id"] == "prefLabel"
-                        ):
-                            selected_reference = (reference["list_id"], label["id"])
-                            break
-
-                view = ListView()
-                if selected_reference:
-                    list_id, label_id = selected_reference
-                    serialized = view.get(request, list_id=list_id)
-                    list_data = json.loads(serialized.content)
-                    addtional_info["path"] = _get_item_path(
-                        list_data, label_id, request.LANGUAGE_CODE
-                    )
-
-            except List.DoesNotExist:
-                pass
-
-        graph_info = graph_info_by_slug.get(result["graph_slug"], {})
-
-        data.append(
+    for record_row in record_rows:
+        graph_info = graph_info_by_slug.get(record_row["graph_slug"], {})
+        suggestions.append(
             {
-                "id": result["id"],
-                "datatype": result["datatype"],
-                "text": result["value"],
-                "addtional_info": addtional_info,
-                "resourceinstanceid": result["resourceinstanceid"],
+                "id": record_row["id"],
+                "controlled_term": record_row["datatype"] in vocabulary_datatypes,
+                "datatype": record_row["datatype"],
+                "text": record_row["value"],
+                "addtional_info": {},
+                "resourceinstanceid": record_row["resourceinstanceid"],
                 "graph_icon": graph_info.get("icon") or "",
                 "graph_name": graph_info.get("name") or "",
             }
         )
 
-    return data
+    return suggestions

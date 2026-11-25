@@ -25,7 +25,7 @@ from arches_search.utils.advanced_search.registries.search_model_registry import
 )
 from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.search.types import SearchPayload, SearchResult
-from arches_search.utils.term_search.matching import get_related_resources_by_text
+from arches_search.utils.term_search.matching import get_related_resources_by_terms
 from arches_search.utils.term_search.relationship_expansion import (
     get_max_allowed_hops,
 )
@@ -100,20 +100,6 @@ def _resource_type_counts(
         }
         for graph in graphs
     ]
-
-
-def _term_texts_by_datatype(terms: List[Any]) -> Dict[Optional[str], List[str]]:
-    """
-    A string term matches any datatype, so it is grouped under None; an object
-    term only matches its own datatype.
-    """
-    term_texts_by_datatype: Dict[Optional[str], List[str]] = {}
-    for term in terms:
-        if isinstance(term, str):
-            term_texts_by_datatype.setdefault(None, []).append(term)
-        else:
-            term_texts_by_datatype.setdefault(term["datatype"], []).append(term["text"])
-    return term_texts_by_datatype
 
 
 class SearchCompiler:
@@ -290,32 +276,14 @@ class SearchCompiler:
         """
         What the term search matches in this graph, or None when there is not
         one.
-
-        get_related_resources_by_text expands each term independently and then
-        intersects, but restricts every term in a call to one datatype. So the
-        terms are grouped by datatype, one call per group, and those intersected.
         """
         term_search = self.search_payload.term_search
         if not term_search or not term_search.get("terms"):
             return None
 
-        max_hops = min(term_search.get("max_hops") or 0, get_max_allowed_hops())
-        matches = None
-        for datatype, term_texts in _term_texts_by_datatype(
-            term_search["terms"]
-        ).items():
-            datatype_matches = get_related_resources_by_text(
-                term_texts,
-                graph_id,
-                self.readable_nodes,
-                max_hops=max_hops,
-                datatype=datatype,
-            )
-            matches = (
-                datatype_matches
-                if matches is None
-                else matches.filter(
-                    resourceinstanceid__in=datatype_matches.values("resourceinstanceid")
-                )
-            )
-        return matches
+        return get_related_resources_by_terms(
+            term_search["terms"],
+            graph_id,
+            self.readable_nodes,
+            max_hops=min(term_search.get("max_hops") or 0, get_max_allowed_hops()),
+        )

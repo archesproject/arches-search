@@ -4,7 +4,7 @@ import { computed } from "vue";
 import {
     getHighlightSegments,
     getSuggestionPath,
-    isConceptSuggestion,
+    isControlledTermSuggestion,
 } from "@/arches_search/SimpleSearch/components/TermFilter/suggestion-utils.ts";
 
 import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
@@ -14,7 +14,7 @@ const { suggestion, query } = defineProps<{
     query: string;
 }>();
 
-const isConcept = computed(() => isConceptSuggestion(suggestion));
+const isControlledTerm = computed(() => isControlledTermSuggestion(suggestion));
 
 const highlightSegments = computed(() =>
     getHighlightSegments(suggestion.text, query),
@@ -26,11 +26,11 @@ const suggestionPath = computed(() => getSuggestionPath(suggestion));
 <template>
     <div
         class="suggestion-option"
-        :class="{ 'suggestion-option--vocab': isConcept }"
+        :class="{ 'suggestion-option--controlled-term': isControlledTerm }"
     >
         <span
-            v-if="isConcept"
-            class="suggestion-icon suggestion-icon--concept"
+            v-if="isControlledTerm"
+            class="suggestion-icon suggestion-icon--controlled-term"
         >
             C
         </span>
@@ -45,11 +45,11 @@ const suggestionPath = computed(() => getSuggestionPath(suggestion));
 
         <div
             class="suggestion-content"
-            :class="{ 'suggestion-content--record': !isConcept }"
+            :class="{ 'suggestion-content--record': !isControlledTerm }"
         >
             <span
                 class="suggestion-label"
-                :class="{ 'suggestion-label--record': !isConcept }"
+                :class="{ 'suggestion-label--record': !isControlledTerm }"
             >
                 <template
                     v-for="(segment, segmentIndex) in highlightSegments"
@@ -60,13 +60,13 @@ const suggestionPath = computed(() => getSuggestionPath(suggestion));
                 </template>
             </span>
             <span
-                v-if="isConcept && suggestionPath"
+                v-if="isControlledTerm && suggestionPath"
                 class="suggestion-path"
             >
                 {{ suggestionPath }}
             </span>
             <span
-                v-else-if="!isConcept && suggestion.graph_name"
+                v-else-if="!isControlledTerm && suggestion.graph_name"
                 class="suggestion-type"
             >
                 {{ suggestion.graph_name }}
@@ -83,7 +83,7 @@ const suggestionPath = computed(() => getSuggestionPath(suggestion));
     width: 100%;
 }
 
-.suggestion-option--vocab {
+.suggestion-option--controlled-term {
     align-items: flex-start;
 }
 
@@ -100,7 +100,7 @@ const suggestionPath = computed(() => getSuggestionPath(suggestion));
     margin-block-start: 0.1rem;
 }
 
-.suggestion-icon--concept {
+.suggestion-icon--controlled-term {
     background-color: var(--p-primary-color);
     color: var(--p-primary-contrast-color, var(--p-surface-0));
 }

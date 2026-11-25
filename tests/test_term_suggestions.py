@@ -18,6 +18,8 @@ from arches.app.models.models import (
 )
 
 from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
+from arches_search.utils.readable_nodes import ReadableNodes
+from arches_search.utils.term_search.matching import get_related_resources_by_terms
 
 # python manage.py test tests.test_term_suggestions --settings="tests.test_settings"
 
@@ -88,7 +90,7 @@ class TermSuggestionViewTests(TestCase):
         # don't define REFERENCES_INDEX_NAME (a controlled_lists concern this
         # project doesn't need), so that ES sync side effect is
         # muted here -- irrelevant to what TermSuggestionView reads (which
-        # comes entirely from Postgres via ListView's serialize()).
+        # comes entirely from Postgres).
         with mock.patch.object(List, "delete_index"):
             cls.controlled_list = List.objects.create(name="Rock Types")
         cls.pref_label_type = DValueType.objects.get(valuetype="prefLabel")
@@ -192,6 +194,32 @@ class TermSuggestionViewTests(TestCase):
             ["Rock Types", "Quartzite Formation"],
         )
 
+    def test_an_unused_item_of_a_searchable_list_is_suggested_with_its_id(self):
+        unused_item = ListItem.objects.create(
+            id=uuid.uuid4(),
+            list=self.controlled_list,
+            sortorder=1,
+            parent=self.list_item,
+            uri="https://example.org/controlled-lists/quartzite-dyke",
+        )
+        ListItemValue.objects.create(
+            id=uuid.uuid4(),
+            list_item=unused_item,
+            valuetype=self.pref_label_type,
+            language=self.english,
+            value="Quartzite Dyke",
+        )
+        List.objects.filter(pk=self.controlled_list.pk).update(searchable=True)
+
+        response = self.client.get(reverse("term_suggestion_search"), {"q": "Dyke"})
+
+        match = response.json()["results"][0]
+        self.assertEqual(match["item_id"], str(unused_item.id))
+        self.assertEqual(
+            match["addtional_info"]["path"],
+            ["Rock Types", "Quartzite Formation", "Quartzite Dyke"],
+        )
+
     def test_reference_match_is_not_crowded_out_by_common_substring(self):
         """Bucketing check: a substring popular among plain-term rows must not
         push a matching reference-datatype row out of the results. MAX_RESULTS
@@ -283,3 +311,35 @@ class TermSuggestionViewTests(TestCase):
         ]
         self.assertEqual(len(reference_matches), 1)
         self.assertEqual(reference_matches[0]["datatype"], "reference")
+
+    def _matches(self, term):
+        self._reindex()
+        parent_item = ListItem.objects.create(
+            id=uuid.uuid4(),
+            list=self.controlled_list,
+            sortorder=1,
+            uri="https://example.org/controlled-lists/metamorphic",
+        )
+        ListItem.objects.filter(pk=self.list_item.pk).update(parent=parent_item)
+        return set(
+            get_related_resources_by_terms(
+                [{**term, "id": str(parent_item.id)}],
+                self.graph.graphid,
+                ReadableNodes(None),
+                max_hops=0,
+            ).values_list("resourceinstanceid", flat=True)
+        )
+
+    def test_a_controlled_term_matches_records_holding_an_item_under_it(self):
+        self.assertEqual(
+            self._matches({"text": "Metamorphic", "datatype": "reference"}),
+            {self.reference_resource.pk},
+        )
+
+    def test_an_inverted_controlled_term_excludes_those_records(self):
+        matches = self._matches(
+            {"text": "Metamorphic", "datatype": "reference", "inverted": True}
+        )
+
+        self.assertNotIn(self.reference_resource.pk, matches)
+        self.assertIn(self.string_resource.pk, matches)

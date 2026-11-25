@@ -25,6 +25,8 @@ class ArchesSearchConfig(AppConfig):
     ]
 
     advanced_search_operand_normalizers = [
+        "arches_search.utils.advanced_search.operand_normalization.normalizers.concept.ConceptOperandNormalizer",
+        "arches_search.utils.advanced_search.operand_normalization.normalizers.concept_list.ConceptListOperandNormalizer",
         "arches_search.utils.advanced_search.operand_normalization.normalizers.date.DateOperandNormalizer",
         "arches_search.utils.advanced_search.operand_normalization.normalizers.edtf.EDTFOperandNormalizer",
         "arches_search.utils.advanced_search.operand_normalization.normalizers.geojson_feature_collection.GeojsonFeatureCollectionOperandNormalizer",

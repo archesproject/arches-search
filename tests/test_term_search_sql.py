@@ -6,14 +6,14 @@ from django.db import connection
 from django.test import SimpleTestCase
 
 from arches_search.utils.readable_nodes import ReadableNodes
-from arches_search.utils.term_search.matching import get_related_resources_by_text
+from arches_search.utils.term_search.matching import get_related_resources_by_terms
 
 # python manage.py test tests.test_term_search_sql --settings="tests.test_settings"
 
 
 class TermSearchSqlTests(SimpleTestCase):
     def compile_sql(self, terms, max_hops):
-        queryset = get_related_resources_by_text(
+        queryset = get_related_resources_by_terms(
             terms, uuid.uuid4(), ReadableNodes(None), max_hops=max_hops
         )
         return queryset.query.get_compiler(connection=connection).as_sql()

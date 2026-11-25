@@ -5,17 +5,17 @@ import AutoComplete from "openvue/autocomplete";
 
 import { fetchSearchTermSuggestions } from "@/arches_search/SimpleSearch/api.ts";
 import { SUGGESTION_DATATYPE_STRING } from "@/arches_search/SimpleSearch/components/TermFilter/constants.ts";
-import { isConceptSuggestion } from "@/arches_search/SimpleSearch/components/TermFilter/suggestion-utils.ts";
+import { isControlledTermSuggestion } from "@/arches_search/SimpleSearch/components/TermFilter/suggestion-utils.ts";
 
 import type { AutoCompleteCompleteEvent } from "openvue/autocomplete";
 import type { TermSuggestion } from "@/arches_search/SimpleSearch/types.ts";
 
 const TYPEAHEAD_PANEL_RECORDS = "records";
-const TYPEAHEAD_PANEL_VOCAB = "vocab";
+const TYPEAHEAD_PANEL_CONTROLLED_TERMS = "controlled-terms";
 
 type TypeaheadPanel =
     | typeof TYPEAHEAD_PANEL_RECORDS
-    | typeof TYPEAHEAD_PANEL_VOCAB;
+    | typeof TYPEAHEAD_PANEL_CONTROLLED_TERMS;
 
 interface TypeaheadPanelDefinition {
     id: TypeaheadPanel;
@@ -47,12 +47,12 @@ export function useTermSuggestions() {
 
     const recordSuggestions = computed<Array<TermSuggestion>>(() =>
         suggestions.value.filter(
-            (suggestion) => !isConceptSuggestion(suggestion),
+            (suggestion) => !isControlledTermSuggestion(suggestion),
         ),
     );
 
-    const vocabSuggestions = computed<Array<TermSuggestion>>(() =>
-        suggestions.value.filter(isConceptSuggestion),
+    const controlledTermSuggestions = computed<Array<TermSuggestion>>(() =>
+        suggestions.value.filter(isControlledTermSuggestion),
     );
 
     const typeaheadPanels = computed<TypeaheadPanelDefinition[]>(() => [
@@ -64,10 +64,10 @@ export function useTermSuggestions() {
             }),
         },
         {
-            id: TYPEAHEAD_PANEL_VOCAB,
+            id: TYPEAHEAD_PANEL_CONTROLLED_TERMS,
             icon: "pi pi-tag",
             label: $gettext("Controlled Terms (%{count})", {
-                count: String(vocabSuggestions.value.length),
+                count: String(controlledTermSuggestions.value.length),
             }),
         },
     ]);
@@ -76,7 +76,7 @@ export function useTermSuggestions() {
         if (typeaheadPanel.value === TYPEAHEAD_PANEL_RECORDS) {
             return recordSuggestions.value;
         }
-        return vocabSuggestions.value;
+        return controlledTermSuggestions.value;
     });
 
     onMounted(() => {

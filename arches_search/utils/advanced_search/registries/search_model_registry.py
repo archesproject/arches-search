@@ -10,7 +10,7 @@ class SearchModelRegistry:
         self._datatype_to_model_classes: Dict[str, List[Any]] = {}
         self._datatype_to_unambiguous_model_class: Dict[str, Any] = {}
         self._datatype_to_value_model_class: Dict[str, Any] = {}
-        self._datatype_to_relationship_model_class: Dict[str, Any] = {}
+        self._datatype_to_uuid_value_model_class: Dict[str, Any] = {}
         self._model_class_name_to_datatype_and_class: Dict[str, Tuple[str, Any]] = {}
         self._model_class_name_to_all_entries: Dict[str, List[Tuple[str, Any]]] = {}
 
@@ -20,7 +20,7 @@ class SearchModelRegistry:
         # search model, since they read a column on the resource row.
         for facet in AdvancedSearchFacet.objects.select_related(
             "datatype", "target_search_model"
-        ):
+        ).order_by("pk"):
             datatype_name = facet.datatype.datatype
             model_class = facet.target_model_class
             if model_class is None:
@@ -55,17 +55,22 @@ class SearchModelRegistry:
                 for model_class in model_classes
                 if self._model_has_field(model_class, "value")
             ]
+            non_uuid_value_models = self._non_uuid_value_models(model_classes)
             if len(value_models) == 1:
                 self._datatype_to_value_model_class[datatype_name] = value_models[0]
+            elif len(non_uuid_value_models) == 1:
+                self._datatype_to_value_model_class[datatype_name] = (
+                    non_uuid_value_models[0]
+                )
 
-            relationship_models = [
+            uuid_value_models = [
                 model_class
                 for model_class in value_models
                 if self._value_field_is_uuid(model_class)
             ]
-            if len(relationship_models) == 1:
-                self._datatype_to_relationship_model_class[datatype_name] = (
-                    relationship_models[0]
+            if len(uuid_value_models) == 1:
+                self._datatype_to_uuid_value_model_class[datatype_name] = (
+                    uuid_value_models[0]
                 )
 
     def get_model_and_datatype_for_class_name(self, class_name: str) -> Tuple[Any, str]:
@@ -135,29 +140,34 @@ class SearchModelRegistry:
         The model an ordering reads, or None where the datatype has nothing
         worth ordering by.
         """
-        value_models = [
-            model_class
-            for model_class in self._datatype_to_model_classes.get(datatype_name, [])
-            if self._model_has_field(model_class, "value")
-            and not self._value_field_is_uuid(model_class)
-        ]
+        value_models = self._non_uuid_value_models(
+            self._datatype_to_model_classes.get(datatype_name, [])
+        )
 
         if len(value_models) != 1:
             return None
 
         return value_models[0]
 
-    def get_relationship_model_for_datatype(self, datatype_name: str) -> Any:
-        model_class = self._datatype_to_relationship_model_class.get(datatype_name)
+    def get_uuid_value_model_for_datatype(self, datatype_name: str) -> Any:
+        model_class = self._datatype_to_uuid_value_model_class.get(datatype_name)
 
         if model_class is None:
             raise ValueError(
                 _(
-                    "No relationship search model can be derived from facets for datatype '{datatype}'"
+                    "No uuid-valued search model can be derived from facets for datatype '{datatype}'"
                 )
             )
 
         return model_class
+
+    def _non_uuid_value_models(self, model_classes: List[Any]) -> List[Any]:
+        return [
+            model_class
+            for model_class in model_classes
+            if self._model_has_field(model_class, "value")
+            and not self._value_field_is_uuid(model_class)
+        ]
 
     def _model_has_field(self, model_class: Any, field_name: str) -> bool:
         try:

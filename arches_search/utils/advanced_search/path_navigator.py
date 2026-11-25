@@ -6,6 +6,7 @@ from django.utils.translation import gettext as _
 from arches_search.utils.advanced_search.constants import (
     TERMINAL_RESOURCE_DATATYPES,
 )
+from arches_search.indexing.indexing_factory import IndexingFactory
 from arches_search.utils.advanced_search.registries.search_model_registry import (
     SearchModelRegistry,
 )
@@ -39,9 +40,12 @@ class PathNavigator:
                 terminal_graph_slug, terminal_node_alias
             )
         )
-        if terminal_datatype_name.lower() in TERMINAL_RESOURCE_DATATYPES:
+        if (
+            terminal_datatype_name.lower() in TERMINAL_RESOURCE_DATATYPES
+            or terminal_datatype_name in IndexingFactory().vocabulary_datatypes()
+        ):
             terminal_search_model = (
-                self.search_model_registry.get_relationship_model_for_datatype(
+                self.search_model_registry.get_uuid_value_model_for_datatype(
                     terminal_datatype_name
                 )
             )

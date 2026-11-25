@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 from django.db.models import Exists, OuterRef, Q, QuerySet
 
 from arches_search.utils.advanced_search.predicate_building.aggregate_predicate_runtime import (
-    build_grouped_rows_matching_aggregate_predicate,
+    build_aggregate_predicate_q,
 )
 from arches_search.utils.advanced_search.constants import (
     CLAUSE_TYPE_LITERAL,
@@ -150,26 +150,22 @@ class TileScopeEvaluator:
             )
         )
         if isinstance(predicate_expression, AggregatePredicateSpec):
-            resource_level_matches = build_grouped_rows_matching_aggregate_predicate(
+            resource_level_q = build_aggregate_predicate_q(
                 correlated_rows=resource_rows,
                 aggregate_predicate_spec=predicate_expression,
-                grouping_field_name="resourceinstanceid",
             )
-            per_tile_matches = build_grouped_rows_matching_aggregate_predicate(
+            per_tile_q = build_aggregate_predicate_q(
                 correlated_rows=tile_rows.filter(tileid=tile_id_outer_ref),
                 aggregate_predicate_spec=predicate_expression,
-                grouping_field_name="tileid",
             )
 
             if quantifier_token == QUANTIFIER_ANY:
-                per_tile_q = Q(Exists(per_tile_matches))
                 return TileScopePredicateSet(
                     per_tile=(~per_tile_q if is_template_negated else per_tile_q),
                     resource_level=None,
                 )
 
             if quantifier_token == QUANTIFIER_NONE:
-                resource_level_q = Q(Exists(resource_level_matches))
                 return TileScopePredicateSet(
                     per_tile=None,
                     resource_level=(
@@ -179,9 +175,7 @@ class TileScopeEvaluator:
 
             if quantifier_token == QUANTIFIER_ALL:
                 if not is_template_negated:
-                    tiles_missing_match = tiles_for_anchor_resource.filter(
-                        ~Exists(per_tile_matches)
-                    )
+                    tiles_missing_match = tiles_for_anchor_resource.filter(~per_tile_q)
                     return TileScopePredicateSet(
                         per_tile=None,
                         resource_level=(
@@ -189,9 +183,7 @@ class TileScopeEvaluator:
                         ),
                     )
 
-                tiles_with_positive_match = tiles_for_anchor_resource.filter(
-                    Exists(per_tile_matches)
-                )
+                tiles_with_positive_match = tiles_for_anchor_resource.filter(per_tile_q)
                 return TileScopePredicateSet(
                     per_tile=None,
                     resource_level=(

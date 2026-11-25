@@ -1,4 +1,5 @@
 from arches.app.datatypes.datatypes import DataTypeFactory, BaseDataType
+from arches.app.models.models import Relation, Value
 from arches_search.models.models import DateRangeSearch, TermSearch, UUIDSearch
 
 from arches_search.indexing.base import BaseIndexing
@@ -12,6 +13,20 @@ class ConceptIndexing(BaseIndexing):
     def sort_row_filters(self) -> dict:
         """Sort by the preferred label, not by an alternate one."""
         return {"valuetype": "prefLabel"}
+
+    def hierarchy_edges(self):
+        return Relation.objects.filter(
+            relationtype_id__in=["narrower", "hasTopConcept"]
+        ).values_list("conceptfrom_id", "conceptto_id")
+
+    def item_labels(self, item_ids, labels):
+        return list(
+            Value.objects.filter(
+                concept_id__in=item_ids,
+                value__in=labels,
+                valuetype__category="label",
+            ).values_list("concept_id", "value")
+        )
 
     def index(self, tile, node):
         nodeid = str(node.nodeid)
@@ -34,17 +49,16 @@ class ConceptIndexing(BaseIndexing):
             search_items.append(string_search)
 
         for concept in document["domains"]:
-            for id in [concept["conceptid"], concept["valueid"]]:
-                if id is not None:
-                    uuid_search = UUIDSearch(
-                        node_alias=node.alias,
-                        tileid_id=tile.tileid,
-                        resourceinstanceid_id=tile.resourceinstance_id,
-                        datatype=self.datatype.datatype_name,
-                        graph_slug=node.graph.slug,
-                        value=id,
-                    )
-                    search_items.append(uuid_search)
+            if concept["conceptid"] is not None:
+                uuid_search = UUIDSearch(
+                    node_alias=node.alias,
+                    tileid_id=tile.tileid,
+                    resourceinstanceid_id=tile.resourceinstance_id,
+                    datatype=self.datatype.datatype_name,
+                    graph_slug=node.graph.slug,
+                    value=concept["conceptid"],
+                )
+                search_items.append(uuid_search)
 
         for concept in document["date_ranges"]:
             if (

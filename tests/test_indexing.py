@@ -33,9 +33,10 @@ from arches_search.indexing.indexers.geojson_feature_collection import (
 from arches_search.indexing.indexers.string import StringIndexing
 from arches_search.models.models import (
     FileListSearch,
-    GeometrySearch,
     NumericSearch,
     TermSearch,
+    UUIDSearch,
+    GeometrySearch,
 )
 
 
@@ -145,6 +146,55 @@ class ReferenceIndexingTests(IndexingTestCase):
             nodegroup=cls.nodegroup,
             istopnode=False,
         )
+
+    @staticmethod
+    def _reference(list_item_id, *label_values):
+        return {
+            "uri": "https://archesproject.org/item",
+            "labels": [
+                {
+                    "id": str(uuid.uuid4()),
+                    "value": label_value,
+                    "language_id": "en",
+                    "valuetype_id": "prefLabel",
+                    "list_item_id": list_item_id,
+                }
+                for label_value in label_values
+            ],
+            "list_id": str(uuid.uuid4()),
+        }
+
+    def _indexed_ids(self, tile):
+        for record in index_from_tile(tile):
+            record.save()
+        return [
+            str(value)
+            for value in UUIDSearch.objects.filter(tileid=tile.tileid).values_list(
+                "value", flat=True
+            )
+        ]
+
+    def test_a_reference_is_indexed_once_by_its_list_item(self):
+        list_item_id = str(uuid.uuid4())
+        tile = self._make_tile(
+            self.reference_node,
+            [self._reference(list_item_id, "Site", "Archaeological Site")],
+        )
+
+        self.assertEqual(self._indexed_ids(tile), [list_item_id])
+
+    def test_resaving_a_tile_replaces_its_id_rows(self):
+        tile = self._make_tile(
+            self.reference_node, [self._reference(str(uuid.uuid4()), "Site")]
+        )
+        self._indexed_ids(tile)
+        replacement_id = str(uuid.uuid4())
+        tile.data = {
+            str(self.reference_node.nodeid): [self._reference(replacement_id, "Fort")]
+        }
+        tile.save()
+
+        self.assertEqual(self._indexed_ids(tile), [replacement_id])
 
     def test_a_row_per_label_carries_its_language_and_kind(self):
         list_item_id = str(uuid.uuid4())

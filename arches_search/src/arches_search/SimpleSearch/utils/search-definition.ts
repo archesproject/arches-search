@@ -26,14 +26,28 @@ export function isTermKind(value: unknown): value is TermKind {
 }
 
 export function buildRequestTerms(
-    terms: { text: string; inverted: boolean; termKind?: TermKind }[],
+    terms: Pick<
+        SerializedTerm,
+        "text" | "inverted" | "termKind" | "itemId" | "datatype"
+    >[],
 ): SearchRequestTerm[] {
     return terms.map((term) => {
         let type: SearchRequestTerm["type"] = "string";
         if (term.termKind === TERM_KIND_CONTROLLED_TERM) {
             type = term.termKind;
         }
-        return { type, text: term.text, inverted: term.inverted };
+        const requestTerm: SearchRequestTerm = {
+            type,
+            text: term.text,
+            inverted: term.inverted,
+        };
+        if (term.itemId) {
+            requestTerm.itemId = term.itemId;
+        }
+        if (term.datatype) {
+            requestTerm.datatype = term.datatype;
+        }
+        return requestTerm;
     });
 }
 
@@ -139,6 +153,12 @@ export function parseSearchDefinition(
         };
         if (isTermKind(term.termKind)) {
             parsedTerm.termKind = term.termKind;
+        }
+        if (typeof term.itemId === "string") {
+            parsedTerm.itemId = term.itemId;
+        }
+        if (typeof term.datatype === "string") {
+            parsedTerm.datatype = term.datatype;
         }
         if (typeof term.icon === "string") {
             parsedTerm.icon = term.icon;

@@ -5,13 +5,17 @@ import {
     LogicToken,
 } from "@/arches_search/AdvancedSearch/types.ts";
 import { buildTimeFilterClause } from "@/arches_search/SimpleSearch/components/TimeFilter/time-filter-clauses.ts";
-import { buildSearchApiRequestBody } from "@/arches_search/SimpleSearch/utils/search-payload-builder.ts";
+import {
+    buildSearchApiRequestBody,
+    TERM_SEARCH_MAX_HOPS,
+} from "@/arches_search/SimpleSearch/utils/search-payload-builder.ts";
 import { TERM_KIND_CONTROLLED_TERM } from "@/arches_search/SimpleSearch/types.ts";
 
 import type { FeatureCollection } from "geojson";
 import type { GroupPayload } from "@/arches_search/AdvancedSearch/types.ts";
 
 const GRAPH_SLUGS = ["heritage_resource"];
+const CHURCH_ITEM_ID = "4b3a7f4e-3f7c-4f43-9a8e-1f2d7b6a5c01";
 
 function buildQueryForGraph(graphSlug: string): GroupPayload {
     return {
@@ -61,6 +65,35 @@ describe("buildSearchApiRequestBody", () => {
         expect(body.term_search).toEqual({
             terms: ["mission", { text: "adobe", datatype: "reference" }],
             max_hops: 2,
+        });
+    });
+
+    it("sends a controlled term's datatype and item, and an excluded term's flag", () => {
+        const body = buildSearchApiRequestBody({
+            terms: [
+                {
+                    type: TERM_KIND_CONTROLLED_TERM,
+                    text: "church",
+                    inverted: false,
+                    itemId: CHURCH_ITEM_ID,
+                    datatype: "concept",
+                },
+                { type: "string", text: "ruin", inverted: true },
+            ],
+            graphSlugs: GRAPH_SLUGS,
+            mapFilter: null,
+        });
+
+        expect(body.term_search).toEqual({
+            terms: [
+                {
+                    text: "church",
+                    datatype: "concept",
+                    id: CHURCH_ITEM_ID,
+                },
+                { text: "ruin", inverted: true },
+            ],
+            max_hops: TERM_SEARCH_MAX_HOPS,
         });
     });
 
