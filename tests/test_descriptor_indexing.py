@@ -221,6 +221,13 @@ class DescriptorIndexingTestCase(TestCase):
         _index_descriptor_shard(1, 2)
         self.assertEqual(self._rows().count(), 1)
 
+    def test_skips_undefined_in_any_descriptor_language(self):
+        self.resource.descriptors = {
+            "en": {"name": "Indéfini"},
+            "fr": {"name": "Indéfini"},
+        }
+        self.assertEqual(build_descriptor_terms(self.resource), [])
+
     def test_skips_undefined_and_empty_names(self):
         self.resource.descriptors = {"en": {"name": "Undefined"}, "fr": {"name": ""}}
         self.resource.save()

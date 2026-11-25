@@ -6,6 +6,9 @@ tileid is NOT NULL but a descriptor is per-resource: prefer the descriptor's nam
 nodegroup tile when configured, else any tile (tileid is only an FK anchor here).
 """
 
+from django.utils import translation
+from django.utils.translation import gettext
+
 from arches.app.functions.multicard_resource_descriptor import extract_substrings
 from arches.app.models.models import FunctionXGraph, Node, TileModel
 from arches.app.models.system_settings import settings
@@ -100,10 +103,15 @@ def build_descriptor_terms(resource, descriptor_cache=None):
     if tile is None:
         return []
     graph_slug = resource.graph.slug
+
+    undefined_names = set()
+    for language in descriptors:
+        with translation.override(language):
+            undefined_names.add(gettext("Undefined"))
     rows = []
     for language, values in descriptors.items():
         name = (values or {}).get("name")
-        if not name or name == "Undefined" or name.strip() == template_name:
+        if not name or name in undefined_names or name.strip() == template_name:
             continue
         rows.append(
             TermSearch(
