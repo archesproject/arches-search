@@ -19,6 +19,8 @@ export interface ResourceDescriptorData {
         }
     >;
     graph_id: string;
+    has_geometry: boolean;
+    lifecycle_state_id: string | null;
 }
 
 export interface ResourceInstanceLifecycleState {

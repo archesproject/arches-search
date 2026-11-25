@@ -47,7 +47,12 @@ describe("node details popup", () => {
 
     it("offers the report and focus, and no editor", async () => {
         vi.mocked(fetchResourceDescriptors).mockResolvedValue({
-            resource: { descriptors: {}, graph_id: "model" },
+            resource: {
+                descriptors: {},
+                graph_id: "model",
+                has_geometry: false,
+                lifecycle_state_id: null,
+            },
         });
         const wrapper = mountPopup();
         await flushPromises();

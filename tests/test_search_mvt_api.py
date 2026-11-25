@@ -22,6 +22,10 @@ TEST_CACHES = {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "test_search_mvt_api",
     },
+    "user_permission": {
+        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        "LOCATION": "user_permission_cache",
+    },
 }
 GENERATE_TILE = "arches_search.views.api.search_mvt.SearchMVTAPI._generate_tile"
 

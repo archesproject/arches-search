@@ -10,11 +10,13 @@ from django.db import connection
 from django.http import Http404, HttpResponse
 from django.utils.cache import patch_vary_headers
 
+from arches.app.models.models import Node
 from arches.app.models.system_settings import settings
 from arches.app.utils.betterJSONSerializer import JSONDeserializer
 from arches.app.utils.response import JSONResponse
 from arches.app.views.api import APIBase
 
+from arches_search.utils.readable_nodes import ReadableNodes
 from arches_search.utils.search import (
     SearchCompiler,
     SearchPayload,
@@ -112,19 +114,25 @@ class SearchMVTAPI(APIBase):
         if cached_tile is not None:
             return _tile_response(request, cached_tile)
 
+        readable_nodes = ReadableNodes(request.user)
         try:
-            matches = (
-                SearchCompiler(SearchPayload.from_body(body), request.user)
-                .compile(return_counts=False)
-                .results
-            )
+            search_result = SearchCompiler(
+                SearchPayload.from_body(body),
+                request.user,
+                readable_nodes=readable_nodes,
+            ).compile(return_counts=False)
         except ValidationError:
             # The context was checked as the user who created it. Another user
             # may not be able to read a node it names, and gets nothing drawn.
             return HttpResponse(b"", content_type="application/x-protobuf")
 
-        search_results_queryset = matches.values("resourceinstanceid")
-        mvt_tile = self._generate_tile(search_results_queryset, zoom, x, y)
+        search_results_queryset = search_result.results.values("resourceinstanceid")
+        readable_geometry_nodes_queryset = readable_nodes.filter_nodes(
+            Node.objects.filter(datatype="geojson-feature-collection")
+        ).values("nodeid")
+        mvt_tile = self._generate_tile(
+            search_results_queryset, readable_geometry_nodes_queryset, zoom, x, y
+        )
 
         gzipped_tile = (
             gzip.compress(mvt_tile, compresslevel=MVT_GZIP_LEVEL) if mvt_tile else b""
@@ -138,9 +146,15 @@ class SearchMVTAPI(APIBase):
 
         return _tile_response(request, gzipped_tile)
 
-    def _generate_tile(self, search_results_queryset, zoom, x, y):
+    def _generate_tile(
+        self, search_results_queryset, readable_geometry_nodes_queryset, zoom, x, y
+    ):
         compiler = search_results_queryset.query.get_compiler(using="default")
         sub_sql, sub_params = compiler.as_sql()
+        node_compiler = readable_geometry_nodes_queryset.query.get_compiler(
+            using="default"
+        )
+        node_sql, node_params = node_compiler.as_sql()
 
         with connection.cursor() as cursor:
             cursor.execute(
@@ -159,10 +173,21 @@ class SearchMVTAPI(APIBase):
                         ) AS geom
                     FROM geojson_geometries
                     WHERE resourceinstanceid IN ({sub_sql})
+                    AND nodeid IN ({node_sql})
                     AND geom && ST_TileEnvelope(%s, %s, %s, margin => (64.0 / 4096))
                 ) AS tile
                 """,
-                [MVT_LAYER_NAME, zoom, x, y, *sub_params, zoom, x, y],
+                [
+                    MVT_LAYER_NAME,
+                    zoom,
+                    x,
+                    y,
+                    *sub_params,
+                    *node_params,
+                    zoom,
+                    x,
+                    y,
+                ],
             )
             mvt_query_row = cursor.fetchone()
         return bytes(mvt_query_row[0]) if mvt_query_row and mvt_query_row[0] else b""
