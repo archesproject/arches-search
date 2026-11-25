@@ -732,6 +732,25 @@ behaves the same as it did as a map filter.
 graph's payload narrows what is left. They always `AND`, in that order — a term
 search cannot be OR-ed against a clause or nested inside a group.
 
+### Display names
+
+A resource's display name (its `name` descriptor) is indexed as text too, so a
+term matches it even when the value comes from a node that is not text, such
+as a reference number. The name is re-indexed whenever one of the resource's
+tiles is saved, deleted or imported.
+
+After changing a graph's descriptor template, recalculate the stored names and
+then rebuild the search index, in that order:
+
+```bash
+python manage.py resources calculate_descriptors --yes
+python manage.py arches_search reindex_database
+```
+
+`calculate_descriptors` updates the names without saving any tiles, so search
+keeps the old names until the reindex runs. Running the reindex first indexes
+the old names.
+
 ## Searching on Resource Fields
 
 A `RESOURCE_FIELD` subject reaches the resource's own columns — its lifecycle
