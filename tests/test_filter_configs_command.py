@@ -146,8 +146,8 @@ class FilterConfigsCommandTest(TestCase):
             ["reference_node", "number_node"],
         )
         for node in nodes:
-            self.assertEqual(node["filterable"], False)
-            self.assertEqual(node["sortable"], False)
+            self.assertEqual(node["filterable"], True)
+            self.assertEqual(node["sortable"], True)
 
         other_config = NodeFilterConfig.objects.get(
             graph=self.other_graph, slug="filtering"

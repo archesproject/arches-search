@@ -206,8 +206,8 @@ class Command(BaseCommand):
                         "label": self.get_widget_label(node),
                         "sortorder": index,
                         "node_alias": node.alias,
-                        "filterable": False,
-                        "sortable": False,
+                        "filterable": True,
+                        "sortable": True,
                     }
                     for index, node in enumerate(filterable_nodes, start=0)
                 ]
