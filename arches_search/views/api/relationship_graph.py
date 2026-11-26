@@ -202,17 +202,7 @@ def _relationship_type_labels(relationship_type_ids):
     """Map each relationship type id to a display label. A type with no
     preferred label is shown as its raw value, trimmed to the last segment
     when that value is a URL."""
-    # Arches a12-a15 discard all labels if even one value is not a UUID.
-    valid_ids = []
-    for relationship_type_id in relationship_type_ids:
-        try:
-            uuid.UUID(str(relationship_type_id))
-        except (ValueError, TypeError):
-            continue
-        valid_ids.append(relationship_type_id)
-    preferred_labels = (
-        get_resource_relationship_type_label(valid_ids) if valid_ids else {}
-    )
+    preferred_labels = get_resource_relationship_type_label(relationship_type_ids)
 
     labels = {}
     for relationship_type_id in relationship_type_ids:
