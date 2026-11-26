@@ -14,6 +14,7 @@ import type {
 } from "@/arches_search/AdvancedSearch/types.ts";
 import type {
     DateRangeFilter,
+    ExportFormat,
     ExportRequest,
     NodeFilterConfigResponse,
     ResourceFieldFilter,
@@ -281,6 +282,16 @@ export async function exportSearchResults({
     anchor.download = filename;
     anchor.click();
     window.URL.revokeObjectURL(url);
+}
+
+export async function fetchExportFormats(): Promise<ExportFormat[]> {
+    const response = await fetch(
+        generateArchesURL("arches_search:search_results_export"),
+    );
+    if (!response.ok) {
+        throw new Error(response.statusText);
+    }
+    return response.json();
 }
 
 export async function startSearchResultsExport({

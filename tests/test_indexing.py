@@ -10,6 +10,7 @@ null=True / blank=True for those tests to pass.
 """
 
 import uuid
+from unittest import mock
 
 from django.test import TestCase
 
@@ -496,10 +497,32 @@ class PostImportIndexingTests(IndexingTestCase):
             edittype="create",
         )
 
-        SearchIndexingFunction().post_import(transaction_id)
+        result = SearchIndexingFunction().post_import(transaction_id)
 
         rows = NumericSearch.objects.filter(tileid=tile.pk)
         self.assertEqual([row.value for row in rows], [42])
+        # the bulk loader marks the load indexed on this
+        self.assertEqual(result, {"indexed": True})
+
+    def test_post_import_reports_failed_indexing(self):
+        self._make_tile(self.number_node, 42)
+        transaction_id = uuid.uuid4()
+        EditLog.objects.create(
+            resourceinstanceid=str(self.resource_instance.pk),
+            transactionid=transaction_id,
+            edittype="create",
+        )
+
+        with (
+            mock.patch(
+                "arches_search.functions.search_indexing.index_from_tile",
+                side_effect=RuntimeError("indexing failed"),
+            ),
+            self.assertLogs("arches_search.functions.search_indexing", "ERROR"),
+        ):
+            result = SearchIndexingFunction().post_import(transaction_id)
+
+        self.assertEqual(result, {"indexed": False})
 
     def test_post_import_replaces_stale_rows(self):
         tile = self._make_tile(self.number_node, 1)

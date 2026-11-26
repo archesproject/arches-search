@@ -36,7 +36,17 @@ class ArchesSearchConfig(AppConfig):
     ]
 
     def ready(self):
+        from celery.signals import task_postrun
+
         from arches_modular_reports.config_generator_registry import register
+
+        from arches_search.utils.search_results_export import handle_task_postrun
+
+        task_postrun.connect(
+            handle_task_postrun,
+            weak=False,
+            dispatch_uid="arches_search.search_results_export_download_link",
+        )
 
         register(
             "search",
